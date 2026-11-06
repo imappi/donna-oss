@@ -6,8 +6,7 @@ against documents, and asks the business owner only the questions only they
 can answer.
 
 This is a source release of a working codebase, not a supported product.
-There is no hosted service, no support and no warranty. It was built by Kari
-Honkanen, much of it written with AI coding agents (Claude and Codex).
+There is no hosted service, no support and no warranty.
 
 ## Status
 
