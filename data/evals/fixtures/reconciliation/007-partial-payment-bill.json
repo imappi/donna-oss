@@ -1,0 +1,63 @@
+{
+  "id": "007-partial-payment-bill",
+  "title": "Two-part bill payment — deposit then balance across two card swipes",
+  "tags": ["partial_payment", "same_currency", "vendor_overlap", "supplier_bill", "ap"],
+  "narrative": "A SGD 5000 fit-out bill from Marina Interiors paid in two card swipes — a SGD 2000 deposit and a SGD 3000 balance two weeks later, both to the same vendor. The matcher should propose both bank lines (one-to-many on the AP side). Either order in the proposals array is fine — the harness compares as sets.",
+  "document": {
+    "id": "sb-marina-007",
+    "document_type": "supplier_bill",
+    "vendor_name": "Marina Interiors Pte Ltd",
+    "document_date": "2026-04-15",
+    "due_date": "2026-05-15",
+    "total_amount": 5000.00,
+    "currency": "SGD",
+    "reference_number": "MI-2026-0117",
+    "extraction_confidence": 0.95,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-marina-deposit",
+      "money_out": 2000.00,
+      "currency": "SGD",
+      "date": "2026-04-20",
+      "description": "Card MARINA INTERIORS DEPOSIT MI-2026-0117",
+      "raw_description": "Card 4221 MARINA INTERIORS PTE LTD DEPOSIT MI-2026-0117",
+      "contact": "Marina Interiors Pte Ltd"
+    },
+    {
+      "id": "tx-marina-balance",
+      "money_out": 3000.00,
+      "currency": "SGD",
+      "date": "2026-05-04",
+      "description": "Card MARINA INTERIORS BALANCE MI-2026-0117",
+      "raw_description": "Card 4221 MARINA INTERIORS PTE LTD BALANCE MI-2026-0117",
+      "contact": "Marina Interiors Pte Ltd"
+    },
+    {
+      "id": "tx-unrelated-software",
+      "money_out": 149.00,
+      "currency": "SGD",
+      "date": "2026-04-22",
+      "description": "Card NOTION LABS",
+      "raw_description": "Card 4221 NOTION LABS INC SUBSCRIPTION",
+      "contact": "Notion Labs"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      {
+        "bank_transaction_id": "tx-marina-deposit",
+        "status": "auto_matched",
+        "required_hops_any_of": ["partial_payment", "vendor_overlap", "reference_match"]
+      },
+      {
+        "bank_transaction_id": "tx-marina-balance",
+        "status": "auto_matched",
+        "required_hops_any_of": ["partial_payment", "vendor_overlap", "reference_match"]
+      }
+    ],
+    "unmatchable_reason": null
+  }
+}

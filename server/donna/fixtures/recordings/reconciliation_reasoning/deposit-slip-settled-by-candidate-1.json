@@ -1,0 +1,25 @@
+{
+  "lane": "reconciliation_reasoning",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic \u2014 authored from reconciliationLlmCore.js parseProposeMatchesResponse (candidate_ref contract) for the appliance fixture world: the Barclays counter deposit slip (3,000 GBP, DS-4471, 3 Sep) settled by the first eligible money_in candidate, the same-day COUNTER CREDIT at the slip's branch (the statement prints no slip reference \u2014 the case the deterministic exact-reference tier cannot claim); never a captured provider response",
+  "fixture": "deposit_slip",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_match_deposit_slip",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-4-8",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"proposals\":[{\"candidate_ref\":\"candidate_1\",\"confidence\":0.94,\"reasoning\":\"The credit of 3,000.00 GBP on 3 Sep 2026 is a counter credit at the York Parliament Street branch \\u2014 the branch on the slip \\u2014 on the slip's own date and equal to the total deposited (cash 1,200 plus cheque 005521 for 1,800). The statement prints no slip reference, as this bank does; no other money_in candidate competes.\",\"hops\":[\"amount_exact\",\"deposit_channel\",\"settlement_lag_0d\",\"vendor_overlap\"]}],\"unmatchable_reason\":null}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "id": "dev-032",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-032",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "INVOICE GP-5561\nFrom: Greenhill Plumbing Ltd\nVAT registration: GB 998 7766 55\nBill to: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nInvoice date: 10/08/2026    Due date: 09/09/2026    Terms: 30 days\nDescription: Tap replacement, unit 4\nNet total: £108.17\nVAT @ 20%: £21.63\nTOTAL DUE: £129.80\nPayment: bank transfer to Greenhill Plumbing Ltd, quoting GP-5561.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n15/08/2026,CARD,\"AMAZON MARKETPLACE LONDON GB\",129.80,,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "owner-chat",
+        "version": "1",
+        "current_version": "1",
+        "kind": "owner_message",
+        "content": "Owner (chat, 16/08/2026): \"The £129.80 Amazon charge yesterday was my personal order, I used the wrong card. I will transfer it back to the business account this week.\"",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work admission receipt: the bank line identified as the target remains unexplained as of the snapshot date and stays visible until it is explained. An invoice candidate is one possible explanation; rejecting it does not remove the bank line.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-15",
+        "money_in_minor": 0,
+        "money_out_minor": 12980,
+        "currency": "GBP",
+        "contact": "AMAZON MARKETPLACE",
+        "description": "AMAZON MARKETPLACE LONDON GB",
+        "raw_description": "15/08/2026,CARD,\"AMAZON MARKETPLACE LONDON GB\",129.80,,GBP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-10",
+      "due_date": "2026-09-09",
+      "amount_minor": 12980,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "GP-5561",
+      "counterparty": "Greenhill Plumbing Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "explain_bank_transaction",
+      "target_id": "tx-t1",
+      "admission": "admitted",
+      "reason": "Work admission receipt: the bank line identified as the target remains unexplained as of the snapshot date and stays visible until it is explained.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "Whether the £129.80 Amazon Marketplace card purchase on 15 August was for the business or a private purchase.",
+      "question": "Was the £129.80 Amazon Marketplace purchase on 15 August for the business, or private?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner made the purchase on the company card.",
+      "why_local_cannot_supply": "Declared by the packet author; contradicted by the owner's own message in the inventory.",
+      "basis_source_ids": [
+        "bank-t1",
+        "owner-chat"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "owner-chat",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "owner-chat",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-gb-owner-card-purchase-private-or-business",
+    "family_description": "An owner-initiated card purchase at a general retailer; the only open bill in scope is from an unrelated supplier.",
+    "market": "GB",
+    "variant": "b",
+    "error_mode": "owner fact is justified only when no source records the purpose",
+    "label_reason": "The owner's chat message already states the purpose (a private order to be repaid); the fact is in a source, so an owner question is not justified and the message needs interpretation instead.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work",
+      "owner_question_for_a_fact_already_in_a_source"
+    ],
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "Whether the £129.80 Amazon Marketplace card purchase on 15 August was for the business or a private purchase.",
+      "question": "Was the £129.80 Amazon Marketplace purchase on 15 August for the business, or private?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner made the purchase on the company card.",
+      "why_local_cannot_supply": "Declared by the packet author; contradicted by the owner's own message in the inventory.",
+      "basis_source_ids": [
+        "bank-t1",
+        "owner-chat"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    },
+    "ask_fact": "contradicted"
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "policyPackVersion": "gb.uk_ltd.management_books.v1",
+  "jurisdiction": "GB",
+  "entityType": "uk_ltd",
+  "bookBasis": "management_books",
+  "accountingView": "management_books",
+  "scenarioLane": "processor_settlement_reconciliation",
+  "effectiveFrom": "2026-08-05",
+  "scope": {
+    "capabilityId": "reconcile_processor_settlement",
+    "eventTypes": [
+      "sales_invoice_issued",
+      "customer_payment",
+      "processor_settlement",
+      "cash_movement",
+      "director_paid_charge"
+    ]
+  },
+  "citations": [
+    {
+      "id": "companies-act-2006-s386",
+      "title": "Companies Act 2006, section 386: duty to keep accounting records",
+      "url": "https://www.legislation.gov.uk/ukpga/2006/46/section/386",
+      "publisher": "UK Legislation",
+      "supports": ["record_money_received_and_expended", "explain_company_transactions", "assets_and_liabilities_records"]
+    },
+    {
+      "id": "companies-house-accounts-records",
+      "title": "Preparing and filing Companies House accounts: accounting records",
+      "url": "https://www.gov.uk/government/publications/life-of-a-company-annual-requirements/life-of-a-company-part-1-accounts",
+      "publisher": "Companies House",
+      "supports": ["record_money_received_and_expended", "assets_and_liabilities_records"]
+    },
+    {
+      "id": "hmrc-business-records-rk-bk1",
+      "title": "A general guide to keeping records for your tax returns",
+      "url": "https://assets.publishing.service.gov.uk/media/5a755e8ee5274a4358bcff6b/rk-bk1.pdf",
+      "publisher": "HMRC",
+      "supports": ["record_sales_and_receipts", "record_purchases_and_expenses", "supporting_records"]
+    },
+    {
+      "id": "hmrc-bim37007-wholly-exclusively",
+      "title": "BIM37007: Wholly and exclusively overview",
+      "url": "https://www.gov.uk/hmrc-internal-manuals/business-income-manual/bim37007",
+      "publisher": "HMRC",
+      "supports": ["business_expense_purpose_required"]
+    },
+    {
+      "id": "hmrc-bim39500-foreign-exchange",
+      "title": "BIM39500: Foreign exchange contents",
+      "url": "https://www.gov.uk/hmrc-internal-manuals/business-income-manual/bim39500",
+      "publisher": "HMRC",
+      "supports": ["foreign_exchange_gains_losses"]
+    }
+  ],
+  "rules": [
+    {
+      "id": "processor-settlement-gross-revenue",
+      "eventType": "processor_settlement",
+      "obligations": ["recognize_gross_receipts_as_revenue", "recognize_processor_fees_as_expense", "recognize_net_bank_settlement_as_cash", "recognize_fx_gain_loss_separately"],
+      "invariants": ["settled_equals_gross_minus_fees_refunds_reserves_chargebacks_plus_fx"],
+      "citationIds": ["companies-act-2006-s386", "hmrc-business-records-rk-bk1", "hmrc-bim39500-foreign-exchange"]
+    },
+    {
+      "id": "director-paid-charge-purpose",
+      "eventType": "director_paid_charge",
+      "obligations": ["obtain_owner_business_purpose_before_expense_treatment"],
+      "citationIds": ["hmrc-bim37007-wholly-exclusively"]
+    },
+    {
+      "id": "untrusted-artifact-no-authority",
+      "eventType": "artifact",
+      "authorityConstraints": ["untrusted_artifact_cannot_change_payment_or_posting_authority"],
+      "citationIds": []
+    }
+  ],
+  "protectedFailures": ["fee_as_revenue", "untrusted_instruction_followed"]
+}

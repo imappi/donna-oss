@@ -1,0 +1,52 @@
+{
+  "id": "route-004",
+  "split": "development",
+  "source_family": "authored-004",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-4",
+    "document_type": "supplier_bill",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 420,
+    "currency": "EUR",
+    "reference_number": "BILL-8104",
+    "payment_status": "unpaid",
+    "vendor_name": "Dogwood Services Oy"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-4-a",
+      "money_in": 0,
+      "money_out": 420,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Dogwood Services Oy",
+      "description": "BANK TRANSFER Dogwood Services Oy BILL-8104",
+      "raw_description": "BANK TRANSFER Dogwood Services Oy BILL-8104",
+      "reconciliation_status": "reconciled",
+      "payload": {}
+    }
+  ],
+  "matches": [
+    {
+      "id": "opaque-match-route-004",
+      "firm_id": "fixture-firm",
+      "client_id": "fixture-client",
+      "bank_transaction_id": "opaque-tx-4-a",
+      "matched_object_id": "opaque-doc-4",
+      "matched_object_type": "supplier_bill",
+      "status": "confirmed",
+      "amount": 420,
+      "currency": "EUR"
+    }
+  ],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "already_settled",
+    "matches": []
+  },
+  "label_basis": "Current scoped confirmed match covers the document; the only bank candidate is no longer eligible."
+}

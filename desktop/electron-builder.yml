@@ -1,0 +1,125 @@
+# Donna Desktop — packaging config (M0b: bundled PG from the get-go).
+# Run from desktop/ (two-package layout: electron + electron-builder live in
+# desktop/package.json devDeps; the APP is the repo root so main.mjs's
+# REPO_ROOT-relative layout — dist/, server/, db/, scripts/, packs/ — holds
+# verbatim inside Resources/app):
+#
+#   node scripts/desktop-stage-pg.mjs        # stage the PG payload first
+#   cd desktop && npm run dist:mac           # build + sign + notarize + dmg
+#
+# Signing/notarization env (Mac-side; see the M0b handoff doc):
+#   CSC_NAME              "Developer ID Application: …" identity in the keychain
+#   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   for notarytool
+#
+# Decisions of record:
+# - asar: false — the runtime spawns node children (migrations via
+#   ELECTRON_RUN_AS_NODE) and forks utilityProcess from repo-shaped paths;
+#   an unpacked app dir keeps the dev-shell layout as the packaged contract.
+#   Revisit only if launch perf demands it, with the spawn paths audited.
+# - PG payload rides extraResources → Contents/Resources/pg16; main.mjs sets
+#   DONNA_BUNDLED_PG_BIN from process.resourcesPath when app.isPackaged, and
+#   pgSupervisor fails LOUDLY on a broken bundle (never silently falls back
+#   to host Postgres — that would rebuild the debt the bundle removes).
+# - afterSign hook signs every Mach-O in the PG payload (electron-builder
+#   does not reliably deep-sign extraResources) with hardened runtime +
+#   timestamp, using the payload manifest written by desktop-stage-pg.mjs.
+
+# The bundle id is the app's durable identity to macOS (keychain, TCC and
+# Launch Services key off it, not the signing team), so it must never change
+# after the first install. Set your own reverse-DNS id before you ship a build.
+appId: example.donna.desktop
+productName: Donna
+copyright: © 2026 Donna
+
+directories:
+  app: ..
+  buildResources: build
+  output: ../dist-desktop
+
+# electron version comes from THIS package's devDependencies (two-package
+# layout); electron-builder reads it from desktop/package.json.
+
+asar: false
+
+files:
+  - package.json
+  - desktop/main.mjs
+  - desktop/preload.cjs
+  - desktop/runtime.mjs
+  - desktop/build-identity.json
+  - desktop/lib/**/*
+  - desktop/build/icon.png
+  - dist/**/*
+  - server/**/*
+  - db/migrations/**/*
+  - packs/**/*
+  - data/worlds/admitted-entity-profiles.json
+  - data/worlds/policy/**/*
+  # Shared logic the server imports across the tree boundary: src/lib is the
+  # isomorphic layer (pricing, qualificationGate, documentsInbox, blockers…)
+  # and donnaProfiles.js rides src/lib. The closure is machine-checked by
+  # scripts/desktop-files-whitelist.test.js — a new cross-tree import fails
+  # there, not as a MODULE_NOT_FOUND 500 on the next Mac build.
+  - src/lib/**/*
+  - donnaProfiles.js
+  # The hosted MCP adapter (server/donna/mcp/mcpRemoteAdapter.js) imports the
+  # MCPB shim's demo content — the read fixtures and, beside them, the canned
+  # ask_donna answers — as its ONE demo content source. The remote routes are
+  # fenced CLOUD_ONLY on the desktop host, but api.js imports the adapter
+  # statically, so both modules must resolve for the package to boot (the
+  # shim itself imports only the fixtures; desktop behaviour is unchanged).
+  - desktop/mcpb/server/demoFixtures.mjs
+  - desktop/mcpb/server/demoAskDonna.mjs
+  # Data files the runtime READS (not imports) — invisible to the closure
+  # walk; tracked by RUNTIME_DATA_FILES in the same test. vercel.json feeds
+  # handlerManifest.js's http-cron entries (fatal when missing, on purpose —
+  # first drill launch, 2026-08-07). Never add .env files here.
+  - vercel.json
+  - scripts/migrate_firm_db.js
+  - scripts/seed_firm_db.js
+  - scripts/desktop-backup.mjs
+  - scripts/desktop-boot.mjs
+  # Reuse the measured Jev decision contract in the explicit read-only preview.
+  - scripts/jev_direct_action.js
+  - scripts/jev_evidence_action_contract.js
+  - "!**/*.test.js"
+  - "!**/*.test.mjs"
+  # Dependency tarballs can carry development-agent metadata too.
+  - "!**/.claude"
+  - "!**/.claude/**"
+  - "!desktop/vendor/**"
+  - "!desktop/node_modules/**"
+  - "!desktop/dist-desktop/**"
+
+extraResources:
+  - from: vendor/pg16
+    to: pg16
+    filter:
+      - "**/*"
+      - "!manifest.json"
+  # The manifest travels too — desktop-sign-pg.mjs and
+  # desktop-verify-bundle.mjs both read it.
+  - from: vendor/pg16/manifest.json
+    to: pg16/manifest.json
+
+# The wrapper lives inside desktop/ because electron-builder ≥26.15 refuses
+# hook paths resolving outside the workspace root; the real hook is
+# scripts/desktop-sign-pg.mjs (re-exported by the wrapper).
+afterSign: build/after-sign-pg.mjs
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  category: public.app-category.finance
+  icon: build/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  notarize: true
+
+dmg:
+  artifactName: "Donna-${version}-${arch}.${ext}"

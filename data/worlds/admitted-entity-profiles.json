@@ -1,0 +1,745 @@
+{
+  "version": "donna.admitted-entity-profiles.v3",
+  "mode": "observe_only",
+  "assignment_contracts": {
+    "sg-native-owner-capability.v1": {
+      "birth_count": 0,
+      "current_generation": {
+        "assignment_kind": "capability",
+        "principal_type": "firm_collaborator",
+        "role": "owner",
+        "access_level": "client_scoped",
+        "statuses": [
+          "proposed",
+          "active",
+          "suspended",
+          "ended"
+        ],
+        "principal_link": "same_firm_human_collaborator",
+        "historical_rows": "retain_without_authority"
+      }
+    }
+  },
+  "capability_manifests": {
+    "sg-cloud-review.v1": {
+      "required_baseline": [
+        {"flag_key": "JURISDICTION_ACCOUNT_PALETTE", "stage": "auto", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "OPERATOR_CAPABILITY_ENFORCE", "stage": "auto", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "INTERNAL_PILOT_ACCESS", "stage": "canary", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "ENTITY_READINESS_ADMISSION", "stage": "canary", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "DOCUMENT_EXTRACTORS_ENABLED", "stage": "canary", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "DOCUMENT_LINES_ENABLED", "stage": "canary", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "GENERIC_DOCUMENT_EXTRACTOR_ENABLED", "stage": "canary", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "DOCUMENT_ROUTER_ENABLED", "stage": "canary", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "BANK_STATEMENT_LLM_EXTRACTION", "stage": "canary", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "JURISDICTION_TAX_CODING", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "CODING_AUTO_POST", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "LEDGER_AUTO_POST", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "RECONCILIATION_AUTO_MATCH", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "RECONCILIATION_CODE_MATCHED_NO_REVIEW", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "JEV_RECONCILIATION", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "JEV_HELD_PLAN_COMPLETION", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "DOCUMENT_NO_LINE_DISPOSITION", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "BANK_LINE_DISPOSITION", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "RECONCILE_RETRACTION_AUTOSEND", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "OUTBOUND_INVOICING", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "OUTBOUND_QUOTES", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "OUTBOUND_DUNNING", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"},
+        {"flag_key": "OUTBOUND_PAYABLES", "stage": "off", "source": "manual", "reason": "donna.sg-hosted-review.v1"}
+      ],
+      "admitted_extensions": []
+    },
+    "desktop-runtime.v2": {
+      "required_baseline": [
+        { "flag_key": "ASK_SEND_SETTLE_GATE", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "BANK_STATEMENT_LLM_EXTRACTION", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "CODING_AUTO_POST", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "DOCUMENT_EXTRACTORS_ENABLED", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "DOCUMENT_LINES_ENABLED", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "DOCUMENT_NO_LINE_DISPOSITION", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "DOCUMENT_ROUTER_ENABLED", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "FINLAND_ALV_CODING", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "GENERIC_DOCUMENT_EXTRACTOR_ENABLED", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "JEV_RECONCILIATION", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "JURISDICTION_ACCOUNT_PALETTE", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "JURISDICTION_TAX_CODING", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "LEDGER_AUTO_POST", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "MEMORY_CANDIDATES", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "MODEL_CHALLENGER", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "OPERATOR_CAPABILITY_ENFORCE", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "RECONCILE_AUTO_EXPLAIN_RETRACTS", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "RECONCILE_RETRACTION_AUTOSEND", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "RECONCILIATION_ASK_QUIESCENCE_GATE", "stage": "auto", "source": "default", "reason": "desktop_host_default" },
+        { "flag_key": "RECONCILIATION_MATERIAL_AUTO_FYI", "stage": "auto", "source": "default", "reason": "desktop_host_default" }
+      ],
+      "admitted_extensions": [
+        {
+          "flag_key": "ENTITY_READINESS_ADMISSION",
+          "allowed_stages": ["off", "dry_run", "shadow", "canary"],
+          "allowed_sources": ["default", "manual"],
+          "reason_required": true
+        },
+        {
+          "flag_key": "CODING_CORRECTION_AUTO_APPLY",
+          "allowed_stages": ["off", "dry_run", "shadow", "canary", "auto"],
+          "allowed_sources": ["manual"],
+          "reason_required": true
+        },
+        {
+          "flag_key": "CODING_OWNER_TRANSFER_POST",
+          "allowed_stages": ["off", "dry_run", "shadow", "canary", "auto"],
+          "allowed_sources": ["manual"],
+          "reason_required": true
+        },
+        {
+          "flag_key": "MEMORY_LEGACY_AI_RULE_DEMOTION",
+          "allowed_stages": ["off", "dry_run", "shadow", "canary"],
+          "allowed_sources": ["default", "manual"],
+          "reason_required": true
+        },
+        {
+          "flag_key": "MEMORY_MODEL_V2",
+          "allowed_stages": ["off", "dry_run", "shadow", "canary"],
+          "allowed_sources": ["default", "manual"],
+          "reason_required": true
+        },
+        {
+          "flag_key": "DOCUMENT_SETTLEMENT_LEDGER_ENTRY",
+          "allowed_stages": ["off", "dry_run", "shadow", "canary", "auto"],
+          "allowed_sources": ["default", "manual"],
+          "reason_required": true,
+          "profile_scope": { "jurisdiction": "FI", "canonical_legal_form": "fi-oy", "accounting_view": "management_books" }
+        },
+        {
+          "flag_key": "AE_OPENING_BALANCES",
+          "allowed_stages": ["canary", "auto"],
+          "allowed_sources": ["manual"],
+          "reason_required": true,
+          "profile_scope": { "jurisdiction": "AE", "canonical_legal_form": "ae-llc", "accounting_view": "management_books" }
+        },
+        {
+          "flag_key": "AE_VAT_FACT_AUTOMATION",
+          "allowed_stages": ["canary", "auto"],
+          "allowed_sources": ["manual"],
+          "reason_required": true,
+          "profile_scope": { "jurisdiction": "AE", "canonical_legal_form": "ae-llc", "accounting_view": "management_books" }
+        },
+        {
+          "flag_key": "FISCAL_PERIOD_INTAKE",
+          "allowed_stages": ["canary", "auto"],
+          "allowed_sources": ["manual"],
+          "reason_required": true,
+          "profile_scope": { "jurisdiction": "AE", "canonical_legal_form": "ae-llc", "accounting_view": "management_books" }
+        },
+        {
+          "flag_key": "JEV_HELD_PLAN_COMPLETION",
+          "allowed_stages": ["off", "canary"],
+          "allowed_sources": ["manual"],
+          "reason_required": true
+        },
+        {"flag_key": "INVENTORY_CORE", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "INVENTORY_ACCOUNTING", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_CAPTURE_ACCESS", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_RECONCILIATION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_INVENTORY_APPLY", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true}
+      ]
+    },
+    "fi-cloud-pilot.v1": {
+      "required_baseline": [
+        {"flag_key": "JURISDICTION_ACCOUNT_PALETTE", "stage": "auto", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "JURISDICTION_TAX_CODING", "stage": "auto", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "FINLAND_ALV_CODING", "stage": "auto", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "FINLAND_ALV_RETURN", "stage": "auto", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "OPERATOR_CAPABILITY_ENFORCE", "stage": "auto", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "FINLAND_ALV_FILING", "stage": "off", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "RECONCILE_RETRACTION_AUTOSEND", "stage": "off", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "OUTBOUND_INVOICING", "stage": "off", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "OUTBOUND_QUOTES", "stage": "off", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "OUTBOUND_DUNNING", "stage": "off", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "OUTBOUND_PAYABLES", "stage": "off", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"},
+        {"flag_key": "INTERNAL_PILOT_ACCESS", "stage": "canary", "source": "manual", "reason": "donna.fi-hosted-pilot.v1"}
+      ],
+      "admitted_extensions": [
+        {"flag_key": "FISCAL_PERIOD_INTAKE", "allowed_stages": ["canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "ENTITY_READINESS_ADMISSION", "allowed_stages": ["off", "dry_run", "shadow", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "DOCUMENT_EXTRACTORS_ENABLED", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "DOCUMENT_LINES_ENABLED", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "GENERIC_DOCUMENT_EXTRACTOR_ENABLED", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "DOCUMENT_ROUTER_ENABLED", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "BANK_STATEMENT_LLM_EXTRACTION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "RECONCILIATION_AUTO_MATCH", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "RECONCILIATION_CODE_MATCHED_NO_REVIEW", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "CODING_AUTO_POST", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "LEDGER_AUTO_POST", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "DOCUMENT_NO_LINE_DISPOSITION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "RECONCILIATION_ASK_QUIESCENCE_GATE", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "ASK_SEND_SETTLE_GATE", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "BANK_LINE_DISPOSITION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "JEV_RECONCILIATION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "JEV_HELD_PLAN_COMPLETION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "INVENTORY_CORE", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "INVENTORY_ACCOUNTING", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_CAPTURE_ACCESS", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_RECONCILIATION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_INVENTORY_APPLY", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true}
+      ]
+    },
+    "us-cloud-pilot.v1": {
+      "required_baseline": [
+        {"flag_key": "JURISDICTION_ACCOUNT_PALETTE", "stage": "auto", "source": "manual", "reason": "donna.us-hosted-pilot.v1"},
+        {"flag_key": "JURISDICTION_TAX_CODING", "stage": "off", "source": "manual", "reason": "donna.us-hosted-pilot.v1"},
+        {"flag_key": "OPERATOR_CAPABILITY_ENFORCE", "stage": "auto", "source": "manual", "reason": "donna.us-hosted-pilot.v1"},
+        {"flag_key": "RECONCILE_RETRACTION_AUTOSEND", "stage": "off", "source": "manual", "reason": "donna.us-hosted-pilot.v1"},
+        {"flag_key": "OUTBOUND_INVOICING", "stage": "off", "source": "manual", "reason": "donna.us-hosted-pilot.v1"},
+        {"flag_key": "OUTBOUND_QUOTES", "stage": "off", "source": "manual", "reason": "donna.us-hosted-pilot.v1"},
+        {"flag_key": "OUTBOUND_DUNNING", "stage": "off", "source": "manual", "reason": "donna.us-hosted-pilot.v1"},
+        {"flag_key": "OUTBOUND_PAYABLES", "stage": "off", "source": "manual", "reason": "donna.us-hosted-pilot.v1"},
+        {"flag_key": "INTERNAL_PILOT_ACCESS", "stage": "canary", "source": "manual", "reason": "donna.us-hosted-pilot.v1"}
+      ],
+      "admitted_extensions": [
+        {"flag_key": "ENTITY_READINESS_ADMISSION", "allowed_stages": ["off", "dry_run", "shadow", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "DOCUMENT_EXTRACTORS_ENABLED", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "DOCUMENT_LINES_ENABLED", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "GENERIC_DOCUMENT_EXTRACTOR_ENABLED", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "DOCUMENT_ROUTER_ENABLED", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "BANK_STATEMENT_LLM_EXTRACTION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "RECONCILIATION_AUTO_MATCH", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "RECONCILIATION_CODE_MATCHED_NO_REVIEW", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "CODING_AUTO_POST", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "LEDGER_AUTO_POST", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "DOCUMENT_NO_LINE_DISPOSITION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "RECONCILIATION_ASK_QUIESCENCE_GATE", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "ASK_SEND_SETTLE_GATE", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "BANK_LINE_DISPOSITION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "JEV_RECONCILIATION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "JEV_HELD_PLAN_COMPLETION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "INVENTORY_CORE", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "INVENTORY_ACCOUNTING", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_CAPTURE_ACCESS", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_RECONCILIATION", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true},
+        {"flag_key": "PHYSICAL_INVENTORY_APPLY", "allowed_stages": ["off", "canary"], "allowed_sources": ["manual"], "reason_required": true}
+      ]
+    },
+    "sg-native-cloud-review.v1": {
+      "required_baseline": [
+        {
+          "flag_key": "JURISDICTION_ACCOUNT_PALETTE",
+          "stage": "auto",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "OPERATOR_CAPABILITY_ENFORCE",
+          "stage": "auto",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "INTERNAL_PILOT_ACCESS",
+          "stage": "canary",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "ENTITY_READINESS_ADMISSION",
+          "stage": "canary",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "DOCUMENT_EXTRACTORS_ENABLED",
+          "stage": "canary",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "DOCUMENT_LINES_ENABLED",
+          "stage": "canary",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "GENERIC_DOCUMENT_EXTRACTOR_ENABLED",
+          "stage": "canary",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "DOCUMENT_ROUTER_ENABLED",
+          "stage": "canary",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "BANK_STATEMENT_LLM_EXTRACTION",
+          "stage": "canary",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "JURISDICTION_TAX_CODING",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "CODING_AUTO_POST",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "LEDGER_AUTO_POST",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "RECONCILIATION_AUTO_MATCH",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "RECONCILIATION_CODE_MATCHED_NO_REVIEW",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "JEV_RECONCILIATION",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "JEV_HELD_PLAN_COMPLETION",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "DOCUMENT_NO_LINE_DISPOSITION",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "BANK_LINE_DISPOSITION",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "RECONCILE_RETRACTION_AUTOSEND",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "OUTBOUND_INVOICING",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "OUTBOUND_QUOTES",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "OUTBOUND_DUNNING",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        },
+        {
+          "flag_key": "OUTBOUND_PAYABLES",
+          "stage": "off",
+          "source": "manual",
+          "reason": "donna.sg-hosted-review.v1"
+        }
+      ],
+      "admitted_extensions": [
+        {
+          "flag_key": "SG_NATIVE_PROCESSING_REVIEW",
+          "allowed_stages": [
+            "off",
+            "dry_run",
+            "shadow",
+            "canary",
+            "auto"
+          ],
+          "allowed_sources": [
+            "manual",
+            "emergency_override"
+          ],
+          "reason_required": true
+        }
+      ]
+    }
+  },
+  "chart_contracts": {
+    "sg-legacy-palette-v1": {
+      "pack_id": "sg",
+      "pack_version": 1,
+      "home_currency": "SGD",
+      "persisted_chart": "sg_legacy_palette.v1",
+      "required_pack_roles": [
+        "revenue.operating",
+        "expense.bank_fees",
+        "expense.software"
+      ]
+    },
+    "gb-pack-v4": {
+      "pack_id": "gb",
+      "pack_version": 4,
+      "home_currency": "GBP",
+      "persisted_chart": "none",
+      "required_pack_roles": [
+        "revenue.operating",
+        "expense.cost_of_sales",
+        "expense.operating_supplies",
+        "expense.software",
+        "expense.payroll",
+        "expense.professional_fees"
+      ]
+    },
+    "gb-pack-v4+default-chart-v1": {
+      "pack_id": "gb",
+      "pack_version": 4,
+      "home_currency": "GBP",
+      "persisted_chart": "gb_default_chart.v1",
+      "required_pack_roles": [
+        "revenue.operating",
+        "expense.cost_of_sales",
+        "expense.operating_supplies",
+        "expense.software",
+        "expense.payroll",
+        "expense.professional_fees"
+      ]
+    },
+    "fi-pack-v8": {
+      "pack_id": "fi",
+      "pack_version": 8,
+      "home_currency": "EUR",
+      "persisted_chart": "none",
+      "required_pack_roles": [
+        "revenue.operating",
+        "expense.cost_of_sales",
+        "expense.operating_supplies",
+        "expense.software",
+        "expense.payroll",
+        "expense.professional_fees"
+      ]
+    },
+    "us-pack-v6": {
+      "pack_id": "us",
+      "pack_version": 6,
+      "home_currency": "USD",
+      "persisted_chart": "none",
+      "required_pack_roles": [
+        "revenue.operating",
+        "expense.cost_of_sales",
+        "expense.operating_supplies",
+        "expense.software",
+        "expense.payroll",
+        "expense.professional_fees"
+      ]
+    },
+    "ae-pack-v6": {
+      "pack_id": "ae",
+      "pack_version": 6,
+      "home_currency": "AED",
+      "persisted_chart": "none",
+      "required_pack_roles": [
+        "revenue.operating",
+        "expense.cost_of_sales",
+        "expense.operating_supplies",
+        "expense.software",
+        "expense.payroll",
+        "expense.professional_fees"
+      ]
+    },
+    "sg-native-processing-v1": {
+      "pack_id": "sg",
+      "pack_version": 1,
+      "home_currency": "SGD",
+      "persisted_chart": "sg_pte_native.v1",
+      "required_pack_roles": [
+        "revenue.operating",
+        "expense.bank_fees",
+        "expense.software"
+      ],
+      "native_lineage_required": true
+    }
+  },
+  "legacy_identity_contracts": [
+    {
+      "contract_version": "proof0-uk-ltd-to-runtime-gb-ltd.v1",
+      "jurisdiction": "GB",
+      "legacy_legal_form": "uk_ltd",
+      "canonical_legal_form": "gb-ltd"
+    }
+  ],
+  "profiles": [
+    {
+      "profile_id": "sg-pte.firm-intake.vercel.none.management-books.sg-cloud-review-v1",
+      "jurisdiction": "SG",
+      "canonical_legal_form": "sg-pte",
+      "creation_path": "desktop_firm_intake",
+      "runtime_host": "vercel",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "sg-cloud-review.v1",
+      "chart_contract_version": "sg-legacy-palette-v1",
+      "principal_contract": "firm_member",
+      "admission_scope": "document_processing_review_only",
+      "required_provider_classes": [
+        "openai",
+        "anthropic"
+      ]
+    },
+    {
+      "profile_id": "gb-ltd.generic-client-route.desktop.none.management-books.v2",
+      "jurisdiction": "GB",
+      "canonical_legal_form": "gb-ltd",
+      "creation_path": "generic_client_route",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "gb-pack-v4",
+      "principal_contract": "firm_member",
+      "admission_scope": "current_product"
+    },
+    {
+      "profile_id": "gb-ltd.desktop-firm-intake.desktop.none.management-books.v2",
+      "jurisdiction": "GB",
+      "canonical_legal_form": "gb-ltd",
+      "creation_path": "desktop_firm_intake",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "gb-pack-v4",
+      "principal_contract": "firm_member",
+      "admission_scope": "current_product"
+    },
+    {
+      "profile_id": "gb-ltd.self-provision.desktop.none.management-books.v2",
+      "jurisdiction": "GB",
+      "canonical_legal_form": "gb-ltd",
+      "creation_path": "self_provision",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "gb-pack-v4+default-chart-v1",
+      "principal_contract": "self_serve_owner",
+      "admission_scope": "current_product"
+    },
+    {
+      "profile_id": "fi-oy.self-provision.desktop.none.management-books.v2",
+      "jurisdiction": "FI",
+      "canonical_legal_form": "fi-oy",
+      "creation_path": "self_provision",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "fi-pack-v8",
+      "principal_contract": "self_serve_owner",
+      "admission_scope": "current_product"
+    },
+    {
+      "profile_id": "fi-oy.desktop-firm-intake.desktop.none.management-books.v2",
+      "jurisdiction": "FI",
+      "canonical_legal_form": "fi-oy",
+      "creation_path": "desktop_firm_intake",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "fi-pack-v8",
+      "principal_contract": "firm_member",
+      "admission_scope": "current_product"
+    },
+    {
+      "profile_id": "fi-oy.generic-client-route.desktop.none.management-books.v2",
+      "jurisdiction": "FI",
+      "canonical_legal_form": "fi-oy",
+      "creation_path": "generic_client_route",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "fi-pack-v8",
+      "principal_contract": "firm_member",
+      "admission_scope": "current_product"
+    },
+    {
+      "profile_id": "gb-ltd.legacy-heal.desktop.none.management-books.v2",
+      "jurisdiction": "GB",
+      "canonical_legal_form": "gb-ltd",
+      "creation_path": "legacy_heal",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "gb-pack-v4",
+      "principal_contract": "legacy_heal_principal",
+      "admission_scope": "targeted_recovery"
+    },
+    {
+      "profile_id": "us-llc.generic-client-route.desktop.none.management-books.v2",
+      "jurisdiction": "US",
+      "canonical_legal_form": "us-llc",
+      "creation_path": "generic_client_route",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "us-pack-v6",
+      "principal_contract": "firm_member",
+      "admission_scope": "portability_sentinel"
+    },
+    {
+      "profile_id": "ae-llc.desktop-firm-intake.desktop.none.management-books.v2",
+      "jurisdiction": "AE",
+      "canonical_legal_form": "ae-llc",
+      "creation_path": "desktop_firm_intake",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "ae-pack-v6",
+      "principal_contract": "firm_member",
+      "admission_scope": "current_product"
+    },
+    {
+      "profile_id": "ae-llc.generic-client-route.desktop.none.management-books.v2",
+      "jurisdiction": "AE",
+      "canonical_legal_form": "ae-llc",
+      "creation_path": "generic_client_route",
+      "runtime_host": "desktop",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "desktop-runtime.v2",
+      "chart_contract_version": "ae-pack-v6",
+      "principal_contract": "firm_member",
+      "admission_scope": "current_product"
+    },
+    {
+      "profile_id": "fi-oy.self-provision.vercel.none.management-books.fi-cloud-pilot-v1",
+      "jurisdiction": "FI",
+      "canonical_legal_form": "fi-oy",
+      "creation_path": "self_provision",
+      "runtime_host": "vercel",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "fi-cloud-pilot.v1",
+      "chart_contract_version": "fi-pack-v8",
+      "principal_contract": "self_serve_owner",
+      "admission_scope": "technical_hosted_pilot_observation_only",
+      "required_provider_classes": [
+        "openai",
+        "anthropic"
+      ]
+    },
+    {
+      "profile_id": "fi-oy.existing-owner-adoption.vercel.none.management-books.fi-cloud-pilot-v1",
+      "jurisdiction": "FI",
+      "canonical_legal_form": "fi-oy",
+      "creation_path": "existing_owner_adoption",
+      "runtime_host": "vercel",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "fi-cloud-pilot.v1",
+      "chart_contract_version": "fi-pack-v8",
+      "principal_contract": "revalidated_existing_owner",
+      "admission_scope": "technical_hosted_pilot_observation_only",
+      "required_provider_classes": [
+        "openai",
+        "anthropic"
+      ]
+    },
+    {
+      "profile_id": "us-llc.firm-intake.vercel.none.management-books.us-cloud-pilot-v1",
+      "jurisdiction": "US",
+      "canonical_legal_form": "us-llc",
+      "creation_path": "desktop_firm_intake",
+      "runtime_host": "vercel",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "us-cloud-pilot.v1",
+      "chart_contract_version": "us-pack-v6",
+      "principal_contract": "firm_member",
+      "admission_scope": "technical_hosted_pilot_observation_only",
+      "required_provider_classes": [
+        "openai",
+        "anthropic"
+      ]
+    },
+    {
+      "profile_id": "fi-oy.firm-intake.vercel.none.management-books.fi-cloud-pilot-v1",
+      "jurisdiction": "FI",
+      "canonical_legal_form": "fi-oy",
+      "creation_path": "desktop_firm_intake",
+      "runtime_host": "vercel",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "fi-cloud-pilot.v1",
+      "chart_contract_version": "fi-pack-v8",
+      "principal_contract": "firm_member",
+      "admission_scope": "technical_hosted_pilot_observation_only",
+      "required_provider_classes": [
+        "openai",
+        "anthropic"
+      ]
+    },
+    {
+      "profile_id": "sg-pte.firm-intake.vercel.none.management-books.sg-native-cloud-review-v1",
+      "assignment_contract_version": "sg-native-owner-capability.v1",
+      "jurisdiction": "SG",
+      "canonical_legal_form": "sg-pte",
+      "creation_path": "desktop_firm_intake",
+      "runtime_host": "vercel",
+      "accounting_adapter": "none",
+      "accounting_view": "management_books",
+      "capability_manifest_version": "sg-native-cloud-review.v1",
+      "chart_contract_version": "sg-native-processing-v1",
+      "principal_contract": "firm_member",
+      "admission_scope": "document_processing_review_only",
+      "required_provider_classes": [
+        "openai",
+        "anthropic"
+      ]
+    }
+  ],
+  "accounting_admission_contract": {
+    "version": "donna.accounting-profile.v1",
+    "scope": "technical_entity_birth_readiness",
+    "admitted_views": [
+      "management_books"
+    ],
+    "permitted_method_declarations": [
+      "cash",
+      "accrual"
+    ],
+    "unspecified_method": "not_asserted",
+    "certifies_complete_books": false,
+    "certifies_statutory_service": false,
+    "statutory_dependencies": [
+      "U02_opening_intake",
+      "U08_native_tax_posting",
+      "U10_U11_VAT_delivery",
+      "U13_CT_delivery",
+      "U19_U20_close_and_annual_outputs",
+      "U26_retention",
+      "D01_customer_scope",
+      "D05_provider_authority"
+    ]
+  }
+}

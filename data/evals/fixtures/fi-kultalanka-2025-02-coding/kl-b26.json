@@ -1,0 +1,96 @@
+{
+  "id": "kl-b26",
+  "title": "Kultalanka 02/2025 21.2. Prisma −33,15",
+  "split": "development",
+  "family": "kultalanka-multi_rate_receipt",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "multi_rate_receipt",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-21",
+    "description": "KORTTIOSTO PRISMA TAMPERE LIELAHTI TAMPERE",
+    "money_in": 0,
+    "money_out": 33.15,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "Prisma Tampere Lielahti",
+    "total_amount": 33.15,
+    "tax_amount": 5.85,
+    "lines": [
+      {
+        "description": "Pesuaineet, pyyhkeet, talouspaperi, kynttilä, lamppu",
+        "amount": 22.21,
+        "tax_rate": 25.5
+      },
+      {
+        "description": "Kahvi ja kaurajuoma",
+        "amount": 10.94,
+        "tax_rate": 14
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Operating supplies",
+          "direction": "debit",
+          "amount": 17.7,
+          "tax_code": "ALV_25_5_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 4.51,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Meals and entertainment",
+          "direction": "debit",
+          "amount": 9.6,
+          "tax_code": "ALV_14_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 1.34,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 33.15,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B26"
+  }
+}

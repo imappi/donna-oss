@@ -1,0 +1,22 @@
+{
+  "lane": "reconciliation_reasoning",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — authored from reconciliationLlmCore.js parseProposeMatchesResponse (candidate_ref contract) for the appliance fixture world: the Ochre Lighting bill (550 GBP, OL-2026-0812) settled by the first eligible money_out candidate; never a captured provider response",
+  "fixture": "supplier_bill_discount",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_match_ochre_bill",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-4-8",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"proposals\":[{\"candidate_ref\":\"candidate_1\",\"confidence\":0.94,\"reasoning\":\"The bank debit of 550.00 GBP on 20 Aug 2026 quotes the bill reference OL-2026-0812 and names Ochre Lighting Ltd; the amount equals the bill total exactly and lands eight days after the invoice date, inside Net 30. No other candidate competes for this explanation.\",\"hops\":[]}],\"unmatchable_reason\":null}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": { "input_tokens": 0, "output_tokens": 0 }
+  }
+}

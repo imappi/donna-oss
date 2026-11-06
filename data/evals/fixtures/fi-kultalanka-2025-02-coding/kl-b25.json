@@ -1,0 +1,86 @@
+{
+  "id": "kl-b25",
+  "title": "Kultalanka 02/2025 21.2. VR −28,60",
+  "split": "development",
+  "family": "kultalanka-dated_rate",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "dated_rate",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-21",
+    "description": "KORTTIOSTO VR MATKUSTAJALIIKENNE VR.FI",
+    "money_in": 0,
+    "money_out": 28.6,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "VR Matkustajaliikenne",
+    "total_amount": 28.6,
+    "tax_amount": 2.6,
+    "lines": [
+      {
+        "description": "Tampere-Helsinki Eko",
+        "amount": 28.6,
+        "tax_rate": 10
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Travel",
+          "direction": "debit",
+          "amount": 26,
+          "tax_code": "ALV_10_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 2.6,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 28.6,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": {
+      "terminal": "ask_owner",
+      "journal": [],
+      "ask": {
+        "evidence_type": "document_discrepancy",
+        "kind": "ask_supply_timing"
+      }
+    },
+    "adjudication": {
+      "status": "adjudicated",
+      "reviewer": "Ilkka Halonen (operator; not professional review)",
+      "date": "2026-09-24"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B25"
+  }
+}

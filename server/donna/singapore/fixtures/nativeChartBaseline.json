@@ -1,0 +1,36 @@
+{
+  "source_revision": "6281542cb9bdf7948fa87e150800180c3050d2b1",
+  "reference": {
+    "SG_STATUTORY_GROUPS": "e648d1389b9804c2af254efed888b61c9596024bdb09fe7d31c2a0cf780042e9",
+    "SFRS_CHART": "58452af1008b5c701493653acdafcaf0041a841f201ba6415c49907a4b5d5d47",
+    "SOLE_PROP_EQUITY_ACCOUNTS": "14ab4a5388d6e2dbd0fa8449e005c030f35e2b4802b7bd990cdf56cee26f0c7e",
+    "LLP_EQUITY_ACCOUNTS": "87e17de8749239d9c8187c81930d3db83a4c3784e94630bb5ba806b786c8180c",
+    "PTE_LTD_ONLY_STATUTORY_GROUPS": "4ec4c2100701a8c4a2d5668a64727516f58457c12e1a21b338da7ab7b160cd46",
+    "GST_ACCOUNT_CODES": "d520f583de05ec7fa9e4ea80e1fc77e03746b90f923ff464ccfada704fe91053",
+    "SG_STATUTORY_GROUP_KEYS": "da44d90f76c75785476ba339a163498c7be07258c1d23855eb6d518696b252fa"
+  },
+  "builders": {
+    "buildPteLtdChart": {
+      "default": "58452af1008b5c701493653acdafcaf0041a841f201ba6415c49907a4b5d5d47",
+      "registered": "58452af1008b5c701493653acdafcaf0041a841f201ba6415c49907a4b5d5d47",
+      "unregistered": "ef0f5e0de624bf4fd776cb037698f4c9c44dd95903aea56aa3bf1f608a06f0d7"
+    },
+    "buildSoleProprietorChart": {
+      "default": "2287669c88cee8179879340cba864c8386a8496147614f5540d93eb2db8d5917",
+      "registered": "3a9c825dec81db033bb7d044a800359705b2126c63fe5849cdf477487baa8403",
+      "unregistered": "2287669c88cee8179879340cba864c8386a8496147614f5540d93eb2db8d5917"
+    },
+    "buildLlpChart": {
+      "default": "8c8bdd14b7b48b50e8f9b180164fac33f59cba44a96d6d047131e702f6133303",
+      "registered": "61f45407ec82aa9882715db9c8ff65f297e6331f74856e6626fefea69dbf0c51",
+      "unregistered": "8c8bdd14b7b48b50e8f9b180164fac33f59cba44a96d6d047131e702f6133303"
+    }
+  },
+  "fallbacks": {
+    "ae": "fcea0802d217f48a11a01ebb51834e66a67972dbf4aa3ad00dd8603345ff3115",
+    "fi": "5efa38bdae519234c9e45d6ba755913ee240cdcc459948113637f9387a1fcb29",
+    "gb": "79459a5b4dfc26f2e3044a9273f3ed29566fbf6f43858b325866913d1329ed0a",
+    "sg": "edfd4e5d3160cb64cf00080d9a91ec943a7b1ac816e44ea6e2568fdc65dc5e66",
+    "us": "7e298a31c19cfd1b827ebf737470bd27c216e87714637c581b810f9291eb3a37"
+  }
+}

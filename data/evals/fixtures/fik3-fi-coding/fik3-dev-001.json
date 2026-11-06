@@ -1,0 +1,94 @@
+{
+  "id": "fik3-dev-001",
+  "title": "Software licence on a held supplier bill at the standard rate",
+  "split": "development",
+  "family": "fi-oy-software-licence",
+  "entity": "synthetic-oy-a",
+  "period": "2026-03",
+  "decision_class": "input_vat_rate",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Synteettinen Alfa Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [
+    {
+      "scope": "client",
+      "subject": "Synteettinen Alfa Oy",
+      "fact": "The company develops software for small retailers."
+    },
+    {
+      "scope": "jurisdiction",
+      "subject": "fi",
+      "fact": "Unreviewed: software licences are always exempt from ALV."
+    },
+    {
+      "scope": "merchant",
+      "subject": "SYNTH SOFTWARE OY",
+      "fact": "Legacy: this supplier bills the sibling's hosting.",
+      "asserted_by": [
+        "synthetic-oy-b"
+      ]
+    }
+  ],
+  "transaction": {
+    "date": "2026-03-04",
+    "description": "SYNTH SOFTWARE OY",
+    "money_in": 0,
+    "money_out": 125.5,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "supplier_bill",
+    "party": "Synth Software Oy",
+    "total_amount": 125.5,
+    "tax_amount": 25.5,
+    "lines": [
+      {
+        "description": "Software licence, March",
+        "amount": 125.5,
+        "tax_rate": 25.5
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Software subscriptions",
+          "direction": "debit",
+          "amount": 100,
+          "tax_code": "ALV_25_5_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 25.5,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 125.5,
+          "tax_code": "NONE"
+        }
+      ]
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "sibling_entities": [
+    "synthetic-oy-b"
+  ]
+}

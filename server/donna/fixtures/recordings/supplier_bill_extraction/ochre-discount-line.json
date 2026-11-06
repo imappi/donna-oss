@@ -1,0 +1,31 @@
+{
+  "lane": "supplier_bill_extraction",
+  "endpoint_class": "openai",
+  "provenance": "synthetic — authored from supplierBill.js BILL_EXTRACTION_SCHEMA for the appliance fixture world (artifact/supplier-bill: subtotal 550, discount 27.50, VAT 5% 27.50, total 550 — audit §9 fixture 5); never a captured provider response",
+  "fixture": "supplier_bill_discount",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_extract_ochre_supplier_bill",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_extract_ochre_supplier_bill",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"extraction_status\":\"validated\",\"extraction_confidence\":0.96,\"warnings\":[],\"header\":{\"counterparty_name\":\"Ochre Lighting\",\"counterparty_role\":\"vendor\",\"document_date\":\"2026-08-12\",\"due_date\":\"2026-09-11\",\"currency\":\"GBP\",\"subtotal_amount\":550,\"tax_amount\":27.5,\"shipping_amount\":null,\"discount_amount\":27.5,\"rounding_amount\":null,\"total_amount\":550,\"line_amounts_include_tax\":false,\"reference_number\":\"OL-2026-0812\",\"references\":[{\"type\":\"invoice_number\",\"value\":\"OL-2026-0812\"}],\"payment_status\":\"unpaid\",\"payment_terms_phrase\":\"Net 30\"},\"lines\":[{\"description\":\"LED panel light 600x600, energy-saving fitting\",\"quantity\":10,\"unit_price\":50,\"amount\":500,\"tax_rate\":0.05},{\"description\":\"Installation and commissioning\",\"quantity\":1,\"unit_price\":50,\"amount\":50,\"tax_rate\":0.05}]}"
+          }
+        ]
+      }
+    ],
+    "usage": { "input_tokens": 0, "output_tokens": 0, "total_tokens": 0 }
+  }
+}

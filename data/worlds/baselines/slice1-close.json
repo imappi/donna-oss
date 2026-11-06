@@ -1,0 +1,97 @@
+{
+  "version": "eaw.slice1-close-baseline.v1",
+  "provenance": {
+    "source_run_file": "data/worlds/receipts/slice1-db-close-run-20260819-1840.json",
+    "source_run_sha256": "241616f24e7f8eb29af000109790c6ef6ea1a2bbea8eee4fc0070a91693e7e26",
+    "operator": "kari@books.example",
+    "run_date": "2026-08-19",
+    "base_commit": "b4815cec827a35fdaf2bb862080d6cc66cf76f99",
+    "verified_by": "eaw-orchestrator (Claude), overseer verification 2026-08-19"
+  },
+  "worlds": [
+    {
+      "world_id": "slice1/s1-f1-gross-to-net-single",
+      "receipt_file": "data/worlds/receipts/slice1-db-close-f1.json",
+      "posted_journals": 2,
+      "replay_newly_posted": 0,
+      "terminal": {
+        "t1": 1,
+        "t2": 0,
+        "limbo": 0,
+        "locked_on_replay": true
+      },
+      "lock_status": "locked",
+      "archive_id": "close-archive-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-67d22a35b7ca3ebc",
+      "export_checksum": "3f27738cbd4649d3671c5639ab99a865edba5f46cefe5e9d11e028fa75660658",
+      "cleanup": {
+        "residue_rows": 0,
+        "firm_retired": true,
+        "audit_event_rows": 10
+      }
+    },
+    {
+      "world_id": "slice1/s1-f2-batched-fx-fee-netted",
+      "receipt_file": "data/worlds/receipts/slice1-db-close-f2.json",
+      "posted_journals": 2,
+      "replay_newly_posted": 0,
+      "terminal": {
+        "t1": 1,
+        "t2": 0,
+        "limbo": 0,
+        "locked_on_replay": true
+      },
+      "lock_status": "locked",
+      "archive_id": "close-archive-eaw-eaw-s1-close-20260819-1840-2-eaw-eaw-s1-close-20260819-1840-2-client-1-2026-08-01-2026-08-05-02b106eaeec10683",
+      "export_checksum": "d511fd9a5196e0580b0157487449a848a83d37e3737440a5463482b58c56061c",
+      "cleanup": {
+        "residue_rows": 0,
+        "firm_retired": true,
+        "audit_event_rows": 10
+      }
+    },
+    {
+      "world_id": "slice1/s1-f3-director-purpose-close",
+      "receipt_file": "data/worlds/receipts/slice1-db-close-f3-base.json",
+      "posted_journals": 3,
+      "replay_newly_posted": 0,
+      "terminal": {
+        "t1": 1,
+        "t2": 0,
+        "limbo": 0,
+        "locked_on_replay": true
+      },
+      "lock_status": "locked",
+      "archive_id": "close-archive-eaw-eaw-s1-close-20260819-1840-3-eaw-eaw-s1-close-20260819-1840-3-client-1-2026-08-01-2026-08-09-5e0044fa8fef7280",
+      "export_checksum": "50e91b111675949887cf445355b04538180162ea62c67765fabfcccfcfa0da7a",
+      "cleanup": {
+        "residue_rows": 0,
+        "firm_retired": true,
+        "audit_event_rows": 11
+      }
+    },
+    {
+      "world_id": "slice1/s1-f3-director-purpose-close::sibling::counterfactual/director-purpose-personal",
+      "receipt_file": "data/worlds/receipts/slice1-db-close-f3-sibling.json",
+      "posted_journals": 3,
+      "replay_newly_posted": 0,
+      "terminal": {
+        "t1": 1,
+        "t2": 0,
+        "limbo": 0,
+        "locked_on_replay": true
+      },
+      "lock_status": "locked",
+      "archive_id": "close-archive-eaw-eaw-s1-close-20260819-1840-4-eaw-eaw-s1-close-20260819-1840-4-client-1-2026-08-01-2026-08-09-5ab56f95b503e643",
+      "export_checksum": "6c441b83c730820f3f03b0cf35426cc2d74ccc907ac43dd33b722550ebe4b5b4",
+      "cleanup": {
+        "residue_rows": 0,
+        "firm_retired": true,
+        "audit_event_rows": 11
+      }
+    }
+  ],
+  "variance_notes": [
+    "Base-versus-sibling treatment discrimination is NOT exercised by this harness: it pre-codes transactions mechanically, so both F3 worlds close with identical account treatment by construction. Treatment discrimination evidence rides the oracle suite (buildExpectedClose), not the DB harness.",
+    "The harness makes no model calls (deterministic posting of pre-coded lines): model spend for this run is a measured zero, not an unknown reported as zero. Production provider-usage capture (Unit 36) remains absent and irrelevant to this run."
+  ]
+}

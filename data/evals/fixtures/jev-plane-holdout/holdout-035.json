@@ -1,0 +1,209 @@
+{
+  "id": "holdout-035",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-035",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "LASKU\nLaskun numero: 9917    Laskun päivä: 25.08.2026    Eräpäivä: 08.09.2026    Maksuehto: 14 pv netto\nLaskuttaja: Tampereen Toimistotarvike Oy, Y-tunnus 8899001-2\nMaksaja: Kuusela Design Oy\nErittely: Tulostuspaperi ja värikasetit\nVeroton yhteensä: 191,24 €\nALV 25,5 %: 48,76 €\nMaksettava yhteensä: 240,00 €\nViitenumero: 9 91708    Tilinumero: FI49 5000 0120 3456 78    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n03.09.2026;03.09.2026;-240,00;Pikasiirto;SEPA-pikasiirto;Matti Virtanen;FI38 1590 3000 0011 22;;;202609030001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "owner-chat",
+        "version": "1",
+        "current_version": "1",
+        "kind": "owner_message",
+        "content": "Omistaja (chat, 04.09.2026): \"Se 240 € Matti Virtaselle eilen oli maksu logon piirtämisestä, ihan firman juttu. Hän lähettää laskun jälkikäteen.\"",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work admission receipt: the bank line identified as the target remains unexplained as of the snapshot date and stays visible until it is explained. An invoice candidate is one possible explanation; rejecting it does not remove the bank line.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-03",
+        "money_in_minor": 0,
+        "money_out_minor": 24000,
+        "currency": "EUR",
+        "contact": "Matti Virtanen",
+        "description": "Pikasiirto SEPA-pikasiirto",
+        "raw_description": "03.09.2026;03.09.2026;-240,00;Pikasiirto;SEPA-pikasiirto;Matti Virtanen;FI38 1590 3000 0011 22;;;202609030001",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-25",
+      "due_date": "2026-09-08",
+      "amount_minor": 24000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "991708",
+      "counterparty": "Tampereen Toimistotarvike Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "explain_bank_transaction",
+      "target_id": "tx-t1",
+      "admission": "admitted",
+      "reason": "Work admission receipt: the bank line identified as the target remains unexplained as of the snapshot date and stays visible until it is explained.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "Whether the 240,00 € instant transfer to Matti Virtanen on 03.09.2026 was a business payment or a private transfer.",
+      "question": "Was the 240,00 € transfer to Matti Virtanen on 3 September a business payment?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner initiated the transfer to a private individual with no message.",
+      "why_local_cannot_supply": "Declared by the packet author; contradicted by the owner's own message in the inventory.",
+      "basis_source_ids": [
+        "bank-t1",
+        "owner-chat"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "owner-chat",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "owner-chat",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-fi-instant-transfer-to-private-person",
+    "family_description": "The owner sends a SEPA instant transfer to a private individual with no message; a freelancer bill for the same amount may or may not exist.",
+    "market": "FI",
+    "variant": "b",
+    "error_mode": "owner-only business-purpose fact; fact already in a source; freelancer bill plus receipt",
+    "label_reason": "The owner's chat already states the transfer paid Matti Virtanen for the logo work; the fact is in a source, so an owner question is not justified and the message needs interpretation instead.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work",
+      "owner_question_for_a_fact_already_in_a_source"
+    ],
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "Whether the 240,00 € instant transfer to Matti Virtanen on 03.09.2026 was a business payment or a private transfer.",
+      "question": "Was the 240,00 € transfer to Matti Virtanen on 3 September a business payment?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner initiated the transfer to a private individual with no message.",
+      "why_local_cannot_supply": "Declared by the packet author; contradicted by the owner's own message in the inventory.",
+      "basis_source_ids": [
+        "bank-t1",
+        "owner-chat"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    },
+    "ask_fact": "contradicted"
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

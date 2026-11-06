@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { validateAeCtReply, validateAePeriodReply } from './ae/factualReply.js';
+import { getOwnerReplyAdapters } from './ae/ownerReplyAdapter.js';
+const period = { period_key: '2026-Q1', start_date: '2026-01-01', end_date: '2026-03-31', due_date: '2026-04-28' };
+test('UAE factual reply schemas require explicit strict dates and preserve bounded consumers', () => {
+  assert.equal(validateAeCtReply({ registered: false }), true);
+  assert.equal(validateAeCtReply({ registered: false, trn: '100123456789012' }), false);
+  assert.equal(validateAeCtReply({ registered: true, trn: '100123456789012', registered_from: '2026-02-30' }), false);
+  assert.equal(validateAeCtReply({ registered: true, trn: '100123456789012', registered_from: '2024-02-29' }), true);
+  assert.equal(validateAeCtReply({ registered: true, trn: '100123456789012' }), false);
+  assert.equal(validateAePeriodReply({ periods: [period] }), true);
+  assert.equal(validateAePeriodReply({ periods: [{ ...period, start_date: '2026-02-29' }] }), false);
+  assert.equal(validateAePeriodReply({ periods: [period, { ...period, period_key: 'other' }] }), false);
+  assert.equal(validateAePeriodReply({ periods: [period, { ...period, start_date: '2026-04-01', end_date: '2026-06-30', due_date: '2026-07-28' }] }), false);
+  assert.equal(validateAePeriodReply({ periods: [{ ...period, due_date: '2026-03-01' }] }), false);
+  assert.equal(validateAePeriodReply({ periods: [period], filed: true }), false);
+  const adapters = getOwnerReplyAdapters();
+  assert.equal(adapters.find(item => item.evidenceType === 'ct_registration_deadline').validateAnswer({ registered: false }), false);
+  assert.ok(adapters.find(item => item.evidenceType === 'vat_registration_status'));
+});

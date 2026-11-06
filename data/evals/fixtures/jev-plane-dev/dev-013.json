@@ -1,0 +1,169 @@
+{
+  "id": "dev-013",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-013",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0402\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Orchid Lane Boutique Pte. Ltd.  UEN 201812345C\nInvoice date: 12 Aug 2026    Due date: 26 Aug 2026    Terms: 14 days\nDescription: Monthly analytics retainer, August\nSubtotal: S$500.00\nGST 9%: S$45.00\nTOTAL: S$545.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0402.\nPay by card: https://pay.merlion.example/INV-2026-0402 (via Stripe)",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n19 Aug 2026,ICT,,523.80,STRIPE PAYMENTS SINGAPORE,STRIPE,PAYOUT",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-19",
+        "money_in_minor": 52380,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "STRIPE PAYMENTS SINGAPORE PTE LTD",
+        "description": "STRIPE PAYMENTS SINGAPORE STRIPE PAYOUT",
+        "raw_description": "19 Aug 2026,ICT,,523.80,STRIPE PAYMENTS SINGAPORE,STRIPE,PAYOUT",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-12",
+      "due_date": "2026-08-26",
+      "amount_minor": 54500,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "INV-2026-0402",
+      "counterparty": "Orchid Lane Boutique Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-sg-stripe-payout-without-report",
+    "family_description": "Singapore company receives a Stripe payout; the customer usually pays by card link; no payout report is in the book.",
+    "market": "SG",
+    "variant": "a",
+    "error_mode": "processor is not the customer; without a report the relation cannot be established",
+    "label_reason": "Bank line shows only STRIPE; no payout report or receipt binds it to the invoice or the customer.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

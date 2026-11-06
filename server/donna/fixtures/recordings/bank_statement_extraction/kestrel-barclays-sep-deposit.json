@@ -1,0 +1,35 @@
+{
+  "lane": "bank_statement_extraction",
+  "endpoint_class": "openai",
+  "provenance": "synthetic \u2014 authored from bankStatementVision.js STRUCTURED_RESPONSE_SCHEMA for the appliance fixture world (artifact/bank-statement-sep, one line: the counter credit, printed WITHOUT the slip reference as the bank prints it); never a captured provider response",
+  "fixture": "bank_statement_deposit",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_extract_kestrel_barclays_sep",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_extract_kestrel_barclays_sep",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"transactions\":[{\"date\":\"2026-09-03\",\"counterparty\":null,\"payment_method\":\"cash_deposit\",\"message\":null,\"reference\":null,\"description\":\"COUNTER CREDIT YORK PARLIAMENT ST\",\"direction\":\"in\",\"amount\":3000,\"currency\":\"GBP\",\"balance\":6063.75}],\"statement_summary\":{\"opening_balance\":3063.75,\"closing_balance\":6063.75,\"total_deposits\":3000,\"total_payouts\":0,\"currency\":\"GBP\",\"period_start\":\"2026-09-01\",\"period_end\":\"2026-09-30\",\"account_identifier\":\"20-00-00 12345678\"}}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

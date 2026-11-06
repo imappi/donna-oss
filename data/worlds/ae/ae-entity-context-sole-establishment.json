@@ -1,0 +1,91 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/entity-context/sole-establishment",
+  "seed": "ae-entity-context-sole-establishment-v1",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.entity-context.v1",
+    "capabilityId": "record_ae_entity_tax_context",
+    "jurisdiction": "AE",
+    "entityType": "ae-sole-establishment",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_entity_tax_context",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": ["sole_establishment_entity_context", "natural_person_vat_aggregation", "explicit_not_registered_status"],
+    "permittedActions": ["record_context", "request_missing_entity_fact"],
+    "maximumAuthority": "observe_only",
+    "fallback": {"terminalState": "blocked", "responsibleActor": "owner_or_firm", "nextPermittedAction": "request_missing_entity_fact"},
+    "protectedFailures": ["sole_establishment_threshold_per_licence", "unknown_registration_defaulted_false", "period_tax_status_stored_as_profile"]
+  },
+  "policySources": [
+    {
+      "id": "policy/ae-vat-designated-zones",
+      "authority": "Federal Tax Authority",
+      "title": "Designated Zones VAT Guide VATGDZ1",
+      "url": "https://tax.gov.ae/DownloadOpenTextFile?fileUrl=en%2FVAT_VAT_Guides%2FDesignated_Zones_VAT_Guide%2FDesignated_Zones_VAT_Guide_EN.pdf",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-08-31"
+    },
+    {
+      "id": "policy/ae-vat-registration",
+      "authority": "Federal Tax Authority",
+      "title": "Value Added Tax Registration service and FAQ",
+      "url": "https://www.tax.gov.ae/en/services/vat.registration.aspx",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-08-31"
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity/ae-sole-establishment",
+      "kind": "sole_establishment",
+      "legalForm": "ae-sole-establishment",
+      "activeFrom": "2026-04-01",
+      "facts": {
+        "freeZoneStanding": [
+          {"standing": "mainland", "licensingAuthority": "Sharjah Economic Development Department", "emirate": "SHJ", "effectiveFrom": "2026-04-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-sole-establishment-licence"}
+        ],
+        "designatedZone": [
+          {"status": "not_designated", "zoneName": null, "effectiveFrom": "2026-04-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-designated-zone-register-sole", "policySourceId": "policy/ae-vat-designated-zones"}
+        ],
+        "vatRegistration": [
+          {"status": "not_registered", "registrationSubject": "natural_person_all_sole_establishments", "registrationSubjectId": "natural-person/salim-haddad", "trn": null, "registrationBasis": null, "effectiveFrom": "2026-04-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-owner-vat-status-confirmation"}
+        ],
+        "ftaVatPeriods": []
+      }
+    }
+  ],
+  "events": [],
+  "observations": [
+    {"id": "observation/ae-sole-establishment-licence", "artifactId": "artifact/ae-sole-establishment-licence", "observedAt": "2026-04-02"},
+    {"id": "observation/ae-designated-zone-register-sole", "artifactId": "artifact/ae-designated-zone-register-sole", "observedAt": "2026-04-02"},
+    {"id": "observation/ae-owner-vat-status-confirmation", "artifactId": "artifact/ae-owner-vat-status-confirmation", "observedAt": "2026-04-03"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {
+      "id": "artifact/ae-sole-establishment-licence",
+      "kind": "trade_licence",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic UAE Sole-Establishment Trade Licence",
+      "fields": {"tradeName": "Saffron Lens Studio", "owner": "Salim Haddad", "licenceNumber": "SYNTH-AE-SE-000001", "licensingAuthority": "Sharjah Economic Development Department", "issueDate": "2026-04-01"}
+    },
+    {
+      "id": "artifact/ae-designated-zone-register-sole",
+      "kind": "designated_zone_register_extract",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic FTA Designated-Zone Register Check",
+      "fields": {"establishment": "Sharjah mainland", "status": "not_designated", "checkedOn": "2026-04-02"}
+    },
+    {
+      "id": "artifact/ae-owner-vat-status-confirmation",
+      "kind": "owner_fact_confirmation",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic Owner VAT-Registration Confirmation",
+      "fields": {"owner": "Salim Haddad", "registrationSubject": "All sole establishments owned by Salim Haddad", "vatRegistrationStatus": "not_registered", "confirmedOn": "2026-04-03"}
+    }
+  ]
+}

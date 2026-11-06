@@ -1,0 +1,55 @@
+{
+  "id": "003-partial-payment-then-completion",
+  "title": "Two-part payment — deposit then balance, same customer",
+  "tags": ["partial_payment", "same_currency", "customer_overlap"],
+  "narrative": "Invoice for EUR 5000 settled in two transfers from the same customer (EUR 2000 deposit, EUR 3000 balance two weeks later). The LLM matcher should propose both bank lines. Either order in the proposals array is fine — the harness compares as sets.",
+  "document": {
+    "id": "si-partial-003",
+    "document_type": "sales_invoice",
+    "customer_name": "Berlin Bakehouse GmbH",
+    "document_date": "2026-04-15",
+    "due_date": "2026-05-15",
+    "total_amount": 5000.00,
+    "currency": "EUR",
+    "reference_number": "INV-2026-0088",
+    "extraction_confidence": 0.96,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-berlin-deposit",
+      "money_in": 2000.00,
+      "currency": "EUR",
+      "date": "2026-04-20",
+      "description": "DEPOSIT BERLIN BAKEHOUSE INV-2026-0088",
+      "raw_description": "SEPA CT BERLIN BAKEHOUSE GMBH DEPOSIT INV-2026-0088",
+      "contact": "Berlin Bakehouse GmbH"
+    },
+    {
+      "id": "tx-berlin-balance",
+      "money_in": 3000.00,
+      "currency": "EUR",
+      "date": "2026-05-04",
+      "description": "BALANCE BERLIN BAKEHOUSE INV-2026-0088",
+      "raw_description": "SEPA CT BERLIN BAKEHOUSE GMBH BALANCE INV-2026-0088",
+      "contact": "Berlin Bakehouse GmbH"
+    },
+    {
+      "id": "tx-unrelated-rent",
+      "money_in": 1800.00,
+      "currency": "EUR",
+      "date": "2026-04-22",
+      "description": "RENT FROM TENANT-B",
+      "raw_description": "RENT TENANT B APR 2026",
+      "contact": "Tenant B"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      { "bank_transaction_id": "tx-berlin-deposit" },
+      { "bank_transaction_id": "tx-berlin-balance" }
+    ],
+    "unmatchable_reason": null
+  }
+}

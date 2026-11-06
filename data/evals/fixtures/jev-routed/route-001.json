@@ -1,0 +1,42 @@
+{
+  "id": "route-001",
+  "split": "development",
+  "source_family": "authored-001",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-1",
+    "document_type": "supplier_bill",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 420,
+    "currency": "EUR",
+    "reference_number": "BILL-8101",
+    "payment_status": "unpaid",
+    "vendor_name": "Alder Workshop Ltd"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-1-a",
+      "money_in": 0,
+      "money_out": 420,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Alder Workshop Ltd",
+      "description": "BANK TRANSFER Alder Workshop Ltd BILL-8101",
+      "raw_description": "BANK TRANSFER Alder Workshop Ltd BILL-8101",
+      "reconciliation_status": null,
+      "payload": {}
+    }
+  ],
+  "matches": [],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "match",
+    "matches": [
+      "candidate_1"
+    ]
+  },
+  "label_basis": "Explicit invoice identity, payment reference, party and amount."
+}

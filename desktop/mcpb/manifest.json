@@ -1,0 +1,32 @@
+{
+  "manifest_version": "0.3",
+  "name": "donna-books",
+  "display_name": "Donna — Books Status",
+  "version": "0.2.1",
+  "description": "Read-only view of your Donna-run books: close status, blockers, outstanding documents, and Donna's recent activity.",
+  "long_description": "Connects Claude to the Donna desktop app running on this machine. Ask what's blocking a close, which clients still owe documents, and what Donna finished overnight. Read-only by design: Claude cannot post, approve, file or send anything through this extension, and each business is only visible after you expose it inside Donna. Every call is written to Donna's audit trail. No Donna yet? Try it anyway: without Donna running, the extension answers from a clearly labeled built-in sample company, so you can see the experience before connecting anything.",
+  "author": {
+    "name": "Donna"
+  },
+  "icon": "icon.png",
+  "keywords": ["bookkeeping", "accounting", "reconciliation", "month-end close", "books"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.mjs"]
+    }
+  },
+  "tools": [
+    { "name": "entity_list", "description": "List the businesses this Donna installation exposes to Claude, with a close-status summary for each." },
+    { "name": "close_status", "description": "Close/reconcile state for one business: bucket counts, close blockers, open owner questions." },
+    { "name": "unmatched_items", "description": "Unresolved transactions and documents for one business, paginated." },
+    { "name": "document_status", "description": "Outstanding document/evidence requests — what each business still owes." },
+    { "name": "audit_recent", "description": "Recent Donna actions from the audit trail (\"what did Donna do overnight\")." }
+  ],
+  "compatibility": {
+    "platforms": ["darwin"],
+    "runtimes": { "node": ">=18" }
+  }
+}

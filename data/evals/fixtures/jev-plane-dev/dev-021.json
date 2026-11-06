@@ -1,0 +1,211 @@
+{
+  "id": "dev-021",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-021",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "INVOICE INV-2250\nFrom: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nVAT registration: GB 312 4567 89\nBill to: Larkspur Interiors Ltd\nInvoice date: 25/08/2026    Due date: 24/09/2026    Terms: 30 days\nDescription: E-commerce build, milestone 1\nNet total: £4,166.67\nVAT @ 20%: £833.33\nTOTAL DUE: £5,000.00\nPayment: bank transfer to sort code 20-45-67, account 12345678, quoting INV-2250.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "INVOICE DEP-2250\nFrom: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nVAT registration: GB 312 4567 89\nBill to: Larkspur Interiors Ltd\nInvoice date: 01/08/2026    Due date: 08/08/2026    Terms: 7 days\nDescription: Project deposit held on account (customer deposit, refundable until milestone 1 acceptance)\nNet total: £1,666.67\nVAT @ 20%: £333.33\nTOTAL DUE: £2,000.00\nPayment: bank transfer to sort code 20-45-67, account 12345678, quoting DEP-2250.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n06/08/2026,FPI,\"LARKSPUR INTERIORS DEPOSIT\",,2000.00,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "deposit-receipt",
+        "version": "1",
+        "current_version": "1",
+        "kind": "deposit_receipt",
+        "content": "Northgate Web Studio Ltd — Deposit receipt DEP-2250\nReceived 06/08/2026 from Larkspur Interiors Ltd: £2,000.00 by Faster Payment (reference DEPOSIT)\nHeld on account as a refundable project deposit under deposit request DEP-2250. Not applied to any invoice; to be released against the final milestone invoice on acceptance.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-06",
+        "money_in_minor": 200000,
+        "money_out_minor": 0,
+        "currency": "GBP",
+        "contact": "Larkspur Interiors Ltd",
+        "description": "LARKSPUR INTERIORS DEPOSIT",
+        "raw_description": "06/08/2026,FPI,\"LARKSPUR INTERIORS DEPOSIT\",,2000.00,GBP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "different_obligation",
+        "source_id": "deposit-receipt",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-r1"
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-08-01",
+        "reference": "DEP-2250"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-25",
+      "due_date": "2026-09-24",
+      "amount_minor": 500000,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "INV-2250",
+      "counterparty": "Larkspur Interiors Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "deposit-receipt",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "deposit-receipt",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-gb-retainer-deposit-vs-invoice",
+    "family_description": "Customer pays a deposit on account for a project; a later invoice bills the project.",
+    "market": "GB",
+    "variant": "a",
+    "error_mode": "deposit held on account is a different obligation unless the customer applies it",
+    "label_reason": "The deposit receipt states the £2,000 is held on account under deposit request DEP-2250 and not applied to any invoice; the deposit is a separate obligation in the group.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "unresolved_research"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "contradicted",
+      "obligation": "contradicted",
+      "exclusion": "supported"
+    }
+  },
+  "expected": {
+    "route": "unresolved_research",
+    "proposals": []
+  }
+}

@@ -1,0 +1,3551 @@
+{
+  "version": "fi-kultalanka-labels-v1",
+  "pack": "fi-kultalanka-2025-02",
+  "provenance": "Everything in the pack is fictional, as the answer key states. ORIGINAL labels are the answer key verbatim and are never edited; ADJUDICATED labels are Ilkka's operator calls of 2026-09-24 (not professional review); DISPUTED lines carry no gold until Ilkka decides. Tree positions are cited to the code or test that encodes them at the time of writing.",
+  "entity": {
+    "company_name": "Kampaamo Kultalanka Oy",
+    "business_id": "3224455-8",
+    "vat_id": "FI32244558",
+    "entity_type": "fi-oy",
+    "jurisdiction": "FI",
+    "currency": "EUR",
+    "accounting_basis": "accrual",
+    "period": "2025-02",
+    "period_start": "2025-02-01",
+    "period_end": "2025-02-28",
+    "bank": {
+      "iban": "FI03 5000 9420 0012 34",
+      "opening": 8136.99,
+      "closing": 14000
+    }
+  },
+  "answer_key": {
+    "file": "90 Kirjausohje ja vastaukset - Kultalanka 02-2025.pdf",
+    "sections": {
+      "A": [
+        {
+          "id": "A.1",
+          "title": "Yksityisajo yrityskortilla (St1 14.2., 52,10 €)",
+          "text": "Kuittiin on merkitty käsin ”YKSITYISAJO 14.2. / M.L.”. Kulu kirjataan tilille 7090 Yksityisotot. ALV:ta (10,59 €) EI saa vähentää, eikä kulua saa kirjata autokuluksi."
+        },
+        {
+          "id": "A.2",
+          "title": "Tuplaveloitus (Tokmanni 14.2., 2 × 19,90 €)",
+          "text": "Sama ostos on veloitettu kahdesti; hyvitys näkyy tiliotteella 17.2. (+19,90 €). Kirjaa vain yksi ostos tai kumoa ylimääräinen hyvityksellä. Kuitti löytyy vain yhdestä ostoksesta."
+        },
+        {
+          "id": "A.3",
+          "title": "Puuttuva kuitti (Shell 26.2., 40,00 €)",
+          "text": "Tiliotteella on korttiosto, mutta kuittia ei ole toimitettu. Ilman tositetta ALV-vähennystä ei voi tehdä. Merkitse selvitykseen / kirjaa väliaikaisesti ilman ALV:tä ja pyydä kuitti."
+        },
+        {
+          "id": "A.4",
+          "title": "Käteisostos (Kukkakauppa 25.2., 22,00 €)",
+          "text": "Kuitti on maksettu käteisellä — sitä EI löydy tiliotteelta. Kirjaus kohdistuu käteiskassaan (1900), ei pankkitilille."
+        },
+        {
+          "id": "A.5",
+          "title": "Maksunvälittäjän nettosetlementit (Nets)",
+          "text": "Tilille tulevat erät ovat bruttomyyntiä miinus 1,10 % palvelumaksu (yht. 113,52 €, arvonlisäveroton rahoituspalvelu). Myynti kirjataan bruttopohjaisesti ja palkkio omaksi kuluksi. Viikon 9 myynti (24.–28.2.) settlementoituu vasta 3.3. — jää kirjaamatta helmikuun kassavirtaan, vaikka myynti kuuluu helmikuuhun."
+        },
+        {
+          "id": "A.6",
+          "title": "Käännetty ALV, kolme ostoa",
+          "text": "Wella Germany (tavaraosto EU:sta, 320,00 €), Meta Platforms Ireland (mainonta, 150,00 €) ja Google Ireland (pilvipalvelu, 13,60 €). Suomalainen ALV 25,5 % ilmoitetaan sekä verona että vähennyksenä (yht. 123,32 €) — verottajalle ei mene mitään, mutta ilmoitusvelvollisuus on."
+        },
+        {
+          "id": "A.7",
+          "title": "Hyvityslasku ja netotettu maksu",
+          "text": "Lasku 1001 (2 008,00 €) hyvitetään osittain hyvityslaskulla 1003 (− 376,50 €). Asiakas maksoi netotetun summan 1 631,50 €. Ala kirjaa hyvitystä myyntisaatavana virheellisesti erillisenä."
+        },
+        {
+          "id": "A.8",
+          "title": "Myöhässä maksettu lasku + viivästyskorko",
+          "text": "Lasku 1002 (903,60 €, eräpäivä 19.2.) maksettiin 24.2. muistutuksen jälkeen yhdessä 20,00 € viivästyskoron kanssa. Viivästyskorko on arvonlisäverotonta korkotuloa (3580), ei myyntiä."
+        },
+        {
+          "id": "A.9",
+          "title": "Lainanerän jako",
+          "text": "Tiliotteen 412,35 € erä jakautuu lainalaskelman mukaan: korko 67,98 € (8810 Korkokulut) ja lyhennys 344,37 € (2620 Yrityslaina)."
+        },
+        {
+          "id": "A.10",
+          "title": "Palkkojen ajoitus",
+          "text": "Tiliotteella 12.2. maksetut ennakonpidätys, sava, TyEL ja TVR koskevat TAMMIKUUN 2025 palkkoja. Helmikuun palkan (28.2. maksettu netto 1 926,24 €) verot ja sivukulut erääntyvät vasta maaliskuussa."
+        },
+        {
+          "id": "A.11",
+          "title": "Verottomat maksut",
+          "text": "Vuokra (ei alv-hakeutumista), vakuutus, TyEL, palkat, verot, pankkimaksut ja Nets-palkkio ovat kaikki arvonlisäverottomia — näistä ei saa tehdä ALV-vähennystä."
+        },
+        {
+          "id": "A.12",
+          "title": "Usean verokannan kuitit",
+          "text": "K-Supermarket (14 % + veroton pantti 0,62 €), Prisma (25,5 % + 14 %), Suomalainen Kirjakauppa (25,5 % + kirja 10 %). ALV on eriteltävä verokannoittain."
+        }
+      ]
+    }
+  },
+  "sources": [
+    {
+      "file": "01 OP Tiliote 02-2025.pdf",
+      "sha256": "8b4607c2d834aebb260e3df1942bdd76854d190d78a69466ab2f89a3dd7262c5"
+    },
+    {
+      "file": "02 OP Yrityslaina - lainalaskelma 02-2025.pdf",
+      "sha256": "e4db66146b6442ba9467f40ea843c45cfea4ca946f07d5581e0604f0ce5684ca"
+    },
+    {
+      "file": "10 Myyntilasku 1001 - Kahvila Aroma Oy.pdf",
+      "sha256": "090e5242c2e3cda2f71e873d7efa4babc8daaf8da5decea4119fa1209a1d2b8c"
+    },
+    {
+      "file": "11 Myyntilasku 1002 - Lumikki Oy.pdf",
+      "sha256": "0b842791b69c9c102bc816b2aef45b6423c3627f62a77d69dddda6f097e6191b"
+    },
+    {
+      "file": "12 Muistutuslasku 1002-M - Lumikki Oy.pdf",
+      "sha256": "0e25745651f5062e6393c559bfd12ba3eb816dd2d8ac30d94cf68e3bfcb6ccdd"
+    },
+    {
+      "file": "13 Hyvityslasku 1003 - Kahvila Aroma Oy.pdf",
+      "sha256": "83deb1c89c9c19fa291fac1e4fcb42108e14b55c3628bcf9547a46981af7dd7d"
+    },
+    {
+      "file": "14 Nets kuukausiraportti 02-2025.pdf",
+      "sha256": "2de36b63bfee0d7ba56184ecbb1d126b8a72e9c1b4e43e3a6618f39215e20812"
+    },
+    {
+      "file": "20 Vuokralasku 02-2025 - Kiinteistö Oy Hämeen Sali.pdf",
+      "sha256": "bb2e3176c039db85011a22cf6ee2f68b4018295bcf6148fedba04359f5cf74ce"
+    },
+    {
+      "file": "21 Sähkölasku 01-2025 - Tampere Energia Oy.pdf",
+      "sha256": "d96e96083661378cf999da64fa857b378f41056bfb26a60830b641d7b08f3447"
+    },
+    {
+      "file": "22 Puhelin- ja nettilasku - Suomen Teleyhtymä Oy.pdf",
+      "sha256": "f76eaacd9debe8a3caf233ce33034adcb4137de577485f25af16cfba07e6d9a7"
+    },
+    {
+      "file": "23 Ostolasku 88231 - Pohjolan Hius-Tukku Oy.pdf",
+      "sha256": "af68d3adfb6fc5799cde89502677f4b6b119fc88b539b56b6b94bc59577bb32b"
+    },
+    {
+      "file": "24 Vakuutuslasku - Turva-Suomi.pdf",
+      "sha256": "23fc7926097c2682500ce48507dcdfd6a4e7b976dde57f7f048189de7592a7bd"
+    },
+    {
+      "file": "25 TyEL-lasku 01-2025 - Ilmarinen.pdf",
+      "sha256": "474c233b7cf69b5bd7f83031e570eb7b9f29ff8b93ec4a4947ebf9fb7dbe2b8e"
+    },
+    {
+      "file": "26 Meta Platforms Ireland - lasku (käännetty ALV).pdf",
+      "sha256": "5bb75f45fac6c05c72a4f4748de4503a4a968d0aec0dfd2eda4b3ac942b1f07e"
+    },
+    {
+      "file": "27 Google Ireland - lasku (käännetty ALV).pdf",
+      "sha256": "e4fcd91ebef0e265806f4037a80cd2c2538075c0a468a3f127cc48667b09cab7"
+    },
+    {
+      "file": "28 Wella Germany - lasku (EU-tavaraosto).pdf",
+      "sha256": "a3f50cd4785e483ca6fc0c46ec49c303d692b82716081c71832f0a292f03deae"
+    },
+    {
+      "file": "30 Palkkalaskelma 02-2025 - Korhonen Saara.pdf",
+      "sha256": "ca9d9ec8db811feb3a8153c499b0dd1d96a5cee08ea9f2c3dd6938d28456700d"
+    },
+    {
+      "file": "40 Kuitti 04.02 - K-Supermarket Tampella.pdf",
+      "sha256": "05f72f904eff99f44f70e1338720e05396c67d6511fe94738eabb0fb91ae72fb"
+    },
+    {
+      "file": "41 Kuitti 14.02 - Hesburger Koskikeskus.pdf",
+      "sha256": "ae5510deb97b5da30a9118454b228113b76f2e50b234ee84e7b4de062a10239c"
+    },
+    {
+      "file": "42 Kuitti 14.02 - St1 Hervanta (YKSITYISAJO).pdf",
+      "sha256": "87b00202887dc30b385ee9470cb45d5f8dc871a0a26d343ef56ff53f85236d53"
+    },
+    {
+      "file": "43 Kuitti 14.02 - Tokmanni Koskikeskus.pdf",
+      "sha256": "6c493df49d0610da92fc1ae735d0853b907cd279b78cf3b980142464dc35fe44"
+    },
+    {
+      "file": "44 Kuitti 18.02 - Suomalainen Kirjakauppa.pdf",
+      "sha256": "95b8fd5a29105c96bc398faba614a62c9527c3177e3e2ec12990acb07efdfd61"
+    },
+    {
+      "file": "45 Kuitti 19.02 - P-Tampere pysäköinti.pdf",
+      "sha256": "d89541986bc6ff75fa49c79cb423c8156d307fdec5b425b8b5235f3f1b10c804"
+    },
+    {
+      "file": "46 Kuitti 21.02 - Prisma Lielahti.pdf",
+      "sha256": "129a97f2c1fa61923a51cc86ab868ccca123649f3a44f9bda7ba0bdccc097cc4"
+    },
+    {
+      "file": "47 Kuitti 21.02 - VR lippu.pdf",
+      "sha256": "bc83a39c2aa826fc5a93147f61a5aa885990ad21c274f6b3b0000c185482a6e3"
+    },
+    {
+      "file": "48 Kuitti 26.02 - Taksi Tampere.pdf",
+      "sha256": "17aee7a5e8327313015b8633d7ca7470f857447ee7c2ae30a7016e0ccbd0d1b5"
+    },
+    {
+      "file": "49 Kuitti 25.02 - Kukkakauppa Kukka-Aho (KÄTEINEN).pdf",
+      "sha256": "4fe7525c4a73b3d462c6aa35ad2bd9a4da08e43be5027a7420df255752758547"
+    },
+    {
+      "file": "90 Kirjausohje ja vastaukset - Kultalanka 02-2025.pdf",
+      "sha256": "60b83037ee8cb78d1b0685f29ce2d36f8ca0162e312a5a2e1275b80006f31ad5"
+    }
+  ],
+  "documents": [
+    {
+      "file": "20 Vuokralasku 02-2025 - Kiinteistö Oy Hämeen Sali.pdf",
+      "document_type": "supplier_bill",
+      "party": "Kiinteistö Oy Hämeen Sali",
+      "total_amount": 1450,
+      "tax_amount": 0,
+      "lines": [
+        {
+          "description": "Toimitilavuokra 2/2025 — Hämeenkatu 12 (vuokra arvonlisäverotonta, AVL 27 §)",
+          "amount": 1450,
+          "tax_rate": 0
+        }
+      ]
+    },
+    {
+      "file": "21 Sähkölasku 01-2025 - Tampere Energia Oy.pdf",
+      "document_type": "supplier_bill",
+      "party": "Tampere Energia Oy",
+      "total_amount": 359.42,
+      "tax_amount": 73.03,
+      "lines": [
+        {
+          "description": "Sähkön myynti ja siirto 1/2025",
+          "amount": 359.42,
+          "tax_rate": 25.5
+        }
+      ]
+    },
+    {
+      "file": "22 Puhelin- ja nettilasku - Suomen Teleyhtymä Oy.pdf",
+      "document_type": "supplier_bill",
+      "party": "Suomen Teleyhtymä Oy",
+      "total_amount": 59.32,
+      "tax_amount": 12.05,
+      "lines": [
+        {
+          "description": "Yritysliittymä Pro ja yritysnetti",
+          "amount": 59.32,
+          "tax_rate": 25.5
+        }
+      ]
+    },
+    {
+      "file": "23 Ostolasku 88231 - Pohjolan Hius-Tukku Oy.pdf",
+      "document_type": "supplier_bill",
+      "party": "Pohjolan Hius-Tukku Oy",
+      "total_amount": 610.18,
+      "tax_amount": 123.98,
+      "lines": [
+        {
+          "description": "Sävytteet, shampoot, hoitoaineet ja käsineet",
+          "amount": 610.18,
+          "tax_rate": 25.5
+        }
+      ]
+    },
+    {
+      "file": "24 Vakuutuslasku - Turva-Suomi.pdf",
+      "document_type": "supplier_bill",
+      "party": "Keskinäinen Vakuutusyhtiö Turva-Suomi",
+      "total_amount": 198.6,
+      "tax_amount": 0,
+      "lines": [
+        {
+          "description": "Liiketoimintavakuutus 1.2.-30.4.2025 (AVL 44 §)",
+          "amount": 198.6,
+          "tax_rate": 0
+        }
+      ]
+    },
+    {
+      "file": "25 TyEL-lasku 01-2025 - Ilmarinen.pdf",
+      "document_type": "supplier_bill",
+      "party": "Ilmarinen Keskinäinen Eläkevakuutusyhtiö",
+      "total_amount": 596.4,
+      "tax_amount": 0,
+      "lines": [
+        {
+          "description": "TyEL-maksu 1/2025, työnantajan ja työntekijän osuus",
+          "amount": 596.4,
+          "tax_rate": 0
+        }
+      ]
+    },
+    {
+      "file": "26 Meta Platforms Ireland - lasku (käännetty ALV).pdf",
+      "document_type": "supplier_bill",
+      "party": "Meta Platforms Ireland Limited",
+      "total_amount": 150,
+      "tax_amount": 0,
+      "lines": [
+        {
+          "description": "Online advertising services (reverse charge, Art. 196)",
+          "amount": 150,
+          "tax_rate": 0
+        }
+      ]
+    },
+    {
+      "file": "27 Google Ireland - lasku (käännetty ALV).pdf",
+      "document_type": "supplier_bill",
+      "party": "Google Ireland Limited",
+      "total_amount": 13.6,
+      "tax_amount": 0,
+      "lines": [
+        {
+          "description": "Google Workspace Business Starter (reverse charge, Art. 196)",
+          "amount": 13.6,
+          "tax_rate": 0
+        }
+      ]
+    },
+    {
+      "file": "28 Wella Germany - lasku (EU-tavaraosto).pdf",
+      "document_type": "supplier_bill",
+      "party": "Wella Germany GmbH",
+      "total_amount": 320,
+      "tax_amount": 0,
+      "lines": [
+        {
+          "description": "Salon and resale products (intra-Community supply, Art. 138)",
+          "amount": 320,
+          "tax_rate": 0
+        }
+      ]
+    },
+    {
+      "file": "40 Kuitti 04.02 - K-Supermarket Tampella.pdf",
+      "document_type": "receipt",
+      "party": "K-Supermarket Tampella",
+      "total_amount": 18.74,
+      "tax_amount": 2.23,
+      "lines": [
+        {
+          "description": "Kahvi, maito, keksit ja suklaa",
+          "amount": 18.12,
+          "tax_rate": 14
+        },
+        {
+          "description": "Pantti 2 kpl",
+          "amount": 0.62,
+          "tax_rate": 0
+        }
+      ]
+    },
+    {
+      "file": "41 Kuitti 14.02 - Hesburger Koskikeskus.pdf",
+      "document_type": "receipt",
+      "party": "Hesburger Koskikeskus",
+      "total_amount": 12.9,
+      "tax_amount": 1.58,
+      "lines": [
+        {
+          "description": "Hesburger menu",
+          "amount": 12.9,
+          "tax_rate": 14
+        }
+      ]
+    },
+    {
+      "file": "42 Kuitti 14.02 - St1 Hervanta (YKSITYISAJO).pdf",
+      "document_type": "receipt",
+      "party": "St1 Tampere Hervanta",
+      "total_amount": 52.1,
+      "tax_amount": 10.59,
+      "lines": [
+        {
+          "description": "Bensa 95E10 30,01 l — käsin: YKSITYISAJO 14.2. / M.L.",
+          "amount": 52.1,
+          "tax_rate": 25.5
+        }
+      ]
+    },
+    {
+      "file": "44 Kuitti 18.02 - Suomalainen Kirjakauppa.pdf",
+      "document_type": "receipt",
+      "party": "Suomalainen Kirjakauppa",
+      "total_amount": 43.45,
+      "tax_amount": 7.14,
+      "lines": [
+        {
+          "description": "Kuittirulla, kuulakynät, Post-it",
+          "amount": 28.44,
+          "tax_rate": 25.5
+        },
+        {
+          "description": "Kirja: Kampaamoyrityksen talous",
+          "amount": 15.01,
+          "tax_rate": 10
+        }
+      ]
+    },
+    {
+      "file": "45 Kuitti 19.02 - P-Tampere pysäköinti.pdf",
+      "document_type": "receipt",
+      "party": "P-Tampere Oy",
+      "total_amount": 4.2,
+      "tax_amount": 0.85,
+      "lines": [
+        {
+          "description": "Pysäköinti 2 h",
+          "amount": 4.2,
+          "tax_rate": 25.5
+        }
+      ]
+    },
+    {
+      "file": "46 Kuitti 21.02 - Prisma Lielahti.pdf",
+      "document_type": "receipt",
+      "party": "Prisma Tampere Lielahti",
+      "total_amount": 33.15,
+      "tax_amount": 5.85,
+      "lines": [
+        {
+          "description": "Pesuaineet, pyyhkeet, talouspaperi, kynttilä, lamppu",
+          "amount": 22.21,
+          "tax_rate": 25.5
+        },
+        {
+          "description": "Kahvi ja kaurajuoma",
+          "amount": 10.94,
+          "tax_rate": 14
+        }
+      ]
+    },
+    {
+      "file": "47 Kuitti 21.02 - VR lippu.pdf",
+      "document_type": "receipt",
+      "party": "VR Matkustajaliikenne",
+      "total_amount": 28.6,
+      "tax_amount": 2.6,
+      "lines": [
+        {
+          "description": "Tampere-Helsinki Eko",
+          "amount": 28.6,
+          "tax_rate": 10
+        }
+      ]
+    },
+    {
+      "file": "48 Kuitti 26.02 - Taksi Tampere.pdf",
+      "document_type": "receipt",
+      "party": "Taksi Tampere Oy",
+      "total_amount": 17.5,
+      "tax_amount": 1.59,
+      "lines": [
+        {
+          "description": "Kyyti 3,4 km",
+          "amount": 17.5,
+          "tax_rate": 10
+        }
+      ]
+    }
+  ],
+  "multi_line_documents": [
+    "14 Nets kuukausiraportti 02-2025.pdf"
+  ],
+  "crosswalk": [
+    {
+      "key_account": "1900",
+      "key_name": "Käteiskassa",
+      "accept": {
+        "account_codes": [
+          "1900"
+        ]
+      },
+      "note": "Cash on hand; the bank account (asset.cash) is NOT accepted for it."
+    },
+    {
+      "key_account": "1910",
+      "key_name": "Pankkitili OP",
+      "accept": {
+        "roles": [
+          "asset.cash"
+        ],
+        "line_roles": [
+          "bank"
+        ]
+      }
+    },
+    {
+      "key_account": "1700",
+      "key_name": "Myyntisaamiset",
+      "accept": {
+        "roles": [
+          "asset.accounts_receivable"
+        ]
+      }
+    },
+    {
+      "key_account": "1760",
+      "key_name": "ALV-saamiset (key numbering)",
+      "accept": {
+        "account_codes": [
+          "2940"
+        ],
+        "line_roles": [
+          "alv_input_deductible"
+        ]
+      },
+      "note": "The key's 1760 is Donna's 2940 Vähennettävä arvonlisävero. Donna's own 1760 is Lainasaamiset osakkailta — never match by number."
+    },
+    {
+      "key_account": "1761",
+      "key_name": "Käänn. ALV-vähennys",
+      "accept": {
+        "represented_by_alv_code": true
+      },
+      "note": "Reverse charge has one accepted representation: the self-assessed deduction rides the base line's ALV code (ALV_EU_ACQUISITION / ALV_EU_SERVICE_ACQUISITION), as finland/alvReturn.js computes 305/306 and 307 from it (alvCodes.js splitAlvGross posts no legs). A posted leg would count twice in 307 and among the domestic deductible legs, so it is scored as a tax error."
+    },
+    {
+      "key_account": "2937",
+      "key_name": "Käänn. ALV-velka",
+      "accept": {
+        "represented_by_alv_code": true
+      },
+      "note": "See 1761."
+    },
+    {
+      "key_account": "2939",
+      "key_name": "ALV-velka",
+      "accept": {
+        "account_codes": [
+          "2939"
+        ]
+      }
+    },
+    {
+      "key_account": "1930",
+      "key_name": "Ennakonpidätysvelka",
+      "accept": {
+        "roles": [
+          "liability.payroll_payable"
+        ]
+      }
+    },
+    {
+      "key_account": "1940",
+      "key_name": "Sava-velka",
+      "accept": {
+        "roles": [
+          "liability.payroll_payable"
+        ]
+      }
+    },
+    {
+      "key_account": "1950",
+      "key_name": "TyEL-velka",
+      "accept": {
+        "roles": [
+          "liability.payroll_payable"
+        ]
+      }
+    },
+    {
+      "key_account": "1955",
+      "key_name": "TVR-velka",
+      "accept": {
+        "roles": [
+          "liability.payroll_payable"
+        ]
+      }
+    },
+    {
+      "key_account": "2620",
+      "key_name": "Yrityslaina",
+      "accept": {
+        "roles": [
+          "liability.loan"
+        ]
+      }
+    },
+    {
+      "key_account": "3000",
+      "key_name": "Myynti / Palvelumyynti",
+      "accept": {
+        "roles": [
+          "revenue.operating"
+        ]
+      }
+    },
+    {
+      "key_account": "3010",
+      "key_name": "Käteismyynti",
+      "accept": {
+        "roles": [
+          "revenue.operating"
+        ]
+      }
+    },
+    {
+      "key_account": "3580",
+      "key_name": "Korkotuotot",
+      "accept": {
+        "roles": [
+          "revenue.interest"
+        ]
+      }
+    },
+    {
+      "key_account": "4010",
+      "key_name": "Toimitilavuokra",
+      "accept": {
+        "roles": [
+          "expense.rent"
+        ]
+      }
+    },
+    {
+      "key_account": "4080",
+      "key_name": "Matkakulut",
+      "accept": {
+        "roles": [
+          "expense.travel",
+          "expense.motor"
+        ]
+      },
+      "note": "Parking is accepted as travel or motor expense."
+    },
+    {
+      "key_account": "4140",
+      "key_name": "Sähkö",
+      "accept": {
+        "roles": [
+          "expense.utilities"
+        ]
+      }
+    },
+    {
+      "key_account": "4340",
+      "key_name": "Siivous-/hoitotarvikkeet",
+      "accept": {
+        "roles": [
+          "expense.operating_supplies"
+        ]
+      }
+    },
+    {
+      "key_account": "4351",
+      "key_name": "EU-tavaraostot",
+      "accept": {
+        "roles": [
+          "expense.cost_of_sales",
+          "expense.operating_supplies"
+        ]
+      },
+      "note": "Salon-use and resale stock on one invoice; either purchase role is accepted."
+    },
+    {
+      "key_account": "4540",
+      "key_name": "Toimistotarvikkeet",
+      "accept": {
+        "roles": [
+          "expense.office"
+        ]
+      }
+    },
+    {
+      "key_account": "4560",
+      "key_name": "Puhelin/netti",
+      "accept": {
+        "roles": [
+          "expense.telecom"
+        ]
+      }
+    },
+    {
+      "key_account": "5000",
+      "key_name": "Palkat",
+      "accept": {
+        "roles": [
+          "expense.payroll"
+        ]
+      }
+    },
+    {
+      "key_account": "5210",
+      "key_name": "Henkilöstön virvokkeet",
+      "accept": {
+        "roles": [
+          "expense.meals",
+          "expense.office",
+          "expense.operating_supplies"
+        ]
+      },
+      "note": "Donna's FI palette has no staff-welfare account; review this acceptance set."
+    },
+    {
+      "key_account": "5460",
+      "key_name": "Vakuutusmaksut",
+      "accept": {
+        "roles": [
+          "expense.insurance"
+        ]
+      }
+    },
+    {
+      "key_account": "5560",
+      "key_name": "Ohjelmat",
+      "accept": {
+        "roles": [
+          "expense.software"
+        ]
+      }
+    },
+    {
+      "key_account": "5570",
+      "key_name": "Markkinointi",
+      "accept": {
+        "roles": [
+          "expense.marketing"
+        ]
+      }
+    },
+    {
+      "key_account": "5960",
+      "key_name": "Pantit ym.",
+      "accept": {
+        "roles": [
+          "expense.meals",
+          "expense.office",
+          "expense.operating_supplies"
+        ]
+      },
+      "note": "Bottle deposit on the refreshment receipt; accepted on the same accounts as 5210."
+    },
+    {
+      "key_account": "5990",
+      "key_name": "Pankkipalvelumaksut",
+      "accept": {
+        "roles": [
+          "expense.bank_fees"
+        ]
+      }
+    },
+    {
+      "key_account": "7020",
+      "key_name": "Tarvike-/myyntituoteostot",
+      "accept": {
+        "roles": [
+          "expense.cost_of_sales",
+          "expense.operating_supplies"
+        ]
+      }
+    },
+    {
+      "key_account": "7090",
+      "key_name": "Yksityisotot",
+      "accept": {
+        "roles": [
+          "equity.owner_drawings"
+        ]
+      },
+      "note": "Sole-trader account; appears only in an original label that Ilkka adjudicated away (B17)."
+    },
+    {
+      "key_account": "8810",
+      "key_name": "Korkokulut",
+      "accept": {
+        "roles": [
+          "expense.interest"
+        ]
+      }
+    },
+    {
+      "key_account": "NETS-PALKKIO",
+      "key_name": "Nets palvelumaksu (key names no account)",
+      "accept": {
+        "roles": [
+          "expense.platform_fees"
+        ]
+      },
+      "note": "The key names no account for the fee; the tree's settlement writer posts it to expense.platform_fees. Used only by the disputed Nets proposals."
+    },
+    {
+      "key_account": "KULU-KUKAT",
+      "key_name": "Kukat liiketilaan (key names no account)",
+      "accept": {
+        "roles": [
+          "expense.office",
+          "expense.operating_supplies"
+        ]
+      },
+      "note": "Used only by the disputed cash purchase."
+    }
+  ],
+  "alv_classes": {
+    "none": [
+      "NONE"
+    ],
+    "exempt": [
+      "NONE",
+      "ALV_EXEMPT",
+      "ALV_OUT_OF_SCOPE"
+    ],
+    "out_25_5": [
+      "ALV_25_5_OUTPUT"
+    ],
+    "in_25_5": [
+      "ALV_25_5_INPUT"
+    ],
+    "in_14": [
+      "ALV_14_INPUT"
+    ],
+    "in_10": [
+      "ALV_10_INPUT"
+    ],
+    "eu_goods": [
+      "ALV_EU_ACQUISITION"
+    ],
+    "eu_services": [
+      "ALV_EU_SERVICE_ACQUISITION"
+    ]
+  },
+  "groups": [
+    {
+      "id": "G-TOKMANNI",
+      "members": [
+        "B15",
+        "B16",
+        "B19"
+      ],
+      "derivation": "A.2: only one purchase stands — book one, or reverse the extra with the 17.2. refund. Either representation nets to one purchase over the three bank lines.",
+      "gold": [
+        {
+          "account": "4340",
+          "direction": "debit",
+          "amount": 15.86,
+          "alv": "in_25_5"
+        },
+        {
+          "account": "1760",
+          "direction": "debit",
+          "amount": 4.04,
+          "alv": "none"
+        },
+        {
+          "account": "1910",
+          "direction": "credit",
+          "amount": 19.9,
+          "alv": "none"
+        }
+      ]
+    }
+  ],
+  "lines": [
+    {
+      "id": "B01",
+      "bank": {
+        "statement_row": 1,
+        "date": "2025-02-03",
+        "amount": 2452.72,
+        "direction": "in",
+        "counterparty": "NETS FINLAND OY",
+        "message": "JAKSO VKO5 2025",
+        "kind": "NETS SETTLEMENT"
+      },
+      "key_row": "3.2. Nets setlementti +2 452,72",
+      "decision_class": "processor_settlement",
+      "verbatim": {
+        "debit": "1910 Pankki 2 452,72",
+        "credit": "3000 Myynti 25,5 % (osa) 1 949,18 / 2939 ALV-velka 503,54",
+        "note": "brutto 2 480,00 − palkkio 27,28"
+      },
+      "source_files": [
+        "14 Nets kuukausiraportti 02-2025.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 2452.72,
+            "alv": "none"
+          },
+          {
+            "account": "3000",
+            "direction": "credit",
+            "amount": 1949.18,
+            "alv": "out_25_5"
+          },
+          {
+            "account": "2939",
+            "direction": "credit",
+            "amount": 503.54,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "Adopted the A.5 gross-up: gross sales 2 480,00 at 25,5 % (1 976,10 + 503,90) and the exempt 1,10 % fee 27,28, amounts from the Nets report; the printed row is kept as the original.",
+        "dispute_detail": "The printed row credits the NET settlement as sales and 503,54 as ALV; A.5 says gross sales and the fee as its own expense, and section C totals the gross (10 320,00 / 1,255 = 8 223,11). 503,54 is not 25,5 % of either 2 452,72 or 2 480,00.",
+        "tree_position": {
+          "summary": "Grosses up a settlement matched to its report row: Dr bank net, Dr expense.platform_fees fee (tax NONE), Cr Sales gross base ALV_25_5_OUTPUT, Cr 2939 (alv_output). Refuses by name on any mismatch; a document-level match falls back to the two-line journal.",
+          "citations": [
+            "server/donna/db/ledger.js resolveSettlementRowSplit",
+            "server/donna/settlementRowSplitPgLifecycle.test.js (Kultalanka VKO5: 1910 Dr 2452.72 / fee Dr 27.28 / 3000 Cr 1976.10 / 2939 Cr 503.90)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 2452.72,
+            "alv": "none"
+          },
+          {
+            "account": "NETS-PALKKIO",
+            "direction": "debit",
+            "amount": 27.28,
+            "alv": "exempt"
+          },
+          {
+            "account": "3000",
+            "direction": "credit",
+            "amount": 1976.1,
+            "alv": "out_25_5"
+          },
+          {
+            "account": "2939",
+            "direction": "credit",
+            "amount": 503.9,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      }
+    },
+    {
+      "id": "B02",
+      "bank": {
+        "statement_row": 2,
+        "date": "2025-02-03",
+        "amount": 640,
+        "direction": "in",
+        "counterparty": "OP TAMPERE",
+        "message": "KASSATALLETUS 28.2.-2.3.",
+        "kind": "KÄTEISTALLETUS"
+      },
+      "key_row": "3.2. Käteistalletus +640,00",
+      "decision_class": "cash_sales_deposit",
+      "verbatim": {
+        "debit": "1910 Pankki 640,00",
+        "credit": "3010 Käteismyynti 25,5 % 509,96 / 2939 ALV 130,04",
+        "note": "käteismyynti viikolta"
+      },
+      "source_files": [],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 640,
+            "alv": "none"
+          },
+          {
+            "account": "3010",
+            "direction": "credit",
+            "amount": 509.96,
+            "alv": "out_25_5"
+          },
+          {
+            "account": "2939",
+            "direction": "credit",
+            "amount": 130.04,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "disputed",
+        "reason": "key_books_unevidenced_cash_sales",
+        "raised_by": "claude_for_ilkka",
+        "detail": "No cash-register (Z) report is in the pack; the bank text is the only source, and its period \"28.2.-2.3.\" postdates the 3.2. deposit.",
+        "tree_position": {
+          "dispute": true,
+          "summary": "A deposit coded to operating revenue needs a sales source (sales invoice, issued receipt or payout statement); a deposit or slip never establishes revenue. The sweep asks the owner for the cashbook / till reconciliation (evidence_type supporting_document, Jev ask_sales_source); the writer refuses TRANSACTION_REVENUE_SOURCE_REQUIRED.",
+          "citations": [
+            "server/donna/codingRevenueEvidence.js",
+            "server/donna/codingRevenueEvidence.test.js",
+            "server/donna/codingRevenueEvidencePgLifecycle.test.js (455 deposit → supporting_document)"
+          ],
+          "tree_outcome": {
+            "terminal": "ask_owner",
+            "evidence_type": "supporting_document",
+            "kind": "ask_sales_source"
+          }
+        }
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B03",
+      "bank": {
+        "statement_row": 3,
+        "date": "2025-02-03",
+        "amount": 1450,
+        "direction": "out",
+        "counterparty": "KIINTEISTÖ OY HÄMEEN SALI",
+        "message": "VIITE 10045",
+        "kind": "TILISIIRTO"
+      },
+      "key_row": "3.2. Vuokra −1 450,00",
+      "decision_class": "exempt_purchase",
+      "verbatim": {
+        "debit": "4010 Toimitilavuokra 1 450,00",
+        "credit": "1910 Pankki 1 450,00",
+        "note": "veroton, ei ALV:tä"
+      },
+      "source_files": [
+        "20 Vuokralasku 02-2025 - Kiinteistö Oy Hämeen Sali.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4010",
+            "direction": "debit",
+            "amount": 1450,
+            "alv": "exempt"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 1450,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B04",
+      "bank": {
+        "statement_row": 4,
+        "date": "2025-02-04",
+        "amount": 18.74,
+        "direction": "out",
+        "counterparty": "K-SUPERMARKET TAMPELLA",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "4.2. K-Supermarket −18,74",
+      "decision_class": "multi_rate_receipt",
+      "verbatim": {
+        "debit": "5210 Henkilöstön virvokkeet 15,90 / 1760 ALV 2,22 / 5960 Pantit ym. 0,62",
+        "credit": "1910 Pankki 18,74",
+        "note": "14 % ALV + veroton pantti"
+      },
+      "source_files": [
+        "40 Kuitti 04.02 - K-Supermarket Tampella.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5210",
+            "direction": "debit",
+            "amount": 15.9,
+            "alv": "in_14"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 2.22,
+            "alv": "none"
+          },
+          {
+            "account": "5960",
+            "direction": "debit",
+            "amount": 0.62,
+            "alv": "exempt"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 18.74,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "Adopted the receipt's split: 15,89 + 2,23 ALV at 14 % and the exempt 0,62 deposit (the key prints 15,90 + 2,22).",
+        "dispute_detail": "The receipt prints the 14 % component as 15,89 + 2,23 = 18,12; the key prints 15,90 + 2,22. The tree splits the 18,12 gross the receipt way.",
+        "tree_position": {
+          "summary": "Multi-rate receipts post per component from the source's own printed split (document_allocation); the ALV split derives vat = gross − round(net), which for 18,12 at 14 % gives 15,89 + 2,23, as the receipt prints.",
+          "citations": [
+            "server/donna/db/documentAllocation.js",
+            "server/donna/finland/alvCodes.js splitAlvGross"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5210",
+            "direction": "debit",
+            "amount": 15.89,
+            "alv": "in_14"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 2.23,
+            "alv": "none"
+          },
+          {
+            "account": "5960",
+            "direction": "debit",
+            "amount": 0.62,
+            "alv": "exempt"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 18.74,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      }
+    },
+    {
+      "id": "B05",
+      "bank": {
+        "statement_row": 5,
+        "date": "2025-02-05",
+        "amount": 359.42,
+        "direction": "out",
+        "counterparty": "TAMPERE ENERGIA OY",
+        "message": "SÄHKÖ 1/2025",
+        "kind": "E-LASKU"
+      },
+      "key_row": "5.2. Sähkölasku −359,42",
+      "decision_class": "input_vat_rate",
+      "verbatim": {
+        "debit": "4140 Sähkö 286,39 / 1760 ALV 73,03",
+        "credit": "1910 Pankki 359,42",
+        "note": "ostolasku"
+      },
+      "source_files": [
+        "21 Sähkölasku 01-2025 - Tampere Energia Oy.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4140",
+            "direction": "debit",
+            "amount": 286.39,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 73.03,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 359.42,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B06",
+      "bank": {
+        "statement_row": 6,
+        "date": "2025-02-06",
+        "amount": 13.6,
+        "direction": "out",
+        "counterparty": "GOOGLE *WORKSPACE",
+        "message": "GOOGLE.COM IE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "6.2. Google Ireland −13,60",
+      "decision_class": "reverse_charge",
+      "verbatim": {
+        "debit": "5560 Ohjelmat 13,60 / 1761 Käänn. ALV-vähennys 3,47",
+        "credit": "1910 Pankki 13,60 / 2937 Käänn. ALV-velka 3,47",
+        "note": "käännetty ALV 25,5 %"
+      },
+      "source_files": [
+        "27 Google Ireland - lasku (käännetty ALV).pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5560",
+            "direction": "debit",
+            "amount": 13.6,
+            "alv": "eu_services"
+          },
+          {
+            "account": "1761",
+            "direction": "debit",
+            "amount": 3.47,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 13.6,
+            "alv": "none"
+          },
+          {
+            "account": "2937",
+            "direction": "credit",
+            "amount": 3.47,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B07",
+      "bank": {
+        "statement_row": 7,
+        "date": "2025-02-07",
+        "amount": 320,
+        "direction": "out",
+        "counterparty": "WELLA GERMANY GMBH",
+        "message": "INV-2025-0187",
+        "kind": "SEPA-MAKSU"
+      },
+      "key_row": "7.2. Wella Germany −320,00",
+      "decision_class": "reverse_charge",
+      "verbatim": {
+        "debit": "4351 Tavaraostot EU 320,00 / 1761 Käänn. ALV-vähennys 81,60",
+        "credit": "1910 Pankki 320,00 / 2937 Käänn. ALV-velka 81,60",
+        "note": "yhteisöhankinta"
+      },
+      "source_files": [
+        "28 Wella Germany - lasku (EU-tavaraosto).pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4351",
+            "direction": "debit",
+            "amount": 320,
+            "alv": "eu_goods"
+          },
+          {
+            "account": "1761",
+            "direction": "debit",
+            "amount": 81.6,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 320,
+            "alv": "none"
+          },
+          {
+            "account": "2937",
+            "direction": "credit",
+            "amount": 81.6,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B08",
+      "bank": {
+        "statement_row": 8,
+        "date": "2025-02-10",
+        "amount": 2625.79,
+        "direction": "in",
+        "counterparty": "NETS FINLAND OY",
+        "message": "JAKSO VKO6 2025",
+        "kind": "NETS SETTLEMENT"
+      },
+      "key_row": "10.2. Nets setlementti +2 625,79",
+      "decision_class": "processor_settlement",
+      "verbatim": {
+        "debit": "1910 Pankki 2 625,72... ks. kaava",
+        "credit": "3000/2939",
+        "note": "brutto 2 655,00 − palkkio 29,21"
+      },
+      "source_files": [
+        "14 Nets kuukausiraportti 02-2025.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": null,
+        "ask": null,
+        "incomplete": "The row prints no complete journal (\"ks. kaava\"), and its 2 625,72 differs from the bank line 2 625,79."
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "Adopted the A.5 gross-up: gross sales 2 655,00 at 25,5 % and the exempt fee 29,21, amounts from the Nets report; the bank amount is 2 625,79 (the key prints 2 625,72).",
+        "dispute_detail": "Row incomplete (\"ks. kaava\") and 2 625,72 ≠ the bank line 2 625,79.",
+        "tree_position": {
+          "summary": "Grosses up a settlement matched to its report row: Dr bank net, Dr expense.platform_fees fee (tax NONE), Cr Sales gross base ALV_25_5_OUTPUT, Cr 2939 (alv_output). Refuses by name on any mismatch; a document-level match falls back to the two-line journal.",
+          "citations": [
+            "server/donna/db/ledger.js resolveSettlementRowSplit",
+            "server/donna/settlementRowSplitPgLifecycle.test.js (Kultalanka VKO5: 1910 Dr 2452.72 / fee Dr 27.28 / 3000 Cr 1976.10 / 2939 Cr 503.90)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 2625.79,
+            "alv": "none"
+          },
+          {
+            "account": "NETS-PALKKIO",
+            "direction": "debit",
+            "amount": 29.21,
+            "alv": "exempt"
+          },
+          {
+            "account": "3000",
+            "direction": "credit",
+            "amount": 2115.54,
+            "alv": "out_25_5"
+          },
+          {
+            "account": "2939",
+            "direction": "credit",
+            "amount": 539.46,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      }
+    },
+    {
+      "id": "B09",
+      "bank": {
+        "statement_row": 9,
+        "date": "2025-02-11",
+        "amount": 59.32,
+        "direction": "out",
+        "counterparty": "SUOMEN TELEYHTYMÄ OY",
+        "message": "PUH/NETTI 1/2025",
+        "kind": "E-LASKU"
+      },
+      "key_row": "11.2. Puhelinlasku −59,32",
+      "decision_class": "input_vat_rate",
+      "verbatim": {
+        "debit": "4560 Puhelin/netti 47,27 / 1760 ALV 12,05",
+        "credit": "1910 Pankki 59,32",
+        "note": "ostolasku"
+      },
+      "source_files": [
+        "22 Puhelin- ja nettilasku - Suomen Teleyhtymä Oy.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4560",
+            "direction": "debit",
+            "amount": 47.27,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 12.05,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 59.32,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B10",
+      "bank": {
+        "statement_row": 10,
+        "date": "2025-02-12",
+        "amount": 332.88,
+        "direction": "out",
+        "counterparty": "VEROHALLINTO",
+        "message": "ENNAKONPIDÄTYS+SAVA 1/2025",
+        "kind": "OMA-ALOITTEINEN VERO"
+      },
+      "key_row": "12.2. Verohallinto ep+sava −332,88",
+      "decision_class": "statutory_payment",
+      "verbatim": {
+        "debit": "1930 Ennakonpidätysvelka 288,00 / 1940 Sava-velka 44,88",
+        "credit": "1910 Pankki 332,88",
+        "note": "KOSKEE 1/2025 palkkoja"
+      },
+      "source_files": [],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1930",
+            "direction": "debit",
+            "amount": 288,
+            "alv": "none"
+          },
+          {
+            "account": "1940",
+            "direction": "debit",
+            "amount": 44.88,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 332.88,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "disputed",
+        "reason": "tree_requires_statutory_source",
+        "raised_by": "claude_for_ilkka",
+        "detail": "No withholding/TVR notice or payroll declaration for 1/2025 is in the pack; the tree holds a statutory-liability payment until its source is held and asks the owner for it.",
+        "tree_position": {
+          "dispute": true,
+          "summary": "A payment to a statutory liability role (payroll withholding/SAVA, TVR) posts only against a held source (notice, return, bill); without one the sweep asks for the filing or notice (supporting_document, Jev ask_statutory_source). TyEL posts because its Ilmarinen invoice is in the pack.",
+          "citations": [
+            "server/donna/codingStatutoryEvidence.js",
+            "server/donna/codingStatutoryEvidencePgLifecycle.test.js",
+            "server/donna/fiCodingEvidencePgLifecycle.test.js (withholding 332.88 posts once the notice is matched)"
+          ],
+          "tree_outcome": {
+            "terminal": "ask_owner",
+            "evidence_type": "supporting_document",
+            "kind": "ask_statutory_source"
+          }
+        }
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B11",
+      "bank": {
+        "statement_row": 11,
+        "date": "2025-02-12",
+        "amount": 1245,
+        "direction": "out",
+        "counterparty": "VEROHALLINTO",
+        "message": "ALV Q4/2024",
+        "kind": "OMA-ALOITTEINEN VERO"
+      },
+      "key_row": "12.2. Verohallinto ALV −1 245,00",
+      "decision_class": "statutory_payment",
+      "verbatim": {
+        "debit": "2939 ALV-velka 1 245,00",
+        "credit": "1910 Pankki 1 245,00",
+        "note": "Q4/2024 tilitys"
+      },
+      "source_files": [],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "2939",
+            "direction": "debit",
+            "amount": 1245,
+            "alv": "none",
+            "role": "counterparty"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 1245,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "disputed",
+        "reason": "tree_requires_statutory_source",
+        "raised_by": "claude_for_ilkka",
+        "detail": "No Q4/2024 ALV return or OmaVero notice is in the pack; the tree holds the payment until the filing is held and asks the owner for it.",
+        "tree_position": {
+          "dispute": true,
+          "summary": "The Q4/2024 ALV payment codes to 2939 but is held until the filing or notice is held (supporting_document, Jev ask_statutory_source); the ask survives statutory descriptors (fi-autonomous-material-errors statutory_ask_lifecycle).",
+          "citations": [
+            "server/donna/codingStatutoryEvidence.js",
+            "server/donna/codingAutoPost.js (statutory_evidence_required)",
+            "server/donna/codingStatutoryEvidencePgLifecycle.test.js (1245 → supporting_document, later notice closes the ask)"
+          ],
+          "tree_outcome": {
+            "terminal": "ask_owner",
+            "evidence_type": "supporting_document",
+            "kind": "ask_statutory_source"
+          }
+        }
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B12",
+      "bank": {
+        "statement_row": 12,
+        "date": "2025-02-12",
+        "amount": 35.04,
+        "direction": "out",
+        "counterparty": "TYÖLLISYYSRAHASTO",
+        "message": "TVR 1/2025",
+        "kind": "TILISIIRTO"
+      },
+      "key_row": "12.2. Työllisyysrahasto −35,04",
+      "decision_class": "statutory_payment",
+      "verbatim": {
+        "debit": "1955 TVR-velka 35,04",
+        "credit": "1910 Pankki 35,04",
+        "note": "1/2025"
+      },
+      "source_files": [],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1955",
+            "direction": "debit",
+            "amount": 35.04,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 35.04,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "disputed",
+        "reason": "tree_requires_statutory_source",
+        "raised_by": "claude_for_ilkka",
+        "detail": "No withholding/TVR notice or payroll declaration for 1/2025 is in the pack; the tree holds a statutory-liability payment until its source is held and asks the owner for it.",
+        "tree_position": {
+          "dispute": true,
+          "summary": "A payment to a statutory liability role (payroll withholding/SAVA, TVR) posts only against a held source (notice, return, bill); without one the sweep asks for the filing or notice (supporting_document, Jev ask_statutory_source). TyEL posts because its Ilmarinen invoice is in the pack.",
+          "citations": [
+            "server/donna/codingStatutoryEvidence.js",
+            "server/donna/codingStatutoryEvidencePgLifecycle.test.js",
+            "server/donna/fiCodingEvidencePgLifecycle.test.js (withholding 332.88 posts once the notice is matched)"
+          ],
+          "tree_outcome": {
+            "terminal": "ask_owner",
+            "evidence_type": "supporting_document",
+            "kind": "ask_statutory_source"
+          }
+        }
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B13",
+      "bank": {
+        "statement_row": 13,
+        "date": "2025-02-12",
+        "amount": 596.4,
+        "direction": "out",
+        "counterparty": "ILMARINEN KESK. ELÄKEVAK.YHTIÖ",
+        "message": "TYEL 1/2025",
+        "kind": "E-LASKU"
+      },
+      "key_row": "12.2. Ilmarinen TyEL −596,40",
+      "decision_class": "statutory_payment",
+      "verbatim": {
+        "debit": "1950 TyEL-velka 596,40",
+        "credit": "1910 Pankki 596,40",
+        "note": "1/2025"
+      },
+      "source_files": [
+        "25 TyEL-lasku 01-2025 - Ilmarinen.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1950",
+            "direction": "debit",
+            "amount": 596.4,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 596.4,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B14",
+      "bank": {
+        "statement_row": 14,
+        "date": "2025-02-13",
+        "amount": 150,
+        "direction": "out",
+        "counterparty": "META PLATFORMS IRELAND",
+        "message": "FB*ADS META.COM IE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "13.2. Meta Platforms −150,00",
+      "decision_class": "reverse_charge",
+      "verbatim": {
+        "debit": "5570 Markkinointi 150,00 / 1761 Käänn. ALV-vähennys 38,25",
+        "credit": "1910 Pankki 150,00 / 2937 Käänn. ALV-velka 38,25",
+        "note": "käännetty ALV"
+      },
+      "source_files": [
+        "26 Meta Platforms Ireland - lasku (käännetty ALV).pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5570",
+            "direction": "debit",
+            "amount": 150,
+            "alv": "eu_services"
+          },
+          {
+            "account": "1761",
+            "direction": "debit",
+            "amount": 38.25,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 150,
+            "alv": "none"
+          },
+          {
+            "account": "2937",
+            "direction": "credit",
+            "amount": 38.25,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B15",
+      "bank": {
+        "statement_row": 15,
+        "date": "2025-02-14",
+        "amount": 19.9,
+        "direction": "out",
+        "counterparty": "TOKMANNI TAMPERE KOSKIKESKUS",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "14.2. Tokmanni 2 × −19,90",
+      "decision_class": "refund_group",
+      "verbatim": {
+        "debit": "4340 Siivous-/hoitotarvikkeet 15,86 / 1760 ALV 4,04",
+        "credit": "1910 Pankki 19,90",
+        "note": "VAIN YKSI ostos — ks. hyvitys 17.2."
+      },
+      "source_files": [
+        "43 Kuitti 14.02 - Tokmanni Koskikeskus.pdf"
+      ],
+      "group": "G-TOKMANNI",
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4340",
+            "direction": "debit",
+            "amount": 15.86,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 4.04,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 19.9,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B16",
+      "bank": {
+        "statement_row": 16,
+        "date": "2025-02-14",
+        "amount": 19.9,
+        "direction": "out",
+        "counterparty": "TOKMANNI TAMPERE KOSKIKESKUS",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "14.2. Tokmanni 2 × −19,90 (second charge; the key prints one row for both)",
+      "decision_class": "refund_group",
+      "verbatim": {
+        "debit": "(same row as B15)",
+        "credit": "(same row as B15)",
+        "note": "VAIN YKSI ostos — ks. hyvitys 17.2."
+      },
+      "source_files": [
+        "43 Kuitti 14.02 - Tokmanni Koskikeskus.pdf"
+      ],
+      "group": "G-TOKMANNI",
+      "original": {
+        "terminal": "posted",
+        "journal": null,
+        "ask": null,
+        "incomplete": "The key prints one row for both identical charges; the group gold (A.2) carries this line."
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B17",
+      "bank": {
+        "statement_row": 17,
+        "date": "2025-02-14",
+        "amount": 52.1,
+        "direction": "out",
+        "counterparty": "ST1 TAMPERE HERVANTA",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "14.2. St1 Hervanta −52,10",
+      "decision_class": "private_spend",
+      "verbatim": {
+        "debit": "7090 Yksityisotot 52,10",
+        "credit": "1910 Pankki 52,10",
+        "note": "YKSITYISAJO — ei ALV-vähennystä"
+      },
+      "source_files": [
+        "42 Kuitti 14.02 - St1 Hervanta (YKSITYISAJO).pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "7090",
+            "direction": "debit",
+            "amount": 52.1,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 52.1,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "7090 Yksityisotot is a sole-trader account; an Oy has no drawings. No expense and no input-VAT deduction. An evidenced shareholder receivable would post; here the receipt's \"M.L.\" is not evidenced as a shareholder (the payslip names Minna Laine only as toimitusjohtaja), so the owner question is the outcome. Follows the tree's oy_private_spend contract.",
+        "tree_position": {
+          "summary": "Owner drawings is absent from an Oy menu; private-use evidence forbids the expense, and a shareholder receivable needs the relationship from the owner (business_purpose, Jev ask_business_use / ask_source_relationship).",
+          "citations": [
+            "server/donna/sourceBusinessUse.js",
+            "server/donna/finland/codingPolicy.js",
+            "server/donna/fiCodingBoundaryGuards.test.js",
+            "server/donna/fiCodingEvidencePgLifecycle.test.js (fuel 52.10 → business_purpose)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "ask_owner",
+        "journal": [],
+        "ask": {
+          "evidence_type": "business_purpose",
+          "kinds": [
+            "ask_business_use",
+            "ask_source_relationship"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B18",
+      "bank": {
+        "statement_row": 18,
+        "date": "2025-02-14",
+        "amount": 12.9,
+        "direction": "out",
+        "counterparty": "HESBURGER TAMPERE KOSKIK.",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "14.2. Hesburger −12,90",
+      "decision_class": "meal_refreshment",
+      "verbatim": {
+        "debit": "5210 Henkilöstön virvokkeet 11,32 / 1760 ALV 1,58",
+        "credit": "1910 Pankki 12,90",
+        "note": "14 % ALV"
+      },
+      "source_files": [
+        "41 Kuitti 14.02 - Hesburger Koskikeskus.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5210",
+            "direction": "debit",
+            "amount": 11.32,
+            "alv": "in_14"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 1.58,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 12.9,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null,
+      "notes": "Tree: ungoverned — no rule or reviewed guidance covers meals or staff refreshments (the model chooses). Kept as agreed with the key; see the PR."
+    },
+    {
+      "id": "B19",
+      "bank": {
+        "statement_row": 19,
+        "date": "2025-02-17",
+        "amount": 19.9,
+        "direction": "in",
+        "counterparty": "TOKMANNI TAMPERE KOSKIKESKUS",
+        "message": "HYVITYS",
+        "kind": "KORTIN HYVITYS"
+      },
+      "key_row": "17.2. Tokmanni hyvitys +19,90",
+      "decision_class": "refund_group",
+      "verbatim": {
+        "debit": "1910 Pankki 19,90",
+        "credit": "4340 / 1760 ALV (kumoava)",
+        "note": "kumoaa tuplaveloituksen"
+      },
+      "source_files": [
+        "43 Kuitti 14.02 - Tokmanni Koskikeskus.pdf"
+      ],
+      "group": "G-TOKMANNI",
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 19.9,
+            "alv": "none"
+          },
+          {
+            "account": "4340",
+            "direction": "credit",
+            "amount": 15.86,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "credit",
+            "amount": 4.04,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B20",
+      "bank": {
+        "statement_row": 20,
+        "date": "2025-02-17",
+        "amount": 1631.5,
+        "direction": "in",
+        "counterparty": "KAHVILA AROMA OY",
+        "message": "VIITE 710015",
+        "kind": "TILISIIRTO"
+      },
+      "key_row": "17.2. Kahvila Aroma maksu +1 631,50",
+      "decision_class": "ar_settlement",
+      "verbatim": {
+        "debit": "1910 Pankki 1 631,50",
+        "credit": "1700 Myyntisaamiset 1 631,50",
+        "note": "lasku 1001 − hyvitys 1003"
+      },
+      "source_files": [
+        "10 Myyntilasku 1001 - Kahvila Aroma Oy.pdf",
+        "13 Hyvityslasku 1003 - Kahvila Aroma Oy.pdf"
+      ],
+      "group": null,
+      "representation_alternatives": [
+        {
+          "journal": [
+            {
+              "account": "1910",
+              "direction": "debit",
+              "amount": 1631.5,
+              "alv": "none"
+            },
+            {
+              "account": "3000",
+              "direction": "credit",
+              "amount": 1300,
+              "alv": "out_25_5"
+            },
+            {
+              "account": "2939",
+              "direction": "credit",
+              "amount": 331.5,
+              "alv": "none"
+            }
+          ],
+          "basis": "Representation, not a decision: the key books invoice 1001 and credit note 1003 as receivables when issued (section C counts them in February sales) and clears 1700 here; the tree never journals an uploaded invoice or credit note on its own and recognises the same 1 300,00 + 331,50 on this settling line (creditNoteApplications.js; creditNoteSettlementPgLifecycle.test.js). Both give the same February figures. Accepted only while the book holds no sales-invoice or credit-note journal, so the revenue is recognised once and no receivable stays open; never a general recognition-on-payment rule for accrual books. Listed for Ilkka to confirm."
+        }
+      ],
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 1631.5,
+            "alv": "none"
+          },
+          {
+            "account": "1700",
+            "direction": "credit",
+            "amount": 1631.5,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B21",
+      "bank": {
+        "statement_row": 21,
+        "date": "2025-02-17",
+        "amount": 2284.59,
+        "direction": "in",
+        "counterparty": "NETS FINLAND OY",
+        "message": "JAKSO VKO7 2025",
+        "kind": "NETS SETTLEMENT"
+      },
+      "key_row": "17.2. Nets setlementti +2 284,59",
+      "decision_class": "processor_settlement",
+      "verbatim": {
+        "debit": "1910 Pankki ...",
+        "credit": "3000/2939",
+        "note": "brutto 2 310,00 − palkkio 25,41"
+      },
+      "source_files": [
+        "14 Nets kuukausiraportti 02-2025.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": null,
+        "ask": null,
+        "incomplete": "The row prints no complete journal."
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "Adopted the A.5 gross-up: gross sales 2 310,00 at 25,5 % and the exempt fee 25,41, amounts from the Nets report.",
+        "dispute_detail": "Row incomplete (\"1910 Pankki ...\", \"3000/2939\").",
+        "tree_position": {
+          "summary": "Grosses up a settlement matched to its report row: Dr bank net, Dr expense.platform_fees fee (tax NONE), Cr Sales gross base ALV_25_5_OUTPUT, Cr 2939 (alv_output). Refuses by name on any mismatch; a document-level match falls back to the two-line journal.",
+          "citations": [
+            "server/donna/db/ledger.js resolveSettlementRowSplit",
+            "server/donna/settlementRowSplitPgLifecycle.test.js (Kultalanka VKO5: 1910 Dr 2452.72 / fee Dr 27.28 / 3000 Cr 1976.10 / 2939 Cr 503.90)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 2284.59,
+            "alv": "none"
+          },
+          {
+            "account": "NETS-PALKKIO",
+            "direction": "debit",
+            "amount": 25.41,
+            "alv": "exempt"
+          },
+          {
+            "account": "3000",
+            "direction": "credit",
+            "amount": 1840.64,
+            "alv": "out_25_5"
+          },
+          {
+            "account": "2939",
+            "direction": "credit",
+            "amount": 469.36,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      }
+    },
+    {
+      "id": "B22",
+      "bank": {
+        "statement_row": 22,
+        "date": "2025-02-18",
+        "amount": 43.45,
+        "direction": "out",
+        "counterparty": "SUOMALAINEN KIRJAKAUPPA",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "18.2. Suomalainen Kirjakauppa −43,45",
+      "decision_class": "dated_rate",
+      "verbatim": {
+        "debit": "4540 Toimistotarvikkeet 22,66 / 1760 ALV 5,78 / 4540 Kirja (10 %) 13,65 / 1760 ALV 1,36",
+        "credit": "1910 Pankki 43,45",
+        "note": "kaksi verokantaa"
+      },
+      "source_files": [
+        "44 Kuitti 18.02 - Suomalainen Kirjakauppa.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4540",
+            "direction": "debit",
+            "amount": 22.66,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 5.78,
+            "alv": "none"
+          },
+          {
+            "account": "4540",
+            "direction": "debit",
+            "amount": 13.65,
+            "alv": "in_10"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 1.36,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 43.45,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "Books moved from 10 % to 14 % on 1.1.2025, so a printed 10 % on a February 2025 receipt is a discrepancy. Outcome = the tree's supply-timing / document-discrepancy owner question, not a 10 % deduction.",
+        "source_url": "https://www.vero.fi/yritykset-ja-yhteisot/verot-ja-maksut/arvonlisaverotus/arvonlisaveroprosentit/",
+        "source_snapshot": "owed — capture was 403-blocked from the cloud session",
+        "tree_position": {
+          "summary": "A 2025 date printing the retired 10 % rate without a stated historical-rate basis becomes posting_requirement document_discrepancy (verified source) — Jev ask_supply_timing; one historical component holds the whole allocation.",
+          "citations": [
+            "server/donna/finland/codingPolicy.js historicalTaxTreatmentsFor",
+            "server/donna/transactionLlm.js historical-rate guard",
+            "server/donna/fiCodingBoundaryGuards.test.js (VR 28.60; book component)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "ask_owner",
+        "journal": [],
+        "ask": {
+          "evidence_type": "document_discrepancy",
+          "kinds": [
+            "ask_supply_timing"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B23",
+      "bank": {
+        "statement_row": 23,
+        "date": "2025-02-19",
+        "amount": 4.2,
+        "direction": "out",
+        "counterparty": "P-TAMPERE OY",
+        "message": "PYSÄKÖINTI",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "19.2. P-Tampere −4,20",
+      "decision_class": "input_vat_rate",
+      "verbatim": {
+        "debit": "4080 Matkakulut 3,35 / 1760 ALV 0,85",
+        "credit": "1910 Pankki 4,20",
+        "note": "25,5 %"
+      },
+      "source_files": [
+        "45 Kuitti 19.02 - P-Tampere pysäköinti.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4080",
+            "direction": "debit",
+            "amount": 3.35,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 0.85,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 4.2,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B24",
+      "bank": {
+        "statement_row": 24,
+        "date": "2025-02-20",
+        "amount": 610.18,
+        "direction": "out",
+        "counterparty": "POHJOLAN HIUS-TUKKU OY",
+        "message": "LASKU 88231",
+        "kind": "E-LASKU"
+      },
+      "key_row": "20.2. Hius-Tukku −610,18",
+      "decision_class": "input_vat_rate",
+      "verbatim": {
+        "debit": "7020 Tarvike-/myyntituoteostot 486,20 / 1760 ALV 123,98",
+        "credit": "1910 Pankki 610,18",
+        "note": "ostolasku"
+      },
+      "source_files": [
+        "23 Ostolasku 88231 - Pohjolan Hius-Tukku Oy.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "7020",
+            "direction": "debit",
+            "amount": 486.2,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 123.98,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 610.18,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B25",
+      "bank": {
+        "statement_row": 25,
+        "date": "2025-02-21",
+        "amount": 28.6,
+        "direction": "out",
+        "counterparty": "VR MATKUSTAJALIIKENNE",
+        "message": "VR.FI",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "21.2. VR −28,60",
+      "decision_class": "dated_rate",
+      "verbatim": {
+        "debit": "4080 Matkakulut 26,00 / 1760 ALV 2,60",
+        "credit": "1910 Pankki 28,60",
+        "note": "10 % ALV"
+      },
+      "source_files": [
+        "47 Kuitti 21.02 - VR lippu.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4080",
+            "direction": "debit",
+            "amount": 26,
+            "alv": "in_10"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 2.6,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 28.6,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "Passenger transport moved from 10 % to 14 % on 1.1.2025, so a printed 10 % on a February 2025 receipt is a discrepancy. Outcome = the tree's supply-timing / document-discrepancy owner question, not a 10 % deduction.",
+        "source_url": "https://www.vero.fi/yritykset-ja-yhteisot/verot-ja-maksut/arvonlisaverotus/arvonlisaveroprosentit/",
+        "source_snapshot": "owed — capture was 403-blocked from the cloud session",
+        "tree_position": {
+          "summary": "A 2025 date printing the retired 10 % rate without a stated historical-rate basis becomes posting_requirement document_discrepancy (verified source) — Jev ask_supply_timing; one historical component holds the whole allocation.",
+          "citations": [
+            "server/donna/finland/codingPolicy.js historicalTaxTreatmentsFor",
+            "server/donna/transactionLlm.js historical-rate guard",
+            "server/donna/fiCodingBoundaryGuards.test.js (VR 28.60; book component)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "ask_owner",
+        "journal": [],
+        "ask": {
+          "evidence_type": "document_discrepancy",
+          "kinds": [
+            "ask_supply_timing"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B26",
+      "bank": {
+        "statement_row": 26,
+        "date": "2025-02-21",
+        "amount": 33.15,
+        "direction": "out",
+        "counterparty": "PRISMA TAMPERE LIELAHTI",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "21.2. Prisma −33,15",
+      "decision_class": "multi_rate_receipt",
+      "verbatim": {
+        "debit": "4340 Siivoustarvikkeet 17,70 / 1760 ALV 4,51 / 5210 Virvokkeet 9,60 / 1760 ALV 1,34",
+        "credit": "1910 Pankki 33,15",
+        "note": "kaksi verokantaa"
+      },
+      "source_files": [
+        "46 Kuitti 21.02 - Prisma Lielahti.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4340",
+            "direction": "debit",
+            "amount": 17.7,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 4.51,
+            "alv": "none"
+          },
+          {
+            "account": "5210",
+            "direction": "debit",
+            "amount": 9.6,
+            "alv": "in_14"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 1.34,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 33.15,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B27",
+      "bank": {
+        "statement_row": 27,
+        "date": "2025-02-24",
+        "amount": 2843.38,
+        "direction": "in",
+        "counterparty": "NETS FINLAND OY",
+        "message": "JAKSO VKO8 2025",
+        "kind": "NETS SETTLEMENT"
+      },
+      "key_row": "24.2. Nets setlementti +2 843,38",
+      "decision_class": "processor_settlement",
+      "verbatim": {
+        "debit": "1910 Pankki ...",
+        "credit": "3000/2939",
+        "note": "brutto 2 875,00 − palkkio 31,62"
+      },
+      "source_files": [
+        "14 Nets kuukausiraportti 02-2025.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": null,
+        "ask": null,
+        "incomplete": "The row prints no complete journal."
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "Adopted the A.5 gross-up: gross sales 2 875,00 at 25,5 % and the exempt fee 31,62, amounts from the Nets report.",
+        "dispute_detail": "Row incomplete (\"1910 Pankki ...\", \"3000/2939\").",
+        "tree_position": {
+          "summary": "Grosses up a settlement matched to its report row: Dr bank net, Dr expense.platform_fees fee (tax NONE), Cr Sales gross base ALV_25_5_OUTPUT, Cr 2939 (alv_output). Refuses by name on any mismatch; a document-level match falls back to the two-line journal.",
+          "citations": [
+            "server/donna/db/ledger.js resolveSettlementRowSplit",
+            "server/donna/settlementRowSplitPgLifecycle.test.js (Kultalanka VKO5: 1910 Dr 2452.72 / fee Dr 27.28 / 3000 Cr 1976.10 / 2939 Cr 503.90)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 2843.38,
+            "alv": "none"
+          },
+          {
+            "account": "NETS-PALKKIO",
+            "direction": "debit",
+            "amount": 31.62,
+            "alv": "exempt"
+          },
+          {
+            "account": "3000",
+            "direction": "credit",
+            "amount": 2290.84,
+            "alv": "out_25_5"
+          },
+          {
+            "account": "2939",
+            "direction": "credit",
+            "amount": 584.16,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      }
+    },
+    {
+      "id": "B28",
+      "bank": {
+        "statement_row": 28,
+        "date": "2025-02-24",
+        "amount": 923.6,
+        "direction": "in",
+        "counterparty": "HÄÄ- JA JUHLAPALVELU LUMIKKI OY",
+        "message": "VIITE 710028",
+        "kind": "TILISIIRTO"
+      },
+      "key_row": "24.2. Lumikki maksu +923,60",
+      "decision_class": "combined_charge",
+      "verbatim": {
+        "debit": "1910 Pankki 923,60",
+        "credit": "1700 Myyntisaamiset 903,60 / 3580 Korkotuotot 20,00",
+        "note": "viivästyskorko veroton"
+      },
+      "source_files": [
+        "11 Myyntilasku 1002 - Lumikki Oy.pdf",
+        "12 Muistutuslasku 1002-M - Lumikki Oy.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 923.6,
+            "alv": "none"
+          },
+          {
+            "account": "1700",
+            "direction": "credit",
+            "amount": 903.6,
+            "alv": "none"
+          },
+          {
+            "account": "3580",
+            "direction": "credit",
+            "amount": 20,
+            "alv": "exempt"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "The reminder combines late interest and a reminder fee in one unsplit 20,00. All of it as interest income is unsupported; ask for the split, never invent one.",
+        "tree_position": {
+          "summary": "An unsplit combined source line is the Jev ask_component_split question, a document_discrepancy ask holding the whole allocation.",
+          "citations": [
+            "server/donna/jevCoding.js ask_component_split",
+            "server/donna/jevCoding.test.js (FI combined source line)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "ask_owner",
+        "journal": [],
+        "ask": {
+          "evidence_type": "document_discrepancy",
+          "kinds": [
+            "ask_component_split"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B29",
+      "bank": {
+        "statement_row": 29,
+        "date": "2025-02-25",
+        "amount": 455,
+        "direction": "in",
+        "counterparty": "OP TAMPERE",
+        "message": "KASSATALLETUS 21.-24.2.",
+        "kind": "KÄTEISTALLETUS"
+      },
+      "key_row": "25.2. Käteistalletus +455,00",
+      "decision_class": "cash_sales_deposit",
+      "verbatim": {
+        "debit": "1910 Pankki 455,00",
+        "credit": "3010 Käteismyynti 362,55 / 2939 ALV 92,45",
+        "note": ""
+      },
+      "source_files": [],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "1910",
+            "direction": "debit",
+            "amount": 455,
+            "alv": "none"
+          },
+          {
+            "account": "3010",
+            "direction": "credit",
+            "amount": 362.55,
+            "alv": "out_25_5"
+          },
+          {
+            "account": "2939",
+            "direction": "credit",
+            "amount": 92.45,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "disputed",
+        "reason": "key_books_unevidenced_cash_sales",
+        "raised_by": "claude_for_ilkka",
+        "detail": "No cash-register (Z) report is in the pack; the bank text is the only source.",
+        "tree_position": {
+          "dispute": true,
+          "summary": "A deposit coded to operating revenue needs a sales source (sales invoice, issued receipt or payout statement); a deposit or slip never establishes revenue. The sweep asks the owner for the cashbook / till reconciliation (evidence_type supporting_document, Jev ask_sales_source); the writer refuses TRANSACTION_REVENUE_SOURCE_REQUIRED.",
+          "citations": [
+            "server/donna/codingRevenueEvidence.js",
+            "server/donna/codingRevenueEvidence.test.js",
+            "server/donna/codingRevenueEvidencePgLifecycle.test.js (455 deposit → supporting_document)"
+          ],
+          "tree_outcome": {
+            "terminal": "ask_owner",
+            "evidence_type": "supporting_document",
+            "kind": "ask_sales_source"
+          }
+        }
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B30",
+      "bank": {
+        "statement_row": 30,
+        "date": "2025-02-26",
+        "amount": 40,
+        "direction": "out",
+        "counterparty": "SHELL TAMPERE RATINA",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "26.2. Shell −40,00",
+      "decision_class": "missing_receipt",
+      "verbatim": {
+        "debit": "SELVITETTÄVÄ — kuitti puuttuu",
+        "credit": "1910 Pankki 40,00",
+        "note": "ei ALV-vähennystä ilman tositetta"
+      },
+      "source_files": [],
+      "group": null,
+      "original": {
+        "terminal": "ask_owner",
+        "journal": [],
+        "ask": {
+          "evidence_type": "supporting_document",
+          "kinds": [
+            "ask_source_document"
+          ],
+          "also": [
+            {
+              "evidence_type": "business_purpose",
+              "question_mentions": [
+                "receipt",
+                "kuitti",
+                "tosite"
+              ]
+            }
+          ]
+        },
+        "interim_posting": "no_input_vat",
+        "interim_basis": "A.3: \"kirjaa väliaikaisesti ilman ALV:tä ja pyydä kuitti\""
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B31",
+      "bank": {
+        "statement_row": 31,
+        "date": "2025-02-26",
+        "amount": 17.5,
+        "direction": "out",
+        "counterparty": "TAKSI TAMPERE OY",
+        "message": "TAMPERE",
+        "kind": "KORTTIOSTO"
+      },
+      "key_row": "26.2. Taksi −17,50",
+      "decision_class": "dated_rate",
+      "verbatim": {
+        "debit": "4080 Matkakulut 15,91 / 1760 ALV 1,59",
+        "credit": "1910 Pankki 17,50",
+        "note": "10 % ALV"
+      },
+      "source_files": [
+        "48 Kuitti 26.02 - Taksi Tampere.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "4080",
+            "direction": "debit",
+            "amount": 15.91,
+            "alv": "in_10"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 1.59,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 17.5,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "adjudicated",
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "reason": "Passenger transport moved from 10 % to 14 % on 1.1.2025, so a printed 10 % on a February 2025 receipt is a discrepancy. Outcome = the tree's supply-timing / document-discrepancy owner question, not a 10 % deduction.",
+        "source_url": "https://www.vero.fi/yritykset-ja-yhteisot/verot-ja-maksut/arvonlisaverotus/arvonlisaveroprosentit/",
+        "source_snapshot": "owed — capture was 403-blocked from the cloud session",
+        "tree_position": {
+          "summary": "A 2025 date printing the retired 10 % rate without a stated historical-rate basis becomes posting_requirement document_discrepancy (verified source) — Jev ask_supply_timing; one historical component holds the whole allocation.",
+          "citations": [
+            "server/donna/finland/codingPolicy.js historicalTaxTreatmentsFor",
+            "server/donna/transactionLlm.js historical-rate guard",
+            "server/donna/fiCodingBoundaryGuards.test.js (VR 28.60; book component)"
+          ]
+        }
+      },
+      "adjudicated": {
+        "terminal": "ask_owner",
+        "journal": [],
+        "ask": {
+          "evidence_type": "document_discrepancy",
+          "kinds": [
+            "ask_supply_timing"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B32",
+      "bank": {
+        "statement_row": 32,
+        "date": "2025-02-27",
+        "amount": 198.6,
+        "direction": "out",
+        "counterparty": "KESK. VAKUUTUSYHTIÖ TURVA-SUOMI",
+        "message": "VAKUUTUS 1/2025",
+        "kind": "E-LASKU"
+      },
+      "key_row": "27.2. Vakuutus −198,60",
+      "decision_class": "exempt_purchase",
+      "verbatim": {
+        "debit": "5460 Vakuutusmaksut 198,60",
+        "credit": "1910 Pankki 198,60",
+        "note": "veroton"
+      },
+      "source_files": [
+        "24 Vakuutuslasku - Turva-Suomi.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5460",
+            "direction": "debit",
+            "amount": 198.6,
+            "alv": "exempt"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 198.6,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B33",
+      "bank": {
+        "statement_row": 33,
+        "date": "2025-02-28",
+        "amount": 412.35,
+        "direction": "out",
+        "counterparty": "OP YRITYSLAINA 6100123456",
+        "message": "LYHENNYS+KORKO 2/2025",
+        "kind": "LAINANHOITO"
+      },
+      "key_row": "28.2. Lainaerä −412,35",
+      "decision_class": "loan_split",
+      "verbatim": {
+        "debit": "8810 Korkokulut 67,98 / 2620 Yrityslaina 344,37",
+        "credit": "1910 Pankki 412,35",
+        "note": "jako lainalaskelmasta"
+      },
+      "source_files": [
+        "02 OP Yrityslaina - lainalaskelma 02-2025.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "8810",
+            "direction": "debit",
+            "amount": 67.98,
+            "alv": "exempt"
+          },
+          {
+            "account": "2620",
+            "direction": "debit",
+            "amount": 344.37,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 412.35,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B34",
+      "bank": {
+        "statement_row": 34,
+        "date": "2025-02-28",
+        "amount": 1926.24,
+        "direction": "out",
+        "counterparty": "KORHONEN SAARA",
+        "message": "PALKKA 2/2025",
+        "kind": "PALKKA"
+      },
+      "key_row": "28.2. Palkka −1 926,24",
+      "decision_class": "payroll",
+      "verbatim": {
+        "debit": "5000 Palkat 2 400,00 (bruttokirjaus)",
+        "credit": "1910 Pankki 1 926,24 / 1930 Ep-velka 288,00 / 1950 TyEL-velka 171,60 / 1955 TVR-velka 14,16",
+        "note": "2/2025"
+      },
+      "source_files": [
+        "30 Palkkalaskelma 02-2025 - Korhonen Saara.pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5000",
+            "direction": "debit",
+            "amount": 2400,
+            "alv": "none"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 1926.24,
+            "alv": "none"
+          },
+          {
+            "account": "1930",
+            "direction": "credit",
+            "amount": 288,
+            "alv": "none"
+          },
+          {
+            "account": "1950",
+            "direction": "credit",
+            "amount": 171.6,
+            "alv": "none"
+          },
+          {
+            "account": "1955",
+            "direction": "credit",
+            "amount": 14.16,
+            "alv": "none"
+          }
+        ],
+        "ask": null
+      },
+      "adjudication": {
+        "status": "disputed",
+        "reason": "ilkka_disputed_payroll_package",
+        "raised_by": "ilkka",
+        "detail": "Ilkka 2026-09-24: disputed. The key books gross from the payslip; the tree requires the external payroll package. (The key also omits the employer contributions 424,80 + 44,88 + 20,88 the payslip lists.)",
+        "tree_position": {
+          "summary": "A net salary payment with only a payslip is the Jev ask_payroll_package question (evidence_type payroll_package).",
+          "citations": [
+            "server/donna/jevCoding.js",
+            "server/donna/codingAutoPost.js",
+            "server/donna/fiCodingEvidencePgLifecycle.test.js (salary → payroll_package)"
+          ]
+        },
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B35",
+      "bank": {
+        "statement_row": 35,
+        "date": "2025-02-28",
+        "amount": 8,
+        "direction": "out",
+        "counterparty": "OP",
+        "message": "2/2025",
+        "kind": "TILINHOITOPALKKIO"
+      },
+      "key_row": "28.2. Tilinhoito −8,00 (row shared with e-lasku −6,00)",
+      "decision_class": "bank_fee",
+      "verbatim": {
+        "debit": "5990 Pankkipalvelumaksut 14,00",
+        "credit": "1910 Pankki 14,00",
+        "note": "veroton rahoituspalvelu"
+      },
+      "source_files": [],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5990",
+            "direction": "debit",
+            "amount": 8,
+            "alv": "exempt"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 8,
+            "alv": "none"
+          }
+        ],
+        "ask": null,
+        "derivation": "The key prints one row for both fee lines (\"−8,00 / e-lasku −6,00\", 14,00 total); each line carries its own printed amount."
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "B36",
+      "bank": {
+        "statement_row": 36,
+        "date": "2025-02-28",
+        "amount": 6,
+        "direction": "out",
+        "counterparty": "OP",
+        "message": "2/2025",
+        "kind": "E-LASKUPALVELUMAKSU"
+      },
+      "key_row": "28.2. E-lasku −6,00 (row shared with tilinhoito −8,00)",
+      "decision_class": "bank_fee",
+      "verbatim": {
+        "debit": "5990 Pankkipalvelumaksut 14,00",
+        "credit": "1910 Pankki 14,00",
+        "note": "veroton rahoituspalvelu"
+      },
+      "source_files": [],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "5990",
+            "direction": "debit",
+            "amount": 6,
+            "alv": "exempt"
+          },
+          {
+            "account": "1910",
+            "direction": "credit",
+            "amount": 6,
+            "alv": "none"
+          }
+        ],
+        "ask": null,
+        "derivation": "The key prints one row for both fee lines; each line carries its own printed amount."
+      },
+      "adjudication": {
+        "status": "agreed"
+      },
+      "adjudicated": null
+    },
+    {
+      "id": "K01",
+      "bank": null,
+      "decision_class": "cash_purchase",
+      "cash_document": {
+        "date": "2025-02-25",
+        "amount": 22,
+        "file": "49 Kuitti 25.02 - Kukkakauppa Kukka-Aho (KÄTEINEN).pdf"
+      },
+      "key_row": "A.4 Käteisostos (Kukkakauppa 25.2., 22,00 €) — no section-B row; section C: \"käteisosto 22,00 € — kassa 1900\"",
+      "verbatim": {
+        "a4": "Kuitti on maksettu käteisellä — sitä EI löydy tiliotteelta. Kirjaus kohdistuu käteiskassaan (1900), ei pankkitilille."
+      },
+      "source_files": [
+        "49 Kuitti 25.02 - Kukkakauppa Kukka-Aho (KÄTEINEN).pdf"
+      ],
+      "group": null,
+      "original": {
+        "terminal": "posted",
+        "journal": [
+          {
+            "account": "KULU-KUKAT",
+            "direction": "debit",
+            "amount": 17.53,
+            "alv": "in_25_5"
+          },
+          {
+            "account": "1760",
+            "direction": "debit",
+            "amount": 4.47,
+            "alv": "none"
+          },
+          {
+            "account": "1900",
+            "direction": "credit",
+            "amount": 22,
+            "alv": "none"
+          }
+        ],
+        "ask": null,
+        "derivation": "A.4 names only the credit (1900); the expense and ALV amounts are the receipt's printed split, the expense account is unnamed."
+      },
+      "adjudication": {
+        "status": "disputed",
+        "reason": "ilkka_disputed_cash_funding",
+        "raised_by": "ilkka",
+        "detail": "Ilkka 2026-09-24: disputed. The key books cash box 1900; the tree asks who funded the cash purchase.",
+        "tree_position": {
+          "summary": "A cash-paid document is the Jev ask_cash_funding question (evidence_type payment_method); a CASH label alone never settles it.",
+          "citations": [
+            "server/donna/jevDisposition.js",
+            "server/donna/documentDispositionLlm.js",
+            "data/evals/fixtures/fi-autonomous-material-errors.json cash_settlement"
+          ]
+        },
+        "reviewer": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24"
+      },
+      "adjudicated": null
+    }
+  ],
+  "section_c": {
+    "original": [
+      {
+        "key": "sales_net",
+        "label": "Myynti yhteensä, veroton (Nets 8 223,11 + käteinen 872,51 + laskut 2 020,00)",
+        "amount": 11115.62,
+        "parts": {
+          "nets": 8223.11,
+          "cash": 872.51,
+          "invoices": 2020
+        }
+      },
+      {
+        "key": "output_vat",
+        "label": "Myynnin ALV 25,5 % yhteensä",
+        "amount": 2834.48
+      },
+      {
+        "key": "input_vat_deductible",
+        "label": "Ostojen ALV-vähennykset (kotimaiset ostot ja kuitit, ilman yksityisajoa ja puuttuvaa kuittia)",
+        "amount": 239.4
+      },
+      {
+        "key": "reverse_charge_vat",
+        "label": "Käännetty ALV (velka = vähennys, nettovaikutus 0)",
+        "amount": 123.32
+      },
+      {
+        "key": "vat_due",
+        "label": "ALV-tilitys 2/2025 verottajalle (eräpäivä 12.4.2025)",
+        "amount": 2595.08
+      },
+      {
+        "key": "nets_fees",
+        "label": "Nets-palvelumaksut (veroton rahoituspalvelu)",
+        "amount": 113.52
+      },
+      {
+        "key": "cash_box",
+        "label": "Käteiskassan liikenne: talletukset 1 095,00 €, käteisosto 22,00 €",
+        "amount": null,
+        "text": "kassa 1900",
+        "parts": {
+          "deposits": 1095,
+          "cash_purchase": 22
+        }
+      }
+    ],
+    "contributions": [
+      {
+        "figure": "sales_net",
+        "lines": [
+          "B01",
+          "B08",
+          "B21",
+          "B27"
+        ],
+        "amount": 8223.11,
+        "derived_from": "section_c",
+        "note": "Section C \"Nets 8 223,11\" (10 320,00 / 1,255); the B rows print no complete journal to derive it from."
+      },
+      {
+        "figure": "sales_net",
+        "lines": [
+          "B02"
+        ],
+        "amount": 509.96,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "sales_net",
+        "lines": [
+          "B29"
+        ],
+        "amount": 362.55,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "sales_net",
+        "lines": [
+          "B20"
+        ],
+        "amount": 1300,
+        "derived_from": "documents",
+        "documents": [
+          "10 Myyntilasku 1001 - Kahvila Aroma Oy.pdf",
+          "13 Hyvityslasku 1003 - Kahvila Aroma Oy.pdf"
+        ],
+        "note": "Invoice 1001 1 600,00 − credit note 1003 300,00."
+      },
+      {
+        "figure": "sales_net",
+        "lines": [
+          "B28"
+        ],
+        "amount": 720,
+        "derived_from": "documents",
+        "documents": [
+          "11 Myyntilasku 1002 - Lumikki Oy.pdf"
+        ],
+        "note": "Invoice 1002, recognised when issued on 12.2. (accrual; Ilkka 2026-09-24: correct gold, not a dispute). B28 only settles it and stays adjudicated to the owner question on the 20,00 split. The tree cannot yet journal an uploaded sales invoice: CG-1.",
+        "recognition": "on_issue",
+        "capability_gap": "CG-1"
+      },
+      {
+        "figure": "output_vat",
+        "lines": [
+          "B01",
+          "B08",
+          "B21",
+          "B27"
+        ],
+        "amount": 2096.89,
+        "derived_from": "section_c",
+        "note": "10 320,00 − 8 223,11."
+      },
+      {
+        "figure": "output_vat",
+        "lines": [
+          "B02"
+        ],
+        "amount": 130.04,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "output_vat",
+        "lines": [
+          "B29"
+        ],
+        "amount": 92.45,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "output_vat",
+        "lines": [
+          "B20"
+        ],
+        "amount": 331.5,
+        "derived_from": "documents",
+        "documents": [
+          "10 Myyntilasku 1001 - Kahvila Aroma Oy.pdf",
+          "13 Hyvityslasku 1003 - Kahvila Aroma Oy.pdf"
+        ],
+        "note": "408,00 − 76,50."
+      },
+      {
+        "figure": "output_vat",
+        "lines": [
+          "B28"
+        ],
+        "amount": 183.6,
+        "derived_from": "documents",
+        "documents": [
+          "11 Myyntilasku 1002 - Lumikki Oy.pdf"
+        ],
+        "recognition": "on_issue",
+        "capability_gap": "CG-1",
+        "note": "Invoice 1002, recognised when issued on 12.2. (accrual; Ilkka 2026-09-24: correct gold, not a dispute). B28 only settles it and stays adjudicated to the owner question on the 20,00 split. The tree cannot yet journal an uploaded sales invoice: CG-1."
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B04"
+        ],
+        "amount": 2.22,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B05"
+        ],
+        "amount": 73.03,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B09"
+        ],
+        "amount": 12.05,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B15"
+        ],
+        "amount": 4.04,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B18"
+        ],
+        "amount": 1.58,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B22"
+        ],
+        "amount": 7.14,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B23"
+        ],
+        "amount": 0.85,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B24"
+        ],
+        "amount": 123.98,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B25"
+        ],
+        "amount": 2.6,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B26"
+        ],
+        "amount": 5.85,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "B31"
+        ],
+        "amount": 1.59,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "input_vat_deductible",
+        "lines": [
+          "K01"
+        ],
+        "amount": 4.47,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "reverse_charge_vat",
+        "lines": [
+          "B06"
+        ],
+        "amount": 3.47,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "reverse_charge_vat",
+        "lines": [
+          "B07"
+        ],
+        "amount": 81.6,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "reverse_charge_vat",
+        "lines": [
+          "B14"
+        ],
+        "amount": 38.25,
+        "derived_from": "lines"
+      },
+      {
+        "figure": "nets_fees",
+        "lines": [
+          "B01",
+          "B08",
+          "B21",
+          "B27"
+        ],
+        "amount": 113.52,
+        "derived_from": "section_c"
+      }
+    ],
+    "c_disputes": [
+      {
+        "id": "DC-2",
+        "raised_by": "claude_for_ilkka",
+        "reason": "card_sales_period",
+        "detail": "Note only; figures unchanged. Section C counts card sales by settlement (weeks 5–8, 27.1.–23.2.), so it includes 27.–31.1. sales and excludes week 9 (24.–28.2.), which A.5 itself says belongs to February. Accrual recognition would need daily Nets figures the pack does not have.",
+        "tree_position": {
+          "summary": "The tree recognises a processor settlement when its bank line settles against a report row (see nets).",
+          "citations": [
+            "server/donna/db/ledger.js resolveSettlementRowSplit",
+            "server/donna/settlementRowSplitPgLifecycle.test.js (Kultalanka VKO5: 1910 Dr 2452.72 / fee Dr 27.28 / 3000 Cr 1976.10 / 2939 Cr 503.90)"
+          ]
+        }
+      }
+    ],
+    "capability_gaps": [
+      {
+        "id": "CG-1",
+        "kind": "uploaded_sales_invoice_recognition",
+        "basis": "accrual",
+        "documents": [
+          "11 Myyntilasku 1002 - Lumikki Oy.pdf"
+        ],
+        "settling_line": "B28",
+        "amount_sales": 720,
+        "amount_output_vat": 183.6,
+        "tree": "server/donna/creditNoteApplications.js",
+        "citations": [
+          "server/donna/creditNoteApplications.js",
+          "server/donna/creditNoteSettlementPgLifecycle.test.js"
+        ],
+        "decided_by": "Ilkka Halonen (operator; not professional review)",
+        "date": "2026-09-24",
+        "note": "Under the declared accrual basis, sales invoice 1002 (720,00 + 183,60 ALV) is February revenue when issued on 12.2. The tree never journals an uploaded sales invoice on its own; it recognises revenue only on the settling bank line, and B28 rests on an owner question about the unsplit 20,00. A book omitting the invoice FAILS sales_net, output_vat and vat_due; the shortfall is attributed here, never accepted as an alternative. Aroma (B20) is paid within the month, so its bank-line representation leaves no gap."
+      }
+    ],
+    "adjudicated": {
+      "sales_net": {
+        "original": 11115.62,
+        "at_rest": 10243.11,
+        "with_key_disputes": 11115.62,
+        "pending_owner": 0,
+        "undecided": 872.51,
+        "pending_items": [],
+        "undecided_items": [
+          {
+            "id": "B02",
+            "amount": 509.96,
+            "derived_from": "lines"
+          },
+          {
+            "id": "B29",
+            "amount": 362.55,
+            "derived_from": "lines"
+          }
+        ],
+        "capability_gap_items": [
+          {
+            "id": "CG-1",
+            "kind": "uploaded_sales_invoice_recognition",
+            "amount": 720
+          }
+        ],
+        "rounding_tolerance_cents": 1,
+        "arithmetic": "11115,62 − 0,00 pending owner (—) − 872,51 undecided (B02, B29) = 10243,11 at rest, of which 720,00 is CG-1 (a capability gap the tree cannot yet produce)"
+      },
+      "output_vat": {
+        "original": 2834.48,
+        "at_rest": 2611.99,
+        "with_key_disputes": 2834.48,
+        "pending_owner": 0,
+        "undecided": 222.49,
+        "pending_items": [],
+        "undecided_items": [
+          {
+            "id": "B02",
+            "amount": 130.04,
+            "derived_from": "lines"
+          },
+          {
+            "id": "B29",
+            "amount": 92.45,
+            "derived_from": "lines"
+          }
+        ],
+        "capability_gap_items": [
+          {
+            "id": "CG-1",
+            "kind": "uploaded_sales_invoice_recognition",
+            "amount": 183.6
+          }
+        ],
+        "rounding_tolerance_cents": 1,
+        "arithmetic": "2834,48 − 0,00 pending owner (—) − 222,49 undecided (B02, B29) = 2611,99 at rest, of which 183,60 is CG-1 (a capability gap the tree cannot yet produce)"
+      },
+      "input_vat_deductible": {
+        "original": 239.4,
+        "at_rest": 223.61,
+        "with_key_disputes": 228.08,
+        "pending_owner": 11.33,
+        "undecided": 4.47,
+        "pending_items": [
+          {
+            "id": "B22",
+            "amount": 7.14,
+            "derived_from": "lines"
+          },
+          {
+            "id": "B25",
+            "amount": 2.6,
+            "derived_from": "lines"
+          },
+          {
+            "id": "B31",
+            "amount": 1.59,
+            "derived_from": "lines"
+          }
+        ],
+        "undecided_items": [
+          {
+            "id": "K01",
+            "amount": 4.47,
+            "derived_from": "lines"
+          }
+        ],
+        "capability_gap_items": [],
+        "rounding_tolerance_cents": 0,
+        "arithmetic": "239,40 − 11,33 pending owner (B22, B25, B31) − 4,47 undecided (K01) + 0,01 adjudicated (B04) = 223,61 at rest"
+      },
+      "reverse_charge_vat": {
+        "original": 123.32,
+        "at_rest": 123.32,
+        "with_key_disputes": 123.32,
+        "pending_owner": 0,
+        "undecided": 0,
+        "pending_items": [],
+        "undecided_items": [],
+        "capability_gap_items": [],
+        "rounding_tolerance_cents": 0,
+        "arithmetic": "123,32 − 0,00 pending owner (—) − 0,00 undecided (—) = 123,32 at rest"
+      },
+      "nets_fees": {
+        "original": 113.52,
+        "at_rest": 113.52,
+        "with_key_disputes": 113.52,
+        "pending_owner": 0,
+        "undecided": 0,
+        "pending_items": [],
+        "undecided_items": [],
+        "capability_gap_items": [],
+        "rounding_tolerance_cents": 1,
+        "arithmetic": "113,52 − 0,00 pending owner (—) − 0,00 undecided (—) = 113,52 at rest"
+      },
+      "vat_due": {
+        "original": 2595.08,
+        "at_rest": 2388.38,
+        "with_key_disputes": 2606.4,
+        "arithmetic": "output ALV − domestic input ALV (reverse charge nets to zero): at rest 2611,99 − 223,61 = 2388,38; with the key's disputed positions 2834,48 − 228,08 = 2606,40; original 2595,08"
+      }
+    }
+  }
+}

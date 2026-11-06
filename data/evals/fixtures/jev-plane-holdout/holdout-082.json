@@ -1,0 +1,218 @@
+{
+  "id": "holdout-082",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-082",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "TAX INVOICE SB-1101\nEastwind Printing Pte. Ltd.  UEN 200812345B\nBill to: Merlion Analytics Pte. Ltd.  UEN 202012345K\nInvoice date: 15 Aug 2026    Due date: 14 Sep 2026    Terms: 30 days\nDescription: Brochure print run, August\nSubtotal: S$1,834.86\nGST 9%: S$165.14\nTOTAL: S$2,000.00\nPayment: transfer to Eastwind Printing Pte. Ltd. PayNow UEN 200812345B, quoting SB-1101.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "TAX INVOICE SB-1118\nEastwind Printing Pte. Ltd.  UEN 200812345B\nBill to: Merlion Analytics Pte. Ltd.  UEN 202012345K\nInvoice date: 29 Aug 2026    Due date: 28 Sep 2026    Terms: 30 days\nDescription: Roller banners (4)\nSubtotal: S$1,834.86\nGST 9%: S$165.14\nTOTAL: S$2,000.00\nPayment: transfer to Eastwind Printing Pte. Ltd. PayNow UEN 200812345B, quoting SB-1118.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n09 Sep 2026,ITR,2000.00,,PAYNOW TRANSFER,EASTWIND PRINTING PTE LTD,",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-09",
+        "money_in_minor": 0,
+        "money_out_minor": 200000,
+        "currency": "SGD",
+        "contact": "EASTWIND PRINTING PTE LTD",
+        "description": "PAYNOW TRANSFER EASTWIND PRINTING PTE LTD",
+        "raw_description": "09 Sep 2026,ITR,2000.00,,PAYNOW TRANSFER,EASTWIND PRINTING PTE LTD,",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-08-29",
+        "reference": "SB-1118"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-15",
+      "due_date": "2026-09-14",
+      "amount_minor": 200000,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "SB-1101",
+      "counterparty": "Eastwind Printing Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "Which of the two open Eastwind Printing bills (SB-1101 or SB-1118) the owner intended the S$2,000.00 PayNow payment of 09 Sep 2026 to settle.",
+      "question": "You paid Eastwind Printing S$2,000.00 by PayNow on 9 September with no reference. Was that for bill SB-1101 (brochures) or SB-1118 (roller banners)?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner initiated the payment without a reference; both open bills are for the same amount.",
+      "why_local_cannot_supply": "The complete declared inventory holds both bills and the bank row; nothing records the intended allocation.",
+      "basis_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-sg-owner-paid-supplier-two-equal-bills",
+    "family_description": "The owner pays a supplier S$2,000.00 by PayNow with no reference while two of the supplier's bills for S$2,000.00 are open.",
+    "market": "SG",
+    "variant": "a",
+    "error_mode": "owner-initiated payment against two equal bills: owner-only intention, or the owner's own statement naming a bill",
+    "label_reason": "The owner sent the payment with no reference; both bills are equal; the complete inventory records no intention — which bill the owner meant is an owner-only fact.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "customer_question"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "Which of the two open Eastwind Printing bills (SB-1101 or SB-1118) the owner intended the S$2,000.00 PayNow payment of 09 Sep 2026 to settle.",
+      "question": "You paid Eastwind Printing S$2,000.00 by PayNow on 9 September with no reference. Was that for bill SB-1101 (brochures) or SB-1118 (roller banners)?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner initiated the payment without a reference; both open bills are for the same amount.",
+      "why_local_cannot_supply": "The complete declared inventory holds both bills and the bank row; nothing records the intended allocation.",
+      "basis_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    },
+    "ask_fact": "supported"
+  },
+  "expected": {
+    "route": "customer_question",
+    "proposals": []
+  }
+}

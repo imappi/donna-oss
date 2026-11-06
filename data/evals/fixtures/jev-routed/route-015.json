@@ -1,0 +1,66 @@
+{
+  "id": "route-015",
+  "split": "evaluation",
+  "source_family": "authored-015",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-15",
+    "document_type": "supplier_bill",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 1000,
+    "currency": "EUR",
+    "reference_number": "BILL-8115",
+    "payment_status": "unpaid",
+    "vendor_name": "Oak Hosting Ltd"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-15-a",
+      "money_in": 0,
+      "money_out": 400,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Oak Hosting Ltd",
+      "description": "BANK TRANSFER Oak Hosting Ltd BILL-8115",
+      "raw_description": "BANK TRANSFER Oak Hosting Ltd BILL-8115",
+      "reconciliation_status": "reconciled",
+      "payload": {}
+    },
+    {
+      "id": "opaque-tx-15-b",
+      "money_in": 0,
+      "money_out": 600,
+      "currency": "EUR",
+      "date": "2026-08-14",
+      "contact": "Oak Hosting Ltd",
+      "description": "BANK TRANSFER Oak Hosting Ltd BILL-8115",
+      "raw_description": "BANK TRANSFER Oak Hosting Ltd BILL-8115",
+      "reconciliation_status": null,
+      "payload": {}
+    }
+  ],
+  "matches": [
+    {
+      "id": "opaque-match-route-015",
+      "firm_id": "fixture-firm",
+      "client_id": "fixture-client",
+      "bank_transaction_id": "opaque-tx-15-a",
+      "matched_object_id": "opaque-doc-15",
+      "matched_object_type": "supplier_bill",
+      "status": "confirmed",
+      "amount": 400,
+      "currency": "EUR"
+    }
+  ],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "match",
+    "matches": [
+      "candidate_2"
+    ]
+  },
+  "label_basis": "Confirmed 400 plus new 600 pays the 1000 invoice; partial settlement must retain the remainder."
+}

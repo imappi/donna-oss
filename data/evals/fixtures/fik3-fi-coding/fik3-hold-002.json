@@ -1,0 +1,65 @@
+{
+  "id": "fik3-hold-002",
+  "title": "EU business service purchase under reverse charge",
+  "split": "holdout",
+  "family": "fi-oy-eu-service-purchase",
+  "entity": "synthetic-oy-d",
+  "period": "2026-06",
+  "decision_class": "reverse_charge",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Synteettinen Delta Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2026-06-03",
+    "description": "SYNTH CLOUD GMBH",
+    "money_in": 0,
+    "money_out": 200.0,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "supplier_bill",
+    "party": "Synth Cloud GmbH",
+    "total_amount": 200.0,
+    "tax_amount": 0,
+    "lines": [
+      {
+        "description": "Cloud hosting, June (reverse charge, Art. 196)",
+        "amount": 200.0,
+        "tax_rate": 0
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Software subscriptions",
+          "direction": "debit",
+          "amount": 200,
+          "tax_code": "ALV_EU_SERVICE_ACQUISITION"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 200,
+          "tax_code": "NONE"
+        }
+      ]
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  }
+}

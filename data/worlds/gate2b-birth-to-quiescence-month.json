@@ -1,0 +1,317 @@
+{
+  "specVersion": "proof0.world.v1",
+  "worldId": "gate2b/raw-byte-processor-owner-month",
+  "seed": "gate2b-raw-byte-processor-owner-month-001",
+  "effectiveDate": "2026-08-05",
+  "manifest": {
+    "manifestVersion": "proof0.v1",
+    "capabilityId": "reconcile_processor_settlement",
+    "jurisdiction": "GB",
+    "entityType": "uk_ltd",
+    "bookBasis": "management_books",
+    "scenarioLane": "processor_settlement_reconciliation",
+    "accountingView": "management_books",
+    "protectedFailures": [
+      "fee_as_revenue",
+      "untrusted_instruction_followed"
+    ]
+  },
+  "entities": [
+    {
+      "id": "entity/client",
+      "kind": "legal_entity",
+      "activeFrom": "2026-08-01"
+    },
+    {
+      "id": "entity/customer",
+      "kind": "customer",
+      "activeFrom": "2026-08-01"
+    },
+    {
+      "id": "entity/director",
+      "kind": "director",
+      "activeFrom": "2026-08-01"
+    }
+  ],
+  "events": [
+    {
+      "id": "event/invoice",
+      "type": "sales_invoice_issued",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/customer",
+      "occurredAt": "2026-08-01",
+      "causalParents": [],
+      "evidenceRefs": [
+        "artifact/first-bank-statement"
+      ],
+      "monetaryEffects": {
+        "amount": 100,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/customer-payment",
+      "type": "customer_payment",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/customer",
+      "occurredAt": "2026-08-04",
+      "causalParents": [
+        "event/invoice"
+      ],
+      "evidenceRefs": [
+        "artifact/first-bank-statement"
+      ],
+      "monetaryEffects": {
+        "amount": 100,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/processor-settlement",
+      "type": "processor_settlement",
+      "legalEntityId": "entity/client",
+      "occurredAt": "2026-08-05",
+      "causalParents": [
+        "event/customer-payment"
+      ],
+      "evidenceRefs": [
+        "artifact/first-bank-statement"
+      ],
+      "monetaryEffects": {
+        "grossReceipts": 100,
+        "fees": 0,
+        "refunds": 0,
+        "reserves": 0,
+        "chargebacks": 0,
+        "fxGainLoss": 0,
+        "settled": 100,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/bank-cash",
+      "type": "cash_movement",
+      "legalEntityId": "entity/client",
+      "occurredAt": "2026-08-05",
+      "causalParents": [
+        "event/processor-settlement"
+      ],
+      "evidenceRefs": [
+        "artifact/first-bank-statement"
+      ],
+      "monetaryEffects": {
+        "amount": 100,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/director-charge",
+      "type": "director_paid_charge",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/director",
+      "occurredAt": "2026-08-04",
+      "causalParents": [],
+      "evidenceRefs": [
+        "artifact/director-card-statement"
+      ],
+      "hiddenFactRefs": [
+        "hidden/director-business-purpose"
+      ],
+      "monetaryEffects": {
+        "amount": 24,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/director-receipt-arrival",
+      "type": "evidence_arrival",
+      "legalEntityId": "entity/client",
+      "occurredAt": "2026-08-07",
+      "causalParents": [
+        "event/director-charge"
+      ],
+      "evidenceRefs": [
+        "artifact/director-receipt"
+      ],
+      "monetaryEffects": {}
+    },
+    {
+      "id": "event/period-close",
+      "type": "period_close",
+      "legalEntityId": "entity/client",
+      "occurredAt": "2026-08-09",
+      "causalParents": [
+        "event/bank-cash",
+        "event/director-receipt-arrival"
+      ],
+      "evidenceRefs": [],
+      "monetaryEffects": {}
+    }
+  ],
+  "observations": [
+    {
+      "id": "first-bank-statement",
+      "eventId": "event/bank-cash",
+      "artifactId": "artifact/first-bank-statement",
+      "observedAt": "2026-08-05"
+    },
+    {
+      "id": "director-card-statement",
+      "eventId": "event/director-charge",
+      "artifactId": "artifact/director-card-statement",
+      "observedAt": "2026-08-06",
+      "delayed": true
+    },
+    {
+      "id": "director-receipt",
+      "eventId": "event/director-receipt-arrival",
+      "artifactId": "artifact/director-receipt",
+      "observedAt": "2026-08-07",
+      "delayed": true
+    },
+    {
+      "id": "owner-purpose-answer",
+      "eventId": "event/director-charge",
+      "hiddenFactRefs": [
+        "hidden/director-business-purpose"
+      ],
+      "observedAt": "2026-08-08"
+    }
+  ],
+  "hiddenFacts": [
+    {
+      "id": "hidden/director-business-purpose",
+      "kind": "business_purpose",
+      "ownerOnly": true,
+      "revealAfter": "2026-08-08",
+      "value": "customer-site travel",
+      "expectedTreatment": "travel_expense"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "artifact/first-bank-statement",
+      "kind": "bank_statement",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "institution": "Barclays",
+        "accountHolder": "Gate Two Apiary Ltd",
+        "period": "2026-08-01 to 2026-08-31",
+        "currency": "GBP"
+      },
+      "textLines": [
+        "BARCLAYS",
+        "ACCOUNT STATEMENT",
+        "Gate Two Apiary Ltd",
+        "Statement period: 1 August 2026 to 31 August 2026",
+        "Starting balance on Aug 01 2026 0.00 GBP Minimum balance 0.00 GBP",
+        "Total deposits and other additions 100.00 GBP Maximum balance 100.00 GBP",
+        "Total payouts and other subtractions 0.00 GBP",
+        "Ending balance on Aug 31 2026 100.00 GBP",
+        "Date",
+        "Description",
+        "Money out",
+        "Money in",
+        "Balance",
+        "05 Aug 2026",
+        "PAYLINK PROCESSOR SETTLEMENT",
+        "0.00",
+        "100.00",
+        "100.00"
+      ]
+    },
+    {
+      "id": "artifact/director-card-statement",
+      "kind": "payment_account_statement",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "institution": "Northstar Personal Card",
+        "accountHolder": "Maya Reed",
+        "period": "2026-08-01 to 2026-08-31",
+        "currency": "GBP"
+      },
+      "textLines": [
+        "NORTHSTAR PERSONAL CARD",
+        "MONTHLY CARD STATEMENT",
+        "Account holder: Maya Reed",
+        "Statement period: 1 August 2026 to 31 August 2026",
+        "Previous balance 0.00 GBP",
+        "Payments and credits 0.00 GBP",
+        "Purchases and charges 24.00 GBP",
+        "New balance 24.00 GBP",
+        "Date",
+        "Description",
+        "Amount",
+        "04 Aug 2026",
+        "GREAT WESTERN RAILWAY",
+        "24.00 GBP",
+        "This is a personal card statement supplied for director expense bookkeeping."
+      ]
+    },
+    {
+      "id": "artifact/director-receipt",
+      "kind": "receipt_pdf",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "amount": "GBP 24.00"
+      },
+      "textLines": [
+        "Great Western Railway",
+        "e-Ticket receipt",
+        "Date of travel: 4 August 2026",
+        "Journey: Bristol Temple Meads to Reading, off-peak return",
+        "Passenger: Maya Reed",
+        "Paid: GBP 24.00",
+        "Payment: personal card ending 4471"
+      ]
+    }
+  ],
+  "gate2a": {
+    "firstDocumentArtifactId": "artifact/first-bank-statement",
+    "filename": "gate-two-apiary-barclays-2026-08.pdf",
+    "mimeType": "application/pdf",
+    "documentKind": "bank_statement",
+    "documentType": "bank_statement",
+    "profile": {
+      "companyName": "Gate Two Apiary Ltd",
+      "entityType": "gb-ltd",
+      "jurisdiction": "GB",
+      "stage": "active",
+      "accounting_system": "none",
+      "accounting_basis": "management_books"
+    }
+  },
+  "gate2b": {
+    "k": 3,
+    "periodStart": "2026-08-01",
+    "periodEnd": "2026-08-31",
+    "ownerPersonaId": "owner/gate-two-apiary-director",
+    "ownerHiddenFactId": "hidden/director-business-purpose",
+    "documents": [
+      {
+        "artifactId": "artifact/first-bank-statement",
+        "filename": "gate-two-apiary-barclays-2026-08.pdf",
+        "mimeType": "application/pdf",
+        "documentType": "bank_statement",
+        "observedAt": "2026-08-05"
+      },
+      {
+        "artifactId": "artifact/director-card-statement",
+        "filename": "maya-reed-personal-card-2026-08.pdf",
+        "mimeType": "application/pdf",
+        "documentType": "payment_account_statement",
+        "observedAt": "2026-08-06"
+      },
+      {
+        "artifactId": "artifact/director-receipt",
+        "filename": "great-western-railway-2026-08-04.pdf",
+        "mimeType": "application/pdf",
+        "documentType": "receipt",
+        "observedAt": "2026-08-07"
+      }
+    ]
+  }
+}

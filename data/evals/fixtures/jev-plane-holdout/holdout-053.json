@@ -1,0 +1,246 @@
+{
+  "id": "holdout-053",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-053",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "LASKU\nLaskun numero: 5520    Laskun päivä: 18.08.2026    Eräpäivä: 01.09.2026    Maksuehto: 14 pv netto\nLaskuttaja: Jyväskylän Konevuokraamo Oy, Y-tunnus 1357913-5\nMaksaja: Kuusela Design Oy\nErittely: Nostimen vuokra 10.–14.8.2026\nVeroton yhteensä: 1 745,02 €\nALV 25,5 %: 444,98 €\nMaksettava yhteensä: 2 190,00 €\nViitenumero: 5 52008    Tilinumero: FI62 8000 1100 2233 45    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n31.08.2026;31.08.2026;-2190,00;Tilisiirto;Maksu;Jyväskylän Konevuokraamo Oy;FI62 8000 1100 2233 45;552008;;202608310004",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n02.09.2026;02.09.2026;+2190,00;Palautus;Maksun palautus AC04 tili suljettu;Jyväskylän Konevuokraamo Oy;;552008;;202609020005",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "allocation-source-a1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "allocation_record",
+        "content": "Reconciliation record a1: bank line dated 31.08.2026 for 2 190,00 € is recorded as REJECTED against lasku 5520 (supplier bill) on 02.09.2026. Rejected by the owner: transfer returned by the receiving bank (account closed)",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-31",
+        "money_in_minor": 0,
+        "money_out_minor": 219000,
+        "currency": "EUR",
+        "contact": "Jyväskylän Konevuokraamo Oy",
+        "description": "Tilisiirto Maksu",
+        "raw_description": "31.08.2026;31.08.2026;-2190,00;Tilisiirto;Maksu;Jyväskylän Konevuokraamo Oy;FI62 8000 1100 2233 45;552008;;202608310004",
+        "structured_reference": "552008",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-02",
+        "money_in_minor": 219000,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Jyväskylän Konevuokraamo Oy",
+        "description": "Palautus Maksun palautus AC04 tili suljettu",
+        "raw_description": "02.09.2026;02.09.2026;+2190,00;Palautus;Maksun palautus AC04 tili suljettu;Jyväskylän Konevuokraamo Oy;;552008;;202609020005",
+        "structured_reference": "552008",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 219000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 219000,
+        "bank_currency": "EUR",
+        "gross_minor": 219000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [
+      {
+        "id": "allocation-a1",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "source_id": "allocation-source-a1",
+        "version": "1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "status": "rejected",
+        "amount_minor": 219000,
+        "currency": "EUR",
+        "object_type": "supplier_bill"
+      }
+    ],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-18",
+      "due_date": "2026-09-01",
+      "amount_minor": 219000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "552008",
+      "counterparty": "Jyväskylän Konevuokraamo Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "allocation-source-a1",
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "allocation-source-a1",
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-fi-payment-returned-and-resent",
+    "family_description": "A supplier payment is returned by the receiving bank (closed account) and re-sent; both outgoing transfers carry the viite.",
+    "market": "FI",
+    "variant": "b",
+    "error_mode": "returned payment (money in) beside two outgoing transfers; rejected allocation removing the returned transfer",
+    "label_reason": "Only the returned transfer and its return are in scope; the book already rejected the returned transfer against this bill, so it is not eligible, and the return is money in; the bill remains unpaid with no eligible payment.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "unresolved_research"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": false,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "unresolved_research",
+    "proposals": []
+  }
+}

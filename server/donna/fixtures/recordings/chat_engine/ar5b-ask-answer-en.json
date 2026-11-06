@@ -1,0 +1,16 @@
+{
+  "lane": "chat_engine",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — authored from the AR-5B attributed English owner answer and client-portal structured-reply contract; never a captured provider response",
+  "fixture": "open-ask-answer-en",
+  "status": 200,
+  "body": {
+    "id": "msg_ar5b_ask_answer_en",
+    "type": "message",
+    "role": "assistant",
+    "model": "recorded-provider-model",
+    "content": [{ "type": "tool_use", "id": "tool_ar5b_ask_en", "name": "submit_structured_reply", "input": { "text": "That answers the open VAT question. Please confirm below and I'll file your answer.", "actions": [{ "type": "answer_evidence_request", "reason": "The owner identified the exact liability settled by the payment.", "evidence_request_id": "ask-ae-vat-1", "reply_text": "That AED 5,250 payment settles the August VAT liability.", "miles": null, "date": null, "purpose": null, "confidence": "confirmed", "report_type": null, "period_start": null, "period_end": null, "basis": null }] } }],
+    "stop_reason": "tool_use",
+    "usage": { "input_tokens": 0, "output_tokens": 0 }
+  }
+}

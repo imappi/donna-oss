@@ -1,0 +1,241 @@
+{
+  "id": "holdout-030",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-030",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0481\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Lim Family Dental Pte. Ltd.  UEN 201412345N\nInvoice date: 01 Sep 2026    Due date: 15 Sep 2026    Terms: 14 days\nDescription: Appointment reminders integration\nSubtotal: S$1,000.00\nGST 9%: S$90.00\nTOTAL: S$1,090.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0481.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n10 Sep 2026,ICT,,1000.00,PAYNOW TRANSFER,LIM FAMILY DENTAL PTE LTD,INV-2026-0481",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n10 Sep 2026,ICT,,90.00,PAYNOW TRANSFER,LIM FAMILY DENTAL PTE LTD,INV-2026-0481 GST",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-10",
+        "money_in_minor": 100000,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "LIM FAMILY DENTAL PTE LTD",
+        "description": "PAYNOW TRANSFER LIM FAMILY DENTAL PTE LTD INV-2026-0481",
+        "raw_description": "10 Sep 2026,ICT,,1000.00,PAYNOW TRANSFER,LIM FAMILY DENTAL PTE LTD,INV-2026-0481",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-10",
+        "money_in_minor": 9000,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "LIM FAMILY DENTAL PTE LTD",
+        "description": "PAYNOW TRANSFER LIM FAMILY DENTAL PTE LTD INV-2026-0481 GST",
+        "raw_description": "10 Sep 2026,ICT,,90.00,PAYNOW TRANSFER,LIM FAMILY DENTAL PTE LTD,INV-2026-0481 GST",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 100000,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 100000,
+        "bank_currency": "SGD",
+        "gross_minor": 100000,
+        "fee_minor": 0
+      },
+      {
+        "id": "link-2-t2",
+        "kind": "reference",
+        "source_id": "bank-t2",
+        "transaction_id": "tx-t2",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 9000,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 9000,
+        "bank_currency": "SGD",
+        "gross_minor": 9000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-09-01",
+      "due_date": "2026-09-15",
+      "amount_minor": 109000,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "INV-2026-0481",
+      "counterparty": "Lim Family Dental Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-sg-overpayment-and-short-payment",
+    "family_description": "A customer pays the wrong amount by PayNow quoting the invoice: transposed digits, bank charges deducted, or two transfers.",
+    "market": "SG",
+    "variant": "c",
+    "error_mode": "amount mismatch handled by the customer's own advice; partial; split",
+    "label_reason": "The customer paid the invoice in two PayNow transfers (S$1,000.00 and S$90.00) both quoting the invoice; the group fits exactly.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 100000
+      },
+      {
+        "transaction_id": "tx-t2",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 9000
+      }
+    ]
+  }
+}

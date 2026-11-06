@@ -1,0 +1,32 @@
+-- Drop the stray transaction_chat_messages → transactions(id) foreign
+-- key so the feed chat's virtual '__feed__' thread (#381) can persist.
+--
+-- Migration 016 deliberately created this table WITHOUT the FK: PR 131's
+-- version used `references transactions(id) on delete cascade` and failed
+-- at db:migrate, so 016's note reads "this iteration drops the FK and
+-- keeps transaction_id as a plain text column. Orphan rows are tolerable
+-- here ... a follow-up can re-add the FK once we know what was wrong."
+--
+-- But 016 uses `create table if not exists`. A production database that
+-- already carried an FK-bearing table from the failed PR-131 era was
+-- therefore never recreated, so prod kept the constraint
+-- `transaction_chat_messages_transaction_id_fkey` that the 016 source
+-- does not define — a schema/file drift.
+--
+-- The feed chat (#381) keys one global thread per client under the
+-- sentinel transaction_id '__feed__', which has no backing transactions
+-- row by design. With the app-level guard skipped (the prior fix), the
+-- insert then hit the DB constraint directly:
+--   insert or update on table "transaction_chat_messages" violates
+--     foreign key constraint "transaction_chat_messages_transaction_id_fkey"
+--
+-- This migration converges prod onto 016's documented design: a plain
+-- text transaction_id with no FK. `drop constraint if exists` is a safe
+-- no-op on any schema built purely from the current migration files
+-- (where the FK was never created), so fresh dev/test databases are
+-- unaffected. The firm_id / client_id FKs (on delete cascade) stay, so a
+-- message's lifecycle still follows its client — only the per-transaction
+-- referential link, already declared expendable in 016, is removed.
+
+alter table transaction_chat_messages
+  drop constraint if exists transaction_chat_messages_transaction_id_fkey;

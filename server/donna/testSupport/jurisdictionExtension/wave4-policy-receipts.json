@@ -1,0 +1,167 @@
+{
+  "base": "edbe20a6b3ad1b01430927a855d2d39ad38b66c9",
+  "cases": [
+    {
+      "input": {
+        "jurisdiction": "sg",
+        "businessDate": "2026-09-05",
+        "accountingSystem": "none"
+      },
+      "receipt": {
+        "policyId": "sg_legacy_coding",
+        "policyVersion": 1,
+        "jurisdiction": "sg",
+        "businessDate": "2026-09-05",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "entityType": null,
+        "accountingSystem": "none",
+        "taxProfileDigest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      },
+      "contractSha256": "02d0152431bf20a91355aba40a3222d8e23f8c08cec7fe73dddbfc30c09ab876"
+    },
+    {
+      "input": {
+        "jurisdiction": "fi",
+        "businessDate": "2026-09-05",
+        "accountingSystem": "none"
+      },
+      "receipt": {
+        "policyId": "fi_alv_coding",
+        "policyVersion": 10,
+        "jurisdiction": "fi",
+        "businessDate": "2026-09-05",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "entityType": null,
+        "accountingSystem": "none",
+        "taxProfileDigest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      },
+      "contractSha256": "cf5e9439f6871c95efafda270c977ffb915e06c9f44f0ec305127c1695c1d257",
+      "amendments": [
+        {
+          "by": "RT-25 (2026-09-09)",
+          "reason": "FI_ALV_INSTRUCTIONS_NOTE gained the same-rate-composite and rent-follows-the-bill sentences (a salon's card payout is 25,5 %, never 'ALV-tarkistus'). An authored change to a coding note is a policy-version event, not a silent re-digest: fi_alv_coding version 1 -> 2; this case is re-captured from the amended implementation, the wave-4 capture stays the base for every other case.",
+          "priorPolicyVersion": 1,
+          "priorContractSha256": "e2b993e0b6894cdab1e4efa7ce539dc807fb400964c59651d83e07c7cd849de7"
+        },
+        {
+          "by": "Finnish live validation (2026-09-11)",
+          "reason": "Source component allocation, required owner facts and external balanced payroll evidence change the FI coding contract. Version 2 advances to 3.",
+          "priorPolicyVersion": 2,
+          "priorContractSha256": "06bd0bbbde0923c7b25fe81c7073e15bf402fa2521bf191cd2e00cb83f5c822b"
+        },
+        {
+          "by": "Finnish live validation (2026-09-11), withholding remittance",
+          "reason": "The live coder named the missing withholding liability and substituted Payroll expense. Add the dedicated liability account and its settlement guidance; version 3 advances to 4.",
+          "priorPolicyVersion": 3,
+          "priorContractSha256": "da664369f7d342c587b7673872cae1b9d430cde5853ac77b87d16877e3b44887"
+        },
+        {
+          "by": "Finnish posting refusal recovery (2026-09-11)",
+          "reason": "Verified source discrepancies have a factual document question and reply continuation. The note preserves historical transport rates for pre-2025 supplies and advances; version 4 advances to 5. The live recheck must establish timing before using a historical rate; printed arithmetic alone is not exception evidence.",
+          "priorPolicyVersion": 4,
+          "priorContractSha256": "aa6217e806609e01241eb28e97fb94c9a69ea48bc7ae5ade53be020b7657685d"
+        },
+        {
+          "by": "Finnish material-error regression (2026-09-20)",
+          "reason": "The Oy menu excludes sole-trader drawings and includes the existing shareholder-receivable role. Private-use evidence does not establish the shareholder relationship; version 5 advances to 6.",
+          "priorPolicyVersion": 5,
+          "priorContractSha256": "88859385c0803dd501b98fbec9e6788e80a35c0bfaa5b2704a4ffe46347f428c"
+        },
+        {
+          "by": "FIK-V (2026-09-22)",
+          "reason": "The FI menu gains 'Vähennyskelvoton ALV (osto)' (ALV_NONDEDUCTIBLE_INPUT) and FI_ALV_INSTRUCTIONS_NOTE defines it. A verdict chosen without that option may have coded a non-deductible purchase at a deductible rate, so it is re-judged: version 7 advances to 8, a stored version-7 suggestion conflicts at its next apply and re-codes under the clock; posted journals are unaffected. (The 6 -> 7 re-pin recorded no amendment; its prior digest was ee8dc1cbe84a5122a977b5708aaf33f3cf499ad987846cc3dcd35d701b0ed04e.)",
+          "priorPolicyVersion": 7,
+          "priorContractSha256": "1e7ece51260f29bd0d4b3f90a003c47ce4e7550c53684b7c1f81a65f3656875a"
+        },
+        {
+          "by": "FIK-1 inventory corrections (2026-09-23)",
+          "reason": "Four workflow-contract sentences disagreed with the executable contract (docs/fik-1-fi-policy-clause-inventory.md §4.3): FI-POST-28 said tax-bearing document allocations were unsupported (they are supported and tested); FI-ALV-20 said 'ALV-tarkistus' flags the line for review (it becomes a source-document ask or a re-examination of the held source); FI-ALV-28 used 'ALV-tarkistus' to ask which tax a Verohallinto payment settles; FI-POST-20 said an unestablished historical-rate basis is always document_discrepancy (it is owner_fact without a verified source). No legal claim changed. Version 8 advances to 9; a stored version-8 suggestion conflicts at its next apply and re-codes under the clock; posted journals are unaffected. Prior digest: 68c8a342b2cc64008f395439e830a60b1673d82c7ea9ed1d48f84023d02b4dc2."
+        },
+        {
+          "by": "FIK-1 inventory corrections, version 10 (2026-09-24)",
+          "reason": "Three more sentences disagreed with the executable contract (docs/fik-1-fi-policy-clause-inventory.md §4.3, §7): FI-ALV-25 implied the OmaVero/tax-account reference alone was enough to code an ALV settlement (codingStatutoryEvidenceGap holds an outgoing settlement until the return, tax notice or payment confirmation is held); FI-POST-10 scoped the payroll-package rule to an Oy (the payroll_package requirement and ask_payroll_package are entity-neutral); FI-POST-06 said to request a missing chart account, contradicting FI-POST-26 (a missing account is Donna's chart-capability gap, never an owner question). No legal claim changed. Version 9 advances to 10; a stored version-9 suggestion conflicts at its next apply and re-codes under the clock; posted journals are unaffected. Approved by Kari on 2026-09-24.",
+          "priorPolicyVersion": 9,
+          "priorContractSha256": "b9720bbe5b22cc50abc3830c280086e7d35dbf27ce248c568036ad4eddf7ef49"
+        }
+      ]
+    },
+    {
+      "input": {
+        "jurisdiction": "gb",
+        "businessDate": "2026-09-05",
+        "accountingSystem": "none"
+      },
+      "receipt": {
+        "policyId": "gb_coding",
+        "policyVersion": 1,
+        "jurisdiction": "gb",
+        "businessDate": "2026-09-05",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "entityType": null,
+        "accountingSystem": "none",
+        "taxProfileDigest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      },
+      "contractSha256": "2970e29fe30a577cb09d2d5e69ddf0cad72a96b3e3799c0dfdd3a5c8af5b93b5"
+    },
+    {
+      "input": {
+        "jurisdiction": "ae",
+        "businessDate": "2026-09-05",
+        "accountingSystem": "none"
+      },
+      "receipt": {
+        "policyId": "ae_coding",
+        "policyVersion": 1,
+        "jurisdiction": "ae",
+        "businessDate": "2026-09-05",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "entityType": null,
+        "accountingSystem": "none",
+        "taxProfileDigest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      },
+      "contractSha256": "df6635ac233f6340388ef5a010aaabe5be0b158c920208485245b5088d1db43b"
+    },
+    {
+      "input": {
+        "jurisdiction": "us",
+        "businessDate": "2026-09-05",
+        "accountingSystem": "none"
+      },
+      "receipt": {
+        "policyId": "us_coding",
+        "policyVersion": 1,
+        "jurisdiction": "us",
+        "businessDate": "2026-09-05",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "entityType": null,
+        "accountingSystem": "none",
+        "taxProfileDigest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      },
+      "contractSha256": "384479f0a983b57ed9b34fc330badb47a69ce441d3b5d133b74243641999f5e4"
+    },
+    {
+      "input": {
+        "jurisdiction": "au",
+        "businessDate": "2026-09-05",
+        "accountingSystem": "none"
+      },
+      "receipt": {
+        "policyId": "au_coding",
+        "policyVersion": 1,
+        "jurisdiction": "au",
+        "businessDate": "2026-09-05",
+        "effectiveFrom": null,
+        "effectiveTo": null,
+        "entityType": null,
+        "accountingSystem": "none",
+        "taxProfileDigest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      },
+      "contractSha256": "f04402bb5da0a405b5d171d948d21d743b83ffe0a87518caee2934ea556a4201"
+    }
+  ]
+}

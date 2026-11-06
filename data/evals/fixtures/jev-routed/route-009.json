@@ -1,0 +1,68 @@
+{
+  "id": "route-009",
+  "split": "evaluation",
+  "source_family": "authored-009",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-9",
+    "document_type": "supplier_bill",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 1780,
+    "currency": "EUR",
+    "reference_number": "BILL-8109",
+    "payment_status": "unpaid",
+    "vendor_name": "Iris Logistics Oy"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-9-a",
+      "money_in": 0,
+      "money_out": 1780,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Iris Logistics Oy",
+      "description": "IRIS LOGISTICS TRANSFER",
+      "raw_description": "IRIS LOGISTICS TRANSFER",
+      "reconciliation_status": null,
+      "payload": {}
+    },
+    {
+      "id": "opaque-tx-9-b",
+      "money_in": 0,
+      "money_out": 1780,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Iris Logistics Oy",
+      "description": "IRIS LOGISTICS TRANSFER",
+      "raw_description": "IRIS LOGISTICS TRANSFER",
+      "reconciliation_status": null,
+      "payload": {}
+    }
+  ],
+  "matches": [],
+  "inventory_complete": true,
+  "local_artifacts": [
+    {
+      "id": "opaque-art-route-009",
+      "bank_transaction_id": "opaque-tx-9-b",
+      "invoice_reference": "BILL-8109",
+      "counterparty": "Iris Logistics Oy",
+      "text": "Remittance identifies invoice BILL-8109 and the selected bank transfer.",
+      "invoice_currency": "EUR",
+      "invoice_amount": 1780,
+      "bank_currency": "EUR",
+      "gross_bank_amount": 1780,
+      "fee_bank_amount": 0,
+      "net_bank_amount": 1780
+    }
+  ],
+  "expected": {
+    "route": "match",
+    "matches": [
+      "candidate_2"
+    ]
+  },
+  "label_basis": "Local remittance identifies only the second otherwise indistinguishable transfer."
+}

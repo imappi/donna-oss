@@ -1,0 +1,5724 @@
+{
+  "version": "jev-routed-triage-v1",
+  "completion": "complete",
+  "capture": "72 real provider responses; four formulations/providers on 18 model-dependent cases plus six common no-call routes",
+  "frozen_before_live_commit": "2c6fd79d",
+  "original_plan_sha256": "56f32eb5ca094b1f5bda5aebdbca6b288f6944e895ee0e6c98ba10b111de128e",
+  "plan_sha256": "b9fc91df5be0729e44823bea6ee07c5f6dadee39cd71845ec1536b5e535e7c6e",
+  "corpus_sha256": "84ec03da56deb760f2e55cb7952f0640f319102a8f7bc021d7dfb60ae45f8f3a",
+  "code_hashes": {
+    "scripts/jev_routed_protocol.js": "fe38ca183498fb9e8009bf305cb9785a8ddca125dbcffd6c6b56e16948e59b73",
+    "scripts/jev_routed_triage.js": "a4ba96221bb2cae1bd709e444b1134799c6540fe600cc31caa3db2bf4e04cfe8",
+    "scripts/jev_comparison_protocol.js": "1eda9319fd1c0f12f0b41ba86e1fec2acba7986b8a9189c6e85f4e18c7948f92",
+    "scripts/jev_semantic_support_probe.js": "9d28b681f786d93752a1d1337a7360383d0cee02e605cd3c89eb0dc6b9e82909",
+    "server/donna/reconciliationLlmCore.js": "48c2bd7592e5420a47b033cddfceef34b0cf6c80046369a7f06e2241cff62589",
+    "server/donna/issuedInvoiceSettlementMath.js": "e019d58b6f78e7b5f0cd07b6c6375db9926779ed16a1f845086bc6ccb9833ace",
+    "server/donna/providerTransport.js": "a6d3c5264ff0df9d2399c37f45b7b1c446bcc655c0f108f5373900c663e83e65",
+    "server/donna/evalHarness.js": "17699c125c26a09d9543010f1530b82d3d2fe2f55fdb25a7f7fd350a9f9226d8",
+    "server/donna/reconciliationTriage.js": "a8f1007e9437a1ef4373535a0f1fbe8bc77f3b666283adda0d55ad56b4b98cf4"
+  },
+  "reporting_repair": {
+    "kind": "diagnostic_count_serialization_only",
+    "original_plan_sha256": "56f32eb5ca094b1f5bda5aebdbca6b288f6944e895ee0e6c98ba10b111de128e",
+    "corrected_plan_sha256": "b9fc91df5be0729e44823bea6ee07c5f6dadee39cd71845ec1536b5e535e7c6e",
+    "original_capture_sha256": "39bb677d88803ef05e78e60a0a30e7d89744d298ab7d52ea775f8704345a4039",
+    "requests_cases_thresholds_identical": true,
+    "decisions_primary_metrics_criteria_unchanged": true,
+    "additional_provider_calls": 0
+  },
+  "provider_usage": {
+    "typesafe": {
+      "calls": 36,
+      "input_tokens": 37234,
+      "output_tokens": 2260
+    },
+    "anthropic": {
+      "calls": 36,
+      "input_tokens": 42788,
+      "output_tokens": 1717
+    }
+  },
+  "served_model_identity": "Retained in private raw receipts; omitted here per repository convention.",
+  "measurement": "Sequential paired provider inference; cascades are counterfactual. Common preparation/owner waiting/extraction excluded. Authored synthetic corpus, not production qualification.",
+  "continuation": {
+    "status": "criteria_not_met",
+    "checks": {
+      "no_wrong_matches_or_settled": true,
+      "no_more_false_asks_or_missed_matches": true,
+      "halves_fallbacks_with_actual_reduction": false,
+      "cascade_twice_as_fast": false
+    },
+    "cascade_speedup_vs_equally_preprocessed_strong": 1.1690592271578186
+  },
+  "metrics": {
+    "development/typesafe/broad": {
+      "cases": 4,
+      "completed": 4,
+      "common_routes": 2,
+      "model_cases": 2,
+      "correct": 4,
+      "wrong_matches": 0,
+      "missed_matches": 0,
+      "false_evidence_requests": 0,
+      "false_settled": 0,
+      "fallbacks": 0,
+      "blanket_review_cases": 0,
+      "autonomous_correct_matches": 1,
+      "needs_evidence": 2,
+      "unresolved_model": 0,
+      "total_raw_ms": 1040,
+      "total_cascade_ms": 1040,
+      "initial_wrong_matches": 0
+    },
+    "development/typesafe/atomic": {
+      "cases": 4,
+      "completed": 4,
+      "common_routes": 2,
+      "model_cases": 2,
+      "correct": 4,
+      "wrong_matches": 0,
+      "missed_matches": 0,
+      "false_evidence_requests": 0,
+      "false_settled": 0,
+      "fallbacks": 0,
+      "blanket_review_cases": 0,
+      "autonomous_correct_matches": 1,
+      "needs_evidence": 2,
+      "unresolved_model": 0,
+      "total_raw_ms": 491,
+      "total_cascade_ms": 491,
+      "initial_wrong_matches": 0
+    },
+    "development/anthropic/broad": {
+      "cases": 4,
+      "completed": 4,
+      "common_routes": 2,
+      "model_cases": 2,
+      "correct": 3,
+      "wrong_matches": 0,
+      "missed_matches": 0,
+      "false_evidence_requests": 0,
+      "false_settled": 0,
+      "fallbacks": 0,
+      "blanket_review_cases": 1,
+      "autonomous_correct_matches": 1,
+      "needs_evidence": 1,
+      "unresolved_model": 1,
+      "total_raw_ms": 3540,
+      "total_cascade_ms": 3540,
+      "initial_wrong_matches": 0
+    },
+    "development/anthropic/atomic": {
+      "cases": 4,
+      "completed": 4,
+      "common_routes": 2,
+      "model_cases": 2,
+      "correct": 3,
+      "wrong_matches": 0,
+      "missed_matches": 0,
+      "false_evidence_requests": 0,
+      "false_settled": 0,
+      "fallbacks": 0,
+      "blanket_review_cases": 0,
+      "autonomous_correct_matches": 1,
+      "needs_evidence": 1,
+      "unresolved_model": 1,
+      "total_raw_ms": 3455,
+      "total_cascade_ms": 3455,
+      "initial_wrong_matches": 0
+    },
+    "evaluation/typesafe/broad": {
+      "cases": 20,
+      "completed": 20,
+      "common_routes": 4,
+      "model_cases": 16,
+      "correct": 14,
+      "wrong_matches": 0,
+      "missed_matches": 2,
+      "false_evidence_requests": 0,
+      "false_settled": 0,
+      "fallbacks": 13,
+      "blanket_review_cases": 11,
+      "autonomous_correct_matches": 2,
+      "needs_evidence": 4,
+      "unresolved_model": 6,
+      "total_raw_ms": 5862,
+      "total_cascade_ms": 26844,
+      "initial_wrong_matches": 0
+    },
+    "evaluation/typesafe/atomic": {
+      "cases": 20,
+      "completed": 20,
+      "common_routes": 4,
+      "model_cases": 16,
+      "correct": 14,
+      "wrong_matches": 0,
+      "missed_matches": 2,
+      "false_evidence_requests": 0,
+      "false_settled": 0,
+      "fallbacks": 11,
+      "blanket_review_cases": 4,
+      "autonomous_correct_matches": 4,
+      "needs_evidence": 4,
+      "unresolved_model": 6,
+      "total_raw_ms": 4238,
+      "total_cascade_ms": 22152,
+      "initial_wrong_matches": 0
+    },
+    "evaluation/anthropic/broad": {
+      "cases": 20,
+      "completed": 20,
+      "common_routes": 4,
+      "model_cases": 16,
+      "correct": 13,
+      "wrong_matches": 0,
+      "missed_matches": 2,
+      "false_evidence_requests": 0,
+      "false_settled": 0,
+      "fallbacks": 0,
+      "blanket_review_cases": 7,
+      "autonomous_correct_matches": 8,
+      "needs_evidence": 3,
+      "unresolved_model": 7,
+      "total_raw_ms": 25897,
+      "total_cascade_ms": 25897,
+      "initial_wrong_matches": 0
+    },
+    "evaluation/anthropic/atomic": {
+      "cases": 20,
+      "completed": 20,
+      "common_routes": 4,
+      "model_cases": 16,
+      "correct": 13,
+      "wrong_matches": 0,
+      "missed_matches": 2,
+      "false_evidence_requests": 0,
+      "false_settled": 0,
+      "fallbacks": 0,
+      "blanket_review_cases": 4,
+      "autonomous_correct_matches": 8,
+      "needs_evidence": 3,
+      "unresolved_model": 7,
+      "total_raw_ms": 27339,
+      "total_cascade_ms": 27339,
+      "initial_wrong_matches": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "route-001",
+      "split": "development",
+      "source_family": "authored-001",
+      "input_sha256": "8498cb8118782845457e800ee8bfa31e2bc452f35875b24b5e1613b25b700787",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-001/typesafe/broad",
+          "request_sha256": "f0f775a31bd536870c99f2bbdb6d7dd0e9ac245e90bf449076f040d8560b2761"
+        },
+        {
+          "id": "route-001/anthropic/broad",
+          "request_sha256": "60468da159bd0ff67ecc1d9b1d43af162c28c27f09f3277515288af4df36c96d"
+        },
+        {
+          "id": "route-001/typesafe/atomic",
+          "request_sha256": "94ad36b61a40c75a157942119ff3b9fc70b198fd6c44851f726307cfc1535e3b"
+        },
+        {
+          "id": "route-001/anthropic/atomic",
+          "request_sha256": "d14bc1d6b90745443a7697071407d00c979bfe5705dfaec656046a4ddcd00704"
+        }
+      ]
+    },
+    {
+      "id": "route-002",
+      "split": "development",
+      "source_family": "authored-002",
+      "input_sha256": "9b6891c679b2159c949e3e51f52cd7db40ce81ad614e0e47154c2aec6654f3b5",
+      "common_route": "needs_evidence",
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": []
+    },
+    {
+      "id": "route-003",
+      "split": "development",
+      "source_family": "authored-003",
+      "input_sha256": "4035b915cca70f07d58f82bdde30234e13d76b34093eb1713668535964819ef9",
+      "common_route": null,
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": [
+        {
+          "id": "route-003/typesafe/broad",
+          "request_sha256": "125773b09afc55dc7b590644e304f765be54ad2b8b4ef85fa651e87b2a8a1bb5"
+        },
+        {
+          "id": "route-003/anthropic/broad",
+          "request_sha256": "c9be2f5b4c3b41bbbd01f367664b9cd434b156ed0b6685090ab2c2e412baaa6b"
+        },
+        {
+          "id": "route-003/typesafe/atomic",
+          "request_sha256": "13dcaa67fad56d1538b08384a4d92ec1d6b45c8b6d9a378f76d68930b14e12da"
+        },
+        {
+          "id": "route-003/anthropic/atomic",
+          "request_sha256": "0800587f59ec5a6283808dade2554f52b3fe8737a29a49d2bdda716de4d97bbd"
+        }
+      ]
+    },
+    {
+      "id": "route-004",
+      "split": "development",
+      "source_family": "authored-004",
+      "input_sha256": "5fbf1c2f7a11d9d275436e4b4079bd7b1d6ecab10e956daa5bb0fc8f95506350",
+      "common_route": "already_settled",
+      "expected": {
+        "route": "already_settled",
+        "matches": []
+      },
+      "requests": []
+    },
+    {
+      "id": "route-005",
+      "split": "evaluation",
+      "source_family": "authored-005",
+      "input_sha256": "70dbc6b9a02999216d6d9e831997880781e78591922332dc400eeb8c08ea1f4a",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-005/typesafe/broad",
+          "request_sha256": "fcf5ba2a8d9f2fbbb37c5e4f02dc397b0eaaf706b763c91e660b8240003f64b6"
+        },
+        {
+          "id": "route-005/anthropic/broad",
+          "request_sha256": "17ed64c00de5e3b7bcef0d0708e844f75b8c235a718bda9f29ce740dbb6a5f4f"
+        },
+        {
+          "id": "route-005/typesafe/atomic",
+          "request_sha256": "403ef94b12dcae006885000dfad2a8ced17f2bcf13597043bd7d680480f4835e"
+        },
+        {
+          "id": "route-005/anthropic/atomic",
+          "request_sha256": "37cf93876601ce56dd4b93eaee238a8089d9bccffa40d12f511c7febc4935ce0"
+        }
+      ]
+    },
+    {
+      "id": "route-006",
+      "split": "evaluation",
+      "source_family": "authored-006",
+      "input_sha256": "17bcd52f7dcc691b23b4e87d87b72525bc2051ccec3ae93539e081b21a73f452",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-006/typesafe/broad",
+          "request_sha256": "2513a3298b1632622d036512c966d341f0285915c61e53e261afff107d645c5a"
+        },
+        {
+          "id": "route-006/anthropic/broad",
+          "request_sha256": "9e61e822066f809967a90eeb999799d19f73057f5e1d2b156fe917479392c2d5"
+        },
+        {
+          "id": "route-006/typesafe/atomic",
+          "request_sha256": "12c35b4968370d9952b2895db7c9e25db9baca093524f20b4a3e237715b337f4"
+        },
+        {
+          "id": "route-006/anthropic/atomic",
+          "request_sha256": "0529b862762807412c9b7f411d15b69e49df56d58ea55f25015caabd11ca950c"
+        }
+      ]
+    },
+    {
+      "id": "route-007",
+      "split": "evaluation",
+      "source_family": "authored-007",
+      "input_sha256": "51392da5ed41568cdc93d5796d9f47db045abed9621bff06bc00fba0cc386d12",
+      "common_route": null,
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": [
+        {
+          "id": "route-007/typesafe/broad",
+          "request_sha256": "f406c1cfda5c0342ee7933fb6c906c6865006b3cd3a66dd707d672a38b4c96bf"
+        },
+        {
+          "id": "route-007/anthropic/broad",
+          "request_sha256": "90d956dfeb00a1006f6168a9c547b8f9ff72bb353a24a8504a4926f57a795677"
+        },
+        {
+          "id": "route-007/typesafe/atomic",
+          "request_sha256": "c30ae040429e3bd25849ff4ffef609e099765507a28707f6af6314bb4eb4711f"
+        },
+        {
+          "id": "route-007/anthropic/atomic",
+          "request_sha256": "f811c84d056824e3f45d0993fe29e01db683d31b9e9b6c42bb7ec164b99ccf3c"
+        }
+      ]
+    },
+    {
+      "id": "route-008",
+      "split": "evaluation",
+      "source_family": "authored-008",
+      "input_sha256": "543394881fa36b18c211797b744d5496856e5f3605a8555b9ace7b26ebabd19f",
+      "common_route": "needs_evidence",
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": []
+    },
+    {
+      "id": "route-009",
+      "split": "evaluation",
+      "source_family": "authored-009",
+      "input_sha256": "616ffb58c3646787c1ee9994175ac9aa98325e6159de4023290e83f65da34152",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-009/typesafe/broad",
+          "request_sha256": "565f19e4a7b460e24ed2c1e24e8d7394a1d1d43c62ffd07ecc89a5d828ea4ced"
+        },
+        {
+          "id": "route-009/anthropic/broad",
+          "request_sha256": "5237f480611bf86289fd5df9d4ee923f1a84bdd52a8487ff478230bbecbdff76"
+        },
+        {
+          "id": "route-009/typesafe/atomic",
+          "request_sha256": "e691bbccf88e96988bec805e1735d083121538b5dec86ff08b0f29038204ced5"
+        },
+        {
+          "id": "route-009/anthropic/atomic",
+          "request_sha256": "86f8c8e39ea64bbc73c55499602e1061df98d36e810528a6ee8fe765f9f39890"
+        }
+      ]
+    },
+    {
+      "id": "route-010",
+      "split": "evaluation",
+      "source_family": "authored-010",
+      "input_sha256": "d8c3eb6d23df2c20696ade61d9e08b58055c7df14d15d15a6a139fcdcb957f53",
+      "common_route": "retrieve_local",
+      "expected": {
+        "route": "retrieve_local",
+        "matches": []
+      },
+      "requests": []
+    },
+    {
+      "id": "route-011",
+      "split": "evaluation",
+      "source_family": "authored-011",
+      "input_sha256": "303a2169c7ff37a48efbccb664ea80991b02f58fe6916fbf7d5ab5aa0b5ce989",
+      "common_route": null,
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": [
+        {
+          "id": "route-011/typesafe/broad",
+          "request_sha256": "69badf2f3e0337e8c39cc00ef6d391df082f545e31413487929c0839ea3e69bf"
+        },
+        {
+          "id": "route-011/anthropic/broad",
+          "request_sha256": "c075afc4a856843c27027f2783b76e4856288b51679cdc3078df7ba30d3146a3"
+        },
+        {
+          "id": "route-011/typesafe/atomic",
+          "request_sha256": "b6f6f4ddd14d08ed1afd08ce3fae52c617fed7725a0b354065fe1dfe90641b64"
+        },
+        {
+          "id": "route-011/anthropic/atomic",
+          "request_sha256": "7a642515f28dfd2851c2d3035fca98aa3499805f9734badd8237bc46cb2e6cb4"
+        }
+      ]
+    },
+    {
+      "id": "route-012",
+      "split": "evaluation",
+      "source_family": "authored-012",
+      "input_sha256": "e6163058342588251c9bc846f57d691080b882304a1dfd6daf022e622a3026a7",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-012/typesafe/broad",
+          "request_sha256": "6581a949df28a50c6c6522b42949810a7613ec5cf8504f500cf08262be6d1752"
+        },
+        {
+          "id": "route-012/anthropic/broad",
+          "request_sha256": "0b04e89949dd9a45e4fef79533bc1be71b4fd52b8c726ef63c0f515986a36004"
+        },
+        {
+          "id": "route-012/typesafe/atomic",
+          "request_sha256": "7f1df31bbfae6c85e02fc4223403396fea6cbd93a723646eb2f71a7f365ce061"
+        },
+        {
+          "id": "route-012/anthropic/atomic",
+          "request_sha256": "a4b28a90215b8266165d9e51c78cc17e0c9bfcb0c6e8d51e2fbde548948ca33f"
+        }
+      ]
+    },
+    {
+      "id": "route-013",
+      "split": "evaluation",
+      "source_family": "authored-013",
+      "input_sha256": "e70fb7ea2a63c9377f9e7f4541c049c9d97235047d3f0af9dd7bd08e411bed80",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-013/typesafe/broad",
+          "request_sha256": "9973ce9cafefca02b7019976931ddd7ced84e650bdc3217aa1a942448bb3ded4"
+        },
+        {
+          "id": "route-013/anthropic/broad",
+          "request_sha256": "26cdd1c304e6b765148ee12aa48f4f6324cce8aafa55a793339bf9b4ef6f0437"
+        },
+        {
+          "id": "route-013/typesafe/atomic",
+          "request_sha256": "767f78d49ec2d7261e04964ef33194f1681856c7c04082ab1f37cef15df24877"
+        },
+        {
+          "id": "route-013/anthropic/atomic",
+          "request_sha256": "363ed8ac714b81cbde9f58744d0dd240671ff0a02d262695fc0c2dc6f29f18a3"
+        }
+      ]
+    },
+    {
+      "id": "route-014",
+      "split": "evaluation",
+      "source_family": "authored-014",
+      "input_sha256": "f819f3b60cdd34b6e81601537632588c5437b52a034ac229bf3c4c7a9a30ff60",
+      "common_route": "already_settled",
+      "expected": {
+        "route": "already_settled",
+        "matches": []
+      },
+      "requests": []
+    },
+    {
+      "id": "route-015",
+      "split": "evaluation",
+      "source_family": "authored-015",
+      "input_sha256": "269dd0a839ae3d13739a7586de66adec7148ae15fd184939bb76163437029319",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-015/typesafe/broad",
+          "request_sha256": "4e40aed0940b3e0bd02c193cb6654410e8f6ccb8f99e54fe16f224af97091a69"
+        },
+        {
+          "id": "route-015/anthropic/broad",
+          "request_sha256": "c6a93a2989b3770e6cb14d693105145f3b43c6af98651f8b751f98e30b6d6f51"
+        },
+        {
+          "id": "route-015/typesafe/atomic",
+          "request_sha256": "a723be82de888bce7390ac42a34aded847b9ef6bdf6460df60670e41956ac362"
+        },
+        {
+          "id": "route-015/anthropic/atomic",
+          "request_sha256": "6281e2d299827b29df275d0598dc71819465075a1c6efbed8a21a5424771c129"
+        }
+      ]
+    },
+    {
+      "id": "route-016",
+      "split": "evaluation",
+      "source_family": "authored-016",
+      "input_sha256": "cb9a8831048525dc1ecf71fb43e86788f6ca0ee287c1cb9e90f2f41c84c58442",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-016/typesafe/broad",
+          "request_sha256": "483f763a50e2a52664a996918350d2345718092296a9fb000b39db9982f185b6"
+        },
+        {
+          "id": "route-016/anthropic/broad",
+          "request_sha256": "1a45cd452050ee6d87452cddc11b5af69dea79d766859620a49d92cc4f531f27"
+        },
+        {
+          "id": "route-016/typesafe/atomic",
+          "request_sha256": "96a04c5ce1666ad3ca624a884f2b159c7286a0504e9b61c19be85f3725fd5240"
+        },
+        {
+          "id": "route-016/anthropic/atomic",
+          "request_sha256": "ecee512d095514f661dee23644c79e4a4b12242912f7bbbf1e82d76aa6e0a389"
+        }
+      ]
+    },
+    {
+      "id": "route-017",
+      "split": "evaluation",
+      "source_family": "authored-017",
+      "input_sha256": "e5f5e6e04a8f55da0d7d08194e2bf72b6c16baf9bb24cb89898b1fc336a7b279",
+      "common_route": "needs_evidence",
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": []
+    },
+    {
+      "id": "route-018",
+      "split": "evaluation",
+      "source_family": "authored-018",
+      "input_sha256": "ef78e06f3a4b5839bd260343898524e92ba83fa26b3ee9237fdb86d9b2badb49",
+      "common_route": null,
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": [
+        {
+          "id": "route-018/typesafe/broad",
+          "request_sha256": "6469b530d2b2afaee17e5621c6ca050673fe4b1bb5bfe13d9b016fb19adc10ff"
+        },
+        {
+          "id": "route-018/anthropic/broad",
+          "request_sha256": "76d4f014090a2995fbe02164c72bf355ec5455efa777f5b8ace24e96a1108e7e"
+        },
+        {
+          "id": "route-018/typesafe/atomic",
+          "request_sha256": "dd23e46e86b2bf5399f20098ff67394270a5781b3d0e3af4a5d9859c27d89e9b"
+        },
+        {
+          "id": "route-018/anthropic/atomic",
+          "request_sha256": "4ad80ee5193cf1ea5247b70eb7bbade551bd2dd47bbb0240cb8f8abc5819dae2"
+        }
+      ]
+    },
+    {
+      "id": "route-019",
+      "split": "evaluation",
+      "source_family": "authored-019",
+      "input_sha256": "5b1ca5f3ec8f616dde99da048326444ba034fc768753ef5090e85c075e429327",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-019/typesafe/broad",
+          "request_sha256": "fd4b1ea51f7702c7d80e636b3e7cc2c8f63a9dea41ac295dd431f654a55f8a5c"
+        },
+        {
+          "id": "route-019/anthropic/broad",
+          "request_sha256": "d19752484edca3d942e688c8c318e1825ccdb99c7976925829330f4a30ba9f73"
+        },
+        {
+          "id": "route-019/typesafe/atomic",
+          "request_sha256": "1cadc114b73f19fc80589af2e18082532cf5f46bdf265000d06597c2e63af2b9"
+        },
+        {
+          "id": "route-019/anthropic/atomic",
+          "request_sha256": "ae95227a33ea031abe7ec8d64540216fa196c6fd6669da540d8de0399e66318f"
+        }
+      ]
+    },
+    {
+      "id": "route-020",
+      "split": "evaluation",
+      "source_family": "authored-020",
+      "input_sha256": "c06147644453217c577bb7170e033a5d8440c217d4bfc0cf4744f3d4819c09b0",
+      "common_route": null,
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": [
+        {
+          "id": "route-020/typesafe/broad",
+          "request_sha256": "2f7529113e8119d47f8525e0ce318e6297f8b6c5c2a43b1c9356c61b8d993bb2"
+        },
+        {
+          "id": "route-020/anthropic/broad",
+          "request_sha256": "812fa401c04f57416158f00c8e730b80afa1ce9c26556a5887cac1bfa1cd374c"
+        },
+        {
+          "id": "route-020/typesafe/atomic",
+          "request_sha256": "05ff9661c2d9e10dd078371292e2fefbdd8b7b866e9a5725ef97874bd1ea7dc4"
+        },
+        {
+          "id": "route-020/anthropic/atomic",
+          "request_sha256": "44311a2bbfee6765ae2aee1f94aaa7322317b13856a12a389c2ac65d34017bde"
+        }
+      ]
+    },
+    {
+      "id": "route-021",
+      "split": "evaluation",
+      "source_family": "authored-021",
+      "input_sha256": "6bed781855b12023dd13888dbc4045d80288e4b61051257afd7c06c729d90dcf",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-021/typesafe/broad",
+          "request_sha256": "01091d3c155eb80d0bb56d10889e414ea1e6e4c27db3881f78f5bd14f9a9119d"
+        },
+        {
+          "id": "route-021/anthropic/broad",
+          "request_sha256": "9ebf397c56fc0fc419daf75d41bac2d3fa9d36333cf72762f5fe81ac64160a08"
+        },
+        {
+          "id": "route-021/typesafe/atomic",
+          "request_sha256": "80d14cc73559847d7729bc5bc29ae4cbf9928e552b600fdc38820f8c3dca2de4"
+        },
+        {
+          "id": "route-021/anthropic/atomic",
+          "request_sha256": "d0c31c121910dc25491fd039d9262f5452b6680f18ba037abb21bcdcf6e25e3c"
+        }
+      ]
+    },
+    {
+      "id": "route-022",
+      "split": "evaluation",
+      "source_family": "authored-022",
+      "input_sha256": "4831b859cd39b5bceec0fc4ddbe72640b0505556615b1579599e7550d9d2d7b2",
+      "common_route": null,
+      "expected": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ]
+      },
+      "requests": [
+        {
+          "id": "route-022/typesafe/broad",
+          "request_sha256": "2c629a703bf434d343bf3e74df8cfc9437babba2edb1c012b41fa3d89b59fb01"
+        },
+        {
+          "id": "route-022/anthropic/broad",
+          "request_sha256": "c5753aa1cb306ad4f2e8581f14254a0e2470f1297a2b3941b73f378204e6b797"
+        },
+        {
+          "id": "route-022/typesafe/atomic",
+          "request_sha256": "3bb195fe69083d386f4b238a6d862ee58d85f5ca7c8203f39c06334f989acf6b"
+        },
+        {
+          "id": "route-022/anthropic/atomic",
+          "request_sha256": "436e5de3f6a220604c38f20f7f89a7614fac949e5231056f141f5e847c76905c"
+        }
+      ]
+    },
+    {
+      "id": "route-023",
+      "split": "evaluation",
+      "source_family": "authored-023",
+      "input_sha256": "c3fcdb1331e4e567df819bac77cf92d2f448dd6dbda41092bf06b56824672431",
+      "common_route": null,
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": [
+        {
+          "id": "route-023/typesafe/broad",
+          "request_sha256": "161e9148953d54ea40f4908ccb7c643d477493e736e59d26437b7e59bda1f936"
+        },
+        {
+          "id": "route-023/anthropic/broad",
+          "request_sha256": "c13bfcbbaf1b9e6e785d707725c6f7de29084a3d7b92cd7d3c0b092916497535"
+        },
+        {
+          "id": "route-023/typesafe/atomic",
+          "request_sha256": "a707a8063af4feac9574cfb8b4cf989a2eaa6dee8fb9030023df5e75aed7e7e9"
+        },
+        {
+          "id": "route-023/anthropic/atomic",
+          "request_sha256": "c570075c1ced5ed36af71003c9c76fd4facabc41726be6a9bc9bc23b69caa078"
+        }
+      ]
+    },
+    {
+      "id": "route-024",
+      "split": "evaluation",
+      "source_family": "authored-024",
+      "input_sha256": "ae99d179f3610ca6c89bda1d17a0b8dd72108d3d2a4067cc1f013d7b352a5eb5",
+      "common_route": null,
+      "expected": {
+        "route": "needs_evidence",
+        "matches": []
+      },
+      "requests": [
+        {
+          "id": "route-024/typesafe/broad",
+          "request_sha256": "7c50415b2f94d0492836b98903af1a57091154069ce36437104b897e481f3ebb"
+        },
+        {
+          "id": "route-024/anthropic/broad",
+          "request_sha256": "580f03d7d0a8a882fe7c67ca83a9db4c4a4495721c3a0266a9cfda205144e669"
+        },
+        {
+          "id": "route-024/typesafe/atomic",
+          "request_sha256": "5b611bc9b7d8b2f0b5d46cb130feb9ebe85c909941af0cea08419acc6ab06be5"
+        },
+        {
+          "id": "route-024/anthropic/atomic",
+          "request_sha256": "85ac449a6ecf4256c8f6e4f2efae94776b7bb7b624c8bc0db82b698bea44f881"
+        }
+      ]
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "route-001/typesafe/broad",
+      "split": "development",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.09,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.09,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 778,
+      "cascade_latency_ms": 778,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.09
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "review": 0.1,
+            "no_match": 0,
+            "match": 0.9
+          },
+          "confidence": 0.85
+        }
+      }
+    },
+    {
+      "id": "route-001/typesafe/atomic",
+      "split": "development",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.09,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.09,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 248,
+      "cascade_latency_ms": 248,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.09
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.95
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-001/anthropic/broad",
+      "split": "development",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1837,
+      "cascade_latency_ms": 1837,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.95
+        }
+      }
+    },
+    {
+      "id": "route-001/anthropic/atomic",
+      "split": "development",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1821,
+      "cascade_latency_ms": 1821,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-002/typesafe/broad",
+      "split": "development",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-002/typesafe/atomic",
+      "split": "development",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-002/anthropic/broad",
+      "split": "development",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-002/anthropic/atomic",
+      "split": "development",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-003/typesafe/broad",
+      "split": "development",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 262,
+      "cascade_latency_ms": 262,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "no_match",
+          "probabilities": {
+            "match": 0,
+            "no_match": 0.91,
+            "review": 0.09
+          },
+          "confidence": 0.87
+        }
+      }
+    },
+    {
+      "id": "route-003/typesafe/atomic",
+      "split": "development",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 243,
+      "cascade_latency_ms": 243,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.08
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.09
+        }
+      }
+    },
+    {
+      "id": "route-003/anthropic/broad",
+      "split": "development",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1703,
+      "cascade_latency_ms": 1703,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.8
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "no_match",
+          "confidence": 0.7
+        }
+      }
+    },
+    {
+      "id": "route-003/anthropic/atomic",
+      "split": "development",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1634,
+      "cascade_latency_ms": 1634,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.8
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.1
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      }
+    },
+    {
+      "id": "route-004/typesafe/broad",
+      "split": "development",
+      "common_route": "already_settled",
+      "completion": "complete",
+      "initial": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-004/typesafe/atomic",
+      "split": "development",
+      "common_route": "already_settled",
+      "completion": "complete",
+      "initial": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-004/anthropic/broad",
+      "split": "development",
+      "common_route": "already_settled",
+      "completion": "complete",
+      "initial": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-004/anthropic/atomic",
+      "split": "development",
+      "common_route": "already_settled",
+      "completion": "complete",
+      "initial": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-005/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.15,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.03,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 1358,
+      "cascade_latency_ms": 2974,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.15
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "no_match": 0.01,
+            "match": 0.78,
+            "review": 0.21
+          },
+          "confidence": 0.68
+        }
+      }
+    },
+    {
+      "id": "route-005/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.13,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.03,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 232,
+      "cascade_latency_ms": 1848,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.13
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.91
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.03
+        }
+      }
+    },
+    {
+      "id": "route-005/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.03,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.03,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1616,
+      "cascade_latency_ms": 1616,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.03
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.95
+        }
+      }
+    },
+    {
+      "id": "route-005/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.03,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.03,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1729,
+      "cascade_latency_ms": 1729,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.03
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-006/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 353,
+      "cascade_latency_ms": 353,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "no_match": 0.01,
+            "review": 0.03,
+            "match": 0.96
+          },
+          "confidence": 0.94
+        }
+      }
+    },
+    {
+      "id": "route-006/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 260,
+      "cascade_latency_ms": 260,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.94
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-006/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1692,
+      "cascade_latency_ms": 1692,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.95
+        }
+      }
+    },
+    {
+      "id": "route-006/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1454,
+      "cascade_latency_ms": 1454,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-007/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.84,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.7,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 230,
+      "cascade_latency_ms": 2099,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.84
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "no_match",
+          "probabilities": {
+            "review": 0.19,
+            "match": 0,
+            "no_match": 0.81
+          },
+          "confidence": 0.7
+        }
+      }
+    },
+    {
+      "id": "route-007/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.85,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.7,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 252,
+      "cascade_latency_ms": 2121,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.85
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.09
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.53
+        }
+      }
+    },
+    {
+      "id": "route-007/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.7,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.7,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1869,
+      "cascade_latency_ms": 1869,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.7
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "no_match",
+          "confidence": 0.8
+        }
+      }
+    },
+    {
+      "id": "route-007/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.85,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.85,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1840,
+      "cascade_latency_ms": 1840,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.85
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.1
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      }
+    },
+    {
+      "id": "route-008/typesafe/broad",
+      "split": "evaluation",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-008/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-008/anthropic/broad",
+      "split": "evaluation",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-008/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-009/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          },
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          },
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 1,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 261,
+      "cascade_latency_ms": 2096,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "review",
+          "probabilities": {
+            "no_match": 0.22,
+            "match": 0.01,
+            "review": 0.77
+          },
+          "confidence": 0.66
+        },
+        "candidate_2": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "no_match": 0,
+            "match": 0.96,
+            "review": 0.04
+          },
+          "confidence": 0.93
+        }
+      }
+    },
+    {
+      "id": "route-009/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          },
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          },
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 1,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 284,
+      "cascade_latency_ms": 2119,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.78
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.04
+        },
+        "candidate_2_party": {
+          "type": "noul",
+          "noul": 0.94
+        },
+        "candidate_2_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-009/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          },
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          },
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 1,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1835,
+      "cascade_latency_ms": 1835,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "review",
+          "confidence": 0.6
+        },
+        "candidate_2": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.9
+        }
+      }
+    },
+    {
+      "id": "route-009/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          },
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          },
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 1,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1858,
+      "cascade_latency_ms": 1858,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_2_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_2_other": {
+          "type": "noul",
+          "noul": 0.03
+        }
+      }
+    },
+    {
+      "id": "route-010/typesafe/broad",
+      "split": "evaluation",
+      "common_route": "retrieve_local",
+      "completion": "complete",
+      "initial": {
+        "route": "retrieve_local",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "retrieve_local",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-010/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": "retrieve_local",
+      "completion": "complete",
+      "initial": {
+        "route": "retrieve_local",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "retrieve_local",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-010/anthropic/broad",
+      "split": "evaluation",
+      "common_route": "retrieve_local",
+      "completion": "complete",
+      "initial": {
+        "route": "retrieve_local",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "retrieve_local",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-010/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": "retrieve_local",
+      "completion": "complete",
+      "initial": {
+        "route": "retrieve_local",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "retrieve_local",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-011/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": true,
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": true,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 299,
+      "cascade_latency_ms": 299,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "no_match",
+          "probabilities": {
+            "match": 0,
+            "no_match": 0.89,
+            "review": 0.11
+          },
+          "confidence": 0.84
+        }
+      }
+    },
+    {
+      "id": "route-011/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 241,
+      "cascade_latency_ms": 241,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.07
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.12
+        }
+      }
+    },
+    {
+      "id": "route-011/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1619,
+      "cascade_latency_ms": 1619,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.8
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "review",
+          "confidence": 0.55
+        }
+      }
+    },
+    {
+      "id": "route-011/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1326,
+      "cascade_latency_ms": 1326,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.8
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.15
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      }
+    },
+    {
+      "id": "route-012/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.13,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 1,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 276,
+      "cascade_latency_ms": 1903,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.13
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "review": 0.23,
+            "no_match": 0.08,
+            "match": 0.69
+          },
+          "confidence": 0.53
+        }
+      }
+    },
+    {
+      "id": "route-012/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.14,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 1,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 321,
+      "cascade_latency_ms": 1948,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.14
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.71
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.03
+        }
+      }
+    },
+    {
+      "id": "route-012/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 1,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1627,
+      "cascade_latency_ms": 1627,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.85
+        }
+      }
+    },
+    {
+      "id": "route-012/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1747,
+      "cascade_latency_ms": 1747,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      }
+    },
+    {
+      "id": "route-013/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.09,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 349,
+      "cascade_latency_ms": 1746,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.09
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "review": 0.1,
+            "no_match": 0.16,
+            "match": 0.74
+          },
+          "confidence": 0.61
+        }
+      }
+    },
+    {
+      "id": "route-013/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.1,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.1,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 287,
+      "cascade_latency_ms": 287,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.1
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.94
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-013/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1397,
+      "cascade_latency_ms": 1397,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.92
+        }
+      }
+    },
+    {
+      "id": "route-013/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1827,
+      "cascade_latency_ms": 1827,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-014/typesafe/broad",
+      "split": "evaluation",
+      "common_route": "already_settled",
+      "completion": "complete",
+      "initial": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-014/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": "already_settled",
+      "completion": "complete",
+      "initial": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-014/anthropic/broad",
+      "split": "evaluation",
+      "common_route": "already_settled",
+      "completion": "complete",
+      "initial": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-014/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": "already_settled",
+      "completion": "complete",
+      "initial": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "already_settled",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-015/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.11,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 299,
+      "cascade_latency_ms": 1970,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.11
+        },
+        "candidate_2": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "no_match": 0.04,
+            "review": 0.06,
+            "match": 0.9
+          },
+          "confidence": 0.84
+        }
+      }
+    },
+    {
+      "id": "route-015/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.09,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.09,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 278,
+      "cascade_latency_ms": 278,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.09
+        },
+        "candidate_2_party": {
+          "type": "noul",
+          "noul": 0.94
+        },
+        "candidate_2_other": {
+          "type": "noul",
+          "noul": 0.03
+        }
+      }
+    },
+    {
+      "id": "route-015/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1671,
+      "cascade_latency_ms": 1671,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_2": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.9
+        }
+      }
+    },
+    {
+      "id": "route-015/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1732,
+      "cascade_latency_ms": 1732,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_2_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_2_other": {
+          "type": "noul",
+          "noul": 0.03
+        }
+      }
+    },
+    {
+      "id": "route-016/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.33,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 262,
+      "cascade_latency_ms": 1672,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.33
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "match": 0.64,
+            "review": 0.21,
+            "no_match": 0.15
+          },
+          "confidence": 0.47
+        }
+      }
+    },
+    {
+      "id": "route-016/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.35,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 281,
+      "cascade_latency_ms": 1691,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.35
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.94
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.04
+        }
+      }
+    },
+    {
+      "id": "route-016/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1410,
+      "cascade_latency_ms": 1410,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.9
+        }
+      }
+    },
+    {
+      "id": "route-016/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 1,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1552,
+      "cascade_latency_ms": 1552,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-017/typesafe/broad",
+      "split": "evaluation",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-017/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-017/anthropic/broad",
+      "split": "evaluation",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-017/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": "needs_evidence",
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [],
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 0,
+      "cascade_latency_ms": 0,
+      "answers": null
+    },
+    {
+      "id": "route-018/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.71,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.7,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 311,
+      "cascade_latency_ms": 1976,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.71
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "review",
+          "probabilities": {
+            "match": 0.04,
+            "no_match": 0.44,
+            "review": 0.52
+          },
+          "confidence": 0.29
+        }
+      }
+    },
+    {
+      "id": "route-018/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.68,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.7,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 246,
+      "cascade_latency_ms": 1911,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.68
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.84
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.9
+        }
+      }
+    },
+    {
+      "id": "route-018/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.7,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.7,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1665,
+      "cascade_latency_ms": 1665,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.7
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "no_match",
+          "confidence": 0.7
+        }
+      }
+    },
+    {
+      "id": "route-018/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1699,
+      "cascade_latency_ms": 1699,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.8
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.95
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.9
+        }
+      }
+    },
+    {
+      "id": "route-019/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.06,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.06,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 306,
+      "cascade_latency_ms": 306,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.06
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "review": 0.04,
+            "no_match": 0.01,
+            "match": 0.95
+          },
+          "confidence": 0.93
+        }
+      }
+    },
+    {
+      "id": "route-019/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.06,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.06,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 233,
+      "cascade_latency_ms": 233,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.06
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.96
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-019/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1604,
+      "cascade_latency_ms": 1604,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.95
+        }
+      }
+    },
+    {
+      "id": "route-019/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1614,
+      "cascade_latency_ms": 1614,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-020/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.87,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 254,
+      "cascade_latency_ms": 1810,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.87
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "no_match",
+          "probabilities": {
+            "review": 0,
+            "match": 0,
+            "no_match": 1
+          },
+          "confidence": 1
+        }
+      }
+    },
+    {
+      "id": "route-020/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.87,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 239,
+      "cascade_latency_ms": 1795,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.87
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.91
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.08
+        }
+      }
+    },
+    {
+      "id": "route-020/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1556,
+      "cascade_latency_ms": 1556,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "no_match",
+          "confidence": 0.95
+        }
+      }
+    },
+    {
+      "id": "route-020/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "needs_evidence",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.9,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1703,
+      "cascade_latency_ms": 1703,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.95
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      }
+    },
+    {
+      "id": "route-021/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.11,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 401,
+      "cascade_latency_ms": 2040,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.11
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "review": 0.11,
+            "match": 0.89,
+            "no_match": 0
+          },
+          "confidence": 0.82
+        }
+      }
+    },
+    {
+      "id": "route-021/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.11,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 263,
+      "cascade_latency_ms": 1902,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.11
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.95
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-021/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1639,
+      "cascade_latency_ms": 1639,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.95
+        }
+      }
+    },
+    {
+      "id": "route-021/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_1"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.02,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1671,
+      "cascade_latency_ms": 1671,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-022/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.11,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 304,
+      "cascade_latency_ms": 1646,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.11
+        },
+        "candidate_2": {
+          "type": "choice",
+          "choice": "match",
+          "probabilities": {
+            "review": 0.09,
+            "no_match": 0,
+            "match": 0.91
+          },
+          "confidence": 0.86
+        }
+      }
+    },
+    {
+      "id": "route-022/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.11,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 270,
+      "cascade_latency_ms": 1612,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.11
+        },
+        "candidate_2_party": {
+          "type": "noul",
+          "noul": 0.95
+        },
+        "candidate_2_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-022/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.05,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1342,
+      "cascade_latency_ms": 1342,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_2": {
+          "type": "strong_verdict",
+          "choice": "match",
+          "confidence": 0.95
+        }
+      }
+    },
+    {
+      "id": "route-022/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.03,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "final": {
+        "route": "match",
+        "matches": [
+          "candidate_2"
+        ],
+        "fields": [
+          {
+            "handle": "candidate_2",
+            "verdict": "match"
+          }
+        ],
+        "missing_evidence_probability": 0.03,
+        "blanket_fallback": false,
+        "fallback": false
+      },
+      "score": {
+        "correct": true,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1632,
+      "cascade_latency_ms": 1632,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.03
+        },
+        "candidate_2_party": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "candidate_2_other": {
+          "type": "noul",
+          "noul": 0.02
+        }
+      }
+    },
+    {
+      "id": "route-023/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.71,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 273,
+      "cascade_latency_ms": 2015,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.71
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "no_match",
+          "probabilities": {
+            "no_match": 0.59,
+            "review": 0.34,
+            "match": 0.07
+          },
+          "confidence": 0.39
+        }
+      }
+    },
+    {
+      "id": "route-023/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.71,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 278,
+      "cascade_latency_ms": 2020,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.71
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.91
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.73
+        }
+      }
+    },
+    {
+      "id": "route-023/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1742,
+      "cascade_latency_ms": 1742,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.8
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "no_match",
+          "confidence": 0.85
+        }
+      }
+    },
+    {
+      "id": "route-023/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1985,
+      "cascade_latency_ms": 1985,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.8
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.95
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.85
+        }
+      }
+    },
+    {
+      "id": "route-024/typesafe/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.83,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 326,
+      "cascade_latency_ms": 1939,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.83
+        },
+        "candidate_1": {
+          "type": "choice",
+          "choice": "no_match",
+          "probabilities": {
+            "review": 0.17,
+            "match": 0.01,
+            "no_match": 0.82
+          },
+          "confidence": 0.74
+        }
+      }
+    },
+    {
+      "id": "route-024/typesafe/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.85,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": true,
+      "raw_latency_ms": 273,
+      "cascade_latency_ms": 1886,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.85
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.04
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.1
+        }
+      }
+    },
+    {
+      "id": "route-024/anthropic/broad",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "review"
+          }
+        ],
+        "missing_evidence_probability": 0.8,
+        "blanket_fallback": true,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1613,
+      "cascade_latency_ms": 1613,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.8
+        },
+        "candidate_1": {
+          "type": "strong_verdict",
+          "choice": "no_match",
+          "confidence": 0.85
+        }
+      }
+    },
+    {
+      "id": "route-024/anthropic/atomic",
+      "split": "evaluation",
+      "common_route": null,
+      "completion": "complete",
+      "initial": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.85,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "final": {
+        "route": "model_uncertain",
+        "matches": [],
+        "fields": [
+          {
+            "handle": "candidate_1",
+            "verdict": "no_match"
+          }
+        ],
+        "missing_evidence_probability": 0.85,
+        "blanket_fallback": false,
+        "fallback": true
+      },
+      "score": {
+        "correct": false,
+        "wrong_matches": 0,
+        "missed_matches": 0,
+        "false_evidence_request": false,
+        "false_settled": false
+      },
+      "fallback": false,
+      "raw_latency_ms": 1970,
+      "cascade_latency_ms": 1970,
+      "answers": {
+        "missing_evidence": {
+          "type": "noul",
+          "noul": 0.85
+        },
+        "candidate_1_party": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "candidate_1_other": {
+          "type": "noul",
+          "noul": 0.1
+        }
+      }
+    }
+  ]
+}

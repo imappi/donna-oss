@@ -1,0 +1,202 @@
+{
+  "id": "holdout-050",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-050",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "INVOICE BLX-20441\nFrom: Brightlux Studio Hire Ltd, Unit 9, Hackney Wick, London E9 5EN\nVAT registration: GB 998 7766 55\nBill to: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nInvoice date: 29/08/2026    Due date: 12/09/2026    Terms: 14 days\nDescription: Studio hire, 28 August (full day)\nNet total: £500.00\nVAT @ 20%: £100.00\nTOTAL DUE: £600.00\nPayment: bank transfer to Brightlux Studio Hire Ltd, quoting BLX-20441.\nPay online by card at brightlux.example/pay quoting BLX-20441.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n03/09/2026,CARD,\"BRIGHTLUX STUDIO HIRE LONDON\",600.00,,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "received-email",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_receipt",
+        "content": "From: bookings@brightlux.example\nDate: 01/09/2026\nSubject: Payment received — BLX-20441\n\nThank you. We have received £600.00 by card (Visa ending 4521) on 01/09/2026 against invoice BLX-20441 (studio hire, 28 August). Card payments may take 2–3 working days to appear on your statement. Nothing further is due on this invoice.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-03",
+        "money_in_minor": 0,
+        "money_out_minor": 60000,
+        "currency": "GBP",
+        "contact": "BRIGHTLUX STUDIO HIRE",
+        "description": "BRIGHTLUX STUDIO HIRE LONDON",
+        "raw_description": "03/09/2026,CARD,\"BRIGHTLUX STUDIO HIRE LONDON\",600.00,,GBP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "receipt_payment",
+        "source_id": "received-email",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 60000,
+        "invoice_currency": "GBP",
+        "bank_amount_minor": 60000,
+        "bank_currency": "GBP",
+        "gross_minor": 60000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-29",
+      "due_date": "2026-09-12",
+      "amount_minor": 60000,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "BLX-20441",
+      "counterparty": "Brightlux Studio Hire Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "received-email",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "received-email",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-gb-supplier-card-payment-with-payment-received-email",
+    "family_description": "A UK Ltd pays a supplier bill by company card online; the supplier sends a \"payment received\" email with bill number, amount, date and card last four; the bank shows a bare card line.",
+    "market": "GB",
+    "variant": "b",
+    "error_mode": "reference-free card path; settlement-lag dates; two-part card charge",
+    "label_reason": "The supplier's email is dated 01/09 while the card charge settles on 03/09; a two-day card settlement lag does not break the payment-specific binding.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "supported",
+      "exclusion": "contradicted"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 60000
+      }
+    ]
+  }
+}

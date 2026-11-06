@@ -1,0 +1,225 @@
+{
+  "id": "holdout-069",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-069",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "INVOICE 8841\nFrom: Cloudbench Software Ltd\nVAT registration: GB 998 7766 55\nBill to: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nInvoice date: 01/08/2026    Due date: 01/08/2026    Terms: charged to card on file\nDescription: Team plan, August 2026 (5 seats)\nNet total: £59.90\nVAT @ 20%: £11.98\nTOTAL DUE: £71.88\nPayment: bank transfer to Cloudbench Software Ltd, quoting 8841.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "INVOICE 8902\nFrom: Cloudbench Software Ltd\nVAT registration: GB 998 7766 55\nBill to: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nInvoice date: 01/09/2026    Due date: 01/09/2026    Terms: charged to card on file\nDescription: Team plan, September 2026 (5 seats)\nNet total: £59.90\nVAT @ 20%: £11.98\nTOTAL DUE: £71.88\nPayment: bank transfer to Cloudbench Software Ltd, quoting 8902.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n01/08/2026,CARD,\"CLOUDBENCH SOFTWARE LTD MANCHESTER\",71.88,,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n01/09/2026,CARD,\"CLOUDBENCH SOFTWARE LTD MANCHESTER\",71.88,,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-01",
+        "money_in_minor": 0,
+        "money_out_minor": 7188,
+        "currency": "GBP",
+        "contact": "CLOUDBENCH SOFTWARE",
+        "description": "CLOUDBENCH SOFTWARE LTD MANCHESTER",
+        "raw_description": "01/08/2026,CARD,\"CLOUDBENCH SOFTWARE LTD MANCHESTER\",71.88,,GBP",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-01",
+        "money_in_minor": 0,
+        "money_out_minor": 7188,
+        "currency": "GBP",
+        "contact": "CLOUDBENCH SOFTWARE",
+        "description": "CLOUDBENCH SOFTWARE LTD MANCHESTER",
+        "raw_description": "01/09/2026,CARD,\"CLOUDBENCH SOFTWARE LTD MANCHESTER\",71.88,,GBP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-09-01",
+        "reference": "8902"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-01",
+      "due_date": "2026-08-01",
+      "amount_minor": 7188,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "8841",
+      "counterparty": "Cloudbench Software Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-gb-saas-subscription-card-charges",
+    "family_description": "A SaaS supplier charges the company card monthly and emails a receipt naming the bill and card last four; two months' bills are open.",
+    "market": "GB",
+    "variant": "c",
+    "error_mode": "reference-free card path with sibling month; next month not due; identical charges without receipts",
+    "label_reason": "Two identical card charges and two identical monthly bills with no receipts; nothing payment-specific separates the months.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work",
+      "proposal_from_party_amount_date_only"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

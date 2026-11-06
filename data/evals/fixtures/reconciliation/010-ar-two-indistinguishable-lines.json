@@ -1,0 +1,46 @@
+{
+  "id": "010-ar-two-indistinguishable-lines",
+  "title": "Two indistinguishable payments — authority calibration (AR)",
+  "narrative": "A EUR 2000 invoice to Globex Industries with NO reference number. Two incoming lines are each exactly EUR 2000 from Globex on adjacent days — indistinguishable from the visible fields. Only one can settle THIS invoice (the other is presumably a different invoice); nothing visible says which. POLICY GOLD (please ratify): the matcher should SURFACE both as 'suggested' for human disambiguation and AUTO-MATCH NEITHER — it must not grant itself unattended auto-match authority when candidates are indistinguishable, and auto-matching both would reconcile EUR 4000 against a EUR 2000 invoice. FAILURE TO CATCH: any 'auto_matched' here is an AGGRESSIVE authority error (the split-metrics harness scores authority_band_accuracy on these pinned 'suggested' targets).",
+  "tags": ["ambiguous", "duplicate_lines", "no_reference", "authority_calibration", "sales_invoice", "ar", "policy_gold"],
+  "document": {
+    "id": "si-globex-010",
+    "document_type": "sales_invoice",
+    "customer_name": "Globex Industries Ltd",
+    "document_date": "2026-05-01",
+    "due_date": "2026-05-31",
+    "total_amount": 2000.00,
+    "currency": "EUR",
+    "reference_number": "",
+    "extraction_confidence": 0.94,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-globex-1",
+      "money_in": 2000.00,
+      "currency": "EUR",
+      "date": "2026-05-05",
+      "description": "SEPA CT GLOBEX INDUSTRIES",
+      "raw_description": "SEPA CT GLOBEX INDUSTRIES LTD",
+      "contact": "Globex Industries Ltd"
+    },
+    {
+      "id": "tx-globex-2",
+      "money_in": 2000.00,
+      "currency": "EUR",
+      "date": "2026-05-06",
+      "description": "SEPA CT GLOBEX INDUSTRIES",
+      "raw_description": "SEPA CT GLOBEX INDUSTRIES LTD",
+      "contact": "Globex Industries Ltd"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      { "bank_transaction_id": "tx-globex-1", "status": "suggested" },
+      { "bank_transaction_id": "tx-globex-2", "status": "suggested" }
+    ],
+    "unmatchable_reason": null
+  }
+}

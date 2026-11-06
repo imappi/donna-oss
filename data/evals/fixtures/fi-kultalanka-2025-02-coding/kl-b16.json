@@ -1,0 +1,67 @@
+{
+  "id": "kl-b16",
+  "title": "Kultalanka 02/2025 14.2. Tokmanni 2 × −19,90 (second charge; the key prints one row for both)",
+  "split": "development",
+  "family": "kultalanka-refund_group",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "refund_group",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-14",
+    "description": "KORTTIOSTO TOKMANNI TAMPERE KOSKIKESKUS TAMPERE",
+    "money_in": 0,
+    "money_out": 19.9,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Operating supplies",
+          "direction": "debit",
+          "amount": 15.86,
+          "tax_code": "ALV_25_5_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 4.04,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 19.9,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "gap",
+    "gap": "source",
+    "detail": "refund group G-TOKMANNI: the gold spans B15, B16, B19; the FIK-3 book seeds one line"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B16",
+    "original_note": "The key prints no complete journal for this line; the original slot carries the adjudicated journal or group gold and the case is never scored."
+  }
+}

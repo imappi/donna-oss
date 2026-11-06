@@ -1,0 +1,256 @@
+{
+  "pack": { "id": "us", "country": "US", "version": 6 },
+  "currency": { "home": "USD" },
+  "locale": { "number_locale": "en-US", "date_format": "mdy" },
+  "languages": { "default": "en", "supported": ["en"] },
+  "reference": { "scheme": "none" },
+  "einvoice": { "lane": "none", "operator": "none" },
+  "tax": { "vocabulary": "us_sales_tax" },
+  "reconciliation": {
+    "materiality_ceiling": 500,
+    "disposition_ceiling": 500
+  },
+  "payment_rails": [
+    { "kind": "remit_instructions", "note": "The invoice's stated remit instructions are the payment block when no pay-link exists." },
+    { "kind": "payment_link", "note": "D4 (M2): the Stripe pay-link is the US collection lever and the deterministic settlement signal; when a link exists it replaces the standing payment_instructions block.", "instructions_template": { "en": "Pay securely online: {{payment_link_url}}" } },
+    { "kind": "ach" },
+    { "kind": "check" }
+  ],
+  "correspondence": {
+    "languages": ["en"],
+    "tone": "professional_friendly",
+    "dunning_cadence": [
+      { "step": 1, "days_after_due": 7, "tone": "friendly", "template": "reminder_step_1" },
+      { "step": 2, "days_after_due": 14, "tone": "firm", "template": "reminder_step_2" },
+      { "step": 3, "days_after_due": 30, "tone": "final", "template": "reminder_step_3" }
+    ],
+    "escalation": { "after_step": 3, "to": "owner" },
+    "quote_follow_up_cadence": [
+      { "step": 1, "days_after_sent": 7, "tone": "friendly", "template": "quote_follow_up_1" }
+    ],
+    "statutory": {
+      "late_interest": null,
+      "constraints": [
+        "B2B reminder tone only in Phase 1 (D5): no late fees or interest are added to any US reminder until a provenanced statutory basis is recorded in this manifest."
+      ]
+    }
+  },
+  "documents": {
+    "mandatory_fields": {
+      "invoice": [
+        "invoice_number", "issue_date", "due_date", "total", "currency",
+        "seller_name", "buyer_name", "payment_instructions"
+      ]
+    },
+    "quote_number_prefix": "Q",
+    "invoice_pdf": { "page": "letter" },
+    "quote_pdf": { "page": "letter" },
+    "templates": {
+      "invoice_pdf": {
+        "en": {
+          "subject": "Invoice {{invoice_number}}",
+          "body": "{{owner_business_name}}\n\nInvoice {{invoice_number}}\nBilled to: {{counterparty_name}}\nIssued: {{issue_date}}\nDue: {{due_date}}\n\n{{lines_block}}\n\nTotal due: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}"
+        }
+      },
+      "quote_pdf": {
+        "en": {
+          "subject": "Quote {{quote_number}}",
+          "body": "{{owner_business_name}}\n\nQuote {{quote_number}}\nPrepared for: {{counterparty_name}}\nIssued: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}"
+        }
+      },
+      "invoice_issue": {
+        "en": {
+          "subject": "Invoice {{invoice_number}} from {{owner_business_name}} — {{invoice_total}} {{currency}}",
+          "body": "Hi {{counterparty_name}},\n\nPlease find your invoice from {{owner_business_name}} below.\n\nInvoice {{invoice_number}}\nIssued: {{issue_date}}\nDue: {{due_date}}\n\n{{lines_block}}\n\nTotal due: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}\n\nIf anything about this invoice looks off, just reply to this email and we'll sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis invoice was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "quote_send": {
+        "en": {
+          "subject": "Quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nThank you for your interest — here is your quote from {{owner_business_name}}.\n\nQuote {{quote_number}}\nIssued: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}\n\nTo accept, just reply to this email. Questions and changes are welcome too.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis quote was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "quote_follow_up_1": {
+        "en": {
+          "subject": "Following up on quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nJust checking in on quote {{quote_number}} for {{quote_total}} {{currency}}, sent on {{issue_date}} and valid until {{valid_until}}.\n\nIf you'd like to go ahead, have questions, or want any changes, just reply to this email.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis follow-up was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "payable_notice": {
+        "en": {
+          "subject": "Heads up: {{counterparty_name}}'s bill is due {{due_date}}",
+          "body": "Hi,\n\nA supplier bill for {{owner_business_name}} is coming due:\n\nSupplier: {{counterparty_name}}\nAmount: {{amount_due}} {{currency}}\nDue: {{due_date}} (in {{days_until_due}} days)\n\nWant to schedule the payment? Donna doesn't move money — this note is only so the bill doesn't slip. If it's already paid, looks wrong, or shouldn't be tracked, just reply and Donna will record it.\n\n— Donna, for {{owner_business_name}}"
+        }
+      },
+      "reminder_step_1": {
+        "en": {
+          "subject": "Friendly reminder: invoice {{invoice_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nThis is a friendly reminder that invoice {{invoice_number}} for {{amount_due}} {{currency}} was due on {{due_date}}. If you've already sent payment, thank you — no action is needed.\n\nPayment details:\n{{payment_instructions}}\n\nIf anything about this invoice looks off, just reply to this email and we'll sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis reminder was sent by Donna on behalf of {{owner_business_name}}. To stop receiving payment reminders about this invoice: {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_2": {
+        "en": {
+          "subject": "Second reminder: invoice {{invoice_number}} is {{days_overdue}} days past due",
+          "body": "Hi {{counterparty_name}},\n\nInvoice {{invoice_number}} for {{amount_due}} {{currency}} was due on {{due_date}} and is now {{days_overdue}} days past due. We'd appreciate payment at your earliest convenience.\n\nPayment details:\n{{payment_instructions}}\n\nIf payment is already on its way, or if you have a question or concern about this invoice, please reply and let us know.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis reminder was sent by Donna on behalf of {{owner_business_name}}. To stop receiving payment reminders about this invoice: {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_3": {
+        "en": {
+          "subject": "Final reminder: invoice {{invoice_number}} remains unpaid",
+          "body": "Hi {{counterparty_name}},\n\nDespite earlier reminders, invoice {{invoice_number}} for {{amount_due}} {{currency}} (due {{due_date}}, now {{days_overdue}} days past due) remains unpaid. Please arrange payment promptly.\n\nPayment details:\n{{payment_instructions}}\n\nIf there is a problem with this invoice — a dispute, a delivery issue, anything — please reply now so we can resolve it together before taking this further.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis reminder was sent by Donna on behalf of {{owner_business_name}}. To stop receiving payment reminders about this invoice: {{unsubscribe_url}}"
+        }
+      }
+    }
+  },
+  "chart_of_accounts": {
+    "note": "The fallback coding menu for a US client with no synced chart of accounts. This is the SALVAGED half of the closed PR #1122, which was hand-rolling the same palette as a US-specific usAccountPalette.js module — the wrongness was real, the shape was not: it belongs in the pack as data, not in a per-country core module. Declared here because gap 7 is a live wrongness in EVERY market and leaving the US on the Singapore list while FI and GB are fixed would simply relocate it. This is pack data, not a restart of US product work.",
+    "fallback_accounts": [
+      {
+        "name": "Sales",
+        "role": "revenue.operating"
+      },
+      {
+        "name": "Other income",
+        "role": "revenue.other"
+      },
+      {
+        "name": "Interest income",
+        "role": "revenue.interest"
+      },
+      {
+        "name": "Cost of sales",
+        "role": "expense.cost_of_sales"
+      },
+      {
+        "name": "Operating supplies",
+        "role": "expense.operating_supplies"
+      },
+      {
+        "name": "Software subscriptions",
+        "role": "expense.software"
+      },
+      {
+        "name": "Travel",
+        "role": "expense.travel"
+      },
+      {
+        "name": "Meals and entertainment",
+        "role": "expense.meals"
+      },
+      {
+        "name": "Marketing",
+        "role": "expense.marketing"
+      },
+      {
+        "name": "Professional fees",
+        "role": "expense.professional_fees"
+      },
+      {
+        "name": "Accounting fees",
+        "role": "expense.accounting_fees"
+      },
+      {
+        "name": "Statutory filing fees",
+        "role": "expense.statutory_fees"
+      },
+      {
+        "name": "Payroll",
+        "role": "expense.payroll"
+      },
+      {
+        "name": "Rent",
+        "role": "expense.rent"
+      },
+      {
+        "name": "Utilities",
+        "role": "expense.utilities"
+      },
+      {
+        "name": "Telecommunications",
+        "role": "expense.telecom"
+      },
+      {
+        "name": "Insurance",
+        "role": "expense.insurance"
+      },
+      {
+        "name": "Office expenses",
+        "role": "expense.office"
+      },
+      {
+        "name": "Motor expenses",
+        "role": "expense.motor"
+      },
+      {
+        "name": "Bank fees",
+        "role": "expense.bank_fees"
+      },
+      {
+        "name": "Platform and processor fees",
+        "role": "expense.platform_fees"
+      },
+      {
+        "name": "Foreign exchange gain/loss",
+        "role": "expense.fx"
+      },
+      {
+        "name": "Director loan",
+        "role": "liability.director_loan"
+      },
+      {
+        "name": "Loan payable",
+        "role": "liability.loan"
+      },
+      {
+        "name": "Owner drawings",
+        "role": "equity.owner_drawings"
+      },
+      {
+        "name": "Share capital",
+        "role": "equity.share_capital"
+      },
+      {
+        "name": "Share premium",
+        "role": "equity.share_premium"
+      },
+      {
+        "name": "Retained earnings",
+        "role": "equity.retained_earnings"
+      },
+      {
+        "name": "Intercompany transfer",
+        "role": "clearing.intercompany"
+      },
+      {
+        "name": "Payment processor clearing",
+        "role": "clearing.payment_processor"
+      },
+      {
+        "name": "Sales tax payable",
+        "role": "liability.tax_payable"
+      },
+      {
+        "name": "Income tax payable",
+        "role": "liability.tax_payable"
+      },
+      {
+        "name": "Payroll taxes payable",
+        "role": "liability.payroll_payable"
+      },
+      {
+        "name": "Contractor payments",
+        "role": "expense.professional_fees"
+      },
+      {
+        "name": "Suspense",
+        "role": "control.suspense"
+      }
+    ]
+  },
+  "obligations": {
+    "survey": "not_surveyed",
+    "items": [],
+    "note": "NOT an assertion that the US imposes no statutory obligations — it plainly does (federal and state income tax filings, state sales-tax registration and returns, payroll filings). It is an assertion that nobody has enumerated them for this pack. The section exists so that emptiness cannot be mistaken for cleanliness: `survey: not_surveyed` reports on every statutory_watches run, whereas a bare empty list would have read as a market with nothing to watch. The US was deprioritised on 2026-07-27 (Kari) in favour of Finland and the UK in parallel; this key records the resulting gap rather than hiding it. Surveying the US is US work and is deliberately not started here."
+  },
+  "platforms": ["xero", "qbo"]
+}

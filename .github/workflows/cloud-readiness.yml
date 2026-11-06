@@ -1,0 +1,47 @@
+name: Cloud readiness PostgreSQL 17
+# A documentation-only change skips this workflow (Kari, 2026-11-05: Actions
+# cost). Keep the list equal to DOC_ROOT_FILES in scripts/ci-scope.mjs; none of
+# the suites below reads a doc.
+on:
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'DEPLOYMENT.md'
+      - 'README.md'
+      - 'SESSION_HANDOFF.md'
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'DEPLOYMENT.md'
+      - 'README.md'
+      - 'SESSION_HANDOFF.md'
+jobs:
+  cloud-readiness:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+        env:
+          POSTGRES_USER: donna
+          POSTGRES_PASSWORD: donna_ci
+          POSTGRES_DB: donna_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U donna -d donna_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DONNA_SCHEMA_PROOF_PG17_URL: postgresql://donna:donna_ci@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Prove schema restore, signed worker execution and upload admission
+        run: node --test server/donna/cloudSchemaQualificationPgLifecycle.test.js server/donna/cloudDeploymentAttestationCiPgLifecycle.test.js server/donna/cloudProducerPgLifecycle.test.js server/donna/cloudProducerEvidence.test.js server/donna/cloudDocumentDrainScopePgLifecycle.test.js server/donna/deletedOwnerRecoveryPgLifecycle.test.js

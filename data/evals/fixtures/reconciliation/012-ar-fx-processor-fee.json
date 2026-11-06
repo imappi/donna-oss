@@ -1,0 +1,48 @@
+{
+  "id": "012-ar-fx-processor-fee",
+  "title": "FX + processor fee — harder bridge, observed authority (AR)",
+  "narrative": "Like 001 but harder: a GBP 745 invoice to Globex settled via Stripe, where the EUR payout is net of BOTH the GBP->EUR FX conversion AND Stripe's processing fee, so the bank amount (EUR 842.10) is further from any naive GBP/FX figure. The description carries the processor + FX hints. GOLD is target-ONLY (status-agnostic): the test is whether the matcher bridges FX+fee to find the right line; the AUTHORITY band is left UNPINNED on purpose so the split-metrics harness can observe whether the model's confidence appropriately drops below the 0.85 auto-threshold for a harder, fee-eroded bridge (vs 001 which cleared it at ~0.88). FAILURE TO CATCH: missing the line (recall) or matching the unrelated rent.",
+  "tags": ["fx", "processor", "processor_fee", "sales_invoice", "ar", "authority_observed", "regression"],
+  "document": {
+    "id": "si-globex-012",
+    "document_type": "sales_invoice",
+    "customer_name": "Globex Industries Ltd",
+    "document_date": "2026-05-15",
+    "due_date": "2026-06-14",
+    "total_amount": 745.00,
+    "currency": "GBP",
+    "reference_number": "KV-2026-0051",
+    "extraction_confidence": 0.95,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-stripe-net",
+      "money_in": 842.10,
+      "currency": "EUR",
+      "date": "2026-05-19",
+      "description": "STRIPE PAYOUT 7C9B",
+      "raw_description": "STRIPE PAYMENTS EUROPE PAYOUT 7C9B GBP-EUR FX LESS PROCESSING FEES",
+      "contact": "Stripe Payments Europe"
+    },
+    {
+      "id": "tx-unrelated-rent-012",
+      "money_in": 2400.00,
+      "currency": "EUR",
+      "date": "2026-05-18",
+      "description": "RENT INCOMING TENANT-A",
+      "raw_description": "MONTHLY RENT TENANT A APR-MAY",
+      "contact": "Tenant A"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      {
+        "bank_transaction_id": "tx-stripe-net",
+        "required_hops_any_of": ["fx_conversion_GBP_EUR", "processor:stripe", "processor_fee"]
+      }
+    ],
+    "unmatchable_reason": null
+  }
+}

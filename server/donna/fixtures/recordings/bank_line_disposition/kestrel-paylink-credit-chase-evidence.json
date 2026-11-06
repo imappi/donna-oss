@@ -1,0 +1,22 @@
+{
+  "lane": "bank_line_disposition",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — authored from bankLineDispositionLlm.js's money-in output contract for the appliance fixture world: the 1213.75 GBP PayLink payout is a material processor settlement whose payout report is the missing evidence; never a captured provider response",
+  "fixture": "bank_statement_two_lines",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_dispose_kestrel_paylink_credit",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-4-8",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"disposition\":\"chase_evidence\",\"materiality\":\"material\",\"expense_kind\":\"processor_payout\",\"confidence\":0.9,\"reasoning\":\"A material payment-processor settlement whose net amount is gross sales minus fees; the payout report is needed before it can be booked.\"}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": { "input_tokens": 0, "output_tokens": 0 }
+  }
+}

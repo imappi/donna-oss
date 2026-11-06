@@ -1,0 +1,197 @@
+name: CI
+
+# Build + test gate for every PR (and pushes to main). Added after PR #607
+# merged a frontend that nothing had built — there was no CI, so a broken
+# `npm run build` could land unverified. The build step closes that gap; the
+# test step runs the repo's canonical suite.
+#
+# Cost (Kari, 2026-11-05: Actions had become the largest bill in the stack,
+# about 85 runner-minutes per run). What a run proves is decided once, by the
+# Scope job (scripts/ci-scope.mjs):
+# - a documentation-only change skips the suite, unless code reads a changed file;
+# - a pull request runs the suite once, in UTC;
+# - a push to main also runs it in Europe/Helsinki, the non-UTC day-shift check
+#   (2026-09-01 forensics F-11), re-pointed from Asia/Dubai when the UAE went on hold.
+# The UAE's own test files are on hold in scripts/run-tests.mjs (ON_HOLD_MARKETS).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Don't let stale runs pile up: a new push to a branch cancels its in-flight run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_tests: ${{ steps.scope.outputs.run_tests }}
+      zones: ${{ steps.scope.outputs.zones }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decide what this run must prove
+        id: scope
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SCOPE_PR_NUMBER: ${{ github.event.pull_request.number }}
+          SCOPE_BEFORE: ${{ github.event.before }}
+        run: node scripts/ci-scope.mjs
+
+  test-shards:
+    # Isolated databases per job; sequential files within each balanced shard.
+    name: Tests (${{ matrix.tz }}, shard ${{ matrix.shard }}/4)
+    needs: scope
+    if: needs.scope.outputs.run_tests == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tz: ${{ fromJSON(needs.scope.outputs.zones) }}
+        shard: [1, 2, 3, 4]
+    services:
+      postgres:
+        # Gate 0B: the desktop generation is pinned to PG 16. Pin the CI
+        # service by patch release AND immutable multi-platform digest so a
+        # mutable Docker tag cannot silently change the proof substrate.
+        image: postgres:16.15-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825
+        env:
+          POSTGRES_USER: donna
+          POSTGRES_PASSWORD: donna_ci
+          POSTGRES_DB: donna_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U donna -d donna_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TZ: ${{ matrix.tz }}
+      DATABASE_URL: postgresql://donna:donna_ci@127.0.0.1:5432/donna_ci
+      DONNA_PG_TEST_URL: postgresql://donna:donna_ci@127.0.0.1:5432/postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare pinned PostgreSQL
+        run: npm run db:prepare:ci-host
+
+      - name: Apply all migrations
+        run: npm run db:migrate
+
+      - name: Initialize the real durable scheduler manifest
+        run: npm run runtime:initialize:ci-host
+
+      - name: Build (vite)
+        run: npm run build
+
+      - name: Test
+        run: npm test -- --shard=${{ matrix.shard }}/4 --receipt=artifacts/test-shard-${{ matrix.shard }}.json
+
+      - name: Upload completed test receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-receipt-${{ matrix.tz == 'UTC' && 'utc' || 'helsinki' }}-${{ matrix.shard }}
+          path: artifacts/test-shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Certify the running host dependencies
+        if: matrix.shard == 1
+        run: npm run certify:host -- --output=artifacts/host-certificate-a.json --require-pass
+        # Presence-only placeholders are scoped to the observer. The suite
+        # retains its ordinary missing-key semantics, and the certificate
+        # makes zero provider calls.
+        env:
+          DONNA_DESKTOP_BLOB_DIR: ${{ github.workspace }}/.ci/evidence
+          OPENAI_API_KEY: ci-host-certificate-no-network
+          ANTHROPIC_API_KEY: ci-host-certificate-no-network
+
+      - name: Upload Host Certificate A
+        if: always() && matrix.shard == 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-certificate-a${{ matrix.tz != 'UTC' && '-tz-europe-helsinki' || '' }}
+          path: artifacts/host-certificate-a.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Certify admitted entity births and mutations
+        if: matrix.shard == 1
+        run: >-
+          npm run certify:entity --
+          --host-certificate=artifacts/host-certificate-a.json
+          --output=artifacts/entity-certificate-b.json
+          --require-pass
+
+      - name: Upload Entity Certificate B
+        if: always() && matrix.shard == 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: entity-certificate-b${{ matrix.tz != 'UTC' && '-tz-europe-helsinki' || '' }}
+          path: artifacts/entity-certificate-b.json
+          if-no-files-found: error
+          retention-days: 14
+
+  build-and-test:
+    # One aggregate check per zone. A cancelled/missing/failed shard cannot turn
+    # it green; receipts also prove exact discovered coverage. A documentation-only
+    # change passes here only because Scope said the suite was not needed.
+    name: ${{ matrix.tz == 'UTC' && 'Build & test' || format('Build & test (TZ={0})', matrix.tz) }}
+    needs: [scope, test-shards]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tz: ${{ fromJSON(needs.scope.outputs.zones || '["UTC"]') }}
+    env:
+      TZ: ${{ matrix.tz }}
+    steps:
+      - name: Require the scope decision and every test, build and certificate job to pass
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          RUN_TESTS: ${{ needs.scope.outputs.run_tests }}
+          SHARD_RESULT: ${{ needs.test-shards.result }}
+        run: |
+          test "$SCOPE_RESULT" = success
+          if [ "$RUN_TESTS" = false ]; then
+            test "$SHARD_RESULT" = skipped
+            echo "Documentation only: Scope decided the suite was not needed."
+            exit 0
+          fi
+          test "$RUN_TESTS" = true
+          test "$SHARD_RESULT" = success
+      - if: needs.scope.outputs.run_tests == 'true'
+        uses: actions/checkout@v4
+      - if: needs.scope.outputs.run_tests == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - if: needs.scope.outputs.run_tests == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-receipt-${{ matrix.tz == 'UTC' && 'utc' || 'helsinki' }}-*
+          path: artifacts/test-receipts
+          merge-multiple: true
+      - name: Verify every discovered test ran exactly once
+        if: needs.scope.outputs.run_tests == 'true'
+        run: node scripts/run-tests.mjs --shard=1/4 --verify-receipts=artifacts/test-receipts

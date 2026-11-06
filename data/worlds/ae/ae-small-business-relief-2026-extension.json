@@ -1,0 +1,86 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/corporate-tax/sbr-2026-extension",
+  "seed": "ae-small-business-relief-2026-extension-v1",
+  "effectiveDate": "2030-12-31",
+  "policyAsOf": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.corporate-tax.v1",
+    "capabilityId": "assess_ae_corporate_tax_period",
+    "jurisdiction": "AE",
+    "entityType": "ae-llc",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_small_business_relief_effective_dates",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": ["sbr_current_extension", "sbr_last_eligible_end_date", "sbr_after_window"],
+    "permittedActions": ["project_expected_policy_consequence", "request_missing_sbr_fact"],
+    "maximumAuthority": "oracle_projection_only",
+    "fallback": {"terminalState": "blocked", "responsibleActor": "owner", "nextPermittedAction": "request_missing_sbr_fact"},
+    "protectedFailures": ["sbr_2026_sunset_reused", "qfzp_allowed_sbr", "unreceipted_sbr_election"]
+  },
+  "policyBindings": {
+    "smallBusinessReliefBase": "policy/ae-md73-2023",
+    "smallBusinessReliefCurrent": "policy/ae-md131-2026"
+  },
+  "policySources": [
+    {"id": "policy/ae-mof-legislation-registry", "authority": "Ministry of Finance", "documentNumber": "Financial Legislation Registry", "title": "Financial Legislation", "url": "https://mof.gov.ae/en/financial-legislation/", "effectiveFrom": "2026-08-31", "sourceRole": "live_registry_snapshot", "asOf": "2026-08-31"},
+    {"id": "policy/ae-ct-law-47-2022", "authority": "Ministry of Finance", "documentNumber": "Federal Decree-Law No. 47 of 2022", "title": "Federal Decree-Law No. 47 of 2022 on the Taxation of Corporations and Businesses", "url": "https://www.mof.gov.ae/wp-content/uploads/2022/12/Federal-Decree-Law-No.-47-of-2022-EN.pdf?fm=pdf", "effectiveFrom": "2023-06-01", "asOf": "2026-08-31"},
+    {"id": "policy/ae-md73-2023", "authority": "Ministry of Finance", "documentNumber": "Ministerial Decision No. 73 of 2023", "title": "Small Business Relief", "url": "https://mof.gov.ae/en/news/ministry-of-finance-issues-decision-on-small-business-relief-for-corporate-tax-purposes/", "effectiveFrom": "2023-06-01", "assurance": "base_threshold_and_exclusions_only", "supersededForEndDateBy": "Ministerial Decision No. 131 of 2026", "asOf": "2026-08-31"},
+    {"id": "policy/ae-md131-2026", "authority": "Ministry of Finance", "documentNumber": "Ministerial Decision No. 131 of 2026", "title": "Amending Certain Provisions of Ministerial Decision No. 73 of 2023 on Small Business Relief", "url": "https://mof.gov.ae/wp-content/uploads/2026/08/Ministerial-Decision-No.-131-of-2026-Amending-Certain-Provisions-of-Ministerial-Decision-No.-73-of-2023-on-Small-Business-Relief-for-the-Purposes-of-Federal-Decree-Law-No.-47-of-2022-EN.pdf", "effectiveFrom": "2023-06-01", "issuedOn": "2026-07-29", "legalCommencement": "day_after_official_gazette_publication", "asOf": "2026-08-31"},
+    {"id": "policy/ae-vat-designated-zones", "authority": "Federal Tax Authority", "documentNumber": "VATGDZ1", "title": "Designated Zones VAT Guide", "url": "https://tax.gov.ae/-/media/Files/EN/PDF/Guides/Designated-Zones-VAT-Guide.pdf", "effectiveFrom": "2018-01-01", "asOf": "2026-08-31"}
+  ],
+  "entities": [
+    {
+      "id": "entity/ae-sbr-mainland",
+      "kind": "company",
+      "legalForm": "ae-llc",
+      "activeFrom": "2024-01-01",
+      "facts": {
+        "freeZoneStanding": [{"standing": "mainland", "licensingAuthority": "Dubai Department of Economy and Tourism", "emirate": "DXB", "effectiveFrom": "2024-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-sbr-trade-licence"}],
+        "designatedZone": [{"status": "not_designated", "zoneName": null, "effectiveFrom": "2024-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-sbr-designated-zone-check", "policySourceId": "policy/ae-vat-designated-zones"}],
+        "vatRegistration": [{"status": "registered", "registrationSubject": "legal_entity", "registrationSubjectId": "entity/ae-sbr-mainland", "trn": "100523456789012", "registrationBasis": "mandatory", "returnCadence": "quarter", "effectiveFrom": "2024-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-sbr-vat-registration"}],
+        "ftaVatPeriods": [{"periodKey": "2030-Q4", "startsOn": "2030-10-01", "endsOn": "2030-12-31", "dueOn": "2031-01-28", "sourceArtifactId": "artifact/ae-sbr-vat-period"}]
+      }
+    }
+  ],
+  "smallBusinessReliefPeriods": [
+    {
+      "periodKey": "2026-calendar",
+      "startsOn": "2026-01-01",
+      "endsOn": "2026-12-31",
+      "fact": {"revenueAed": "3000000.00", "priorPeriodsAtOrBelowThreshold": true, "qfzpStatus": "not_qfzp", "mneGroupStatus": "not_member", "election": "elected", "effectiveFrom": "2026-01-01", "effectiveTo": "2026-12-31", "sourceArtifactId": "artifact/ae-sbr-period-2026", "basePolicySourceId": "policy/ae-md73-2023", "policySourceId": "policy/ae-md131-2026", "electionReceipt": {"id": "receipt/ae-sbr-election-2026", "actorId": "member/sbr-owner", "authorityBasis": "beneficial_owner_sbr_election", "recordedAt": "2026-01-01", "sourceArtifactId": "artifact/ae-sbr-period-2026"}}
+    },
+    {
+      "periodKey": "2029-calendar",
+      "startsOn": "2029-01-01",
+      "endsOn": "2029-12-31",
+      "fact": {"revenueAed": "3000000.00", "priorPeriodsAtOrBelowThreshold": true, "qfzpStatus": "not_qfzp", "mneGroupStatus": "not_member", "election": "elected", "effectiveFrom": "2029-01-01", "effectiveTo": "2029-12-31", "sourceArtifactId": "artifact/ae-sbr-period-2029", "basePolicySourceId": "policy/ae-md73-2023", "policySourceId": "policy/ae-md131-2026", "electionReceipt": {"id": "receipt/ae-sbr-election-2029", "actorId": "member/sbr-owner", "authorityBasis": "beneficial_owner_sbr_election", "recordedAt": "2029-01-01", "sourceArtifactId": "artifact/ae-sbr-period-2029"}}
+    },
+    {
+      "periodKey": "2030-calendar",
+      "startsOn": "2030-01-01",
+      "endsOn": "2030-12-31",
+      "fact": {"revenueAed": "3000000.00", "priorPeriodsAtOrBelowThreshold": true, "qfzpStatus": "not_qfzp", "mneGroupStatus": "not_member", "election": "elected", "effectiveFrom": "2030-01-01", "effectiveTo": "2030-12-31", "sourceArtifactId": "artifact/ae-sbr-period-2030", "basePolicySourceId": "policy/ae-md73-2023", "policySourceId": "policy/ae-md131-2026", "electionReceipt": {"id": "receipt/ae-sbr-election-2030", "actorId": "member/sbr-owner", "authorityBasis": "beneficial_owner_sbr_election", "recordedAt": "2030-01-01", "sourceArtifactId": "artifact/ae-sbr-period-2030"}}
+    }
+  ],
+  "events": [],
+  "observations": [
+    {"id": "observation/ae-sbr-trade-licence", "artifactId": "artifact/ae-sbr-trade-licence", "observedAt": "2024-01-01"},
+    {"id": "observation/ae-sbr-designated-zone-check", "artifactId": "artifact/ae-sbr-designated-zone-check", "observedAt": "2024-01-01"},
+    {"id": "observation/ae-sbr-vat-registration", "artifactId": "artifact/ae-sbr-vat-registration", "observedAt": "2024-01-01"},
+    {"id": "observation/ae-sbr-vat-period", "artifactId": "artifact/ae-sbr-vat-period", "observedAt": "2030-10-01"},
+    {"id": "observation/ae-sbr-period-2026", "artifactId": "artifact/ae-sbr-period-2026", "observedAt": "2026-12-31"},
+    {"id": "observation/ae-sbr-period-2029", "artifactId": "artifact/ae-sbr-period-2029", "observedAt": "2029-12-31"},
+    {"id": "observation/ae-sbr-period-2030", "artifactId": "artifact/ae-sbr-period-2030", "observedAt": "2030-12-31"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {"id": "artifact/ae-sbr-trade-licence", "kind": "trade_licence", "format": "json", "trusted": true, "title": "Synthetic Dubai Mainland Trade Licence", "fields": {"legalName": "Desert Cedar Services LLC", "licenceNumber": "SYNTH-AE-SBR-000001", "issueDate": "2024-01-01"}},
+    {"id": "artifact/ae-sbr-designated-zone-check", "kind": "designated_zone_register_extract", "format": "json", "trusted": true, "title": "Synthetic Establishment Check", "fields": {"establishment": "Dubai mainland", "listedDesignatedZone": false, "checkedOn": "2024-01-01"}},
+    {"id": "artifact/ae-sbr-vat-registration", "kind": "vat_registration_certificate", "format": "json", "trusted": true, "title": "Synthetic FTA VAT Registration Certificate", "fields": {"taxablePerson": "Desert Cedar Services LLC", "trn": "100523456789012", "effectiveFrom": "2024-01-01"}},
+    {"id": "artifact/ae-sbr-vat-period", "kind": "emara_tax_period_assignment", "format": "json", "trusted": true, "title": "Synthetic EmaraTax VAT Period Assignment", "fields": {"periodKey": "2030-Q4", "startsOn": "2030-10-01", "endsOn": "2030-12-31", "dueOn": "2031-01-28"}},
+    {"id": "artifact/ae-sbr-period-2026", "kind": "period_tax_evidence_bundle", "format": "json", "trusted": true, "title": "Synthetic 2026 SBR Evidence", "fields": {"revenueAed": "3000000.00", "revenueHistoryAed": ["2800000.00", "3000000.00"], "ownerDecisionReference": "SYNTH-SBR-2026", "mneGroupMember": false}},
+    {"id": "artifact/ae-sbr-period-2029", "kind": "period_tax_evidence_bundle", "format": "json", "trusted": true, "title": "Synthetic 2029 SBR Evidence", "fields": {"revenueAed": "3000000.00", "revenueHistoryAed": ["2750000.00", "2900000.00", "3000000.00"], "ownerDecisionReference": "SYNTH-SBR-2029", "mneGroupMember": false}},
+    {"id": "artifact/ae-sbr-period-2030", "kind": "period_tax_evidence_bundle", "format": "json", "trusted": true, "title": "Synthetic 2030 SBR Evidence", "fields": {"revenueAed": "3000000.00", "revenueHistoryAed": ["2900000.00", "3000000.00"], "ownerDecisionReference": "SYNTH-SBR-2030", "mneGroupMember": false}}
+  ]
+}

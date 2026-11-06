@@ -1,0 +1,223 @@
+{
+  "id": "dev-039",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-039",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "TAX INVOICE SS-20931\nSunrise Stationery Supplies Pte. Ltd.  UEN 200912345E\nBill to: Merlion Analytics Pte. Ltd.  UEN 202012345K\nInvoice date: 03 Aug 2026    Due date: 02 Sep 2026    Terms: 30 days\nDescription: Office supplies, August\nSubtotal: S$1,330.28\nGST 9%: S$119.72\nTOTAL: S$1,450.00\nPayment: transfer to Sunrise Stationery Supplies Pte. Ltd. OCBC 501-234567-001, quoting SS-20931.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n28 Aug 2026,ITR,1450.00,,FAST TRANSFER,SUNRISE STATIONERY SUPPLIES,SS-20931",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n04 Sep 2026,ICT,,1450.00,FAST TRANSFER,SUNRISE STATIONERY SUPPLIES,REFUND DUPLICATE PMT",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-28",
+        "money_in_minor": 0,
+        "money_out_minor": 145000,
+        "currency": "SGD",
+        "contact": "SUNRISE STATIONERY SUPPLIES PTE LTD",
+        "description": "FAST TRANSFER SUNRISE STATIONERY SUPPLIES SS-20931",
+        "raw_description": "28 Aug 2026,ITR,1450.00,,FAST TRANSFER,SUNRISE STATIONERY SUPPLIES,SS-20931",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-04",
+        "money_in_minor": 145000,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "SUNRISE STATIONERY SUPPLIES PTE LTD",
+        "description": "FAST TRANSFER SUNRISE STATIONERY SUPPLIES REFUND DUPLICATE PMT",
+        "raw_description": "04 Sep 2026,ICT,,1450.00,FAST TRANSFER,SUNRISE STATIONERY SUPPLIES,REFUND DUPLICATE PMT",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 145000,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 145000,
+        "bank_currency": "SGD",
+        "gross_minor": 145000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-03",
+      "due_date": "2026-09-02",
+      "amount_minor": 145000,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "SS-20931",
+      "counterparty": "Sunrise Stationery Supplies Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-sg-supplier-refund-wrong-direction",
+    "family_description": "A supplier refund (money in) of the bill amount sits beside the real outgoing payment.",
+    "market": "SG",
+    "variant": "a",
+    "error_mode": "cash direction excludes the refund mechanically",
+    "label_reason": "The outgoing FAST payment quotes the bill; the same-amount money-in refund from the supplier is the wrong direction for a supplier bill.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 145000
+      }
+    ]
+  }
+}

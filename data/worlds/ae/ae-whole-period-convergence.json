@@ -1,0 +1,286 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/whole-period/convergence",
+  "seed": "ae-whole-period-convergence-v1",
+  "effectiveDate": "2026-09-01",
+  "manifest": {
+    "manifestVersion": "ae.whole-period-convergence.v1",
+    "capabilityId": "certify_ae_whole_period_convergence",
+    "jurisdiction": "AE",
+    "entityType": "synthetic_ae_period_suite",
+    "bookBasis": "statutory_and_management_books",
+    "scenarioLane": "whole_period_convergence",
+    "accountingView": "synthetic_offline_certificate",
+    "requiredWorldFamilies": [
+      "ae_entity_tax_context",
+      "ae_vat_period",
+      "ae_corporate_tax",
+      "ae_payroll_operating",
+      "ae_cash_commerce",
+      "ae_arabic_pint_evidence"
+    ],
+    "permittedActions": [
+      "read_synthetic_worlds",
+      "evaluate_offline_runtime_receipts",
+      "bind_named_production_operations_without_calling_writers"
+    ],
+    "maximumAuthority": "synthetic_offline_certification_only",
+    "fallback": {
+      "terminalState": "blocked",
+      "responsibleActor": "owner",
+      "nextPermittedAction": "report_named_production_prerequisite"
+    },
+    "protectedFailures": [
+      "free_zone_designated_qfzp_conflation",
+      "vat_ct_threshold_collision",
+      "natural_person_sbr_qfzp_collision",
+      "qfzp_breach_horizon_truncated",
+      "vat_fx_evidence_missing_or_wrong_date",
+      "customs_imported_service_lane_swap",
+      "blocked_input_vat_recovered",
+      "unsupported_entertainment_deductibility",
+      "eosb_gcc_pension_swap",
+      "pdf_lookalike_promoted_to_pint",
+      "arabic_digit_economics_drift",
+      "arabic_bidi_identifier_drift",
+      "arabic_page_order_reversed",
+      "arrival_order_divergence",
+      "held_evidence_upload_requested",
+      "cross_entity_identity_leak",
+      "same_name_identity_leak",
+      "derived_id_identity_leak",
+      "long_id_identity_leak"
+    ]
+  },
+  "entities": [
+    {
+      "id": "entity/ae7-synthetic-period-suite",
+      "kind": "synthetic_period_suite",
+      "activeFrom": "2026-01-01"
+    }
+  ],
+  "events": [],
+  "observations": [
+    {
+      "id": "observation/ae7-hidden-settlement-identity",
+      "hiddenFactRefs": [
+        "hidden/ae7-settlement-identity"
+      ],
+      "observedAt": "2026-09-01"
+    }
+  ],
+  "hiddenFacts": [
+    {
+      "id": "hidden/ae7-settlement-identity",
+      "kind": "settlement_group_identity",
+      "ownerOnly": true,
+      "revealAfter": "2026-09-01",
+      "value": "same_name_merchant_alpha",
+      "expectedTreatment": "on_owner"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "artifact/ae7-shrink-noise-a",
+      "kind": "synthetic_noise",
+      "untrustedPayload": {
+        "note": "removable shrink control"
+      }
+    },
+    {
+      "id": "artifact/ae7-shrink-noise-b",
+      "kind": "synthetic_noise",
+      "untrustedPayload": {
+        "note": "second removable shrink control"
+      }
+    }
+  ],
+  "counterfactualMutation": {
+    "id": "hidden-settlement-identity-sibling",
+    "declaredFactId": "hidden/ae7-settlement-identity",
+    "changedFactIds": [
+      "hidden/ae7-settlement-identity"
+    ],
+    "replacement": {
+      "value": "exact_processor_group_identity",
+      "expectedTreatment": "auto_reconciled"
+    },
+    "expectedTreatmentChange": {
+      "from": "on_owner",
+      "to": "auto_reconciled"
+    }
+  },
+  "aeWholePeriod": {
+    "version": "ae.whole-period-convergence.v1",
+    "worldCases": [
+      {
+        "caseId": "ae1-mainland-context",
+        "family": "ae_entity_tax_context",
+        "path": "data/worlds/ae/ae-entity-context-mainland.json"
+      },
+      {
+        "caseId": "ae1-free-zone-context",
+        "family": "ae_entity_tax_context",
+        "path": "data/worlds/ae/ae-entity-context-free-zone-service.json"
+      },
+      {
+        "caseId": "ae1-sole-establishment-context",
+        "family": "ae_entity_tax_context",
+        "path": "data/worlds/ae/ae-entity-context-sole-establishment.json"
+      },
+      {
+        "caseId": "ae1-designated-zone-context",
+        "family": "ae_entity_tax_context",
+        "path": "data/worlds/ae/ae-entity-context-designated-zone-goods.json"
+      },
+      {
+        "caseId": "ae1-vat-threshold-boundaries",
+        "family": "ae_entity_tax_context",
+        "path": "data/worlds/ae/ae-vat-registration-threshold-boundaries.json"
+      },
+      {
+        "caseId": "ae2-vat-period",
+        "family": "ae_vat_period",
+        "path": "data/worlds/ae/ae-vat-period-mainland.json"
+      },
+      {
+        "caseId": "ae3-corporate-tax-periods",
+        "family": "ae_corporate_tax",
+        "path": "data/worlds/ae/ae-free-zone-corporate-tax-periods.json"
+      },
+      {
+        "caseId": "ae3-small-business-relief",
+        "family": "ae_corporate_tax",
+        "path": "data/worlds/ae/ae-small-business-relief-2026-extension.json"
+      },
+      {
+        "caseId": "ae4-payroll-obligations",
+        "family": "ae_payroll_operating",
+        "path": "data/worlds/ae/ae-payroll-obligations.json"
+      },
+      {
+        "caseId": "ae4-operating-obligations",
+        "family": "ae_payroll_operating",
+        "path": "data/worlds/ae/ae-operating-obligations.json"
+      },
+      {
+        "caseId": "ae5-cash-commerce",
+        "family": "ae_cash_commerce",
+        "path": "data/worlds/ae/ae-cash-commerce-lifecycle.json"
+      },
+      {
+        "caseId": "ae6-arabic-pint-evidence",
+        "family": "ae_arabic_pint_evidence",
+        "path": "data/worlds/ae/ae-arabic-pint-evidence.json"
+      }
+    ],
+    "arrivalOrders": [
+      "document_first",
+      "bank_first",
+      "posting_first",
+      "late_document"
+    ],
+    "crashBoundaries": [
+      "post:before",
+      "post:inside",
+      "lock:before",
+      "lock:inside",
+      "archive:before",
+      "archive:inside",
+      "export:before",
+      "export:inside",
+      "retire:before",
+      "retire:inside"
+    ],
+    "mutationContracts": [
+      {
+        "id": "free_zone_designated_qfzp_conflation",
+        "expectedCode": "AE_DESIGNATED_ZONE_CONFLATED_WITH_STANDING"
+      },
+      {
+        "id": "vat_ct_threshold_collision",
+        "expectedCode": "AE_THRESHOLD_BOUNDARY_ON_PROFILE_FORBIDDEN"
+      },
+      {
+        "id": "natural_person_sbr_qfzp_collision",
+        "expectedCode": "AE_PROFILE_PERIOD_OUTCOME_FORBIDDEN"
+      },
+      {
+        "id": "qfzp_breach_horizon_truncated",
+        "expectedCode": "AE_CT_BREACH_HORIZON_INCOMPLETE"
+      },
+      {
+        "id": "vat_fx_evidence_missing_or_wrong_date",
+        "expectedCode": "AE_VAT_FX_RATE_EVIDENCE_REQUIRED"
+      },
+      {
+        "id": "customs_imported_service_lane_swap",
+        "expectedCode": "AE_VAT_IMPORT_LANE_MISMATCH"
+      },
+      {
+        "id": "blocked_input_vat_recovered",
+        "expectedCode": "AE_VAT_APPORTIONMENT_RATE_MISMATCH"
+      },
+      {
+        "id": "unsupported_entertainment_deductibility",
+        "expectedCode": "AE_VAT_JOURNAL_MISMATCH"
+      },
+      {
+        "id": "eosb_gcc_pension_swap",
+        "expectedCode": "AE_EXPAT_EOSB_GCC_PENSION_SWAPPED"
+      },
+      {
+        "id": "pdf_lookalike_promoted_to_pint",
+        "expectedCode": "AE_PINT_LOOKALIKE_PROMOTED"
+      },
+      {
+        "id": "arabic_digit_economics_drift",
+        "expectedCode": "AE_PINT_DIGIT_SYSTEM_ALTERS_ECONOMICS"
+      },
+      {
+        "id": "arabic_bidi_identifier_drift",
+        "expectedCode": "AE_PINT_BIDI_CONTROL_ALTERS_IDENTIFIER"
+      },
+      {
+        "id": "arabic_page_order_reversed",
+        "expectedCode": "AE_PINT_PAGE_ORDER_REVERSED"
+      },
+      {
+        "id": "arrival_order_divergence",
+        "expectedCode": "AE7_ARRIVAL_ORDER_DIVERGENCE"
+      },
+      {
+        "id": "held_evidence_upload_requested",
+        "expectedCode": "AE_EVIDENCE_ALREADY_HELD_UPLOAD_REQUEST"
+      },
+      {
+        "id": "cross_entity_identity_leak",
+        "expectedCode": "AE_CROSS_ENTITY_LINK"
+      },
+      {
+        "id": "same_name_identity_leak",
+        "expectedCode": "AE_CROSS_ENTITY_LINK"
+      },
+      {
+        "id": "derived_id_identity_leak",
+        "expectedCode": "AE_CROSS_ENTITY_LINK"
+      },
+      {
+        "id": "long_id_identity_leak",
+        "expectedCode": "AE_CROSS_ENTITY_LINK"
+      }
+    ],
+    "identityCases": [
+      "cross_entity",
+      "same_name",
+      "derived_id",
+      "long_id"
+    ],
+    "shrink": {
+      "maxEvaluations": 64,
+      "failureClass": "AE7_ARRIVAL_ORDER_DIVERGENCE",
+      "earliestObservableDivergence": "terminal_digest",
+      "consequence": "terminal_inventory_changed"
+    }
+  }
+}

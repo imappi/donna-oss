@@ -1,0 +1,451 @@
+{
+  "version": 1,
+  "sourceBase": "44abb1bc3798fbadbc231ec02049e36d0f493038",
+  "purpose": "Exact direct-import exceptions through wave 7. Named composition roots own all enumerated edges after lifecycle and issuance/mileage extraction. This static inventory does not certify complete policy neutrality.",
+  "countryDirectories": [
+    "ae",
+    "au",
+    "finland",
+    "gb",
+    "singapore",
+    "us"
+  ],
+  "scope": "Production .js/.mjs/.cjs/.jsx/.ts/.tsx below server/donna. Excludes *.test.*, *.spec.*, __tests__, __fixtures__, fixtures and testSupport. Relative static imports, re-exports, literal dynamic imports and literal require calls only. Same-country internal imports are country-owned, not engine debt.",
+  "limitations": [
+    "No transitive graph, country literals, runtime flags, country-named root modules, package aliases, or computed import resolution.",
+    "Country ownership is the explicitly listed implementation directories; adding or relocating a country implementation requires updating the ownership scope.",
+    "Computed imports are reported by the scanner and are outside the edge guarantee."
+  ],
+  "edges": [
+    {
+      "importer": "clientLifecycleRegistry.js",
+      "target": "finland/clientLifecycle.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "clientLifecycleRegistry.js",
+      "target": "singapore/clientLifecycle.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "closePolicyRegistry.js",
+      "target": "ae/closePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "closePolicyRegistry.js",
+      "target": "au/closePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "closePolicyRegistry.js",
+      "target": "finland/closePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "closePolicyRegistry.js",
+      "target": "gb/closePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "closePolicyRegistry.js",
+      "target": "singapore/closePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "closePolicyRegistry.js",
+      "target": "us/closePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "codingPolicyRegistry.js",
+      "target": "ae/codingPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "JN wave 2: named coding-policy composition registry installs country implementations; shared resolver and coder consume its contract."
+    },
+    {
+      "importer": "codingPolicyRegistry.js",
+      "target": "au/codingPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "JN wave 2: named coding-policy composition registry installs country implementations; shared resolver and coder consume its contract."
+    },
+    {
+      "importer": "codingPolicyRegistry.js",
+      "target": "finland/codingPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "JN wave 2: named coding-policy composition registry installs country implementations; shared resolver and coder consume its contract."
+    },
+    {
+      "importer": "codingPolicyRegistry.js",
+      "target": "gb/codingPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "JN wave 2: named coding-policy composition registry installs country implementations; shared resolver and coder consume its contract."
+    },
+    {
+      "importer": "codingPolicyRegistry.js",
+      "target": "singapore/codingPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "JN wave 2: named coding-policy composition registry installs country implementations; shared resolver and coder consume its contract."
+    },
+    {
+      "importer": "codingPolicyRegistry.js",
+      "target": "us/codingPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "JN wave 2: named coding-policy composition registry installs country implementations; shared resolver and coder consume its contract."
+    },
+    {
+      "importer": "inboundCountryRegistry.js",
+      "target": "finland/inboundHandlers.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named ordered country inbound, opening-balance and transport composition; owned adapters preserve existing authority and delivery contracts."
+    },
+    {
+      "importer": "inboundCountryRegistry.js",
+      "target": "gb/inboundHandlers.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named ordered country inbound, opening-balance and transport composition; owned adapters preserve existing authority and delivery contracts."
+    },
+    {
+      "importer": "inboundCountryRegistry.js",
+      "target": "singapore/inboundHandlers.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named ordered country inbound, opening-balance and transport composition; owned adapters preserve existing authority and delivery contracts."
+    },
+    {
+      "importer": "outbound/referenceSchemes.js",
+      "target": "finland/verkkolasku.js",
+      "disposition": "composition",
+      "rationale": "Approved outbound reference-scheme composition edge (country-pack contract gap 8): the registry binds Finnish statutory check-digit arithmetic. This exact binding is legitimate until registration is inverted; no other country import is exempt."
+    },
+    {
+      "importer": "postingAdmissionRegistry.js",
+      "target": "finland/postingAdmission.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "postingAdmissionRegistry.js",
+      "target": "us/postingAdmission.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "US hosted lane (2026-10-01): the posting-admission registry installs the US country-owned coding auto-post verdict (gross-only books: collected sales tax asks the owner instead of posting); it narrows only and never writes."
+    },
+    {
+      "importer": "postingPolicyRegistry.js",
+      "target": "ae/postingPolicy.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 posting composition root binds explicit country capabilities and versioned policy used by existing named ledger writers."
+    },
+    {
+      "importer": "postingPolicyRegistry.js",
+      "target": "au/postingPolicy.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 posting composition root binds explicit country capabilities and versioned policy used by existing named ledger writers."
+    },
+    {
+      "importer": "postingPolicyRegistry.js",
+      "target": "finland/postingPolicy.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 posting composition root binds explicit country capabilities and versioned policy used by existing named ledger writers."
+    },
+    {
+      "importer": "postingPolicyRegistry.js",
+      "target": "gb/postingPolicy.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 posting composition root binds explicit country capabilities and versioned policy used by existing named ledger writers."
+    },
+    {
+      "importer": "postingPolicyRegistry.js",
+      "target": "singapore/postingPolicy.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 posting composition root binds explicit country capabilities and versioned policy used by existing named ledger writers."
+    },
+    {
+      "importer": "postingPolicyRegistry.js",
+      "target": "us/postingPolicy.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 posting composition root binds explicit country capabilities and versioned policy used by existing named ledger writers."
+    },
+    {
+      "importer": "profileValidationRegistry.js",
+      "target": "ae/profileValidation.js",
+      "disposition": "composition",
+      "rationale": "JN wave 3: named profile validation registry installs country-owned field normalizers; shared schema and named profile writer dispatch only through this contract."
+    },
+    {
+      "importer": "profileValidationRegistry.js",
+      "target": "au/profileValidation.js",
+      "disposition": "composition",
+      "rationale": "JN wave 3: named profile validation registry installs country-owned field normalizers; shared schema and named profile writer dispatch only through this contract."
+    },
+    {
+      "importer": "profileValidationRegistry.js",
+      "target": "finland/profileValidation.js",
+      "disposition": "composition",
+      "rationale": "JN wave 3: named profile validation registry installs country-owned field normalizers; shared schema and named profile writer dispatch only through this contract."
+    },
+    {
+      "importer": "profileValidationRegistry.js",
+      "target": "gb/profileValidation.js",
+      "disposition": "composition",
+      "rationale": "JN wave 3: named profile validation registry installs country-owned field normalizers; shared schema and named profile writer dispatch only through this contract."
+    },
+    {
+      "importer": "profileValidationRegistry.js",
+      "target": "singapore/profileValidation.js",
+      "disposition": "composition",
+      "rationale": "JN wave 3: named profile validation registry installs country-owned field normalizers; shared schema and named profile writer dispatch only through this contract."
+    },
+    {
+      "importer": "profileValidationRegistry.js",
+      "target": "us/profileValidation.js",
+      "disposition": "composition",
+      "rationale": "JN wave 3: named profile validation registry installs country-owned field normalizers; shared schema and named profile writer dispatch only through this contract."
+    },
+    {
+      "importer": "provisioningPolicyRegistry.js",
+      "target": "finland/provisioningPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "FI-21: the provisioning registry exposes the country-owned Oy birth chart (tilikartta codes, Finnish names, palette aliases) through the market-neutral birthChart key; the shared palette seed owns the insert, receipt and new-book gate."
+    },
+    {
+      "importer": "provisioningPolicyRegistry.js",
+      "target": "gb/provisioningPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 6 named lifecycle/provisioning/posting/close composition installs country-owned operations; shared named writers retain transaction, authority and persistence contracts."
+    },
+    {
+      "importer": "provisioningPolicyRegistry.js",
+      "target": "singapore/provisioningPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "SG-3C1: the existing provisioning registry exposes only a pure provisional SG chart selection; no default chart, certificate chart, role requirement or writer activation."
+    },
+    {
+      "importer": "sellerRegistrationRegistry.js",
+      "target": "ae/sellerRegistration.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 seller-registration composition root binds country-owned dated registration resolvers; no coding or outbound capability implies registration."
+    },
+    {
+      "importer": "sellerRegistrationRegistry.js",
+      "target": "finland/sellerRegistration.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 seller-registration composition root binds country-owned dated registration resolvers; no coding or outbound capability implies registration."
+    },
+    {
+      "importer": "sellerRegistrationRegistry.js",
+      "target": "gb/sellerRegistration.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 seller-registration composition root binds country-owned dated registration resolvers; no coding or outbound capability implies registration."
+    },
+    {
+      "importer": "sellerRegistrationRegistry.js",
+      "target": "singapore/sellerRegistration.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 seller-registration composition root binds country-owned dated registration resolvers; no coding or outbound capability implies registration."
+    },
+    {
+      "importer": "statutoryObligationRegistry.js",
+      "target": "ae/statutoryObligations.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 statutory obligation composition root binds country-owned adapters; the shared sweep retains enumeration, cadence, provenance and dispatch only."
+    },
+    {
+      "importer": "statutoryObligationRegistry.js",
+      "target": "finland/statutoryObligations.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 statutory obligation composition root binds country-owned adapters; the shared sweep retains enumeration, cadence, provenance and dispatch only."
+    },
+    {
+      "importer": "statutoryObligationRegistry.js",
+      "target": "gb/statutoryObligations.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 statutory obligation composition root binds country-owned adapters; the shared sweep retains enumeration, cadence, provenance and dispatch only."
+    },
+    {
+      "importer": "statutoryRegistry.js",
+      "target": "ae/statutoryDb.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 statutory composition root registers country-owned readers, watches and existing named lifecycle writers; compatibility exports preserve function identity."
+    },
+    {
+      "importer": "statutoryRegistry.js",
+      "target": "finland/statutoryDb.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 statutory composition root registers country-owned readers, watches and existing named lifecycle writers; compatibility exports preserve function identity."
+    },
+    {
+      "importer": "statutoryRegistry.js",
+      "target": "gb/statutoryDb.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 statutory composition root registers country-owned readers, watches and existing named lifecycle writers; compatibility exports preserve function identity."
+    },
+    {
+      "importer": "statutoryRegistry.js",
+      "target": "singapore/gstReturnArtifact.js",
+      "disposition": "composition",
+      "rationale": "SG-6 uses the existing named statutory composition root to expose the country-owned read-only GST F5 draft reader and filename to the authenticated report route; calculation, identity and provenance remain Singapore-owned."
+    },
+    {
+      "importer": "statutoryRegistry.js",
+      "target": "singapore/statutoryDb.js",
+      "disposition": "composition",
+      "rationale": "Named wave 4 statutory composition root registers country-owned readers, watches and existing named lifecycle writers; compatibility exports preserve function identity."
+    },
+    {
+      "importer": "taxVocabularyRegistry.js",
+      "target": "ae/taxVocabulary.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named authored and historical tax-vocabulary composition; structural code membership is not country inference or posting authority."
+    },
+    {
+      "importer": "taxVocabularyRegistry.js",
+      "target": "au/taxVocabulary.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named authored and historical tax-vocabulary composition; structural code membership is not country inference or posting authority."
+    },
+    {
+      "importer": "taxVocabularyRegistry.js",
+      "target": "finland/alvCodes.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named authored and historical tax-vocabulary composition; structural code membership is not country inference or posting authority."
+    },
+    {
+      "importer": "taxVocabularyRegistry.js",
+      "target": "gb/taxVocabulary.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named authored and historical tax-vocabulary composition; structural code membership is not country inference or posting authority."
+    },
+    {
+      "importer": "taxVocabularyRegistry.js",
+      "target": "singapore/codingPolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named authored and historical tax-vocabulary composition; structural code membership is not country inference or posting authority."
+    },
+    {
+      "importer": "taxVocabularyRegistry.js",
+      "target": "singapore/gstCodes.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named authored and historical tax-vocabulary composition; structural code membership is not country inference or posting authority."
+    },
+    {
+      "importer": "taxVocabularyRegistry.js",
+      "target": "us/taxVocabulary.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named authored and historical tax-vocabulary composition; structural code membership is not country inference or posting authority."
+    },
+    {
+      "importer": "xeroTaxPolicyRegistry.js",
+      "target": "gb/xeroTaxTypes.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named country/provider tax-translation composition; authored SG/GB translation stays country-owned and unavailable countries preserve explicit connector codes."
+    },
+    {
+      "importer": "xeroTaxPolicyRegistry.js",
+      "target": "singapore/xeroTaxTypes.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named country/provider tax-translation composition; authored SG/GB translation stays country-owned and unavailable countries preserve explicit connector codes."
+    },
+    {
+      "importer": "issuanceRegistry.js",
+      "target": "finland/issuanceDb.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 7: named operation registry installs country-owned invoice or owner expense implementations; public writers and rate provenance remain authoritative."
+    },
+    {
+      "importer": "ownerExpenseRegistry.js",
+      "target": "finland/ownerExpensePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 7: named operation registry installs country-owned invoice or owner expense implementations; public writers and rate provenance remain authoritative."
+    },
+    {
+      "importer": "ownerExpenseRegistry.js",
+      "target": "gb/ownerExpensePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 7: named operation registry installs country-owned invoice or owner expense implementations; public writers and rate provenance remain authoritative."
+    },
+    {
+      "importer": "ownerExpenseRegistry.js",
+      "target": "us/ownerExpensePolicy.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Wave 7: named operation registry installs country-owned invoice or owner expense implementations; public writers and rate provenance remain authoritative."
+    },
+    {
+      "importer": "api.js",
+      "target": "ae/openingBalanceDb.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named authenticated AE opening intake/read and existing evidence-reply entry points compose the country-owned lifecycle; all journal writes remain on the named common opening writer. U02-S1 real PostgreSQL proves source and owner authority, closure and replay."
+    },
+    {
+      "importer": "db/asks.js",
+      "target": "ae/openingBalanceDb.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "The existing evidence resolver hands the persisted AE opening ask to its owned lifecycle after releasing the generic row lock; it must not generically resolve a confirmation without posting. U02-S1 pins the real database reply consumer and ask/journal atomicity."
+    },
+    {
+      "importer": "db/ledger.js",
+      "target": "ae/openingBalanceDb.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "The authorized thin AE opening adapter validates its exact persisted confirmation and closes the answered ask around the existing private common opening journal body. It does not duplicate journal SQL or select arbitrary jurisdictions."
+    },
+    {
+      "importer": "db/ledger.js",
+      "target": "ae/openingBalances.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "The thin AE opening adapter records the canonical intake digest in the source receipt. This pure digest dependency is confined to the opening adapter; FI/GB payload identities and all non-opening writers remain unchanged."
+    },
+    {
+      "importer": "inboundCountryRegistry.js",
+      "target": "ae/inboundHandlers.js",
+      "boundary": "engine-to-country",
+      "disposition": "composition",
+      "rationale": "Named ordered country inbound composition adds the persisted AE opening reply consumer. The owned adapter rehydrates current identity and actor authority; U02-S1 pins channel reply and actual ask closure."
+    }
+  ]
+}

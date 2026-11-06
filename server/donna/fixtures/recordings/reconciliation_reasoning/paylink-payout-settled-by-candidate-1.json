@@ -1,0 +1,25 @@
+{
+  "lane": "reconciliation_reasoning",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic \u2014 authored from reconciliationLlmCore.js parseProposeMatchesResponse (candidate_ref contract) for the appliance fixture world: the PayLink payout statement (net 1,213.75 GBP, reference PO-88121, payout date 18 Aug) settled by the first eligible money_in candidate, the 19 Aug credit described PAYLINK PAYOUT PO-88121; never a captured provider response",
+  "fixture": "payout_statement",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_match_paylink_payout",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-4-8",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"proposals\":[{\"candidate_ref\":\"candidate_1\",\"confidence\":0.95,\"reasoning\":\"The credit of 1,213.75 GBP on 19 Aug 2026 is described PAYLINK PAYOUT PO-88121 \\u2014 the provider and the payout reference printed on the statement \\u2014 and equals the statement's net payout exactly, one day after the payout date. No other money_in candidate competes for this explanation.\",\"hops\":[\"amount_exact\",\"reference_match\",\"vendor_overlap\",\"processor:paylink\",\"settlement_lag_1d\"]}],\"unmatchable_reason\":null}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+}

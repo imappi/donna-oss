@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Donna Desktop — hardened-runtime entitlements (M0b).
+     Keep this list MINIMAL and justified:
+     - allow-jit: Electron/V8 requires it under hardened runtime.
+     - network.client: the runtime calls model providers (BYO key) and the
+       proxy; network.server is NOT requested — PG listens on a private Unix
+       socket and the runtime on a Unix socket, neither needs the server
+       entitlement (sockets are files, not listeners in the TCC sense).
+     - disable-library-validation: the PG payload dylibs are signed with the
+       same Developer ID, but pg loadable modules resolve at runtime; keep
+       validation off for v1, TIGHTEN after the first notarized build passes
+       kill-tests (try removing it — if PG still boots, delete it here).
+     Anything else (camera, mic, location, address book) stays absent; main
+     denies every permission request anyway. -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <key>com.apple.security.network.client</key>
+  <true/>
+</dict>
+</plist>

@@ -1,0 +1,35 @@
+{
+  "lane": "document_routing",
+  "endpoint_class": "openai",
+  "provenance": "synthetic \u2014 authored from documentRouter.js ROUTER_SCHEMA for the appliance fixture world (artifact/bank-statement and artifact/bank-statement-sep: a Barclays business current account statement); never a captured provider response",
+  "fixture": "bank_statement_two_lines",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_route_kestrel_statement",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_route_kestrel_statement",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"document_family\":\"bank_statement\",\"confidence\":0.98,\"direction_hint\":\"unknown\",\"candidate_families\":[{\"family\":\"bank_statement\",\"confidence\":0.98},{\"family\":\"payment_account_statement\",\"confidence\":0.01}],\"language_hint\":\"en\",\"reason\":\"A Barclays business current account statement for Kestrel Print Studio Ltd with a running balance \\u2014 the client's own bank account.\"}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

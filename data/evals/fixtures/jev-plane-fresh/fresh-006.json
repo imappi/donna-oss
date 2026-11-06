@@ -1,0 +1,278 @@
+{
+  "id": "fresh-006",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "fresh-006",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "LASKU\nLaskun numero: 3041    Laskun päivä: 20.08.2026    Eräpäivä: 03.09.2026    Maksuehto: 14 pv netto\nLaskuttaja: Tampereen Kalustepaja Oy, Y-tunnus 2468013-7\nMaksaja: Kuusela Design Oy\nErittely: Neuvotteluhuoneen pöytä, tilaus 3041\nVeroton yhteensä: 784,86 €\nALV 25,5 %: 200,14 €\nMaksettava yhteensä: 985,00 €\nViitenumero: 3 04104    Tilinumero: FI73 4000 0100 5566 77    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n02.09.2026;02.09.2026;-985,00;Tilisiirto;Maksu;Tampereen Kalustepaja Oy;FI73 4000 0100 5566 78;304104;;202609020011",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n03.09.2026;03.09.2026;+985,00;Palautus;Maksun palautus AC01 virheellinen tilinumero;Tampereen Kalustepaja Oy;;304104;;202609030012",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t3",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n04.09.2026;04.09.2026;-985,00;Tilisiirto;Maksu;Tampereen Kalustepaja Oy;FI73 4000 0100 5566 77;304104;;202609040013",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-02",
+        "money_in_minor": 0,
+        "money_out_minor": 98500,
+        "currency": "EUR",
+        "contact": "Tampereen Kalustepaja Oy",
+        "description": "Tilisiirto Maksu",
+        "raw_description": "02.09.2026;02.09.2026;-985,00;Tilisiirto;Maksu;Tampereen Kalustepaja Oy;FI73 4000 0100 5566 78;304104;;202609020011",
+        "structured_reference": "304104",
+        "instrument": "sepa:e2e:KDO20260902-0011",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-03",
+        "money_in_minor": 98500,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Tampereen Kalustepaja Oy",
+        "description": "Palautus Maksun palautus AC01 virheellinen tilinumero",
+        "raw_description": "03.09.2026;03.09.2026;+985,00;Palautus;Maksun palautus AC01 virheellinen tilinumero;Tampereen Kalustepaja Oy;;304104;;202609030012",
+        "structured_reference": "304104",
+        "instrument": "sepa:e2e:KDO20260902-0011",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t3",
+        "source_id": "bank-t3",
+        "date": "2026-09-04",
+        "money_in_minor": 0,
+        "money_out_minor": 98500,
+        "currency": "EUR",
+        "contact": "Tampereen Kalustepaja Oy",
+        "description": "Tilisiirto Maksu",
+        "raw_description": "04.09.2026;04.09.2026;-985,00;Tilisiirto;Maksu;Tampereen Kalustepaja Oy;FI73 4000 0100 5566 77;304104;;202609040013",
+        "structured_reference": "304104",
+        "instrument": "sepa:e2e:KDO20260904-0013",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 98500,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 98500,
+        "bank_currency": "EUR",
+        "gross_minor": 98500,
+        "fee_minor": 0
+      },
+      {
+        "id": "link-2-t3",
+        "kind": "reference",
+        "source_id": "bank-t3",
+        "transaction_id": "tx-t3",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 98500,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 98500,
+        "bank_currency": "EUR",
+        "gross_minor": 98500,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-20",
+      "due_date": "2026-09-03",
+      "amount_minor": 98500,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "304104",
+      "counterparty": "Tampereen Kalustepaja Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "bank-t3",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "bank-t3",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2",
+        "tx-t3"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "fresh",
+    "source_family": "fresh-fi-supplier-transfer-bounced-and-resent",
+    "family_description": "A Finnish Oy pays a supplier bill by SEPA transfer with the viite; the receiving bank returns it (wrong IBAN) and the payment is re-sent.",
+    "market": "FI",
+    "variant": "c",
+    "error_mode": "reversal/refund: the return carries the original end-to-end id; the re-sent transfer is a new instrument",
+    "label_reason": "The bounced transfer is reversed by its return; the re-sent transfer to the corrected IBAN carries the viite and settles the bill.",
+    "terminal_reason": "The bounced transfer is reversed by its return; the re-sent transfer to the corrected IBAN carries the viite and settles the bill.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    },
+    "tx-t3": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t3",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 98500
+      }
+    ],
+    "terminal": "RESOLVED"
+  }
+}

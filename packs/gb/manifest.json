@@ -1,0 +1,383 @@
+{
+  "pack": { "id": "gb", "country": "GB", "version": 4 },
+  "currency": { "home": "GBP" },
+  "locale": { "number_locale": "en-GB", "date_format": "dmy" },
+  "languages": { "default": "en", "supported": ["en"] },
+  "reference": {
+    "scheme": "none",
+    "note": "The UK has no national structured payment reference in the FI viitenumero sense. Payers quote the invoice number as the reference on a Faster Payments/BACS transfer, so settlement matching relies on the invoice number in the bank narrative plus amount/date — not on a check-digit scheme. Declared 'none' explicitly rather than omitted: an absent scheme is a fact about the market, not a gap in the pack."
+  },
+  "einvoice": {
+    "lane": "none",
+    "operator": "planned",
+    "note": "No UK-wide B2B e-invoicing mandate applies today; Peppol delivery is established for NHS and wider public-sector procurement, and the UK government has consulted on broader e-invoicing adoption. Declared lane 'none' with operator 'planned' so the manifest's shape is honest before any lane ships: the shape is committed, the capability is not claimed. AS OF 2026-07-27 — RE-CHECK before relying on this for a public-sector customer, since that is the segment where Peppol is already expected."
+  },
+  "tax": {
+    "vocabulary": "gb_vat",
+    "note": "Consumed as-is from taxVocabularies.js (GB_VAT_TAX_VOCABULARY). Unlike FI — whose ALV vocabulary predates the registry and routes via FINLAND_ALV_CODING — GB is a registry-native marker, so this pack names it and core resolves it. NOTE: routing is gated on JURISDICTION_TAX_CODING (envFallback () => false); until a client has a stage row, a GB client's coder still receives the SG default vocabulary."
+  },
+  "reconciliation": {
+    "materiality_ceiling": 500,
+    "disposition_ceiling": 500
+  },
+  "payment_rails": [
+    {
+      "kind": "sort_code_account",
+      "note": "Sort code + account number over Faster Payments is the UK B2B norm and the primary rail. The payer quotes the invoice number as their reference; there is no structured scheme to mint (see reference.scheme)."
+    },
+    {
+      "kind": "iban",
+      "note": "Secondary rail for cross-border payers. A UK IBAN exists but domestic UK payers overwhelmingly use sort code + account number, so this is declared after it."
+    },
+    {
+      "kind": "payment_link",
+      "instructions_template": {
+        "en": "Pay securely online: {{payment_link_url}}"
+      },
+      "note": "Where a pay-link exists it replaces the standing payment_instructions block, exactly as on the US lane. It is also the only deterministic settlement signal available to this pack, since GB has no reference scheme — which makes the link materially more load-bearing here than in FI, where the viite carries that job."
+    }
+  ],
+  "correspondence": {
+    "languages": ["en"],
+    "tone": "professional_friendly",
+    "dunning_cadence": [
+      { "step": 1, "days_after_due": 7, "tone": "friendly", "template": "reminder_step_1" },
+      { "step": 2, "days_after_due": 14, "tone": "firm", "template": "reminder_step_2" },
+      { "step": 3, "days_after_due": 30, "tone": "final", "template": "reminder_step_3" }
+    ],
+    "escalation": { "after_step": 3, "to": "owner" },
+    "quote_follow_up_cadence": [
+      { "step": 1, "days_after_sent": 7, "tone": "friendly", "template": "quote_follow_up_1" }
+    ],
+    "statutory": {
+      "late_interest": {
+        "source": "Late Payment of Commercial Debts (Interest) Act 1998, as amended — statutory interest on qualifying commercial debts runs at the Bank of England base rate plus 8 percentage points, alongside a fixed sum compensation per invoice banded by debt size",
+        "jurisdiction": "gb",
+        "as_of": "2026-07-27",
+        "basis": "reference_rate_plus_margin_plus_fixed_compensation",
+        "rate_percent": null,
+        "fixed_compensation": null,
+        "note": "The RULE is provenanced here; the numeric BoE base rate is deliberately NOT carried until it is recorded from the Bank of England with its own as_of date, and the fixed-compensation bands are likewise left null until recorded from primary source. Same posture as the FI pack's D5 rule: no Phase-1 template states an interest amount or a fixed sum, and any future interest-bearing reminder requires these filled with provenance — never a computed or remembered number. The UK differs from FI in carrying BOTH an interest rate and a per-invoice fixed sum, which is why the basis names both."
+      },
+      "constraints": [
+        "Phase 1: dunning is B2B-only, reminder tone. No interest and no fixed-sum compensation render in any reminder — late_interest above carries the statutory rule for the later slice that earns them.",
+        "Consumer (B2C) debt collection in the UK is separately regulated and is explicitly out of scope until reviewed. Statutory interest under the 1998 Act applies to commercial debts between businesses, not to consumer debts.",
+        "Donna does not assert a right to interest or compensation on the owner's behalf. Claiming statutory interest is the owner's commercial decision, and a reminder that asserted it would be Donna taking a position the owner has not taken."
+      ]
+    }
+  },
+  "documents": {
+    "mandatory_fields": {
+      "invoice": [
+        "invoice_number",
+        "issue_date",
+        "supply_date",
+        "due_date",
+        "total",
+        "total_excluding_tax",
+        "currency",
+        "seller_name",
+        "seller_address",
+        "buyer_name",
+        "buyer_address",
+        "line_description",
+        "line_quantity",
+        "line_unit_price",
+        "payment_instructions"
+      ],
+      "invoice_when_tax_registered": [
+        "tax_amount",
+        "seller_tax_registration_id",
+        "line_tax_rate"
+      ],
+      "invoice_forbidden_when_not_tax_registered": [
+        "seller_tax_registration_id",
+        "line_tax_rate"
+      ],
+      "conditional_floor_note": "SPLIT 2026-07-27 (gap 9). The list above is the floor for EVERY UK invoice; 'invoice_when_tax_registered' adds what a full VAT invoice requires on top, and 'invoice_forbidden_when_not_tax_registered' states what a NON-registered business must not show. This is NOT a trim — every field previously declared is still required of the invoices that must carry it. It is the opposite: the flat list conflated 'UK invoice' with 'UK VAT invoice', so core refused to build any invoice at all for a business below the registration threshold, which has no VAT number and must not display a VAT rate. The forbidden list is the half a required-only contract cannot express: showing 'line_tax_rate': 0 would satisfy a required-check while misrepresenting the seller's VAT status, so absence is checked rather than a zero being accepted. Selecting a limb requires seller.taxRegistered to be resolved true/false; core REFUSES rather than inferring it from the presence of a VAT number, since an absent number may simply be unrecorded and guessing 'not registered' would understate output VAT.",
+      "note": "A UK VAT invoice carries materially more mandatory content than the FI or US packs declare — notably the supplier's VAT registration number (seller_tax_registration_id), the time of supply / tax point as distinct from the issue date (supply_date), and the VAT amount shown separately in sterling (tax_amount + total_excluding_tax). Field names are core's jurisdiction-neutral vocabulary, not GB vocabulary: 'tax point' maps onto supply_date, 'VAT number' onto seller_tax_registration_id. Sourced from the UK VAT invoice requirements (VAT Regulations 1995 reg. 14 / VAT Notice 700 §16); as of 2026-07-27. VERIFY against primary source before any GB invoice is issued to a real counterparty — an invoice missing a mandatory field is not a valid VAT invoice for the customer's input-tax recovery.",
+      "line_tax_note": "line_tax_rate is the per-line VAT rate a UK VAT invoice must show against each line (VAT Notice 700 \u00a716). It was the pack's declared known_gap until 2026-07-27, when the line model gained rate and tax per line; a mixed-rate GB invoice is now issuable. Declaring it here makes the requirement enforced rather than advisory: the builder refuses a GB invoice whose lines do not carry BOTH a rate and a tax amount, and refuses again if the line tax amounts do not sum to the declared taxTotal. Both halves are declared by the caller, never computed \u2014 rate \u00d7 net is not always the tax (rounding rules, margin schemes), and computing it would be the Keep layer inventing a statutory number.",
+      "line_quantity_note": "line_quantity and line_unit_price DECLARED 2026-08-30 (gap 13, surfaced by the AE pack's Article 59 survey): the quantity of goods or extent of services and the unit price excluding VAT that Notice 700 \u00a716 requires a VAT invoice to show per line. The builder has always validated and rendered both \u2014 this pack simply could not DECLARE the requirement until the field vocabulary carried the names. Placed in the base floor alongside supply_date and total_excluding_tax per this pack's authored convention: sensible commercial content on every UK invoice, statutory on the VAT invoice, forbidden on neither limb."
+    },
+    "quote_number_prefix": "Q",
+    "invoice_pdf": { "page": "a4" },
+    "quote_pdf": { "page": "a4" },
+    "templates": {
+      "invoice_pdf": {
+        "en": {
+          "subject": "Invoice {{invoice_number}}",
+          "body": "{{owner_business_name}}\n\nInvoice {{invoice_number}}\nBilled to: {{counterparty_name}}\nIssued: {{issue_date}}\nDue: {{due_date}}\n\n{{lines_block}}\n\nTotal due: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}"
+        }
+      },
+      "quote_pdf": {
+        "en": {
+          "subject": "Quote {{quote_number}}",
+          "body": "{{owner_business_name}}\n\nQuote {{quote_number}}\nPrepared for: {{counterparty_name}}\nIssued: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}"
+        }
+      },
+      "invoice_issue": {
+        "en": {
+          "subject": "Invoice {{invoice_number}} from {{owner_business_name}} — {{invoice_total}} {{currency}}",
+          "body": "Hi {{counterparty_name}},\n\nPlease find your invoice from {{owner_business_name}} below.\n\nInvoice {{invoice_number}}\nIssued: {{issue_date}}\nDue: {{due_date}}\n\n{{lines_block}}\n\nTotal due: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}\n\nPlease quote invoice {{invoice_number}} as the payment reference so we can match it up.\n\nIf anything about this invoice looks off, just reply to this email and we'll sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis invoice was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "quote_send": {
+        "en": {
+          "subject": "Quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nThank you for your interest — here is your quote from {{owner_business_name}}.\n\nQuote {{quote_number}}\nIssued: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}\n\nTo accept, just reply to this email. Questions and changes are welcome too.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis quote was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "quote_follow_up_1": {
+        "en": {
+          "subject": "Following up on quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nJust checking in on quote {{quote_number}} for {{quote_total}} {{currency}}, sent on {{issue_date}} and valid until {{valid_until}}.\n\nIf you'd like to go ahead, have questions, or want any changes, just reply to this email.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis follow-up was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "reminder_step_1": {
+        "en": {
+          "subject": "Reminder: invoice {{invoice_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nA quick reminder that invoice {{invoice_number}} for {{amount_due}} {{currency}} fell due on {{due_date}} — that's {{days_overdue}} days ago.\n\nPayment details:\n{{payment_instructions}}\n\nPlease quote invoice {{invoice_number}} as the payment reference.\n\nIf it's already paid, or if something about the invoice isn't right, just reply and we'll sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nSent by Donna on behalf of {{owner_business_name}}. {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_2": {
+        "en": {
+          "subject": "Second reminder: invoice {{invoice_number}} is {{days_overdue}} days overdue",
+          "body": "Hi {{counterparty_name}},\n\nInvoice {{invoice_number}} for {{amount_due}} {{currency}} was due on {{due_date}} and is now {{days_overdue}} days overdue. This is our second reminder.\n\nPayment details:\n{{payment_instructions}}\n\nPlease quote invoice {{invoice_number}} as the payment reference.\n\nIf there's a problem with the invoice, or payment is on its way, please reply and let us know.\n\nBest regards,\n{{owner_business_name}}\n\n--\nSent by Donna on behalf of {{owner_business_name}}. {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_3": {
+        "en": {
+          "subject": "Final reminder: invoice {{invoice_number}}, {{days_overdue}} days overdue",
+          "body": "Hi {{counterparty_name}},\n\nInvoice {{invoice_number}} for {{amount_due}} {{currency}} was due on {{due_date}} and is now {{days_overdue}} days overdue. This is our final reminder before we raise it with {{owner_business_name}} directly.\n\nPayment details:\n{{payment_instructions}}\n\nPlease quote invoice {{invoice_number}} as the payment reference.\n\nIf payment has been made, or there is a dispute we should know about, please reply today.\n\nBest regards,\n{{owner_business_name}}\n\n--\nSent by Donna on behalf of {{owner_business_name}}. {{unsubscribe_url}}"
+        }
+      },
+      "payable_notice": {
+        "en": {
+          "subject": "Heads up: {{counterparty_name}}'s bill is due {{due_date}}",
+          "body": "Hi,\n\nA supplier bill for {{owner_business_name}} is coming due:\n\nSupplier: {{counterparty_name}}\nAmount: {{amount_due}} {{currency}}\nDue: {{due_date}} (in {{days_until_due}} days)\n\nWant to schedule the payment? Donna doesn't move money — this note is only so the bill doesn't slip. If it's already paid, looks wrong, or shouldn't be tracked, just reply and Donna will record it.\n\n— Donna, for {{owner_business_name}}"
+        }
+      }
+    }
+  },
+  "chart_of_accounts": {
+    "note": "The fallback coding menu for a UK client with no synced chart of accounts, replacing the Singapore-flavoured XERO_ACCOUNT_OPTIONS list ('CPF payable', no VAT and no PAYE/NIC account) that every unsynced client in every market was coded against. VAT, corporation tax and PAYE/NIC each get their own account rather than sharing one 'Tax payable' bucket, because they are separately assessed, separately paid and separately reconciled — collapsing them is exactly what made the SG list unusable here.",
+    "fallback_accounts": [
+      {
+        "name": "Sales",
+        "role": "revenue.operating"
+      },
+      {
+        "name": "Other income",
+        "role": "revenue.other"
+      },
+      {
+        "name": "Interest income",
+        "role": "revenue.interest"
+      },
+      {
+        "name": "Cost of sales",
+        "role": "expense.cost_of_sales"
+      },
+      {
+        "name": "Operating supplies",
+        "role": "expense.operating_supplies"
+      },
+      {
+        "name": "Software subscriptions",
+        "role": "expense.software"
+      },
+      {
+        "name": "Travel",
+        "role": "expense.travel"
+      },
+      {
+        "name": "Meals and entertainment",
+        "role": "expense.meals"
+      },
+      {
+        "name": "Marketing",
+        "role": "expense.marketing"
+      },
+      {
+        "name": "Professional fees",
+        "role": "expense.professional_fees"
+      },
+      {
+        "name": "Accounting fees",
+        "role": "expense.accounting_fees"
+      },
+      {
+        "name": "Statutory filing fees",
+        "role": "expense.statutory_fees"
+      },
+      {
+        "name": "Repairs and maintenance",
+        "role": "expense.repairs_maintenance"
+      },
+      {
+        "name": "Fines and penalties",
+        "role": "expense.fines_penalties"
+      },
+      {
+        "name": "Payroll",
+        "role": "expense.payroll"
+      },
+      {
+        "name": "Rent",
+        "role": "expense.rent"
+      },
+      {
+        "name": "Utilities",
+        "role": "expense.utilities"
+      },
+      {
+        "name": "Telecommunications",
+        "role": "expense.telecom"
+      },
+      {
+        "name": "Insurance",
+        "role": "expense.insurance"
+      },
+      {
+        "name": "Office expenses",
+        "role": "expense.office"
+      },
+      {
+        "name": "Motor expenses",
+        "role": "expense.motor"
+      },
+      {
+        "name": "Bank fees",
+        "role": "expense.bank_fees"
+      },
+      {
+        "name": "Platform and processor fees",
+        "role": "expense.platform_fees"
+      },
+      {
+        "name": "Foreign exchange gain/loss",
+        "role": "expense.fx"
+      },
+      {
+        "name": "Director loan",
+        "role": "liability.director_loan"
+      },
+      {
+        "name": "Loan payable",
+        "role": "liability.loan"
+      },
+      {
+        "name": "Owner drawings",
+        "role": "equity.owner_drawings"
+      },
+      {
+        "name": "Share capital",
+        "role": "equity.share_capital"
+      },
+      {
+        "name": "Share premium",
+        "role": "equity.share_premium"
+      },
+      {
+        "name": "Retained earnings",
+        "role": "equity.retained_earnings"
+      },
+      {
+        "name": "Intercompany transfer",
+        "role": "clearing.intercompany"
+      },
+      {
+        "name": "Payment processor clearing",
+        "role": "clearing.payment_processor"
+      },
+      {
+        "name": "VAT payable",
+        "role": "liability.sales_tax_payable"
+      },
+      {
+        "name": "Corporation tax payable",
+        "role": "liability.tax_payable"
+      },
+      {
+        "name": "PAYE and National Insurance payable",
+        "role": "liability.payroll_payable"
+      },
+      {
+        "name": "Pension contributions",
+        "role": "expense.payroll"
+      },
+      {
+        "name": "Suspense",
+        "role": "control.suspense"
+      }
+    ]
+  },
+  "obligations": {
+    "survey": "surveyed",
+    "as_of": "2026-07-27",
+    "note": "Surveyed for the GB ICP shape: a UK-resident single-entity business, limited company or sole trader, inside the narrow ICP (no unscoped inventory/COGS, no book remediation). The UK's statutory duties are declared here in full because that is what the market REQUIRES, not trimmed to what core can serve today; as of 2026-07-27 exactly ONE (gb_vat_registration_threshold) is 'bound' and every other entry remains 'declared_unbuilt'. The engine reports each one on every statutory_watches run rather than silently skipping it, and GB is not production-ready for statutory work until they are bound. Trimming this list to fit the engine is precisely how the country corner gets built. VERIFY each entry against primary source before any GB client is onboarded onto a statutory lane — this survey is a reading taken on as_of, not a standing guarantee.",
+    "items": [
+      {
+        "id": "gb_vat_registration_threshold",
+        "name": "VAT registration threshold watch",
+        "authority": "HM Revenue & Customs",
+        "source": "Value Added Tax Act 1994, Schedule 1 — compulsory VAT registration once taxable turnover exceeds the registration threshold on a rolling 12-month basis, or is expected to exceed it within the next 30 days",
+        "as_of": "2026-07-27",
+        "status": "bound",
+        "binding": "gb_vat_threshold_escalation",
+        "note": "BOUND 2026-07-27 — the first GB statutory duty core can serve, and the honest test that the obligations leg generalises rather than being a Finnish module with a British twin. The direct sibling of the FI pack's fi_alv_registration_threshold: the same duty shape, two markets, one engine. The numeric thresholds are deliberately NOT carried here — they belong with the deterministic watch that reads them (server/donna/gb/vatRegistrationThreshold.js), provenanced there with an as_of, the same posture as FI. Two shape differences forced their own logic rather than a re-parameterised FI watch: the backward limb is a ROLLING 12 months (FI's is a calendar year), and the forward-looking limb (VATA 1994 Sch 1 para 1(1)(b)) tests supplies in the next 30 days ALONE — it has no FI analogue at all. That forward limb turns on the OWNER'S EXPECTATION, which Donna cannot read from a ledger, so the watch reports only a conservative committed-supplies floor and the ask asks the owner for the expectation itself."
+      },
+      {
+        "id": "gb_vat_return_mtd",
+        "name": "VAT return under Making Tax Digital",
+        "authority": "HM Revenue & Customs",
+        "source": "Value Added Tax (Amendment) Regulations 2018 (SI 2018/261) and VAT Notice 700/22 — a VAT-registered business must keep digital records and file its VAT returns through MTD-compatible software over the HMRC API; returns are periodic (commonly quarterly) with payment due after the period end",
+        "as_of": "2026-07-27",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Materially harder than its FI counterpart and the reason not to assume the ALV return generalises for free: MTD is an API-submission duty, not only a computation duty — digital record-keeping, digital links, and an authorised software submission are part of the obligation itself. The FI side already has a transmit lane (alvReturnTransmit/omavero); the shape to reuse is that lane's, not the ALV computation's."
+      },
+      {
+        "id": "gb_confirmation_statement",
+        "name": "Companies House confirmation statement",
+        "authority": "Companies House",
+        "source": "Companies Act 2006, section 853A — a company must deliver a confirmation statement at least once every 12 months confirming the information Companies House holds is up to date",
+        "as_of": "2026-07-27",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Limited-company only; not applicable to a sole trader. Nearest FI analogue is the annual-return / ownership surface, but the duty is a REGISTRY confirmation rather than a tax filing, so it is genuinely its own obligation and not a re-parameterisation."
+      },
+      {
+        "id": "gb_annual_accounts",
+        "name": "Companies House annual accounts",
+        "authority": "Companies House",
+        "source": "Companies Act 2006, Part 15 — a company must prepare and deliver annual accounts for each financial year within the statutory filing period",
+        "as_of": "2026-07-27",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Limited-company only. The FI sibling is the tilinpäätös/annual-return arc, which is itself not yet on this leg — so this entry is unbuilt on BOTH sides and is a fair test of whether the leg generalises before either is built."
+      },
+      {
+        "id": "gb_corporation_tax_return",
+        "name": "Corporation tax return and payment",
+        "authority": "HM Revenue & Customs",
+        "source": "Finance Act 1998, Schedule 18 and the Corporation Tax Acts — a company must file a company tax return (CT600) after the end of its accounting period and pay any corporation tax due; the payment deadline falls before the filing deadline for a company outside the quarterly-instalment regime",
+        "as_of": "2026-07-27",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Limited-company only. The specific filing and payment deadlines are deliberately described rather than encoded — no core code computes them until the obligation is bound, and the numbers must be recorded from primary source with their own as_of when it is. The FI sibling is ennakkovero plus the corporate return, which sit on hardcoded modules today."
+      },
+      {
+        "id": "gb_self_assessment_income_tax",
+        "name": "Self Assessment income tax (sole trader)",
+        "authority": "HM Revenue & Customs",
+        "source": "Taxes Management Act 1970 and the Making Tax Digital for Income Tax regulations — a sole trader must report business profits under Self Assessment, with MTD for Income Tax quarterly updates applying to businesses above the qualifying income threshold on the phased timetable",
+        "as_of": "2026-07-27",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Sole-trader only, and included so the survey is honest for the whole GB ICP rather than for limited companies alone — the FI pack's toiminimi lane has the same split. The MTD for Income Tax timetable is phased by qualifying income and is the single entry here most likely to have moved since as_of: RE-CHECK before relying on it."
+      }
+    ]
+  },
+  "platforms": ["xero", "qbo"]
+}

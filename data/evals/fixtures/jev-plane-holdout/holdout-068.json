@@ -1,0 +1,132 @@
+{
+  "id": "holdout-068",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-068",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "INVOICE 8960\nFrom: Cloudbench Software Ltd\nVAT registration: GB 998 7766 55\nBill to: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nInvoice date: 14/09/2026    Due date: 01/10/2026    Terms: charged to card on file on the due date\nDescription: Team plan, October 2026 (5 seats)\nNet total: £59.90\nVAT @ 20%: £11.98\nTOTAL DUE: £71.88\nPayment: bank transfer to Cloudbench Software Ltd, quoting 8960.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-09-14",
+      "due_date": "2026-10-01",
+      "amount_minor": 7188,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "8960",
+      "counterparty": "Cloudbench Software Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "not_due",
+      "reason": "Invoice due after the snapshot date; the card is charged on the due date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-gb-saas-subscription-card-charges",
+    "family_description": "A SaaS supplier charges the company card monthly and emails a receipt naming the bill and card last four; two months' bills are open.",
+    "market": "GB",
+    "variant": "b",
+    "error_mode": "reference-free card path with sibling month; next month not due; identical charges without receipts",
+    "label_reason": "The October bill has been issued in advance and is not due until 1 October; the work item is not due.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "not_admitted"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": false,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {},
+  "expected": {
+    "route": "not_admitted",
+    "proposals": []
+  }
+}

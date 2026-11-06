@@ -1,0 +1,25 @@
+{
+  "lane": "bank_statement_extraction",
+  "endpoint_class": "openai",
+  "provenance": "synthetic — authored from the AR-5B attributed bilingual AE statement and bankStatementVision strict schema; never a captured provider response",
+  "fixture": "bank-statement-native",
+  "status": 200,
+  "body": {
+    "id": "resp_ar5b_ae_statement",
+    "object": "response",
+    "status": "completed",
+    "model": "recorded-provider-model",
+    "output": [{
+      "id": "msg_ar5b_ae_statement",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [{
+        "type": "output_text",
+        "annotations": [],
+        "text": "{\"transactions\":[{\"date\":\"2026-08-21\",\"counterparty\":\"Desert Bloom Café / مقهى زهرة الصحراء\",\"payment_method\":null,\"message\":null,\"reference\":\"PAY-AE-2026-778899001122\",\"description\":\"Desert Bloom Café / مقهى زهرة الصحراء\",\"direction\":\"in\",\"amount\":2520,\"currency\":\"AED\",\"balance\":12520},{\"date\":\"2026-08-22\",\"counterparty\":\"Al Noor Stationery / مكتبة النور\",\"payment_method\":null,\"message\":null,\"reference\":\"RCPT-AE-883104\",\"description\":\"Al Noor Stationery / مكتبة النور\",\"direction\":\"out\",\"amount\":315,\"currency\":\"AED\",\"balance\":12205}],\"statement_summary\":{\"opening_balance\":10000,\"closing_balance\":12205,\"total_deposits\":2520,\"total_payouts\":315,\"currency\":\"AED\",\"period_start\":\"2026-08-01\",\"period_end\":\"2026-08-31\",\"account_identifier\":\"AE070331234567890123456\"}}"
+      }]
+    }],
+    "usage": { "input_tokens": 0, "output_tokens": 0, "total_tokens": 0 }
+  }
+}

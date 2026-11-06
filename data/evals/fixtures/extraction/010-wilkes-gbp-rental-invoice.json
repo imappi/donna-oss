@@ -1,0 +1,37 @@
+{
+  "id": "010-wilkes-gbp-rental-invoice",
+  "client": "wilkes",
+  "title": "GBP rental invoice from the firm — happy path baseline for Wilkes",
+  "tags": [
+    "happy_path",
+    "sales_invoice",
+    "gbp",
+    "wilkes",
+    "synthetic_identity"
+  ],
+  "narrative": "Wilkes Properties (synthetic UK / GBP stand-in) issues a monthly rent invoice to a tenant in GBP. Baseline so Wilkes is not represented only by its cross-currency hard case; confirms the unified mode does not flip the firm's own AR rental invoice into AP, and gives a clean single-currency GBP case for the UK client.",
+  "upload_time_document_type": "sales_invoice",
+  "client_identity": {
+    "display_name": "Wilkes Properties Ltd",
+    "legal_names": [
+      "Wilkes Properties Ltd"
+    ]
+  },
+  "document_input": {
+    "filename": "010-wilkes-gbp-rental-invoice.pdf",
+    "mimeType": "application/pdf",
+    "base64_synthetic_text_pdf": "JVBERi0xLjcKJYGBgYEKCjEgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFsgNSAwIFIgXQovQ291bnQgMQo+PgplbmRvYmoKCjIgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDEgMCBSCj4+CmVuZG9iagoKMyAwIG9iago8PAovUHJvZHVjZXIgPEZFRkYwMDcwMDA2NDAwNjYwMDJEMDA2QzAwNjkwMDYyMDAyMDAwMjgwMDY4MDA3NDAwNzQwMDcwMDA3MzAwM0EwMDJGMDAyRjAwNjcwMDY5MDA3NDAwNjgwMDc1MDA2MjAwMkUwMDYzMDA2RjAwNkQwMDJGMDA0ODAwNkYwMDcwMDA2NDAwNjkwMDZFMDA2NzAwMkYwMDcwMDA2NDAwNjYwMDJEMDA2QzAwNjkwMDYyMDAyOT4KL01vZERhdGUgKEQ6MjAyNjA2MDgwMDAwMDBaKQovQ3JlYXRvciA8RkVGRjAwNzAwMDY0MDA2NjAwMkQwMDZDMDA2OTAwNjIwMDIwMDAyODAwNjgwMDc0MDA3NDAwNzAwMDczMDAzQTAwMkYwMDJGMDA2NzAwNjkwMDc0MDA2ODAwNzUwMDYyMDAyRTAwNjMwMDZGMDA2RDAwMkYwMDQ4MDA2RjAwNzAwMDY0MDA2OTAwNkUwMDY3MDAyRjAwNzAwMDY0MDA2NjAwMkQwMDZDMDA2OTAwNjIwMDI5PgovQ3JlYXRpb25EYXRlIChEOjIwMjYwNjA4MDAwMDAwWikKPj4KZW5kb2JqCgo0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwo+PgplbmRvYmoKCjUgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAxIDAgUgovUmVzb3VyY2VzIDw8Ci9Gb250IDw8Ci9IZWx2ZXRpY2EtNzA5ODQ4MDc4OSA0IDAgUgovSGVsdmV0aWNhLTk3NDI2ODI1NjggNCAwIFIKL0hlbHZldGljYS0yMDAwODA1OTg2IDQgMCBSCi9IZWx2ZXRpY2EtOTc1MDQ2OTIwNyA0IDAgUgovSGVsdmV0aWNhLTc1NzI1MzM2ODYgNCAwIFIKL0hlbHZldGljYS04NDUwMTgwMTA3IDQgMCBSCi9IZWx2ZXRpY2EtODY1OTg3MTg3OCA0IDAgUgovSGVsdmV0aWNhLTU4MjQ2NjIzMzggNCAwIFIKL0hlbHZldGljYS0xODQ4NTI0MTc1IDQgMCBSCi9IZWx2ZXRpY2EtNzg4ODkxMTA2MyA0IDAgUgovSGVsdmV0aWNhLTk3OTM0NDkyOSA0IDAgUgovSGVsdmV0aWNhLTI3MDgxOTk5NTYgNCAwIFIKL0hlbHZldGljYS02NzAzNjgyNjY0IDQgMCBSCi9IZWx2ZXRpY2EtNzM1NTY5NDg3IDQgMCBSCi9IZWx2ZXRpY2EtODc4NDAxNTcxMSA0IDAgUgovSGVsdmV0aWNhLTk2NjgzMzM0OTMgNCAwIFIKL0hlbHZldGljYS0yNTA4MTIwNDQgNCAwIFIKL0hlbHZldGljYS0xMjc1MzIyODMyIDQgMCBSCi9IZWx2ZXRpY2EtNzcyMDk2NjI5NSA0IDAgUgovSGVsdmV0aWNhLTQ1MjUwNzI3NjIgNCAwIFIKPj4KL1hPYmplY3QgPDwKPj4KL0V4dEdTdGF0ZSA8PAo+Pgo+PgovTWVkaWFCb3ggWyAwIDAgNTk1IDg0MiBdCi9Bbm5vdHMgWyBdCi9Db250ZW50cyBbIDYgMCBSIF0KPj4KZW5kb2JqCgo2IDAgb2JqCjw8Ci9GaWx0ZXIgL0ZsYXRlRGVjb2RlCi9MZW5ndGggNjQyCj4+CnN0cmVhbQp4nK1WTavUQBC851fkLIg9Pf01IIK7m8WDFyF/QOQpih6eiL/f6mRXfbojCb4Mm80kk+maquqe3A+HeaAx29cPw7NXd5+/3337+O7tU6cWEuTRxlLG+f3AMs6vh7IMLaPSGETj/GV4ri5NjnIQ1cqkpCxnJfRYBU+Wu3LEtbwY50/D/GSY5uHNcN+L3FzYgtWiF9lDlshysmKTVQtTry44Mx+BQXG3Zd8EsQ/W0HcTO9tpGwYmoiBtYV0MgJcYtq4JjFhj8u58yiubLCoT2CqClYC/CYs447+KbovlYEFrktKNVW0H9hClElT+gZ1XJwh4dgPLDZooFgvG68v0xKLABLWqHfNJKudsBygmqzrpEVxDLw5N5XL0BCu0jSgNankJ77uGVtcgws12dQ1TlXRRLTXdUxePFUtfwWNArYk6R9zy3za0GixmXGsXrcUefxXkKpxTXLvzOd/UCD21k3FiX7SCU/lUuRJ+hiuqeZSN3ouIVgpZ7eLQ1XsicAAYy5i32gMEupw3YmjeKgoPdwuXycWugqUnBR0oNyDExvLhFKW1pt0UNJYd8poTTMZm0p2PVrvI2fK4JmCadfplVm+/rQoy/2F64ulmI8EAXRjhYxW8j5F53miKiihNols/tPGeeoTyT0Udk/Xm89VjyFc1ziqEHzK457V97f/IaGaBfJLWzRC1y75qUnSphykZK7fHwH9FvxhcauxDj1ejYJKuD7FxreAfmfQb1Mde8IUd3yJJZxc97ym6jk0LcnLrFl0tl02dMvdQZtdspHWrsJPXZOdnHTrbdMlZZC+yEuO2IRF8a+FFt+7KUPavKbFUO3wk1L+VyWrgwIr68TDyDwPuL/QKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDcKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE2IDAwMDAwIG4gCjAwMDAwMDAwNzYgMDAwMDAgbiAKMDAwMDAwMDEyNiAwMDAwMCBuIAowMDAwMDAwNTk2IDAwMDAwIG4gCjAwMDAwMDA2OTQgMDAwMDAgbiAKMDAwMDAwMTQxOCAwMDAwMCBuIAoKdHJhaWxlcgo8PAovU2l6ZSA3Ci9Sb290IDIgMCBSCi9JbmZvIDMgMCBSCj4+CgpzdGFydHhyZWYKMjEzMwolJUVPRg=="
+  },
+  "expected": {
+    "document_type": "sales_invoice",
+    "counterparty_name": "Pinnacle Marketing Ltd",
+    "header": {
+      "counterparty_role": "customer",
+      "vendor_name": null,
+      "currency": "GBP",
+      "total_amount": 2880,
+      "payment_status": "unpaid"
+    },
+    "line_count": 1
+  }
+}

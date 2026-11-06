@@ -1,0 +1,199 @@
+{
+  "id": "review-03",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "review-03",
+    "scope": {
+      "firm_id": "review-firm",
+      "client_id": "review-client",
+      "generation": "review-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "rv3-bank",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Bank export, business account FI21 1234 5600 0007 85, row 2026-08-14: 14.08.2026 | -500,00 EUR | SEPA credit transfer | Payee: Kaisa Virtanen | Payee IBAN FI09 8000 1234 5678 90 | Message: (none) | Initiated in online bank by user OWNER 14.08.2026 09:12 | Archive id 20260814A0411",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv3-invoice",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "INVOICE HWH-88120 — Helsinki Web Hosting Oy, Business ID 3344556-7. Invoice date 01.08.2026, due date 31.08.2026. Shared hosting plan, August 2026. Total incl. VAT EUR 129,00. Reference for payment: HWH-88120.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv3-work",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work admission receipt: the 14.08.2026 transfer of EUR 500,00 to Kaisa Virtanen is non-terminal and requires its business-purpose fact before it can be explained. The declared inventory for 2026-08 (all uploaded documents, contracts, payroll runs and expense claims) was retrieved in full and contains no record naming Kaisa Virtanen. The hosting invoice is in the group only as the period's sole open supplier bill; rejecting it as a candidate does not remove this bank obligation.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "rv3-tx-virtanen",
+        "source_id": "rv3-bank",
+        "date": "2026-08-14",
+        "money_in_minor": 0,
+        "money_out_minor": 50000,
+        "currency": "EUR",
+        "contact": "Kaisa Virtanen",
+        "description": "SEPA CREDIT TRANSFER Kaisa Virtanen",
+        "raw_description": "SEPA CREDIT TRANSFER Kaisa Virtanen Message: (none) Archive id 20260814A0411",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "rv3-inv-hosting",
+      "source_id": "rv3-invoice",
+      "document_type": "supplier_bill",
+      "date": "2026-08-01",
+      "due_date": "2026-08-31",
+      "amount_minor": 12900,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "HWH-88120",
+      "counterparty": "Helsinki Web Hosting Oy"
+    },
+    "work_item": {
+      "id": "rv3-work-item",
+      "kind": "explain_bank_transaction",
+      "target_id": "rv3-tx-virtanen",
+      "admission": "admitted",
+      "reason": "This persisted non-terminal bank payment requires a business-purpose fact before it can be explained.",
+      "basis_source_ids": [
+        "rv3-work"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "review-manifest",
+      "description": "Exactly the bank export row, the sole open supplier bill and the work admission receipt declared in this packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "rv3-bank",
+        "rv3-invoice",
+        "rv3-work"
+      ],
+      "covered_source_ids": [
+        "rv3-bank",
+        "rv3-invoice",
+        "rv3-work"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "rv3-group",
+      "status": "complete_within_scope",
+      "scope_id": "review-manifest",
+      "transaction_ids": [
+        "rv3-tx-virtanen"
+      ],
+      "invoice_ids": [
+        "rv3-inv-hosting"
+      ]
+    },
+    "missing_fact": {
+      "work_item_id": "rv3-work-item",
+      "fact": "What the 14.08.2026 transfer of EUR 500,00 to Kaisa Virtanen was for (for example a contractor fee, an expense reimbursement, a loan, or an owner drawing).",
+      "question": "What was the EUR 500,00 transfer to Kaisa Virtanen on 14.08.2026 for?",
+      "customer_id": "review-owner",
+      "why_customer_only": "The owner initiated this transfer from the business account to a private individual with no payment message; the purpose was never written down anywhere Donna can read, so it exists only in the owner's knowledge.",
+      "why_local_cannot_supply": "The complete declared inventory for the period holds no invoice, contract, payroll run or expense claim naming Kaisa Virtanen, and the bank row itself carries no message.",
+      "basis_source_ids": [
+        "rv3-bank",
+        "rv3-work"
+      ],
+      "retrieval_scope_id": "review-manifest"
+    }
+  },
+  "adjudication": {
+    "status": "agent_reviewed",
+    "reviewer": "workstream-a-agent-review-2026-09-18",
+    "source_family": "review-owner-only-purpose",
+    "limitations": [
+      "Agent review example authored by an independent agent review, not expert accounting validation; model agreement is not ground truth.",
+      "Authored synthetic evidence in realistic text form; source relationships are authored assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "rv3-work-item",
+      "kind": "explain_bank_transaction",
+      "target_id": "rv3-tx-virtanen",
+      "admission": "admitted",
+      "reason": "This persisted non-terminal bank payment requires a business-purpose fact before it can be explained.",
+      "basis_source_ids": [
+        "rv3-work"
+      ]
+    },
+    "demonstrates": "Distinct example for contract-032: a customer-only fact whose basis is the bank row itself (owner-initiated, private-individual payee, no message) and the complete inventory absence recorded in the admission receipt, rather than a source that restates the conclusion that only the customer knows. The unrelated open supplier bill is rejected on its own evidence and does not create or remove the ask.",
+    "acceptable_outcomes": [
+      "customer_question"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "None for allocation: no source connects the transfer to any obligation. The ask basis is rv3-bank (payee, no message, owner-initiated) and rv3-work (complete inventory with no record naming the payee).",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": {
+      "work_item_id": "rv3-work-item",
+      "fact": "What the 14.08.2026 transfer of EUR 500,00 to Kaisa Virtanen was for (for example a contractor fee, an expense reimbursement, a loan, or an owner drawing).",
+      "question": "What was the EUR 500,00 transfer to Kaisa Virtanen on 14.08.2026 for?",
+      "customer_id": "review-owner",
+      "why_customer_only": "The owner initiated this transfer from the business account to a private individual with no payment message; the purpose was never written down anywhere Donna can read, so it exists only in the owner's knowledge.",
+      "why_local_cannot_supply": "The complete declared inventory for the period holds no invoice, contract, payroll run or expense claim naming Kaisa Virtanen, and the bank row itself carries no message.",
+      "basis_source_ids": [
+        "rv3-bank",
+        "rv3-work"
+      ],
+      "retrieval_scope_id": "review-manifest"
+    },
+    "label_reason": "Agent review reading: the purpose of an owner-initiated transfer to a private individual with no message and no local record is a business fact only the owner can supply; the hosting invoice is contradicted on payee and amount.",
+    "positive_paths": []
+  },
+  "semantic_statuses": {
+    "rv3-tx-virtanen": {
+      "counterparty": "contradicted",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    },
+    "ask_fact": "supported"
+  },
+  "expected": {
+    "route": "customer_question",
+    "proposals": []
+  }
+}

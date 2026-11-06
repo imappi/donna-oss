@@ -1,0 +1,13 @@
+{
+  "id": "003-auto_explained-suppressed-explicitly",
+  "title": "An auto_explained verdict (immaterial recurring noise) opens NO case — explicitly, not by omission from a filter list (7.2)",
+  "input": {
+    "verdict": "auto_explained",
+    "hasStickyMatch": false
+  },
+  "expected": {
+    "goal_status": "met",
+    "action": "noop",
+    "stop_reason": "goal_met"
+  }
+}

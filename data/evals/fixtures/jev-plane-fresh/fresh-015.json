@@ -1,0 +1,263 @@
+{
+  "id": "fresh-015",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "fresh-015",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "LASKU\nLaskun numero: 2104    Laskun päivä: 14.08.2026    Eräpäivä: 13.09.2026    Maksuehto: 30 pv netto\nLaskuttaja: Kuusela Design Oy, Y-tunnus 2345678-9\nMaksaja: Lahden Liikuntakeskus Oy, Y-tunnus 3344556-2\nErittely: Varausjärjestelmä, vaihe 2 (maksuerät 40/60)\nVeroton yhteensä: 2 549,80 €\nALV 25,5 %: 650,20 €\nMaksettava yhteensä: 3 200,00 €\nViitenumero: 2 10405    Tilinumero: FI21 1234 5600 0007 85    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n28.08.2026;28.08.2026;+1280,00;Viitesiirto;Maksu;Lahden Liikuntakeskus Oy;;210405;;202608280001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n12.09.2026;12.09.2026;+2020,00;Viitesiirto;Maksu;Lahden Liikuntakeskus Oy;;210405;;202609120002",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "allocation-source-a1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "allocation_record",
+        "content": "Reconciliation record a1: bank line dated 28.08.2026 for 1 280,00 € is recorded as CONFIRMED to lasku 2104 (sales invoice) on 29.08.2026. Ensimmäinen maksuerä 40 %",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-28",
+        "money_in_minor": 128000,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Lahden Liikuntakeskus Oy",
+        "description": "Viitesiirto Maksu",
+        "raw_description": "28.08.2026;28.08.2026;+1280,00;Viitesiirto;Maksu;Lahden Liikuntakeskus Oy;;210405;;202608280001",
+        "structured_reference": "210405",
+        "lifecycle": "reconciled",
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-12",
+        "money_in_minor": 202000,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Lahden Liikuntakeskus Oy",
+        "description": "Viitesiirto Maksu",
+        "raw_description": "12.09.2026;12.09.2026;+2020,00;Viitesiirto;Maksu;Lahden Liikuntakeskus Oy;;210405;;202609120002",
+        "structured_reference": "210405",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 128000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 128000,
+        "bank_currency": "EUR",
+        "gross_minor": 128000,
+        "fee_minor": 0
+      },
+      {
+        "id": "link-2-t2",
+        "kind": "reference",
+        "source_id": "bank-t2",
+        "transaction_id": "tx-t2",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 202000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 202000,
+        "bank_currency": "EUR",
+        "gross_minor": 202000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [
+      {
+        "id": "allocation-a1",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "source_id": "allocation-source-a1",
+        "version": "1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "status": "confirmed",
+        "amount_minor": 128000,
+        "currency": "EUR",
+        "object_type": "sales_invoice"
+      }
+    ],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-14",
+      "due_date": "2026-09-13",
+      "amount_minor": 320000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "210405",
+      "counterparty": "Lahden Liikuntakeskus Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "allocation-source-a1",
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "allocation-source-a1",
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "fresh",
+    "source_family": "fresh-fi-instalment-payments-with-viite",
+    "family_description": "A Finnish customer pays a sales invoice in two instalments with the viite; the final instalment may overshoot.",
+    "market": "FI",
+    "variant": "c",
+    "error_mode": "partial payment: first instalment; balance after a prior confirmed allocation; an overpaying final instalment",
+    "label_reason": "The balance transfer carries the viite but is 100,00 € more than the remaining 60 %, with no advice explaining the excess: the contract cannot allocate a reference-linked payment above the remaining amount, and the disposition of the excess (refund, credit, or a fee the customer added) needs a decision.",
+    "terminal_reason": "CONTRACT GAP as much as capability: a reference link carries one amount, so an overpayment cannot be allocated to the remaining amount with the excess held (a bounded convention the contract lacks; holdout-028a needed an advice to express it). Why the customer overpaid is also a fact the customer could supply. Reported apart from the genuine reasoning labels.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work",
+      "proposal_exceeding_the_remaining_amount"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "contract_gap": "overpayment_on_reference_link",
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": [],
+    "terminal": "NEEDS_REASONING"
+  }
+}

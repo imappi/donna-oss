@@ -1,0 +1,1643 @@
+{
+  "provenance": {
+    "source_run_file": "data/worlds/receipts/slice1-db-close-run-20260819-1840.json",
+    "source_run_sha256": "241616f24e7f8eb29af000109790c6ef6ea1a2bbea8eee4fc0070a91693e7e26",
+    "operator": "kari@books.example",
+    "run_date": "2026-08-19",
+    "base_commit": "b4815cec827a35fdaf2bb862080d6cc66cf76f99",
+    "verified_by": "eaw-orchestrator (Claude), overseer verification 2026-08-19"
+  },
+  "receipt": {
+    "version": "eaw.db-close-receipt.v1",
+    "status": "passed",
+    "world_id": "slice1/s1-f1-gross-to-net-single",
+    "candidate_close": {
+      "world_id": "slice1/s1-f1-gross-to-net-single",
+      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+      "actor": {
+        "type": "operator",
+        "id": "kari@books.example"
+      },
+      "authority_basis": "eaw_isolated_firm_operator",
+      "passes": [
+        {
+          "posting": {
+            "source": "ledger_period_posting",
+            "dry_run": false,
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-05",
+            "eligible_review_states": [
+              "accepted"
+            ],
+            "requested_count": 2,
+            "ready_count": 0,
+            "posted_count": 2,
+            "skipped_count": 0,
+            "error_count": 0,
+            "atomic": true,
+            "results": [
+              {
+                "transaction_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+                "date": "2026-08-04T22:00:00.000Z",
+                "description": "event/processor-settlement",
+                "review_state": "accepted",
+                "status": "posted",
+                "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox",
+                "account_code": null,
+                "amount": 68,
+                "currency": "EUR"
+              },
+              {
+                "transaction_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+                "date": "2026-08-04T22:00:00.000Z",
+                "description": "event/bank-cash",
+                "review_state": "accepted",
+                "status": "posted",
+                "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow",
+                "account_code": null,
+                "amount": 68,
+                "currency": "EUR"
+              }
+            ]
+          },
+          "terminal": {
+            "t1": [
+              {
+                "source": "getLedgerPeriodPreviewFromDb",
+                "period": "/"
+              }
+            ],
+            "locked": false,
+            "t2": [],
+            "limbo": []
+          },
+          "close": {
+            "lock": {
+              "source": "close_lock",
+              "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+              "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+              "period_start": "2026-08-01",
+              "period_end": "2026-08-05",
+              "status": "locked",
+              "locked_at": "2026-08-19T16:40:40.810Z",
+              "forced": false,
+              "checks": [
+                {
+                  "check_type": "source_import",
+                  "status": "passed",
+                  "summary": "2 statement transactions imported and proven for the period.",
+                  "count": 0,
+                  "payload": {
+                    "bank_statement_count": 0,
+                    "transaction_count": 2,
+                    "statement_proof": {
+                      "status": "passed",
+                      "blockers": 0,
+                      "warnings": 0,
+                      "checked_documents": 0,
+                      "passed_documents": 0,
+                      "issues": []
+                    }
+                  }
+                },
+                {
+                  "check_type": "ledger_balance",
+                  "status": "passed",
+                  "summary": "Ledger debits and credits balance.",
+                  "count": null,
+                  "payload": {
+                    "imbalance": 0
+                  }
+                },
+                {
+                  "check_type": "posting_completeness",
+                  "status": "passed",
+                  "summary": "All period transactions are posted to the Donna ledger.",
+                  "count": 0,
+                  "payload": {}
+                },
+                {
+                  "check_type": "client_evidence",
+                  "status": "passed",
+                  "summary": "No client evidence blockers are open for this period.",
+                  "count": 0,
+                  "payload": {}
+                },
+                {
+                  "check_type": "xero_mirror",
+                  "status": "passed",
+                  "summary": "0/2 period transactions exported to the Xero mirror.",
+                  "count": 0,
+                  "payload": {
+                    "exported": 0,
+                    "pending": 2,
+                    "error": 0
+                  }
+                }
+              ]
+            },
+            "archive": {
+              "source": "close_archive",
+              "schema_version": "donna.close_archive.v1",
+              "archive_id": "close-archive-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-67d22a35b7ca3ebc",
+              "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+              "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+              "period_start": "2026-08-01",
+              "period_end": "2026-08-05",
+              "generated_at": "2026-08-19T16:40:40.819Z",
+              "generated_by": "kari@books.example",
+              "manifest_checksum_sha256": "357b32bb8397b4e4b9ed71ec73aa69c6ec4598f37f17b894ccf22da96962e51a",
+              "manifest": {
+                "source": "donna_close_archive_manifest",
+                "schema_version": "donna.close_archive.v1",
+                "archive_id": "close-archive-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-67d22a35b7ca3ebc",
+                "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                "period_start": "2026-08-01",
+                "period_end": "2026-08-05",
+                "generated_at": "2026-08-19T16:40:40.819Z",
+                "generated_by": "kari@books.example",
+                "custody_statement": "Donna is the source of truth, but never the single point of custody.",
+                "files": [
+                  {
+                    "path": "README.md",
+                    "type": "text/markdown",
+                    "description": "Human-readable explanation of the close archive.",
+                    "checksum_sha256": "c95d18fda6de64c5de9985b0dec42670892c2ac855099dab8023ef2896ff6aa2",
+                    "count": 1
+                  },
+                  {
+                    "path": "entity.json",
+                    "type": "application/json",
+                    "description": "Client/entity metadata.",
+                    "checksum_sha256": "ce0bc42c908cc463a10932499aac6b657007390eada10506b3cc6a847fb99e22",
+                    "count": 6
+                  },
+                  {
+                    "path": "period.json",
+                    "type": "application/json",
+                    "description": "Close period metadata and lock state.",
+                    "checksum_sha256": "6fe0719ad5c49442c5468855863e7777050a5d9d6971cbe23038946f6df5fcb0",
+                    "count": 7
+                  },
+                  {
+                    "path": "ledger.json",
+                    "type": "application/json",
+                    "description": "Chart of accounts, journals, ledger lines, trial balance, P&L, and cash summary.",
+                    "checksum_sha256": "bca3835e55b37c579c77b0d88f2b3d630f5ae58fe26304050f8c17bb012040cb",
+                    "count": 7
+                  },
+                  {
+                    "path": "close.json",
+                    "type": "application/json",
+                    "description": "Close checks and normalized close exceptions.",
+                    "checksum_sha256": "6c7fedfb715aecb24699997f95b0352a80a6cd67ca346ead72a5ae814c5b040a",
+                    "count": 4
+                  },
+                  {
+                    "path": "source.json",
+                    "type": "application/json",
+                    "description": "Source documents, imported transactions, classifications, and review queue.",
+                    "checksum_sha256": "3f98e37ac72da354ee1dbd31574f6ea67e6c4bde686f40cbebd0fd3168183092",
+                    "count": 5
+                  },
+                  {
+                    "path": "xero_mirror.json",
+                    "type": "application/json",
+                    "description": "Xero mirror evidence only; not the accounting source of truth.",
+                    "checksum_sha256": "4c683889257a42f1c12b5476ae6a34d9f436953780de25b0e28ca2a5ca897490",
+                    "count": 3
+                  },
+                  {
+                    "path": "audit.json",
+                    "type": "application/json",
+                    "description": "Audit events relevant to the close period.",
+                    "checksum_sha256": "c9b1b2964c9e0a57d5f24d0d18e3ad91b4e180ee2c437ad923050bd8fafb52b8",
+                    "count": 1
+                  }
+                ],
+                "manifest_checksum_sha256": "357b32bb8397b4e4b9ed71ec73aa69c6ec4598f37f17b894ccf22da96962e51a"
+              },
+              "sections": {
+                "readme": "# Donna Close Archive - EAW slice1/s1-f1-gross-to-net-single 2026-08-01 to 2026-08-05\n\nThis archive is an accountant-readable export of Donna close evidence for the period.\n\nDonna is the accounting truth layer for this close package. Xero data is included only as mirror/output evidence.\n\nContinuity promise: the client should be able to give this package to another accountant without needing Donna.\n\nVerify integrity by recomputing SHA-256 over each canonical JSON section and comparing it to manifest.json.",
+                "entity": {
+                  "id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                  "company_name": "EAW slice1/s1-f1-gross-to-net-single",
+                  "uen": null,
+                  "entity_type": "uk_ltd",
+                  "jurisdiction": "GB",
+                  "default_currency": null
+                },
+                "period": {
+                  "period_start": "2026-08-01",
+                  "period_end": "2026-08-05",
+                  "close_status": "ready",
+                  "lockable": true,
+                  "locked_at": "2026-08-19T16:40:40.810Z",
+                  "closed_at": "2026-08-19T16:40:40.810Z",
+                  "closed_by": "kari@books.example"
+                },
+                "ledger": {
+                  "chart_of_accounts": [
+                    {
+                      "role": "counterparty",
+                      "label": "200",
+                      "xero_account_id": null,
+                      "id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-200-jaebp",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "code": null,
+                      "name": "200",
+                      "account_type": "unknown",
+                      "normal_balance": "credit",
+                      "currency": "EUR",
+                      "tax_type": null,
+                      "canonical_role": null,
+                      "status": "active",
+                      "account_label": "200",
+                      "created_at": "2026-08-19T16:40:40.777Z",
+                      "updated_at": "2026-08-19T16:40:40.777Z"
+                    },
+                    {
+                      "role": "bank",
+                      "label": "Business Checking · EUR",
+                      "xero_account_id": null,
+                      "id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-business-checking-eur-sfw6xy",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "code": null,
+                      "name": "Business Checking · EUR",
+                      "account_type": "bank",
+                      "normal_balance": "debit",
+                      "currency": "EUR",
+                      "tax_type": "NONE",
+                      "canonical_role": null,
+                      "status": "active",
+                      "account_label": "Business Checking · EUR",
+                      "created_at": "2026-08-19T16:40:40.777Z",
+                      "updated_at": "2026-08-19T16:40:40.777Z"
+                    }
+                  ],
+                  "journals": [
+                    {
+                      "amount": 68,
+                      "source": "native_ledger",
+                      "closed_by": "kari@books.example",
+                      "direction": "receive",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "xero_match_strategy": null,
+                      "xero_bank_transaction_id": null,
+                      "id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "source_type": "transaction",
+                      "source_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+                      "journal_date": "2026-08-04T22:00:00.000Z",
+                      "currency": "EUR",
+                      "status": "closed",
+                      "memo": "event/processor-settlement",
+                      "tosite_number": null,
+                      "fiscal_year_id": null,
+                      "correction_type": null,
+                      "correction_of_journal_id": null,
+                      "reversal_of_journal_id": null,
+                      "correction_reason": null,
+                      "posted_at": "2026-08-19T16:40:40.777Z",
+                      "closed_at": "2026-08-19T16:40:40.810Z",
+                      "reversed_at": null,
+                      "created_at": "2026-08-19T16:40:40.777Z",
+                      "updated_at": "2026-08-19T16:40:40.810Z"
+                    },
+                    {
+                      "amount": 68,
+                      "source": "native_ledger",
+                      "closed_by": "kari@books.example",
+                      "direction": "receive",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "xero_match_strategy": null,
+                      "xero_bank_transaction_id": null,
+                      "id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "source_type": "transaction",
+                      "source_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+                      "journal_date": "2026-08-04T22:00:00.000Z",
+                      "currency": "EUR",
+                      "status": "closed",
+                      "memo": "event/bank-cash",
+                      "tosite_number": null,
+                      "fiscal_year_id": null,
+                      "correction_type": null,
+                      "correction_of_journal_id": null,
+                      "reversal_of_journal_id": null,
+                      "correction_reason": null,
+                      "posted_at": "2026-08-19T16:40:40.777Z",
+                      "closed_at": "2026-08-19T16:40:40.810Z",
+                      "reversed_at": null,
+                      "created_at": "2026-08-19T16:40:40.777Z",
+                      "updated_at": "2026-08-19T16:40:40.810Z"
+                    }
+                  ],
+                  "lines": [
+                    {
+                      "role": "bank",
+                      "account_label": "Business Checking · EUR",
+                      "id": "ledger-line-ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-1-4jnapa",
+                      "journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "account_id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-business-checking-eur-sfw6xy",
+                      "account_code": null,
+                      "account_name": "Business Checking · EUR",
+                      "line_no": 1,
+                      "direction": "debit",
+                      "debit": 68,
+                      "credit": 0,
+                      "amount": 68,
+                      "currency": "EUR",
+                      "tax_type": "NONE",
+                      "counterparty": null,
+                      "memo": "event/processor-settlement",
+                      "created_at": "2026-08-19T16:40:40.777Z",
+                      "updated_at": "2026-08-19T16:40:40.777Z",
+                      "journal_date": "2026-08-04T22:00:00.000Z",
+                      "journal_status": "closed",
+                      "journal_source_type": "transaction",
+                      "journal_source_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0"
+                    },
+                    {
+                      "role": "bank",
+                      "account_label": "Business Checking · EUR",
+                      "id": "ledger-line-ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-1-4jn9yl",
+                      "journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "account_id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-business-checking-eur-sfw6xy",
+                      "account_code": null,
+                      "account_name": "Business Checking · EUR",
+                      "line_no": 1,
+                      "direction": "debit",
+                      "debit": 68,
+                      "credit": 0,
+                      "amount": 68,
+                      "currency": "EUR",
+                      "tax_type": "NONE",
+                      "counterparty": null,
+                      "memo": "event/bank-cash",
+                      "created_at": "2026-08-19T16:40:40.777Z",
+                      "updated_at": "2026-08-19T16:40:40.777Z",
+                      "journal_date": "2026-08-04T22:00:00.000Z",
+                      "journal_status": "closed",
+                      "journal_source_type": "transaction",
+                      "journal_source_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1"
+                    },
+                    {
+                      "role": "counterparty",
+                      "account_label": "200",
+                      "id": "ledger-line-ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-2-4jnapb",
+                      "journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "account_id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-200-jaebp",
+                      "account_code": null,
+                      "account_name": "200",
+                      "line_no": 2,
+                      "direction": "credit",
+                      "debit": 0,
+                      "credit": 68,
+                      "amount": 68,
+                      "currency": "EUR",
+                      "tax_type": null,
+                      "counterparty": null,
+                      "memo": "event/processor-settlement",
+                      "created_at": "2026-08-19T16:40:40.777Z",
+                      "updated_at": "2026-08-19T16:40:40.777Z",
+                      "journal_date": "2026-08-04T22:00:00.000Z",
+                      "journal_status": "closed",
+                      "journal_source_type": "transaction",
+                      "journal_source_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0"
+                    },
+                    {
+                      "role": "counterparty",
+                      "account_label": "200",
+                      "id": "ledger-line-ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-2-4jn9ym",
+                      "journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "account_id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-200-jaebp",
+                      "account_code": null,
+                      "account_name": "200",
+                      "line_no": 2,
+                      "direction": "credit",
+                      "debit": 0,
+                      "credit": 68,
+                      "amount": 68,
+                      "currency": "EUR",
+                      "tax_type": null,
+                      "counterparty": null,
+                      "memo": "event/bank-cash",
+                      "created_at": "2026-08-19T16:40:40.777Z",
+                      "updated_at": "2026-08-19T16:40:40.777Z",
+                      "journal_date": "2026-08-04T22:00:00.000Z",
+                      "journal_status": "closed",
+                      "journal_source_type": "transaction",
+                      "journal_source_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1"
+                    }
+                  ],
+                  "trial_balance": {
+                    "accounts": [
+                      {
+                        "id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-200-jaebp",
+                        "code": null,
+                        "name": "200",
+                        "account_type": "unknown",
+                        "canonical_role": null,
+                        "normal_balance": "credit",
+                        "currency": "EUR",
+                        "account_label": "200",
+                        "debit_movement": 0,
+                        "credit_movement": 136,
+                        "debit_balance": 0,
+                        "credit_balance": 136,
+                        "balance": 136
+                      },
+                      {
+                        "id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-business-checking-eur-sfw6xy",
+                        "code": null,
+                        "name": "Business Checking · EUR",
+                        "account_type": "bank",
+                        "canonical_role": null,
+                        "normal_balance": "debit",
+                        "currency": "EUR",
+                        "account_label": "Business Checking · EUR",
+                        "debit_movement": 136,
+                        "credit_movement": 0,
+                        "debit_balance": 136,
+                        "credit_balance": 0,
+                        "balance": 136
+                      }
+                    ],
+                    "total_debit": 136,
+                    "total_credit": 136,
+                    "imbalance": 0,
+                    "balanced": true
+                  },
+                  "profit_and_loss": {
+                    "accounts": [],
+                    "revenue": 0,
+                    "expenses": 0,
+                    "net_income": 0
+                  },
+                  "cash": {
+                    "accounts": [
+                      {
+                        "id": "ledger-account-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-business-checking-eur-sfw6xy",
+                        "code": null,
+                        "name": "Business Checking · EUR",
+                        "account_type": "bank",
+                        "canonical_role": null,
+                        "normal_balance": "debit",
+                        "currency": "EUR",
+                        "account_label": "Business Checking · EUR",
+                        "balance": 136,
+                        "debit": 136,
+                        "credit": 0
+                      }
+                    ],
+                    "total": 136
+                  },
+                  "ledger_period": {
+                    "id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                    "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                    "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                    "period_start": "2026-08-01",
+                    "period_end": "2026-08-05",
+                    "status": "locked",
+                    "closed_by": "kari@books.example",
+                    "closed_at": {},
+                    "locked_at": {},
+                    "payload": {
+                      "cash": {
+                        "total": 136
+                      },
+                      "source": "donna_close_preview",
+                      "lockable": true,
+                      "locked_at": "2026-08-19T16:40:40.810Z",
+                      "locked_by": "kari@books.example",
+                      "lock_forced": false,
+                      "xero_mirror": {
+                        "error": 0,
+                        "pending": 2,
+                        "exported": 0
+                      },
+                      "close_status": "ready",
+                      "review_counts": {
+                        "held": 0,
+                        "total": 2,
+                        "closed": 0,
+                        "posted": 2,
+                        "waiting": 0,
+                        "accepted": 0,
+                        "resolved": 0,
+                        "unposted": 0,
+                        "suggested": 0,
+                        "asked_client": 0
+                      },
+                      "trial_balance": {
+                        "balanced": true,
+                        "imbalance": 0,
+                        "total_debit": 136,
+                        "total_credit": 136
+                      },
+                      "profit_and_loss": {
+                        "revenue": 0,
+                        "expenses": 0,
+                        "net_income": 0
+                      },
+                      "ledger_line_count": 4,
+                      "posted_journal_count": 2
+                    },
+                    "created_at": {},
+                    "updated_at": {},
+                    "posted_journal_count": 2,
+                    "ledger_line_count": 4
+                  }
+                },
+                "close": {
+                  "close_period": {
+                    "id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                    "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                    "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                    "period_start": "2026-07-31T22:00:00.000Z",
+                    "period_end": "2026-08-04T22:00:00.000Z",
+                    "status": "locked",
+                    "closed_by": "kari@books.example",
+                    "closed_at": "2026-08-19T16:40:40.810Z",
+                    "locked_at": "2026-08-19T16:40:40.810Z",
+                    "payload": {
+                      "cash": {
+                        "total": 136
+                      },
+                      "source": "donna_close_preview",
+                      "lockable": true,
+                      "locked_at": "2026-08-19T16:40:40.810Z",
+                      "locked_by": "kari@books.example",
+                      "lock_forced": false,
+                      "xero_mirror": {
+                        "error": 0,
+                        "pending": 2,
+                        "exported": 0
+                      },
+                      "close_status": "ready",
+                      "generated_at": "2026-08-19T16:40:40.803Z",
+                      "review_counts": {
+                        "held": 0,
+                        "total": 2,
+                        "closed": 0,
+                        "posted": 2,
+                        "waiting": 0,
+                        "accepted": 0,
+                        "resolved": 0,
+                        "unposted": 0,
+                        "suggested": 0,
+                        "asked_client": 0
+                      },
+                      "trial_balance": {
+                        "balanced": true,
+                        "imbalance": 0,
+                        "total_debit": 136,
+                        "total_credit": 136
+                      },
+                      "profit_and_loss": {
+                        "revenue": 0,
+                        "expenses": 0,
+                        "net_income": 0
+                      },
+                      "ledger_line_count": 4,
+                      "posted_journal_count": 2
+                    },
+                    "created_at": "2026-08-19T16:40:40.803Z",
+                    "updated_at": "2026-08-19T16:40:40.810Z"
+                  },
+                  "checks": [
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--client-evidence-1b4tt3",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "client_evidence",
+                      "status": "passed",
+                      "summary": "No client evidence blockers are open for this period.",
+                      "payload": {
+                        "count": 0
+                      },
+                      "created_at": "2026-08-19T16:40:40.803Z",
+                      "updated_at": "2026-08-19T16:40:40.803Z"
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--ledger-balance-1nma5m",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "ledger_balance",
+                      "status": "passed",
+                      "summary": "Ledger debits and credits balance.",
+                      "payload": {
+                        "count": null,
+                        "imbalance": 0
+                      },
+                      "created_at": "2026-08-19T16:40:40.803Z",
+                      "updated_at": "2026-08-19T16:40:40.803Z"
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--posting-completeness-virf81",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "posting_completeness",
+                      "status": "passed",
+                      "summary": "All period transactions are posted to the Donna ledger.",
+                      "payload": {
+                        "count": 0
+                      },
+                      "created_at": "2026-08-19T16:40:40.803Z",
+                      "updated_at": "2026-08-19T16:40:40.803Z"
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--source-import-uyscth",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "source_import",
+                      "status": "passed",
+                      "summary": "2 statement transactions imported and proven for the period.",
+                      "payload": {
+                        "count": 0,
+                        "statement_proof": {
+                          "issues": [],
+                          "status": "passed",
+                          "blockers": 0,
+                          "warnings": 0,
+                          "passed_documents": 0,
+                          "checked_documents": 0
+                        },
+                        "transaction_count": 2,
+                        "bank_statement_count": 0
+                      },
+                      "created_at": "2026-08-19T16:40:40.803Z",
+                      "updated_at": "2026-08-19T16:40:40.803Z"
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--xero-mirror-fu2s0g",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "xero_mirror",
+                      "status": "passed",
+                      "summary": "0/2 period transactions exported to the Xero mirror.",
+                      "payload": {
+                        "count": 0,
+                        "error": 0,
+                        "pending": 2,
+                        "exported": 0
+                      },
+                      "created_at": "2026-08-19T16:40:40.803Z",
+                      "updated_at": "2026-08-19T16:40:40.803Z"
+                    }
+                  ],
+                  "preview_checks": [
+                    {
+                      "check_type": "source_import",
+                      "status": "passed",
+                      "summary": "2 statement transactions imported and proven for the period.",
+                      "count": 0,
+                      "payload": {
+                        "bank_statement_count": 0,
+                        "transaction_count": 2,
+                        "statement_proof": {
+                          "status": "passed",
+                          "blockers": 0,
+                          "warnings": 0,
+                          "checked_documents": 0,
+                          "passed_documents": 0,
+                          "issues": []
+                        }
+                      }
+                    },
+                    {
+                      "check_type": "ledger_balance",
+                      "status": "passed",
+                      "summary": "Ledger debits and credits balance.",
+                      "count": null,
+                      "payload": {
+                        "imbalance": 0
+                      }
+                    },
+                    {
+                      "check_type": "posting_completeness",
+                      "status": "passed",
+                      "summary": "All period transactions are posted to the Donna ledger.",
+                      "count": 0,
+                      "payload": {}
+                    },
+                    {
+                      "check_type": "client_evidence",
+                      "status": "passed",
+                      "summary": "No client evidence blockers are open for this period.",
+                      "count": 0,
+                      "payload": {}
+                    },
+                    {
+                      "check_type": "xero_mirror",
+                      "status": "passed",
+                      "summary": "0/2 period transactions exported to the Xero mirror.",
+                      "count": 0,
+                      "payload": {
+                        "exported": 0,
+                        "pending": 2,
+                        "error": 0
+                      }
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--client-evidence-1b4tt3",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "client_evidence",
+                      "status": "passed",
+                      "summary": "No client evidence blockers are open for this period.",
+                      "payload": {
+                        "count": 0
+                      },
+                      "created_at": {},
+                      "updated_at": {},
+                      "source": "persisted"
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--ledger-balance-1nma5m",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "ledger_balance",
+                      "status": "passed",
+                      "summary": "Ledger debits and credits balance.",
+                      "payload": {
+                        "count": null,
+                        "imbalance": 0
+                      },
+                      "created_at": {},
+                      "updated_at": {},
+                      "source": "persisted"
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--posting-completeness-virf81",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "posting_completeness",
+                      "status": "passed",
+                      "summary": "All period transactions are posted to the Donna ledger.",
+                      "payload": {
+                        "count": 0
+                      },
+                      "created_at": {},
+                      "updated_at": {},
+                      "source": "persisted"
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--source-import-uyscth",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "source_import",
+                      "status": "passed",
+                      "summary": "2 statement transactions imported and proven for the period.",
+                      "payload": {
+                        "count": 0,
+                        "statement_proof": {
+                          "issues": [],
+                          "status": "passed",
+                          "blockers": 0,
+                          "warnings": 0,
+                          "passed_documents": 0,
+                          "checked_documents": 0
+                        },
+                        "transaction_count": 2,
+                        "bank_statement_count": 0
+                      },
+                      "created_at": {},
+                      "updated_at": {},
+                      "source": "persisted"
+                    },
+                    {
+                      "id": "ledger-close-check-ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1--xero-mirror-fu2s0g",
+                      "close_period_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "check_type": "xero_mirror",
+                      "status": "passed",
+                      "summary": "0/2 period transactions exported to the Xero mirror.",
+                      "payload": {
+                        "count": 0,
+                        "error": 0,
+                        "pending": 2,
+                        "exported": 0
+                      },
+                      "created_at": {},
+                      "updated_at": {},
+                      "source": "persisted"
+                    }
+                  ],
+                  "exceptions": {
+                    "source": "close_exceptions",
+                    "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                    "period_start": "2026-08-01",
+                    "period_end": "2026-08-05",
+                    "status": "warning",
+                    "counts": {
+                      "total": 2,
+                      "blockers": 0,
+                      "warnings": 2,
+                      "by_type": {
+                        "xero_mirror_missing": 2
+                      },
+                      "by_severity": {
+                        "blocker": 0,
+                        "warning": 2
+                      }
+                    },
+                    "exceptions": [
+                      {
+                        "id": "xero_mirror_missing:eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+                        "type": "xero_mirror_missing",
+                        "severity": "warning",
+                        "source": "xero_mirror",
+                        "summary": "event/bank-cash is posted in Donna but missing from the Xero mirror.",
+                        "action": "Retry mirror export from the posted Donna ledger row.",
+                        "transaction_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+                        "date": "2026-08-05",
+                        "description": "event/bank-cash",
+                        "amount": 68,
+                        "currency": "EUR",
+                        "ledger_status": "posted",
+                        "xero_status": "pending",
+                        "issue": "missing_in_xero",
+                        "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow",
+                        "xero_bank_transaction_id": null,
+                        "ledger_account_code": "200",
+                        "xero_account_code": null,
+                        "error": null,
+                        "mirror_issue": "missing_in_xero"
+                      },
+                      {
+                        "id": "xero_mirror_missing:eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+                        "type": "xero_mirror_missing",
+                        "severity": "warning",
+                        "source": "xero_mirror",
+                        "summary": "event/processor-settlement is posted in Donna but missing from the Xero mirror.",
+                        "action": "Retry mirror export from the posted Donna ledger row.",
+                        "transaction_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+                        "date": "2026-08-05",
+                        "description": "event/processor-settlement",
+                        "amount": 68,
+                        "currency": "EUR",
+                        "ledger_status": "posted",
+                        "xero_status": "pending",
+                        "issue": "missing_in_xero",
+                        "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox",
+                        "xero_bank_transaction_id": null,
+                        "ledger_account_code": "200",
+                        "xero_account_code": null,
+                        "error": null,
+                        "mirror_issue": "missing_in_xero"
+                      }
+                    ]
+                  }
+                },
+                "source": {
+                  "documents": [
+                    {
+                      "id": "eaw-eaw-s1-close-20260819-1840-1-client-1-doc-0",
+                      "source": "eaw_world",
+                      "status": "received",
+                      "payload": {
+                        "id": "artifact/invoice-a",
+                        "kind": "invoice_pdf",
+                        "fields": {
+                          "total": "EUR 70.00",
+                          "invoiceNumber": "INV-001"
+                        },
+                        "format": "pdf",
+                        "trusted": true,
+                        "textLines": [
+                          "SALES INVOICE",
+                          "Harborlight Studio Ltd",
+                          "Company No. 15832067 — 14 Quayside Row, Bristol BS1 6XN, United Kingdom",
+                          "",
+                          "Invoice number: INV-001",
+                          "Invoice date: 1 August 2026",
+                          "Due date: 15 August 2026",
+                          "",
+                          "Bill to: Aalto Visio Oy",
+                          "Mannerheimintie 12, 00100 Helsinki, Finland",
+                          "",
+                          "Description: Brand identity design sprint — July 2026",
+                          "Amount: EUR 70.00",
+                          "",
+                          "Total due: EUR 70.00",
+                          "Pay online via the PayLink payment portal link included with this invoice."
+                        ]
+                      },
+                      "filename": "0-invoice_pdf.json",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "document_date": "2026-08-04T22:00:00.000Z",
+                      "document_type": "sales_invoice",
+                      "payment_status": "unknown",
+                      "parse_status": "pending",
+                      "parse_summary": null,
+                      "parse_completed_at": null,
+                      "batch_id": null,
+                      "created_at": "2026-08-19T16:40:40.748Z"
+                    },
+                    {
+                      "id": "eaw-eaw-s1-close-20260819-1840-1-client-1-doc-2",
+                      "source": "eaw_world",
+                      "status": "received",
+                      "payload": {
+                        "id": "artifact/bank-line",
+                        "kind": "bank_line",
+                        "fields": {
+                          "amount": "EUR 68.00",
+                          "postedAt": "2026-08-05"
+                        },
+                        "format": "json",
+                        "trusted": true
+                      },
+                      "filename": "2-bank_line.json",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "document_date": "2026-08-04T22:00:00.000Z",
+                      "document_type": "bank_statement",
+                      "payment_status": "unknown",
+                      "parse_status": "completed",
+                      "parse_summary": {
+                        "source": "documents_sync",
+                        "transaction_count": 0
+                      },
+                      "parse_completed_at": 1787157640748,
+                      "batch_id": null,
+                      "created_at": "2026-08-19T16:40:40.748Z"
+                    }
+                  ],
+                  "document_manifest": [
+                    {
+                      "document_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-doc-0",
+                      "filename": "0-invoice_pdf.json",
+                      "document_type": "sales_invoice",
+                      "status": "received",
+                      "source": "eaw_world",
+                      "file_url": null,
+                      "document_date": "2026-08-04T22:00:00.000Z",
+                      "uploaded_at": null,
+                      "metadata_checksum_sha256": "fd52b2b4779e20cb80639c31c6d066b6edfd15517ffa5f57597279b75ec44cf1"
+                    },
+                    {
+                      "document_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-doc-2",
+                      "filename": "2-bank_line.json",
+                      "document_type": "bank_statement",
+                      "status": "received",
+                      "source": "eaw_world",
+                      "file_url": null,
+                      "document_date": "2026-08-04T22:00:00.000Z",
+                      "uploaded_at": null,
+                      "metadata_checksum_sha256": "23157b08229d03a0130d7ffab7ed1875210bd63bfa52fab01849aabffc686252"
+                    }
+                  ],
+                  "transactions": [
+                    {
+                      "id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+                      "date": "2026-08-04T22:00:00.000Z",
+                      "status": "posted",
+                      "payload": {
+                        "account_name": "Sales",
+                        "review_state": "accepted",
+                        "support_status": "sufficient",
+                        "source_event_id": "event/processor-settlement",
+                        "proposed_account": "200"
+                      },
+                      "category": "200",
+                      "money_in": 68,
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "direction": "money_in",
+                      "money_out": 0,
+                      "description": "event/processor-settlement",
+                      "document_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-doc-0",
+                      "account_code": "200",
+                      "account_name": "200",
+                      "review_state": "posted",
+                      "account_label": "200",
+                      "ledger_amount": 68,
+                      "ledger_status": "posted",
+                      "review_status": "resolved",
+                      "tax_treatment": "",
+                      "xero_tax_type": "",
+                      "ledger_currency": "EUR",
+                      "raw_description": "event/processor-settlement",
+                      "xero_account_id": "",
+                      "account_currency": "EUR",
+                      "confidence_score": 0.62,
+                      "ledger_posted_at": "2026-08-19T16:40:40.783Z",
+                      "proposed_account": "200",
+                      "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox",
+                      "xero_account_code": "",
+                      "xero_account_name": "",
+                      "cleaned_description": "event processor settlement",
+                      "reconciliation_status": "posted",
+                      "created_at": 1787157640748,
+                      "updated_at": 1787157640777
+                    },
+                    {
+                      "id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+                      "date": "2026-08-04T22:00:00.000Z",
+                      "status": "posted",
+                      "payload": {
+                        "account_name": "Sales",
+                        "review_state": "accepted",
+                        "support_status": "sufficient",
+                        "source_event_id": "event/bank-cash",
+                        "proposed_account": "200"
+                      },
+                      "category": "200",
+                      "money_in": 68,
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "direction": "money_in",
+                      "money_out": 0,
+                      "description": "event/bank-cash",
+                      "document_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-doc-0",
+                      "account_code": "200",
+                      "account_name": "200",
+                      "review_state": "posted",
+                      "account_label": "200",
+                      "ledger_amount": 68,
+                      "ledger_status": "posted",
+                      "review_status": "resolved",
+                      "tax_treatment": "",
+                      "xero_tax_type": null,
+                      "ledger_currency": "EUR",
+                      "raw_description": "event/bank-cash",
+                      "xero_account_id": null,
+                      "account_currency": "EUR",
+                      "confidence_score": 0.62,
+                      "ledger_posted_at": "2026-08-19T16:40:40.787Z",
+                      "proposed_account": "200",
+                      "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow",
+                      "xero_account_code": null,
+                      "xero_account_name": "200",
+                      "xero_account_type": "unknown",
+                      "cleaned_description": "event bank cash",
+                      "reconciliation_status": "posted",
+                      "xero_account_match_status": "matched",
+                      "created_at": 1787157640748,
+                      "updated_at": 1787157640777
+                    }
+                  ],
+                  "transaction_review_queue": [],
+                  "import_diagnostics": {
+                    "status": "passed",
+                    "period_start": "2026-08-01",
+                    "period_end": "2026-08-05",
+                    "bank_statement_count": 0,
+                    "transaction_count": 2,
+                    "first_transaction_date": "2026-08-05",
+                    "last_transaction_date": "2026-08-05",
+                    "bank_documents": [],
+                    "bank_documents_without_rows": [],
+                    "transactions_without_document": [],
+                    "orphan_document_ids": [],
+                    "duplicate_groups": [],
+                    "statement_proof": {
+                      "status": "passed",
+                      "blockers": 0,
+                      "warnings": 0,
+                      "checked_documents": 0,
+                      "passed_documents": 0,
+                      "issues": []
+                    },
+                    "summary": "2 statement transactions imported and proven for the period."
+                  }
+                },
+                "xero_mirror": {
+                  "summary": {
+                    "exported": 0,
+                    "pending": 2,
+                    "error": 0
+                  },
+                  "diff": {
+                    "status": "warning",
+                    "period_start": "2026-08-01",
+                    "period_end": "2026-08-05",
+                    "counts": {
+                      "total": 2,
+                      "exported": 0,
+                      "missing_in_xero": 2,
+                      "exported_before_ledger": 0,
+                      "not_posted": 0,
+                      "account_drift": 0,
+                      "amount_drift": 0,
+                      "error": 0
+                    },
+                    "rows": [
+                      {
+                        "transaction_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+                        "date": "2026-08-05",
+                        "description": "event/processor-settlement",
+                        "amount": 68,
+                        "currency": "EUR",
+                        "ledger_status": "posted",
+                        "xero_status": "pending",
+                        "issue": "missing_in_xero",
+                        "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox",
+                        "xero_bank_transaction_id": null,
+                        "ledger_account_code": "200",
+                        "xero_account_code": null,
+                        "error": null
+                      },
+                      {
+                        "transaction_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+                        "date": "2026-08-05",
+                        "description": "event/bank-cash",
+                        "amount": 68,
+                        "currency": "EUR",
+                        "ledger_status": "posted",
+                        "xero_status": "pending",
+                        "issue": "missing_in_xero",
+                        "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow",
+                        "xero_bank_transaction_id": null,
+                        "ledger_account_code": "200",
+                        "xero_account_code": null,
+                        "error": null
+                      }
+                    ],
+                    "summary": "0/2 exported · 0 not posted · 2 missing in Xero · 0 errors."
+                  },
+                  "note": "Xero is a mirror/output adapter. Donna ledger data is the source of accounting truth."
+                },
+                "audit": {
+                  "events": [
+                    {
+                      "id": "19",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "actor_type": "system",
+                      "actor_id": null,
+                      "action": "close.period_locked",
+                      "resource_type": "close_period",
+                      "resource_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "metadata": {
+                        "forced": false,
+                        "actor_id": "kari@books.example",
+                        "period_end": "2026-08-05",
+                        "period_start": "2026-08-01"
+                      },
+                      "created_at": "2026-08-19T16:40:40.810Z"
+                    },
+                    {
+                      "id": "18",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "actor_type": "system",
+                      "actor_id": null,
+                      "action": "close.checks_run",
+                      "resource_type": "close_period",
+                      "resource_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+                      "metadata": {
+                        "status": "ready",
+                        "actor_id": "kari@books.example",
+                        "lockable": true,
+                        "period_end": "2026-08-05",
+                        "period_start": "2026-08-01"
+                      },
+                      "created_at": "2026-08-19T16:40:40.803Z"
+                    },
+                    {
+                      "id": "17",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "actor_type": "system",
+                      "actor_id": "kari@books.example",
+                      "action": "ledger.post_transaction",
+                      "resource_type": "transaction",
+                      "resource_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+                      "metadata": {
+                        "account_code": null,
+                        "bank_account": "Business Checking · EUR",
+                        "coding_model": null,
+                        "ap_settlement": {
+                          "reason": "flag_off",
+                          "applied": false
+                        },
+                        "ar_settlement": {
+                          "reason": "flag_off",
+                          "applied": false
+                        },
+                        "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow"
+                      },
+                      "created_at": "2026-08-19T16:40:40.777Z"
+                    },
+                    {
+                      "id": "16",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "actor_type": "system",
+                      "actor_id": "kari@books.example",
+                      "action": "ledger.post_transaction",
+                      "resource_type": "transaction",
+                      "resource_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+                      "metadata": {
+                        "account_code": null,
+                        "bank_account": "Business Checking · EUR",
+                        "coding_model": null,
+                        "ap_settlement": {
+                          "reason": "flag_off",
+                          "applied": false
+                        },
+                        "ar_settlement": {
+                          "reason": "flag_off",
+                          "applied": false
+                        },
+                        "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox"
+                      },
+                      "created_at": "2026-08-19T16:40:40.777Z"
+                    },
+                    {
+                      "id": "14",
+                      "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+                      "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "actor_type": "system",
+                      "actor_id": null,
+                      "action": "client.create",
+                      "resource_type": "client",
+                      "resource_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+                      "metadata": {
+                        "queue_count": 0
+                      },
+                      "created_at": "2026-08-19T16:40:40.724Z"
+                    }
+                  ]
+                }
+              },
+              "dry_run": false,
+              "status": "generated",
+              "storage_status": "not_configured",
+              "storage_destination": null
+            },
+            "export_checksum": "3f27738cbd4649d3671c5639ab99a865edba5f46cefe5e9d11e028fa75660658"
+          },
+          "projection_digest": "a93a8826d6db0496cff83e806a0bb2391384426ab7b20c1263ecbed58282105e"
+        },
+        {
+          "posting": {
+            "source": "ledger_period_posting",
+            "dry_run": false,
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-05",
+            "eligible_review_states": [
+              "accepted"
+            ],
+            "requested_count": 2,
+            "ready_count": 0,
+            "posted_count": 0,
+            "skipped_count": 2,
+            "error_count": 0,
+            "atomic": true,
+            "results": [
+              {
+                "transaction_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+                "date": "2026-08-04T22:00:00.000Z",
+                "description": "event/processor-settlement",
+                "review_state": "posted",
+                "status": "skipped",
+                "reason": "already_posted"
+              },
+              {
+                "transaction_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+                "date": "2026-08-04T22:00:00.000Z",
+                "description": "event/bank-cash",
+                "review_state": "posted",
+                "status": "skipped",
+                "reason": "already_posted"
+              }
+            ]
+          },
+          "terminal": {
+            "t1": [
+              {
+                "source": "close_period_status",
+                "status": "locked"
+              }
+            ],
+            "locked": true,
+            "t2": [],
+            "limbo": []
+          },
+          "close": null,
+          "projection_digest": "da5198c75a80c245ef9c62b13a62662618e40be778238c200995a6e554d5afa7"
+        }
+      ],
+      "idempotent": true,
+      "terminal": {
+        "t1": [
+          {
+            "source": "close_period_status",
+            "status": "locked"
+          }
+        ],
+        "locked": true,
+        "t2": [],
+        "limbo": []
+      }
+    },
+    "cleanup": {
+      "delete_receipt": {
+        "version": "eaw.firm-lifecycle.v1",
+        "op": "firm_retired",
+        "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+        "actor": {
+          "type": "operator",
+          "id": "kari@books.example"
+        },
+        "client_ids": [
+          "eaw-eaw-s1-close-20260819-1840-1-client-1"
+        ],
+        "authority_plane": [
+          {
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "flags": [],
+            "grants": [],
+            "action_grants": [],
+            "role_assignments": []
+          }
+        ],
+        "audit_trail": [
+          {
+            "id": "13",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": null,
+            "actor_type": "operator",
+            "actor_id": "kari@books.example",
+            "action": "firm.eaw_created",
+            "resource_type": "firm",
+            "resource_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "metadata": {
+              "source": "eaw_lifecycle",
+              "currency": "GBP",
+              "jurisdiction": "GB"
+            },
+            "created_at": "2026-08-19T16:40:40.719Z"
+          },
+          {
+            "id": "14",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "actor_type": "system",
+            "actor_id": null,
+            "action": "client.create",
+            "resource_type": "client",
+            "resource_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "metadata": {
+              "queue_count": 0
+            },
+            "created_at": "2026-08-19T16:40:40.724Z"
+          },
+          {
+            "id": "15",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": null,
+            "actor_type": "system",
+            "actor_id": null,
+            "action": "documents.sync",
+            "resource_type": "document",
+            "resource_id": null,
+            "metadata": {
+              "document_count": 3,
+              "transaction_count": 2,
+              "transaction_intel_client_count": 1
+            },
+            "created_at": "2026-08-19T16:40:40.748Z"
+          },
+          {
+            "id": "16",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "actor_type": "system",
+            "actor_id": "kari@books.example",
+            "action": "ledger.post_transaction",
+            "resource_type": "transaction",
+            "resource_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-0",
+            "metadata": {
+              "account_code": null,
+              "bank_account": "Business Checking · EUR",
+              "coding_model": null,
+              "ap_settlement": {
+                "reason": "flag_off",
+                "applied": false
+              },
+              "ar_settlement": {
+                "reason": "flag_off",
+                "applied": false
+              },
+              "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fox"
+            },
+            "created_at": "2026-08-19T16:40:40.777Z"
+          },
+          {
+            "id": "17",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "actor_type": "system",
+            "actor_id": "kari@books.example",
+            "action": "ledger.post_transaction",
+            "resource_type": "transaction",
+            "resource_id": "eaw-eaw-s1-close-20260819-1840-1-client-1-tx-1",
+            "metadata": {
+              "account_code": null,
+              "bank_account": "Business Checking · EUR",
+              "coding_model": null,
+              "ap_settlement": {
+                "reason": "flag_off",
+                "applied": false
+              },
+              "ar_settlement": {
+                "reason": "flag_off",
+                "applied": false
+              },
+              "ledger_journal_id": "ledger-journal-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-transaction-eaw-eaw-s1-close-20260819-1840--af4fow"
+            },
+            "created_at": "2026-08-19T16:40:40.777Z"
+          },
+          {
+            "id": "18",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "actor_type": "system",
+            "actor_id": null,
+            "action": "close.checks_run",
+            "resource_type": "close_period",
+            "resource_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+            "metadata": {
+              "status": "ready",
+              "actor_id": "kari@books.example",
+              "lockable": true,
+              "period_end": "2026-08-05",
+              "period_start": "2026-08-01"
+            },
+            "created_at": "2026-08-19T16:40:40.803Z"
+          },
+          {
+            "id": "19",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "actor_type": "system",
+            "actor_id": null,
+            "action": "close.period_locked",
+            "resource_type": "close_period",
+            "resource_id": "ledger-close-period-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-jf9cui",
+            "metadata": {
+              "forced": false,
+              "actor_id": "kari@books.example",
+              "period_end": "2026-08-05",
+              "period_start": "2026-08-01"
+            },
+            "created_at": "2026-08-19T16:40:40.810Z"
+          },
+          {
+            "id": "20",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "actor_type": "system",
+            "actor_id": "kari@books.example",
+            "action": "close.archive_generated",
+            "resource_type": "close_archive",
+            "resource_id": "close-archive-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-67d22a35b7ca3ebc",
+            "metadata": {
+              "period_end": "2026-08-05",
+              "period_start": "2026-08-01",
+              "schema_version": "donna.close_archive.v1",
+              "storage_status": "not_configured",
+              "manifest_checksum_sha256": "357b32bb8397b4e4b9ed71ec73aa69c6ec4598f37f17b894ccf22da96962e51a"
+            },
+            "created_at": "2026-08-19T16:40:40.820Z"
+          },
+          {
+            "id": "21",
+            "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+            "client_id": "eaw-eaw-s1-close-20260819-1840-1-client-1",
+            "actor_type": "system",
+            "actor_id": "kari@books.example",
+            "action": "close.archive_exported",
+            "resource_type": "close_archive",
+            "resource_id": "close-archive-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-67d22a35b7ca3ebc",
+            "metadata": {
+              "note": "User-initiated download. The client controls custody after the file leaves Donna.",
+              "method": "manual_download",
+              "status": "delivered",
+              "filename": "donna-close-archive-eaw-eaw-s1-close-20260819-1840-1-client-1-Sat-Aug-01-2026-00-00-00-GMT-0200--Central-European-Summer-Time--Wed-Aug-05-2026-00-00-00-GMT-0200--Central-European-Summer-Time--2a35b7ca3ebc.json",
+              "archive_id": "close-archive-eaw-eaw-s1-close-20260819-1840-1-eaw-eaw-s1-close-20260819-1840-1-client-1-2026-08-01-2026-08-05-67d22a35b7ca3ebc",
+              "destination": "client_download_folder",
+              "exported_at": "2026-08-19T16:40:40.823Z",
+              "exported_by": "kari@books.example",
+              "integrity_check": {
+                "method": "bundle_checksum_sha256",
+                "status": "passed",
+                "checked_at": "2026-08-19T16:40:40.823Z"
+              },
+              "bundle_checksum_sha256": "3f27738cbd4649d3671c5639ab99a865edba5f46cefe5e9d11e028fa75660658",
+              "manifest_checksum_sha256": "357b32bb8397b4e4b9ed71ec73aa69c6ec4598f37f17b894ccf22da96962e51a"
+            },
+            "created_at": "2026-08-19T16:40:40.823Z"
+          }
+        ],
+        "rows_deleted": [
+          {
+            "table": "clients",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 1
+          },
+          {
+            "table": "close_archives",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 1
+          },
+          {
+            "table": "close_checks",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 5
+          },
+          {
+            "table": "close_periods",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 1
+          },
+          {
+            "table": "documents",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 3
+          },
+          {
+            "table": "ledger_accounts",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 2
+          },
+          {
+            "table": "ledger_journals",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 2
+          },
+          {
+            "table": "ledger_lines",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 4
+          },
+          {
+            "table": "transactions",
+            "column": "firm_id",
+            "scope": "firm",
+            "rows": 2
+          }
+        ],
+        "tables_checked": 150,
+        "residue_verified": true,
+        "retained": {
+          "firm_row_present": true,
+          "firm_retired": true,
+          "audit_event_rows": 10
+        },
+        "note": "Retire, not delete (migration 119): the audit trail and the retired firms row survive by design; this receipt carries the exported trail — re-verify with countFirmResidueInDb (residue_rows must be 0)."
+      },
+      "post_delete_residue": {
+        "version": "eaw.firm-lifecycle.v1",
+        "firm_id": "eaw-eaw-s1-close-20260819-1840-1",
+        "tables_checked": 150,
+        "residue": [],
+        "residue_rows": 0,
+        "retained": {
+          "firm_row_present": true,
+          "firm_retired": true,
+          "audit_event_rows": 10
+        }
+      },
+      "cleanup_error": null
+    },
+    "failure": null
+  }
+}

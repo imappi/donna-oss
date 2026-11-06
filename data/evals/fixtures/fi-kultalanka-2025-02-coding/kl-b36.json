@@ -1,0 +1,57 @@
+{
+  "id": "kl-b36",
+  "title": "Kultalanka 02/2025 28.2. E-lasku −6,00 (row shared with tilinhoito −8,00)",
+  "split": "development",
+  "family": "kultalanka-bank_fee",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "bank_fee",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-28",
+    "description": "E-LASKUPALVELUMAKSU OP 2/2025",
+    "money_in": 0,
+    "money_out": 6,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Bank fees",
+          "direction": "debit",
+          "amount": 6,
+          "tax_code": "ALV_OUT_OF_SCOPE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 6,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B36"
+  }
+}

@@ -1,0 +1,204 @@
+{
+  "id": "holdout-055",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-055",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0410\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Woodlands Logistics Hub Pte. Ltd.  UEN 201312345G\nInvoice date: 01 Jul 2026    Due date: 31 Jul 2026    Terms: 30 days\nCustomer PO: Contract CTR-0092\nDescription: Warehouse app maintenance, Q3 2026 (contract CTR-0092)\nSubtotal: S$3,000.00\nGST 9%: S$270.00\nTOTAL: S$3,270.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0410.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0330\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Woodlands Logistics Hub Pte. Ltd.  UEN 201312345G\nInvoice date: 01 Apr 2026    Due date: 01 May 2026    Terms: 30 days\nCustomer PO: Contract CTR-0092\nDescription: Warehouse app maintenance, Q2 2026 (contract CTR-0092)\nSubtotal: S$3,000.00\nGST 9%: S$270.00\nTOTAL: S$3,270.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0330.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n09 Sep 2026,ICT,,3270.00,PAYNOW TRANSFER,WOODLANDS LOGISTICS HUB,CTR-0092",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-09",
+        "money_in_minor": 327000,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "WOODLANDS LOGISTICS HUB PTE LTD",
+        "description": "PAYNOW TRANSFER WOODLANDS LOGISTICS HUB CTR-0092",
+        "raw_description": "09 Sep 2026,ICT,,3270.00,PAYNOW TRANSFER,WOODLANDS LOGISTICS HUB,CTR-0092",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 327000,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 327000,
+        "bank_currency": "SGD",
+        "gross_minor": 327000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-04-01",
+        "reference": "CTR-0092"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-07-01",
+      "due_date": "2026-07-31",
+      "amount_minor": 327000,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "CTR-0092",
+      "counterparty": "Woodlands Logistics Hub Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-sg-quarterly-contract-reference-repeated",
+    "family_description": "Quarterly maintenance invoices all print the contract number, which the customer uses as the PayNow reference.",
+    "market": "SG",
+    "variant": "a",
+    "error_mode": "repeated contract reference across quarters; email naming the quarter; next quarter not yet due",
+    "label_reason": "The PayNow reference CTR-0092 is printed on both open quarterly invoices; a repeated reference cannot pick the quarter.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

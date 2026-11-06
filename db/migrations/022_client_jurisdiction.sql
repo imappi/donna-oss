@@ -1,0 +1,34 @@
+-- Per-client jurisdiction override.
+--
+-- Background: PR 4 of the classification rollout (commit 0e31c7f)
+-- introduced a locale-aware date hint that flows from
+-- `firms.jurisdiction` through the worker into the three header
+-- extractors (receipt, supplier_bill, sales_invoice). The hint
+-- disambiguates slash-separated dates like "04/05/2026" — DMY for
+-- UK/SG/AU/etc, MDY for US/PH.
+--
+-- One firm, one jurisdiction worked for the early demo, but it
+-- breaks for firms whose clients are scattered across jurisdictions.
+-- Alex Morgan (alex-morgan-personal) is a UK individual managed by
+-- the SG-based `donna-demo-firm`. With only `firms.jurisdiction='SG'`
+-- available, the LLM keeps emitting warnings on Alex's docs ("UK
+-- rent receipt; may not align with a Singapore bookkeeping
+-- workflow"). The hint resolution is still DMY-correct because SG
+-- and UK are both DMY, but the prompt text is jurisdictionally
+-- wrong, and a US-based client in this firm would actually misread
+-- dates.
+--
+-- This migration adds `clients.jurisdiction text` (nullable). The
+-- worker now reads client → firm in that order; the firm value is
+-- the fallback when the client value is unset.
+--
+-- No backfill — leaving jurisdiction unset on existing clients
+-- preserves current behaviour (the firm-level value still applies).
+-- Operators set the override per-client via a simple UPDATE:
+--
+--   update clients set jurisdiction = 'UK' where id = 'alex-morgan-personal';
+--
+-- Re-run safe: column add is `if not exists`.
+
+alter table clients
+  add column if not exists jurisdiction text;

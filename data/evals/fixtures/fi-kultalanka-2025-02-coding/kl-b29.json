@@ -1,0 +1,64 @@
+{
+  "id": "kl-b29",
+  "title": "Kultalanka 02/2025 25.2. Käteistalletus +455,00",
+  "split": "development",
+  "family": "kultalanka-cash_sales_deposit",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "cash_sales_deposit",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-25",
+    "description": "KÄTEISTALLETUS OP TAMPERE KASSATALLETUS 21.-24.2.",
+    "money_in": 455,
+    "money_out": 0,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "debit",
+          "amount": 455,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Sales",
+          "direction": "credit",
+          "amount": 362.55,
+          "tax_code": "ALV_25_5_OUTPUT"
+        },
+        {
+          "role": "alv_output",
+          "account": "2939",
+          "direction": "credit",
+          "amount": 92.45,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "disputed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B29"
+  }
+}

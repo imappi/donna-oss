@@ -1,0 +1,22 @@
+{
+  "lane": "document_disposition",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — authored from documentDispositionLlm.js's output contract for the appliance fixture world: the Ochre Lighting bill (550 GBP, material) parsed with no bank statement in the feed, so the honest verdict routes to the owner as a statement request (chase_evidence / uncovered_account); never a captured provider response",
+  "fixture": "supplier_bill_discount",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_dispose_ochre_bill",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-4-8",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"disposition\":\"chase_evidence\",\"materiality\":\"material\",\"expense_kind\":\"lighting_and_electrical\",\"settlement_channel\":\"uncovered_account\",\"confidence\":0.86,\"reasoning\":\"A material supplier bill due on Net 30 terms with no statement covering the paying account in the feed yet; the owner must supply that account's statement before it can be treated as settled.\"}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": { "input_tokens": 0, "output_tokens": 0 }
+  }
+}

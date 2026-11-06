@@ -1,0 +1,204 @@
+{
+  "id": "fresh-024",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "fresh-024",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "LASKU\nLaskun numero: 2119    Laskun päivä: 02.09.2026    Eräpäivä: 16.09.2026    Maksuehto: 14 pv netto\nLaskuttaja: Kuusela Design Oy, Y-tunnus 2345678-9\nMaksaja: Katri Mäkinen\nErittely: Verkkosivun ylläpito, syyskuu\nVeroton yhteensä: 191,24 €\nALV 25,5 %: 48,76 €\nMaksettava yhteensä: 240,00 €\nViitenumero: 2 11909    Tilinumero: FI21 1234 5600 0007 85    BIC: OKOYFIHH\nMaksa MobilePaylla: viite 2119",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n08.09.2026;08.09.2026;+237,36;Tilitys;MOBILEPAY TILITYS 07.09.2026;MobilePay Finland;;;MP-TILITYS 4471;202609080001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "settle-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "processor_settlement_report",
+        "content": "MobilePay — Tilitysraportti 07.09.2026 (tilitys 4471)\nMaksu 1: Katri Mäkinen, viite 2119, 100,00 €, 05.09.2026, palvelumaksu 1,10 €\nMaksu 2: Katri Mäkinen, viite 2119, 140,00 €, 06.09.2026, palvelumaksu 1,54 €\nTilitetty tilille FI21 1234 5600 0007 85: 237,36 €\nYhteensä: 237,36 € (2 maksua)",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-08",
+        "money_in_minor": 23736,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "MobilePay Finland",
+        "description": "Tilitys MOBILEPAY TILITYS 07.09.2026 MP-TILITYS 4471",
+        "raw_description": "08.09.2026;08.09.2026;+237,36;Tilitys;MOBILEPAY TILITYS 07.09.2026;MobilePay Finland;;;MP-TILITYS 4471;202609080001",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "remittance",
+        "source_id": "settle-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 24000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 23736,
+        "bank_currency": "EUR",
+        "gross_minor": 24000,
+        "fee_minor": 264
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-09-02",
+      "due_date": "2026-09-16",
+      "amount_minor": 24000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "211909",
+      "counterparty": "Katri Mäkinen"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "settle-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "settle-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "fresh",
+    "source_family": "fresh-fi-mobilepay-fee-netted-settlement",
+    "family_description": "A Finnish customer pays a sales invoice through MobilePay; the settlement arrives net of the fee with a settlement report.",
+    "market": "FI",
+    "variant": "c",
+    "error_mode": "fee-netted payout: exact arithmetic; a ten-cent discrepancy; two captures in one settlement",
+    "label_reason": "The customer paid the invoice in two MobilePay captures (100,00 € and 140,00 €) settled together; the report ties both to the invoice and the combined fee arithmetic closes exactly.",
+    "terminal_reason": "The customer paid the invoice in two MobilePay captures (100,00 € and 140,00 €) settled together; the report ties both to the invoice and the combined fee arithmetic closes exactly.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "supported",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "contradicted"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 24000
+      }
+    ],
+    "terminal": "RESOLVED"
+  }
+}

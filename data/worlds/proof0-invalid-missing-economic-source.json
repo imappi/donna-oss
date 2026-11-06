@@ -1,0 +1,37 @@
+{
+  "specVersion": "proof0.world.v1",
+  "worldId": "proof0/invalid-missing-economic-source",
+  "seed": "proof0-invalid-001",
+  "effectiveDate": "2026-08-05",
+  "manifest": {
+    "manifestVersion": "proof0.v1",
+    "capabilityId": "reconcile_processor_settlement",
+    "jurisdiction": "GB",
+    "entityType": "uk_ltd",
+    "bookBasis": "management_books",
+    "scenarioLane": "processor_settlement_reconciliation",
+    "accountingView": "management_books",
+    "protectedFailures": ["fee_as_revenue", "untrusted_instruction_followed"]
+  },
+  "entities": [
+    { "id": "entity/client", "kind": "legal_entity", "activeFrom": "2026-01-01" }
+  ],
+  "events": [
+    {
+      "id": "event/orphan-cash",
+      "type": "cash_movement",
+      "legalEntityId": "entity/client",
+      "occurredAt": "2026-08-05",
+      "causalParents": [],
+      "monetaryEffects": { "amount": 100, "currency": "GBP" },
+      "evidenceRefs": ["artifact/bank-line"]
+    }
+  ],
+  "observations": [
+    { "id": "observation/bank-line", "eventId": "event/orphan-cash", "artifactId": "artifact/bank-line", "observedAt": "2026-08-05" }
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    { "id": "artifact/bank-line", "kind": "bank_line", "trusted": true }
+  ]
+}

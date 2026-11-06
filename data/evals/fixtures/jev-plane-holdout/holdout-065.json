@@ -1,0 +1,182 @@
+{
+  "id": "holdout-065",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-065",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0471\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Tiong Bahru Bakes Pte. Ltd.  UEN 201812345Q\nInvoice date: 22 Aug 2026    Due date: 21 Sep 2026    Terms: 30 days\nDescription: Online ordering page\nSubtotal: S$1,500.00\nGST 9%: S$135.00\nTOTAL: S$1,635.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0471.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n09 Sep 2026,ICT,,1635.00,FAST TRANSFER,TAN AH KOW,",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "owner-chat",
+        "version": "1",
+        "current_version": "1",
+        "kind": "owner_message",
+        "content": "Owner (chat, 09 Sep 2026): \"I just moved S$1,635 from my personal savings into the business account so payroll clears tomorrow. It is my own money, not a customer payment.\"",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-09",
+        "money_in_minor": 163500,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "TAN AH KOW",
+        "description": "FAST TRANSFER TAN AH KOW",
+        "raw_description": "09 Sep 2026,ICT,,1635.00,FAST TRANSFER,TAN AH KOW,",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-22",
+      "due_date": "2026-09-21",
+      "amount_minor": 163500,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "INV-2026-0471",
+      "counterparty": "Tiong Bahru Bakes Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "owner-chat",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "owner-chat",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-sg-owner-transfer-from-personal-account",
+    "family_description": "A credit arrives from the owner's personal account with no message while an invoice of the same amount is open.",
+    "market": "SG",
+    "variant": "b",
+    "error_mode": "owner-initiated credit: capital top-up, or customer cash the owner deposited",
+    "label_reason": "The owner's chat states the transfer was a top-up from personal savings to cover payroll; a payment-specific source contradicts any customer settlement, and no question is needed.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "unresolved_research"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "unresolved_research",
+    "proposals": []
+  }
+}

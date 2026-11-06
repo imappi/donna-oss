@@ -1,0 +1,56 @@
+{
+  "world_id": "appliance/rt06-fixture-set",
+  "world_seed": "appliance-rt06-fixture-set-001",
+  "renderer_version": "proof0.worldRenderer.v1",
+  "artifacts": {
+    "artifact/supplier-bill": {
+      "fixture": "supplier_bill_discount",
+      "file": "ochre-lighting-supplier-invoice-OL-2026-0812.pdf",
+      "sha256": "bbccf5c32dc6a4e8cf2c3ef67f66f3a5ea35fe94dc81360020b8a7ed3bf29117",
+      "byte_length": 2551,
+      "frozen_date": "2026-06-08T00:00:00.000Z"
+    },
+    "artifact/payout-statement": {
+      "fixture": "payout_statement",
+      "file": "paylink-PO-88121-2026-08-18.pdf",
+      "sha256": "28ae717493f775bedfeb6392776a9097562a2e55e4c0e901e1d297287ab03fe8",
+      "byte_length": 2050,
+      "frozen_date": "2026-06-08T00:00:00.000Z"
+    },
+    "artifact/payout-statement-nonfooting": {
+      "fixture": "payout_statement_nonfooting",
+      "file": "northgate-marketplace-payout-NM-2026-0825-771.pdf",
+      "sha256": "1fd6bd5559840ac26a0b69e48152303551e773c10bed84b07abeb85c13b29367",
+      "byte_length": 2203,
+      "frozen_date": "2026-06-08T00:00:00.000Z"
+    },
+    "artifact/bank-statement": {
+      "fixture": "bank_statement_two_lines",
+      "file": "kestrel-print-barclays-statement-2026-08.pdf",
+      "sha256": "ea93b82155b9fd14c61c597fed1219a45a8d21cf93d205afc84a1df3bc4b9f6d",
+      "byte_length": 2589,
+      "frozen_date": "2026-06-08T00:00:00.000Z"
+    },
+    "artifact/deposit-slip": {
+      "fixture": "deposit_slip",
+      "file": "barclays-counter-deposit-DS-4471-2026-09-03.pdf",
+      "sha256": "55a3831132d5beb23b34f1524e05281b1a5d7f72fde20abc0aba4c5376313be8",
+      "byte_length": 2027,
+      "frozen_date": "2026-06-08T00:00:00.000Z"
+    },
+    "artifact/bank-statement-sep": {
+      "fixture": "bank_statement_deposit",
+      "file": "kestrel-print-barclays-statement-2026-09.pdf",
+      "sha256": "cd7ef18813b9106fba7d85582d1d58023fe433464377e75fcbb0fbda688ce24f",
+      "byte_length": 2345,
+      "frozen_date": "2026-06-08T00:00:00.000Z"
+    },
+    "artifact/receipt": {
+      "fixture": "receipt_screwfix",
+      "file": "screwfix-receipt-2026-08-22.pdf",
+      "sha256": "2066016328d8bd0bbaa1dbc79c9ba70f83aeaa0aa441b429f7ee215da546f5e3",
+      "byte_length": 2112,
+      "frozen_date": "2026-06-08T00:00:00.000Z"
+    }
+  }
+}

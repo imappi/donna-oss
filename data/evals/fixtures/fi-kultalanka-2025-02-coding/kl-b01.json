@@ -1,0 +1,101 @@
+{
+  "id": "kl-b01",
+  "title": "Kultalanka 02/2025 3.2. Nets setlementti +2 452,72",
+  "split": "development",
+  "family": "kultalanka-processor_settlement",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "processor_settlement",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-03",
+    "description": "NETS SETTLEMENT NETS FINLAND OY JAKSO VKO5 2025",
+    "money_in": 2452.72,
+    "money_out": 0,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "debit",
+          "amount": 2452.72,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Sales",
+          "direction": "credit",
+          "amount": 1949.18,
+          "tax_code": "ALV_25_5_OUTPUT"
+        },
+        {
+          "role": "alv_output",
+          "account": "2939",
+          "direction": "credit",
+          "amount": 503.54,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "debit",
+          "amount": 2452.72,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Platform and processor fees",
+          "direction": "debit",
+          "amount": 27.28,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Sales",
+          "direction": "credit",
+          "amount": 1976.1,
+          "tax_code": "ALV_25_5_OUTPUT"
+        },
+        {
+          "role": "alv_output",
+          "account": "2939",
+          "direction": "credit",
+          "amount": 503.9,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudication": {
+      "status": "adjudicated",
+      "reviewer": "Ilkka Halonen (operator; not professional review)",
+      "date": "2026-09-24"
+    }
+  },
+  "expressible": {
+    "status": "gap",
+    "gap": "source",
+    "detail": "the Nets report settles by row; the FIK-3 book cannot seed a settlement row"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B01"
+  }
+}

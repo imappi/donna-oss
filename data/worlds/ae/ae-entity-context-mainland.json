@@ -1,0 +1,128 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/entity-context/mainland-llc",
+  "seed": "ae-entity-context-mainland-v2",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.entity-context.v1",
+    "capabilityId": "record_ae_entity_tax_context",
+    "jurisdiction": "AE",
+    "entityType": "ae-llc",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_entity_tax_context",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": ["mainland_entity_context", "designated_zone_fact_separation", "fta_assigned_vat_period"],
+    "permittedActions": ["record_context", "request_missing_entity_fact"],
+    "maximumAuthority": "observe_only",
+    "fallback": {
+      "terminalState": "blocked",
+      "responsibleActor": "owner_or_firm",
+      "nextPermittedAction": "request_missing_entity_fact"
+    },
+    "protectedFailures": ["free_zone_planes_conflated", "fta_period_inferred_from_cadence", "period_tax_status_stored_as_profile", "cross_entity_context_leak"]
+  },
+  "policySources": [
+    {
+      "id": "policy/ae-vat-designated-zones",
+      "authority": "Federal Tax Authority",
+      "title": "Designated Zones VAT Guide VATGDZ1",
+      "url": "https://tax.gov.ae/DownloadOpenTextFile?fileUrl=en%2FVAT_VAT_Guides%2FDesignated_Zones_VAT_Guide%2FDesignated_Zones_VAT_Guide_EN.pdf",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-08-31"
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity/ae-mainland-llc",
+      "kind": "company",
+      "legalForm": "ae-llc",
+      "activeFrom": "2026-01-01",
+      "facts": {
+        "freeZoneStanding": [
+          {
+            "standing": "mainland",
+            "licensingAuthority": "Dubai Department of Economy and Tourism",
+            "emirate": "DXB",
+            "effectiveFrom": "2026-01-01",
+            "effectiveTo": null,
+            "sourceArtifactId": "artifact/ae-mainland-trade-licence"
+          }
+        ],
+        "designatedZone": [
+          {
+            "status": "not_designated",
+            "zoneName": null,
+            "effectiveFrom": "2026-01-01",
+            "effectiveTo": null,
+            "sourceArtifactId": "artifact/ae-designated-zone-register-mainland",
+            "policySourceId": "policy/ae-vat-designated-zones"
+          }
+        ],
+        "vatRegistration": [
+          {
+            "status": "registered",
+            "registrationSubject": "legal_entity",
+            "registrationSubjectId": "entity/ae-mainland-llc",
+            "trn": "100123456789012",
+            "registrationBasis": "mandatory",
+            "returnCadence": "quarter",
+            "effectiveFrom": "2026-01-01",
+            "effectiveTo": null,
+            "sourceArtifactId": "artifact/ae-vat-registration-certificate-mainland"
+          }
+        ],
+        "ftaVatPeriods": [
+          {
+            "periodKey": "2026-Q3",
+            "startsOn": "2026-07-01",
+            "endsOn": "2026-09-30",
+            "dueOn": "2026-10-28",
+            "sourceArtifactId": "artifact/ae-fta-period-assignment-mainland"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [],
+  "observations": [
+    {"id": "observation/ae-mainland-trade-licence", "artifactId": "artifact/ae-mainland-trade-licence", "observedAt": "2026-01-02"},
+    {"id": "observation/ae-designated-zone-register-mainland", "artifactId": "artifact/ae-designated-zone-register-mainland", "observedAt": "2026-01-02"},
+    {"id": "observation/ae-vat-registration-certificate-mainland", "artifactId": "artifact/ae-vat-registration-certificate-mainland", "observedAt": "2026-01-03"},
+    {"id": "observation/ae-fta-period-assignment-mainland", "artifactId": "artifact/ae-fta-period-assignment-mainland", "observedAt": "2026-06-15"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {
+      "id": "artifact/ae-mainland-trade-licence",
+      "kind": "trade_licence",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic UAE Mainland Trade Licence",
+      "fields": {"legalName": "Desert Lantern Services LLC", "licenceNumber": "SYNTH-AE-000001", "licensingAuthority": "Dubai Department of Economy and Tourism", "legalForm": "Limited Liability Company", "issueDate": "2026-01-01"}
+    },
+    {
+      "id": "artifact/ae-designated-zone-register-mainland",
+      "kind": "designated_zone_register_extract",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic FTA Designated-Zone Register Check",
+      "fields": {"establishment": "Dubai mainland", "status": "not_designated", "checkedOn": "2026-01-02"}
+    },
+    {
+      "id": "artifact/ae-vat-registration-certificate-mainland",
+      "kind": "vat_registration_certificate",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic FTA VAT Registration Certificate",
+      "fields": {"taxablePerson": "Desert Lantern Services LLC", "trn": "100123456789012", "effectiveFrom": "2026-01-01"}
+    },
+    {
+      "id": "artifact/ae-fta-period-assignment-mainland",
+      "kind": "emara_tax_period_assignment",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic EmaraTax VAT Period Assignment",
+      "fields": {"periodKey": "2026-Q3", "startsOn": "2026-07-01", "endsOn": "2026-09-30", "dueOn": "2026-10-28"}
+    }
+  ]
+}

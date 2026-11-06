@@ -1,0 +1,72 @@
+{
+  "id": "fik3-hold-004",
+  "title": "Customer payment of a held sales invoice at the standard rate",
+  "split": "holdout",
+  "family": "fi-oy-sales-receipt",
+  "entity": "synthetic-oy-c",
+  "period": "2026-08",
+  "decision_class": "output_vat",
+  "strong_is_alternative": false,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Synteettinen Gamma Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2026-08-21",
+    "description": "SYNTH ASIAKAS OY",
+    "money_in": 251.0,
+    "money_out": 0,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "sales_invoice",
+    "party": "Synth Asiakas Oy",
+    "total_amount": 251.0,
+    "tax_amount": 51.0,
+    "lines": [
+      {
+        "description": "Consulting services, August",
+        "amount": 251.0,
+        "tax_rate": 25.5
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "debit",
+          "amount": 251,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Sales",
+          "direction": "credit",
+          "amount": 200,
+          "tax_code": "ALV_25_5_OUTPUT"
+        },
+        {
+          "role": "alv_output",
+          "account": "2939",
+          "direction": "credit",
+          "amount": 51,
+          "tax_code": "NONE"
+        }
+      ]
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  }
+}

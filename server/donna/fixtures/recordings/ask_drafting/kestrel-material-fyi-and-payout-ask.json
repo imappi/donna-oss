@@ -1,0 +1,35 @@
+{
+  "lane": "ask_drafting",
+  "endpoint_class": "openai",
+  "provenance": "synthetic — authored from askPipeline.js buildAskMessageSchema for the appliance fixture world: the Ochre Lighting bill (550 GBP, material) auto-reconciled under the desktop's decide-and-notify seed (a pure FYI, no question), and the PayLink payout (1,213.75 GBP, chase_evidence from the disposition pass) asked for its settlement report — exactly one ask per gathered line; never a captured provider response",
+  "fixture": "supplier_bill_discount",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_ask_draft_kestrel_fyi",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_ask_draft_kestrel_fyi",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"subject\": \"Your August books — one item posted, one report needed\", \"message_markdown\": \"We matched and posted the Ochre Lighting bill OL-2026-0812 (GBP 550.00) to your payment of 20 Aug 2026 — nothing to do there; reply if that looks wrong.\\n\\nOne thing we need: the PayLink payout of GBP 1,213.75 received on 19 Aug 2026 has no settlement report on file. Please send the payout/settlement report so we can record gross sales and fees rather than the net amount.\", \"summary\": \"One material match posted under standing policy; the PayLink payout needs its settlement report.\", \"items\": [{\"transaction_ref\": \"transaction_1\", \"disposition\": \"ask\", \"question\": \"Please send the PayLink payout/settlement report for the GBP 1,213.75 received on 19 Aug 2026 so we can record gross sales and fees.\", \"evidence_type\": \"supporting_document\", \"fyi_note\": \"\", \"skip_reason\": \"\", \"local_document_refs\": []}], \"statement_requests\": [], \"document_asks\": []}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "version": "eaw.diagnostic-artifact.v1",
+  "fictional": true,
+  "operation": "create_client",
+  "creation_path": "desktop_firm_intake",
+  "firm_id": "eaw-fictional-firm",
+  "client_id": "eaw-fictional-client",
+  "injected_failure": "desktop_baseline_seed_failed"
+}

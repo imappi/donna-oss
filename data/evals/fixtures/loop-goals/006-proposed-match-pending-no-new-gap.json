@@ -1,0 +1,13 @@
+{
+  "id": "006-proposed-match-pending-no-new-gap",
+  "title": "A proposed (not yet sticky) match leaves the goal indeterminate and opens NO new gap — the proposal's own confirm lifecycle owns it",
+  "input": {
+    "verdict": "proposed",
+    "hasStickyMatch": false
+  },
+  "expected": {
+    "goal_status": "indeterminate",
+    "action": "noop",
+    "stop_reason": "waiting"
+  }
+}

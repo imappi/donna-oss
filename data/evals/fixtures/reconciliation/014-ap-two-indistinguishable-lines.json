@@ -1,0 +1,46 @@
+{
+  "id": "014-ap-two-indistinguishable-lines",
+  "title": "Two indistinguishable debits — authority calibration (AP)",
+  "narrative": "AP mirror of 010. A EUR 1500 supplier bill from Helsinki Logistics with NO reference number. Two outgoing lines are each exactly EUR 1500 to Helsinki Logistics on adjacent days — indistinguishable from visible fields; only one can settle THIS bill. POLICY GOLD (please ratify): surface both as 'suggested', auto-match NEITHER (auto-matching both would pay EUR 3000 against a EUR 1500 bill). FAILURE TO CATCH: any 'auto_matched' is an AGGRESSIVE authority error (scored via authority_band_accuracy on these pinned 'suggested' targets).",
+  "tags": ["ambiguous", "duplicate_lines", "no_reference", "authority_calibration", "supplier_bill", "ap", "policy_gold"],
+  "document": {
+    "id": "sb-helsinki-014",
+    "document_type": "supplier_bill",
+    "vendor_name": "Helsinki Logistics Oy",
+    "document_date": "2026-05-10",
+    "due_date": "2026-06-07",
+    "total_amount": 1500.00,
+    "currency": "EUR",
+    "reference_number": "",
+    "extraction_confidence": 0.94,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-helsinki-1",
+      "money_out": 1500.00,
+      "currency": "EUR",
+      "date": "2026-05-12",
+      "description": "SEPA DD HELSINKI LOGISTICS",
+      "raw_description": "SEPA DD HELSINKI LOGISTICS OY",
+      "contact": "Helsinki Logistics Oy"
+    },
+    {
+      "id": "tx-helsinki-2",
+      "money_out": 1500.00,
+      "currency": "EUR",
+      "date": "2026-05-13",
+      "description": "SEPA DD HELSINKI LOGISTICS",
+      "raw_description": "SEPA DD HELSINKI LOGISTICS OY",
+      "contact": "Helsinki Logistics Oy"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      { "bank_transaction_id": "tx-helsinki-1", "status": "suggested" },
+      { "bank_transaction_id": "tx-helsinki-2", "status": "suggested" }
+    ],
+    "unmatchable_reason": null
+  }
+}

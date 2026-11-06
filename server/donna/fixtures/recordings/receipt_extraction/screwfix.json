@@ -1,0 +1,31 @@
+{
+  "lane": "receipt_extraction",
+  "endpoint_class": "openai",
+  "provenance": "synthetic — authored from receipt.js RECEIPT_EXTRACTION_SCHEMA for the appliance fixture world (artifact/receipt: net 35.82, VAT 20% 7.17, total 42.99, paid by card); never a captured provider response",
+  "fixture": "receipt_screwfix",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_extract_screwfix_receipt",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_extract_screwfix_receipt",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"extraction_status\":\"validated\",\"extraction_confidence\":0.95,\"warnings\":[],\"header\":{\"counterparty_name\":\"Screwfix\",\"counterparty_role\":\"vendor\",\"document_date\":\"2026-08-22\",\"due_date\":null,\"currency\":\"GBP\",\"subtotal_amount\":35.82,\"tax_amount\":7.17,\"shipping_amount\":null,\"discount_amount\":null,\"rounding_amount\":null,\"total_amount\":42.99,\"line_amounts_include_tax\":true,\"reference_number\":\"4471-2208-0193\",\"references\":[{\"type\":\"receipt_number\",\"value\":\"4471-2208-0193\"}],\"payment_status\":\"paid\"},\"lines\":[{\"description\":\"Cable ties 300mm (pack of 100)\",\"quantity\":2,\"unit_price\":6.99,\"amount\":13.98,\"tax_rate\":0.2},{\"description\":\"Masonry drill bit set, 5 piece\",\"quantity\":1,\"unit_price\":29.01,\"amount\":29.01,\"tax_rate\":0.2}]}"
+          }
+        ]
+      }
+    ],
+    "usage": { "input_tokens": 0, "output_tokens": 0, "total_tokens": 0 }
+  }
+}

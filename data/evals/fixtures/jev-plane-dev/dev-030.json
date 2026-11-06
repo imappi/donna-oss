@@ -1,0 +1,229 @@
+{
+  "id": "dev-030",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-030",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "LASKU\nLaskun numero: 2041    Laskun päivä: 05.08.2026    Eräpäivä: 04.09.2026    Maksuehto: 30 pv netto\nLaskuttaja: Kuusela Design Oy, Y-tunnus 2345678-9\nMaksaja: Hämeen Puutarha Oy, Y-tunnus 3344556-7\nErittely: Verkkokaupan uudistus, vaihe 1\nVeroton yhteensä: 1 000,00 €\nALV 25,5 %: 255,00 €\nMaksettava yhteensä: 1 255,00 €\nViitenumero: 2 04107    Tilinumero: FI21 1234 5600 0007 85    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n03.09.2026;03.09.2026;+1255,00;Tilisiirto;Viitemaksu;Hämeen Puutarha Oy;;204107;;202609030001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "advice-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "remittance_email",
+        "content": "Lähettäjä: talous@hameenpuutarha.example\nPäivä: 03.09.2026\nAihe: Maksuilmoitus\n\nOlemme maksaneet tänään laskun 2041, summa 1 255,00 €, viitteellä 20410.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "advice-1-forwarded",
+        "version": "1",
+        "current_version": "1",
+        "kind": "remittance_email",
+        "content": "Lähettäjä: talous@hameenpuutarha.example\nPäivä: 03.09.2026\nAihe: Maksuilmoitus\n\nOlemme maksaneet tänään laskun 2041, summa 1 255,00 €, viitteellä 20410.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-03",
+        "money_in_minor": 125500,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Hämeen Puutarha Oy",
+        "description": "Tilisiirto Viitemaksu",
+        "raw_description": "03.09.2026;03.09.2026;+1255,00;Tilisiirto;Viitemaksu;Hämeen Puutarha Oy;;204107;;202609030001",
+        "structured_reference": "204107",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-advice-1",
+        "kind": "remittance",
+        "source_id": "advice-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 125500,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 125500,
+        "bank_currency": "EUR",
+        "gross_minor": 125500,
+        "fee_minor": 0
+      },
+      {
+        "id": "link-advice-1",
+        "kind": "remittance",
+        "source_id": "advice-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 125500,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 125500,
+        "bank_currency": "EUR",
+        "gross_minor": 125500,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-05",
+      "due_date": "2026-09-04",
+      "amount_minor": 125500,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "204107",
+      "counterparty": "Hämeen Puutarha Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "advice-1",
+        "advice-1-forwarded",
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "advice-1",
+        "advice-1-forwarded",
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-fi-conflicting-and-duplicate-remittances",
+    "family_description": "Two remittance advices for one SEPA transfer: either they disagree on amounts, or one is a forwarded identical copy.",
+    "market": "FI",
+    "variant": "b",
+    "error_mode": "conflicting remittances block; identical duplicates dedupe",
+    "label_reason": "The second advice is a forwarded byte-identical copy of the first; one relationship, counted once.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "contradicted"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 125500
+      }
+    ]
+  }
+}

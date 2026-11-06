@@ -1,0 +1,282 @@
+{
+  "id": "review-04",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "review-04",
+    "scope": {
+      "firm_id": "review-firm",
+      "client_id": "review-client",
+      "generation": "review-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "rv4-bank-aug",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Bank export, business current account 40-12-34 12345678, row 2026-08-15: 15 AUG 26 | DD | BRIGHTLINE BROADBAND LTD 4471902 | -89.00 GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv4-bank-jul",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Bank export, business current account 40-12-34 12345678, row 2026-07-15: 15 JUL 26 | DD | BRIGHTLINE BROADBAND LTD 4471902 | -89.00 GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv4-invoice-aug",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "Brightline Broadband Ltd — INVOICE BB-0812-77213. Account number 4471902. Invoice date 1 August 2026. Billing period 1–31 August 2026: Business fibre 500, £89.00 incl. VAT. Collected by Direct Debit on or after 15 August 2026 — please quote 4471902 for any manual payment.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv4-invoice-jul",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "Brightline Broadband Ltd — INVOICE BB-0712-71188. Account number 4471902. Invoice date 1 July 2026. Billing period 1–31 July 2026: Business fibre 500, £89.00 incl. VAT. Collected by Direct Debit on or after 15 July 2026 — please quote 4471902 for any manual payment.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv4-alloc-jul",
+        "version": "1",
+        "current_version": "1",
+        "kind": "allocation",
+        "content": "Reconciliation record: bank row 15 JUL 26 DD BRIGHTLINE BROADBAND LTD 4471902 £89.00 confirmed against invoice BB-0712-71188 on 2026-07-20 by the owner.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv4-work",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Offline investigation of the identified August invoice at the requested snapshot. This does not assert that payment has occurred or that a customer owes evidence.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "rv4-tx-aug",
+        "source_id": "rv4-bank-aug",
+        "date": "2026-08-15",
+        "money_in_minor": 0,
+        "money_out_minor": 8900,
+        "currency": "GBP",
+        "contact": "BRIGHTLINE BROADBAND LTD",
+        "description": "DD BRIGHTLINE BROADBAND LTD 4471902",
+        "raw_description": "15 AUG 26 DD BRIGHTLINE BROADBAND LTD 4471902",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "rv4-tx-jul",
+        "source_id": "rv4-bank-jul",
+        "date": "2026-07-15",
+        "money_in_minor": 0,
+        "money_out_minor": 8900,
+        "currency": "GBP",
+        "contact": "BRIGHTLINE BROADBAND LTD",
+        "description": "DD BRIGHTLINE BROADBAND LTD 4471902",
+        "raw_description": "15 JUL 26 DD BRIGHTLINE BROADBAND LTD 4471902",
+        "lifecycle": "reconciled",
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "rv4-link-aug",
+        "kind": "reference",
+        "source_id": "rv4-bank-aug",
+        "transaction_id": "rv4-tx-aug",
+        "invoice_id": "rv4-inv-aug",
+        "invoice_amount_minor": 8900,
+        "invoice_currency": "GBP",
+        "bank_amount_minor": 8900,
+        "bank_currency": "GBP",
+        "gross_minor": 8900,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [
+      {
+        "id": "rv4-allocation-jul",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1",
+        "source_id": "rv4-alloc-jul",
+        "version": "1",
+        "transaction_id": "rv4-tx-jul",
+        "invoice_id": "rv4-inv-jul",
+        "status": "confirmed",
+        "amount_minor": 8900,
+        "currency": "GBP",
+        "object_type": "supplier_bill"
+      }
+    ],
+    "related_invoices": [
+      {
+        "id": "rv4-inv-jul",
+        "source_id": "rv4-invoice-jul",
+        "date": "2026-07-01",
+        "reference": "4471902"
+      }
+    ],
+    "invoice": {
+      "id": "rv4-inv-aug",
+      "source_id": "rv4-invoice-aug",
+      "document_type": "supplier_bill",
+      "date": "2026-08-01",
+      "due_date": "2026-08-15",
+      "amount_minor": 8900,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "4471902",
+      "counterparty": "Brightline Broadband Ltd"
+    },
+    "work_item": {
+      "id": "rv4-work-item",
+      "kind": "settle_invoice",
+      "target_id": "rv4-inv-aug",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "rv4-work"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "review-manifest",
+      "description": "Exactly the two bank export rows, two invoices, the July reconciliation record and the work request declared in this packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "rv4-bank-aug",
+        "rv4-bank-jul",
+        "rv4-invoice-aug",
+        "rv4-invoice-jul",
+        "rv4-alloc-jul",
+        "rv4-work"
+      ],
+      "covered_source_ids": [
+        "rv4-bank-aug",
+        "rv4-bank-jul",
+        "rv4-invoice-aug",
+        "rv4-invoice-jul",
+        "rv4-alloc-jul",
+        "rv4-work"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "rv4-group",
+      "status": "complete_within_scope",
+      "scope_id": "review-manifest",
+      "transaction_ids": [
+        "rv4-tx-aug",
+        "rv4-tx-jul"
+      ],
+      "invoice_ids": [
+        "rv4-inv-aug",
+        "rv4-inv-jul"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "agent_reviewed",
+    "reviewer": "workstream-a-agent-review-2026-09-18",
+    "source_family": "review-monthly-account-reference",
+    "limitations": [
+      "Agent review example authored by an independent agent review, not expert accounting validation; model agreement is not ground truth.",
+      "Authored synthetic evidence in realistic text form; source relationships are authored assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "rv4-work-item",
+      "kind": "settle_invoice",
+      "target_id": "rv4-inv-aug",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "rv4-work"
+      ]
+    },
+    "demonstrates": "Distinct example for contract-030: the realistic repeated-reference hazard is a recurring direct debit whose narrative carries the customer ACCOUNT number every month, so consecutive invoices share the payment reference. The compiler blocks on the repeated reference even though the July invoice is already settled and the August debit lands on the August due date; the disambiguation is by date and prior settlement, which the contract cannot yet express.",
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "rv4-bank-aug carries the shared account reference 4471902 and the August collection date; rv4-invoice-aug states collection on or after 15 August; rv4-alloc-jul shows the July invoice already settled by the July debit.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": null,
+    "label_reason": "Agent review reading: a human resolves this by date and prior settlement; the contract has no date/obligation-context judgment and its repeated-reference guard is blind to the sibling invoice being settled, so it must escalate rather than propose.",
+    "positive_paths": [
+      {
+        "kind": "reference",
+        "transaction_id": "rv4-tx-aug",
+        "invoice_id": "rv4-inv-aug",
+        "source_id": "rv4-bank-aug",
+        "required_semantics": [
+          "affirmative_obligation_connection",
+          "direct_counterparty_or_documented_processor",
+          "reference_association"
+        ],
+        "constraints": [
+          "current_scoped_sources",
+          "eligible_bank_row",
+          "allocation_arithmetic",
+          "resolved_relevant_competitors",
+          "unexpressed: date_and_prior_settlement_disambiguation"
+        ]
+      }
+    ]
+  },
+  "semantic_statuses": {
+    "rv4-tx-aug": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

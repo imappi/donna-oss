@@ -1,0 +1,22 @@
+{
+  "lane": "bank_line_disposition",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — authored from bankLineDispositionLlm.js's money-out output contract for the appliance fixture world: the 550 GBP debit referencing OL-2026-0812 with no bill in the feed is a material supplier payment whose invoice the firm can obtain; never a captured provider response",
+  "fixture": "bank_statement_two_lines",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_dispose_kestrel_ochre_debit",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-4-8",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"disposition\":\"chase_receipt\",\"materiality\":\"material\",\"expense_kind\":\"lighting_and_electrical\",\"confidence\":0.88,\"reasoning\":\"A material one-off payment to a lighting supplier carrying an invoice reference; the invoice substantiates it and the firm can reasonably obtain it.\"}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": { "input_tokens": 0, "output_tokens": 0 }
+  }
+}

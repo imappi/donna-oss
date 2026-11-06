@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Donna">
+  <defs>
+    <linearGradient id="bg" x1="0.12" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#FF9C33"/>
+      <stop offset="1" stop-color="#EF780A"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.3" cy="0.18" r="0.9">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="512" cy="512" r="512" fill="url(#bg)"/>
+  <circle cx="512" cy="512" r="512" fill="url(#sheen)"/>
+  <path fill="#15120F" fill-rule="evenodd" d="
+    M 337.9 233.5
+    H 555.5
+    C 712.2 233.5 808.0 355.3 808.0 512
+    C 808.0 668.7 712.2 790.5 555.5 790.5
+    H 337.9
+    Z
+    M 468.5 355.3
+    H 546.9
+    C 633.9 355.3 686.1 425.0 686.1 512
+    C 686.1 599.0 633.9 668.7 546.9 668.7
+    H 468.5
+    Z
+  "/>
+</svg>

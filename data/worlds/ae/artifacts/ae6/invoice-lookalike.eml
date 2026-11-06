@@ -1,0 +1,7 @@
+From: billing@example-ae.example
+To: accounts@example-ae.example
+Subject: PINT AE Invoice AE-INV-2026-0042 / فاتورة ضريبية
+Content-Type: text/plain; charset=UTF-8
+
+This email visually states AED 1,250.00, TRN 100000000000003 and
+IBAN AE070331234567890123456. It is ordinary evidence, not structured PINT AE.

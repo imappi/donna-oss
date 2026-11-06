@@ -1,0 +1,202 @@
+{
+  "id": "holdout-001",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-001",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0470\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Redwood Analytics Inc.  Portland, Oregon, USA\nInvoice date: 20 Aug 2026    Due date: 19 Sep 2026    Terms: 30 days\nDescription: Data pipeline consulting, August\nSubtotal: USD 2,293.58\nGST 9%: USD 206.42\nTOTAL: USD 2,500.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0470.\nPay to our Airwallex USD collection account (details on the payment link).",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n11 Sep 2026,ICT,,3350.70,AIRWALLEX SETTLEMENT,AIRWALLEX SINGAPORE PTE LTD,SETTLE 11SEP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "settle-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "processor_settlement_report",
+        "content": "Airwallex settlement statement — 11 Sep 2026\nIncoming: USD 2,500.00 from Redwood Analytics Inc. received 09 Sep 2026, payer reference \"INV-2026-0470\"\nConverted USD → SGD at 1.3480: gross S$3,370.00\nAirwallex FX and settlement fee: S$19.30\nSettled to DBS 012-345678-9: S$3,350.70",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-11",
+        "money_in_minor": 335070,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "AIRWALLEX (SINGAPORE) PTE LTD",
+        "description": "AIRWALLEX SETTLEMENT AIRWALLEX SINGAPORE PTE LTD SETTLE 11SEP",
+        "raw_description": "11 Sep 2026,ICT,,3350.70,AIRWALLEX SETTLEMENT,AIRWALLEX SINGAPORE PTE LTD,SETTLE 11SEP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "remittance",
+        "source_id": "settle-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 250000,
+        "invoice_currency": "USD",
+        "bank_amount_minor": 335070,
+        "bank_currency": "SGD",
+        "gross_minor": 337000,
+        "fee_minor": 1930
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-20",
+      "due_date": "2026-09-19",
+      "amount_minor": 250000,
+      "minor_unit": 2,
+      "currency": "USD",
+      "reference": "INV-2026-0470",
+      "counterparty": "Redwood Analytics Inc."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "settle-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "settle-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-sg-airwallex-usd-invoice-sgd-settlement",
+    "family_description": "Singapore company invoices a US customer in USD; Airwallex collects, converts and settles SGD net of its fee; the settlement report names the invoice.",
+    "market": "SG",
+    "variant": "a",
+    "error_mode": "FX processor settlement with exact fee arithmetic; report may name a sibling invoice; bank net may differ from the report",
+    "label_reason": "Settlement report binds the SGD credit to the USD invoice and customer; gross minus fee equals the bank credit.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "supported",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "contradicted"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 250000
+      }
+    ]
+  }
+}

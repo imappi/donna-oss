@@ -1,0 +1,53 @@
+{
+  "id": "016-ar-already-settled-reconciled-line",
+  "title": "Already-settled invoice with a tempting fresh duplicate line — status guard (AR)",
+  "narrative": "AR already-settled test, previously inexpressible: the runner dropped reconciliation_status, so the model could not see that a line was already accounted for. This EUR 1000.00 invoice to Aalto Design Studio (ref INV-2026-0440) was already settled — tx-aalto-settled carries the matching payment AND reconciliation_status='reconciled', and firm_context.settlement reports it fully settled (paid). A SECOND, unreconciled, same-amount inbound line (tx-aalto-second-1000) appears in the window and tempts a pure amount matcher. GOLD: abstain with unmatchable_reason 'already_settled' — the invoice is already settled; the fresh line is not a SECOND payment of this same invoice. FAILURE TO CATCH: re-proposing the reconciled line (double-count) or matching the decoy second line.",
+  "tags": ["already_settled", "reconciliation_status", "negative_decoy", "sales_invoice", "ar", "status_guard"],
+  "document": {
+    "id": "si-aalto-016",
+    "document_type": "sales_invoice",
+    "customer_name": "Aalto Design Studio Oy",
+    "document_date": "2026-04-12",
+    "due_date": "2026-05-12",
+    "total_amount": 1000.00,
+    "currency": "EUR",
+    "reference_number": "INV-2026-0440",
+    "extraction_confidence": 0.95,
+    "payment_status": "paid",
+    "parse_summary": { "warnings": [] }
+  },
+  "firm_context": {
+    "settlement": {
+      "settledCount": 1,
+      "paymentStatus": "paid"
+    }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-aalto-settled",
+      "money_in": 1000.00,
+      "money_out": 0,
+      "currency": "EUR",
+      "date": "2026-04-15",
+      "description": "SEPA CT AALTO DESIGN INV-2026-0440",
+      "raw_description": "SEPA CT AALTO DESIGN STUDIO OY INV-2026-0440",
+      "contact": "Aalto Design Studio Oy",
+      "reconciliation_status": "reconciled"
+    },
+    {
+      "id": "tx-aalto-second-1000",
+      "money_in": 1000.00,
+      "money_out": 0,
+      "currency": "EUR",
+      "date": "2026-04-28",
+      "description": "SEPA CT AALTO DESIGN STUDIO",
+      "raw_description": "SEPA CT AALTO DESIGN STUDIO OY APRIL RETAINER",
+      "contact": "Aalto Design Studio Oy",
+      "reconciliation_status": null
+    }
+  ],
+  "expected": {
+    "proposals": [],
+    "unmatchable_reason": "already_settled"
+  }
+}

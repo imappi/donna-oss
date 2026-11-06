@@ -1,0 +1,529 @@
+{
+  "version": "donna-quantity-report.v1",
+  "ranAt": "2026-10-07T00:00:00.000Z",
+  "manifestDigest": "e10fdf05fc9917287bddc47e2216231371836a7c82df53caf90af1d75f99a74b",
+  "fixtureBasis": "deterministic_contract",
+  "imageryStatus": "not_collected",
+  "recordingKind": null,
+  "modelBenchmark": {
+    "status": "not_run",
+    "reasons": [
+      "representative_consented_imagery_absent",
+      "actual_model_recordings_absent"
+    ]
+  },
+  "calibration": {
+    "status": "not_run",
+    "reason": "representative_model_outcomes_absent"
+  },
+  "scoringStatus": "not_run",
+  "totals": {
+    "n": 8,
+    "evaluated": 0,
+    "missing": 8,
+    "invalid": 0,
+    "exactProposals": 0,
+    "exactCorrect": 0,
+    "falseSupported": 0,
+    "falseSupportRate": null,
+    "abstentionRate": null,
+    "exactAccuracy": null,
+    "failureCategories": {},
+    "confidenceDiagnostics": {
+      "n": 0,
+      "bins": [
+        {
+          "lower": 0,
+          "upper": 0.5,
+          "n": 0,
+          "meanConfidence": null,
+          "exactAccuracy": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.8,
+          "n": 0,
+          "meanConfidence": null,
+          "exactAccuracy": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 1,
+          "n": 0,
+          "meanConfidence": null,
+          "exactAccuracy": null
+        }
+      ],
+      "brier": null
+    }
+  },
+  "splits": {
+    "development": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    },
+    "holdout": {
+      "n": 7,
+      "evaluated": 0,
+      "missing": 7,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    }
+  },
+  "conditions": {
+    "clear_count": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    },
+    "occlusion": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    },
+    "variant_ambiguity": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    },
+    "bundle_ambiguity": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    },
+    "duplicate_views": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    },
+    "unreadable_label": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    },
+    "insufficient_evidence": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    },
+    "incomplete_coverage": {
+      "n": 1,
+      "evaluated": 0,
+      "missing": 1,
+      "invalid": 0,
+      "exactProposals": 0,
+      "exactCorrect": 0,
+      "falseSupported": 0,
+      "falseSupportRate": null,
+      "abstentionRate": null,
+      "exactAccuracy": null,
+      "failureCategories": {},
+      "confidenceDiagnostics": {
+        "n": 0,
+        "bins": [
+          {
+            "lower": 0,
+            "upper": 0.5,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.8,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          },
+          {
+            "lower": 0.8,
+            "upper": 1,
+            "n": 0,
+            "meanConfidence": null,
+            "exactAccuracy": null
+          }
+        ],
+        "brier": null
+      }
+    }
+  },
+  "cost": {
+    "evaluationProviderCalls": 0,
+    "evaluationSpendUsd": 0,
+    "recordedProviderSpendUsd": null,
+    "status": "not_run_or_unknown",
+    "receipts": []
+  },
+  "cases": [
+    {
+      "id": "sample-01",
+      "status": "not_run",
+      "reason": "recorded_proposal_absent",
+      "split": "development",
+      "condition": "clear_count"
+    },
+    {
+      "id": "sample-02",
+      "status": "not_run",
+      "reason": "recorded_proposal_absent",
+      "split": "holdout",
+      "condition": "occlusion"
+    },
+    {
+      "id": "sample-03",
+      "status": "not_run",
+      "reason": "recorded_proposal_absent",
+      "split": "holdout",
+      "condition": "variant_ambiguity"
+    },
+    {
+      "id": "sample-04",
+      "status": "not_run",
+      "reason": "recorded_proposal_absent",
+      "split": "holdout",
+      "condition": "bundle_ambiguity"
+    },
+    {
+      "id": "sample-05",
+      "status": "not_run",
+      "reason": "recorded_proposal_absent",
+      "split": "holdout",
+      "condition": "duplicate_views"
+    },
+    {
+      "id": "sample-06",
+      "status": "not_run",
+      "reason": "recorded_proposal_absent",
+      "split": "holdout",
+      "condition": "unreadable_label"
+    },
+    {
+      "id": "sample-07",
+      "status": "not_run",
+      "reason": "recorded_proposal_absent",
+      "split": "holdout",
+      "condition": "insufficient_evidence"
+    },
+    {
+      "id": "sample-08",
+      "status": "not_run",
+      "reason": "recorded_proposal_absent",
+      "split": "holdout",
+      "condition": "incomplete_coverage"
+    }
+  ]
+}

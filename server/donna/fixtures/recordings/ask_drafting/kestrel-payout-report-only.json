@@ -1,0 +1,35 @@
+{
+  "lane": "ask_drafting",
+  "endpoint_class": "openai",
+  "provenance": "synthetic — authored from askPipeline.js buildAskMessageSchema for the appliance fixture world: the runtime's own post-reconcile draft after the Barclays statement parsed and BEFORE the Ochre bill arrived — the PayLink payout (1,213.75 GBP, chase_evidence from the disposition pass) is the only gathered line, so the message asks for its settlement report and nothing else; never a captured provider response",
+  "fixture": "supplier_bill_discount",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_ask_draft_kestrel_payout_only",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_ask_draft_kestrel_payout_only",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"subject\": \"Your August books — one report needed\", \"message_markdown\": \"The PayLink payout of GBP 1,213.75 received on 19 Aug 2026 has no settlement report on file. Please send the payout/settlement report so we can record gross sales and fees rather than the net amount.\", \"summary\": \"The PayLink payout needs its settlement report.\", \"items\": [{\"transaction_ref\": \"transaction_1\", \"disposition\": \"ask\", \"question\": \"Please send the PayLink payout/settlement report for the GBP 1,213.75 received on 19 Aug 2026 so we can record gross sales and fees.\", \"evidence_type\": \"supporting_document\", \"fyi_note\": \"\", \"skip_reason\": \"\", \"local_document_refs\": []}], \"statement_requests\": [], \"document_asks\": []}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

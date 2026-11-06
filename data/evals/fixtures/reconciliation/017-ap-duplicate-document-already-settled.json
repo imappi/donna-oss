@@ -1,0 +1,53 @@
+{
+  "id": "017-ap-duplicate-document-already-settled",
+  "title": "Duplicate bill upload of an already-matched bill — duplicate-document guard (AP)",
+  "narrative": "AP duplicate-document test, previously inexpressible without reconciliation_status. An identical Oxbridge bill (ref 7FC4A3D8-0001, EUR 745.00) was uploaded earlier and matched to tx-oxbridge-paid, which now carries reconciliation_status='reconciled'; firm_context.settlement reports this bill fully settled (paid). This row is the DUPLICATE upload. The settling line still appears in the window, and an unrelated same-vendor debit is present as noise. GOLD: abstain with unmatchable_reason 'already_settled' — a duplicate document must not create a second match against a line already reconciled to its twin. FAILURE TO CATCH: re-proposing the reconciled line, producing a phantom double-payment.",
+  "tags": ["duplicate_document", "already_settled", "reconciliation_status", "supplier_bill", "ap", "status_guard"],
+  "document": {
+    "id": "sb-oxbridge-dup-017",
+    "document_type": "supplier_bill",
+    "vendor_name": "Oxbridge",
+    "document_date": "2026-02-15",
+    "due_date": "2026-02-15",
+    "total_amount": 745.00,
+    "currency": "EUR",
+    "reference_number": "7FC4A3D8-0001",
+    "extraction_confidence": 0.95,
+    "payment_status": "paid",
+    "parse_summary": { "warnings": [] }
+  },
+  "firm_context": {
+    "settlement": {
+      "settledCount": 1,
+      "paymentStatus": "paid"
+    }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-oxbridge-paid",
+      "money_in": 0,
+      "money_out": 745.00,
+      "currency": "EUR",
+      "date": "2026-02-16",
+      "description": "SEPA DD OXBRIDGE 7FC4A3D8-0001",
+      "raw_description": "SEPA DD OXBRIDGE LTD INVOICE 7FC4A3D8-0001",
+      "contact": "Oxbridge",
+      "reconciliation_status": "reconciled"
+    },
+    {
+      "id": "tx-oxbridge-unrelated-017",
+      "money_in": 0,
+      "money_out": 129.00,
+      "currency": "EUR",
+      "date": "2026-02-20",
+      "description": "SEPA DD OXBRIDGE SUPPLIES TOP-UP",
+      "raw_description": "SEPA DD OXBRIDGE LTD CONSUMABLES TOP-UP FEB",
+      "contact": "Oxbridge",
+      "reconciliation_status": null
+    }
+  ],
+  "expected": {
+    "proposals": [],
+    "unmatchable_reason": "already_settled"
+  }
+}

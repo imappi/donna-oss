@@ -1,0 +1,211 @@
+{
+  "id": "holdout-070",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-070",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "LASKU\nLaskun numero: 2026-118    Laskun päivä: 24.08.2026    Eräpäivä: 07.09.2026    Maksuehto: 14 pv netto\nLaskuttaja: Rakennus Virtanen Oy, Y-tunnus 2468013-5\nMaksaja: Kuusela Design Oy\nErittely: Toimiston väliseinän rakentaminen\nVeroton yhteensä: 2 964,14 €\nALV 25,5 %: 755,86 €\nMaksettava yhteensä: 3 720,00 €\nViitenumero: 202 61188    Tilinumero: FI11 5210 0020 3344 55    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "LASKU\nLaskun numero: VR-5531    Laskun päivä: 26.08.2026    Eräpäivä: 09.09.2026    Maksuehto: 14 pv netto\nLaskuttaja: Virtanen Rakennus Ky, Y-tunnus 1122446-8\nMaksaja: Kuusela Design Oy\nErittely: Piha-alueen asfaltointi\nVeroton yhteensä: 2 964,14 €\nALV 25,5 %: 755,86 €\nMaksettava yhteensä: 3 720,00 €\nViitenumero: 5 53104    Tilinumero: FI90 3131 3001 0122 33    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n04.09.2026;04.09.2026;-3720,00;Tilisiirto;Maksu;VIRTANEN;FI11 5210 0020 3344 55;20261188;;202609040001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-04",
+        "money_in_minor": 0,
+        "money_out_minor": 372000,
+        "currency": "EUR",
+        "contact": "VIRTANEN",
+        "description": "Tilisiirto Maksu",
+        "raw_description": "04.09.2026;04.09.2026;-3720,00;Tilisiirto;Maksu;VIRTANEN;FI11 5210 0020 3344 55;20261188;;202609040001",
+        "structured_reference": "20261188",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 372000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 372000,
+        "bank_currency": "EUR",
+        "gross_minor": 372000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-08-26",
+        "reference": "553104"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-24",
+      "due_date": "2026-09-07",
+      "amount_minor": 372000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "20261188",
+      "counterparty": "Rakennus Virtanen Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-fi-two-suppliers-with-similar-names",
+    "family_description": "Two Finnish suppliers with near-identical names both have open bills; a transfer shows only \"VIRTANEN\".",
+    "market": "FI",
+    "variant": "a",
+    "error_mode": "identity by viite; rent message to the same payee; viite belonging to the other supplier's bill",
+    "label_reason": "The transfer carries this bill's viite; the abbreviated payee name is resolved by the viite and the payee IBAN on the bill.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 372000
+      }
+    ]
+  }
+}

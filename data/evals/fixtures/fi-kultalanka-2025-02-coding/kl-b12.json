@@ -1,0 +1,57 @@
+{
+  "id": "kl-b12",
+  "title": "Kultalanka 02/2025 12.2. Työllisyysrahasto −35,04",
+  "split": "development",
+  "family": "kultalanka-statutory_payment",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "statutory_payment",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-12",
+    "description": "TILISIIRTO TYÖLLISYYSRAHASTO TVR 1/2025",
+    "money_in": 0,
+    "money_out": 35.04,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "TyEL and payroll contributions payable",
+          "direction": "debit",
+          "amount": 35.04,
+          "tax_code": "ALV_OUT_OF_SCOPE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 35.04,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "disputed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B12"
+  }
+}

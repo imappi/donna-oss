@@ -1,0 +1,43 @@
+{
+  "id": "008-no-plausible-match-bill",
+  "title": "Supplier bill with no plausible bank line in window",
+  "tags": ["negative_case", "unmatchable", "supplier_bill", "ap"],
+  "narrative": "AP negative case: a supplier bill whose only candidate money_out lines are unrelated recurring debits (office rent, payroll). The matcher should return empty proposals and an unmatchable_reason — the harness accepts any non-null reason (wildcard '*'). Mirrors the AR 004 fixture on the bill side.",
+  "document": {
+    "id": "sb-nomatch-008",
+    "document_type": "supplier_bill",
+    "vendor_name": "Northwind Logistics GmbH",
+    "document_date": "2026-03-15",
+    "due_date": "2026-04-14",
+    "total_amount": 1280.00,
+    "currency": "EUR",
+    "reference_number": "NW-2026-0033",
+    "extraction_confidence": 0.92,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-rent-march-out",
+      "money_out": 1850.00,
+      "currency": "EUR",
+      "date": "2026-03-01",
+      "description": "RENT OUTGOING OFFICE",
+      "raw_description": "MONTHLY OFFICE RENT MAR 2026",
+      "contact": "Landlord Oy"
+    },
+    {
+      "id": "tx-payroll-march",
+      "money_out": 7400.00,
+      "currency": "EUR",
+      "date": "2026-03-25",
+      "description": "PAYROLL RUN MAR",
+      "raw_description": "SEPA BULK PAYROLL MARCH 2026",
+      "contact": "Payroll"
+    }
+  ],
+  "expected": {
+    "proposals": [],
+    "unmatchable_reason": "*"
+  }
+}

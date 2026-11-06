@@ -1,0 +1,195 @@
+{
+  "id": "holdout-064",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-064",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0471\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Tiong Bahru Bakes Pte. Ltd.  UEN 201812345Q\nInvoice date: 22 Aug 2026    Due date: 21 Sep 2026    Terms: 30 days\nDescription: Online ordering page\nSubtotal: S$1,500.00\nGST 9%: S$135.00\nTOTAL: S$1,635.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0471.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n09 Sep 2026,ICT,,1635.00,FAST TRANSFER,TAN AH KOW,",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work admission receipt: the bank line identified as the target remains unexplained as of the snapshot date and stays visible until it is explained. An invoice candidate is one possible explanation; rejecting it does not remove the bank line.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-09",
+        "money_in_minor": 163500,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "TAN AH KOW",
+        "description": "FAST TRANSFER TAN AH KOW",
+        "raw_description": "09 Sep 2026,ICT,,1635.00,FAST TRANSFER,TAN AH KOW,",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-22",
+      "due_date": "2026-09-21",
+      "amount_minor": 163500,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "INV-2026-0471",
+      "counterparty": "Tiong Bahru Bakes Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "explain_bank_transaction",
+      "target_id": "tx-t1",
+      "admission": "admitted",
+      "reason": "Work admission receipt: the bank line identified as the target remains unexplained as of the snapshot date and stays visible until it is explained.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "What the S$1,635.00 FAST credit from Tan Ah Kow's personal account on 09 Sep 2026 was: the owner's own funds (a capital top-up), or customer cash the owner deposited, and if so for which invoice.",
+      "question": "You transferred S$1,635.00 from your personal account on 9 September with no message. Was that your own money going into the business, or a customer's payment you deposited — and if so, for which invoice?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner initiated the transfer from a personal account; it carries no message and no receipt, chat or note in the book records its purpose.",
+      "why_local_cannot_supply": "The complete declared inventory holds the bank row and an open customer invoice only; nothing connects them.",
+      "basis_source_ids": [
+        "bank-t1",
+        "work-source"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-sg-owner-transfer-from-personal-account",
+    "family_description": "A credit arrives from the owner's personal account with no message while an invoice of the same amount is open.",
+    "market": "SG",
+    "variant": "a",
+    "error_mode": "owner-initiated credit: capital top-up, or customer cash the owner deposited",
+    "label_reason": "The owner transferred S$1,635.00 from a personal account with no message; no source records why; whether it was a capital top-up or the customer's cash is an owner-only fact.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "customer_question"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "What the S$1,635.00 FAST credit from Tan Ah Kow's personal account on 09 Sep 2026 was: the owner's own funds (a capital top-up), or customer cash the owner deposited, and if so for which invoice.",
+      "question": "You transferred S$1,635.00 from your personal account on 9 September with no message. Was that your own money going into the business, or a customer's payment you deposited — and if so, for which invoice?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner initiated the transfer from a personal account; it carries no message and no receipt, chat or note in the book records its purpose.",
+      "why_local_cannot_supply": "The complete declared inventory holds the bank row and an open customer invoice only; nothing connects them.",
+      "basis_source_ids": [
+        "bank-t1",
+        "work-source"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    },
+    "ask_fact": "supported"
+  },
+  "expected": {
+    "route": "customer_question",
+    "proposals": []
+  }
+}

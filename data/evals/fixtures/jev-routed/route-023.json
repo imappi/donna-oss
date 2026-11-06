@@ -1,0 +1,40 @@
+{
+  "id": "route-023",
+  "split": "evaluation",
+  "source_family": "authored-023",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-23",
+    "document_type": "supplier_bill",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 2300,
+    "currency": "EUR",
+    "reference_number": "BILL-8123",
+    "payment_status": "unpaid",
+    "vendor_name": "Willow Construction Ltd"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-23-a",
+      "money_in": 0,
+      "money_out": 2300,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Willow Construction Ltd",
+      "description": "WILLOW REFUNDABLE SECURITY DEPOSIT FOR NEXT YEAR CONTRACT",
+      "raw_description": "WILLOW REFUNDABLE SECURITY DEPOSIT FOR NEXT YEAR CONTRACT",
+      "reconciliation_status": null,
+      "payload": {}
+    }
+  ],
+  "matches": [],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "needs_evidence",
+    "matches": []
+  },
+  "label_basis": "A separately identified future security deposit is not payment of the current invoice."
+}

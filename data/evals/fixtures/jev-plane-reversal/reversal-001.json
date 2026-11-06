@@ -1,0 +1,205 @@
+{
+  "id": "reversal-001",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "reversal-001",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0448\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Heng Seng Hardware Trading  UEN 53012345A\nInvoice date: 11 Aug 2026    Due date: 10 Sep 2026    Terms: 30 days\nDescription: Inventory app, phase 1\nSubtotal: S$4,000.00\nGST 9%: S$360.00\nTOTAL: S$4,360.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0448.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n08 Sep 2026,CHQ,,4360.00,CHEQUE DEPOSIT,CHQ NO 004417,UOB",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "slip-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "remittance_slip",
+        "content": "Heng Seng Hardware Trading — Remittance slip\nDate: 05 Sep 2026\nTo: Merlion Analytics Pte. Ltd.\nEnclosed: UOB cheque no. 004417 for S$4,360.00\nIn payment of: Invoice INV-2026-0448 dated 11 Aug 2026 (inventory app phase 1)\nSigned: Lim H.S.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-08",
+        "money_in_minor": 436000,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "CHEQUE DEPOSIT",
+        "description": "CHEQUE DEPOSIT CHQ NO 004417 UOB",
+        "raw_description": "08 Sep 2026,CHQ,,4360.00,CHEQUE DEPOSIT,CHQ NO 004417,UOB",
+        "instrument": "cheque:UOB:004417",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "remittance",
+        "source_id": "slip-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 436000,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 436000,
+        "bank_currency": "SGD",
+        "gross_minor": 436000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-11",
+      "due_date": "2026-09-10",
+      "amount_minor": 436000,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "INV-2026-0448",
+      "counterparty": "Heng Seng Hardware Trading"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "slip-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "slip-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "reversal-sg-cheque-deposit-returned-unpaid",
+    "family_description": "A customer cheque with a remittance slip is deposited; in one variant the bank returns it unpaid three days later; in another it is re-presented and clears.",
+    "market": "SG",
+    "variant": "a",
+    "error_mode": "reversal of the same instrument (cheque number) carried as a declared instrument identity",
+    "label_reason": "The slip names the invoice and the cheque clears; nothing reverses it.",
+    "terminal_reason": "The slip names the invoice and the cheque clears; nothing reverses it.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "not_established",
+      "processor": "supported",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "contradicted"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 436000
+      }
+    ],
+    "terminal": "RESOLVED"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "$comment": "Date-truncation ratchet (RT-07, audit F-11). Every hand-rolled `toISOString().slice(0, 10)` / `.substring(0, 10)` / `.split('T')[0]` site that existed when the ratchet was born, frozen per file. dateTruncationLint.test.js fails if a file's count grows, a new file appears, or an entry exceeds what the tree still has. RT-15 (a + b, 2026-09-02) swept the list to EMPTY and it stays empty: a new site anywhere under server/donna/ fails the lint as new_file — reach for dates.js (toIsoDay / toLocalIsoDay / toUtcIsoDay / utcDayDiff) instead. Regenerate the census with `node server/donna/dateTruncationLint.js --census`.",
+  "frozen_at": "2026-09-01",
+  "files": {}
+}

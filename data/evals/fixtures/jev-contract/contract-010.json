@@ -1,0 +1,207 @@
+{
+  "id": "contract-010",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "contract-010",
+    "scope": {
+      "firm_id": "fixture-firm",
+      "client_id": "fixture-client",
+      "generation": "fixture-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "bank-source-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "{\"contact\": \"Juniper Warehousing Oy\", \"currency\": \"EUR\", \"date\": \"2026-08-10\", \"description\": \"BANK TRANSFER Juniper Warehousing Oy \", \"money_in\": 0, \"money_out\": 820, \"raw_description\": \"BANK TRANSFER Juniper Warehousing Oy \", \"reconciliation_status\": null}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "bank-source-2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "{\"contact\": \"Juniper Warehousing Oy\", \"currency\": \"EUR\", \"date\": \"2026-08-10\", \"description\": \"BANK TRANSFER Juniper Warehousing Oy \", \"money_in\": 0, \"money_out\": 820, \"raw_description\": \"BANK TRANSFER Juniper Warehousing Oy \", \"reconciliation_status\": null}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "{\"currency\": \"EUR\", \"document_date\": \"2026-08-03\", \"document_type\": \"supplier_bill\", \"due_date\": \"2026-09-03\", \"payment_status\": \"unpaid\", \"reference_number\": \"\", \"total_amount\": 820, \"vendor_name\": \"Juniper Warehousing Oy\"}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the entire declared collision group at this snapshot. Every bank row remains visible; selecting an invoice link does not silently finish other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "opaque-tx-10-a",
+        "source_id": "bank-source-1",
+        "date": "2026-08-10",
+        "money_in_minor": 0,
+        "money_out_minor": 82000,
+        "currency": "EUR",
+        "contact": "Juniper Warehousing Oy",
+        "description": "BANK TRANSFER Juniper Warehousing Oy ",
+        "raw_description": "BANK TRANSFER Juniper Warehousing Oy ",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "opaque-tx-10-b",
+        "source_id": "bank-source-2",
+        "date": "2026-08-10",
+        "money_in_minor": 0,
+        "money_out_minor": 82000,
+        "currency": "EUR",
+        "contact": "Juniper Warehousing Oy",
+        "description": "BANK TRANSFER Juniper Warehousing Oy ",
+        "raw_description": "BANK TRANSFER Juniper Warehousing Oy ",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "opaque-doc-10",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-03",
+      "due_date": "2026-09-03",
+      "amount_minor": 82000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "",
+      "counterparty": "Juniper Warehousing Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Explicit offline request to investigate allocation across the complete declared collision group; no bank item is completed by a proposal.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "not_performed",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-source-1",
+        "bank-source-2",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-source-1",
+        "bank-source-2",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "opaque-tx-10-a",
+        "opaque-tx-10-b"
+      ],
+      "invoice_ids": [
+        "opaque-doc-10"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "source_family": "data/evals/fixtures/jev-routed/route-010.json",
+    "limitations": [
+      "Authored synthetic evidence; source relationships are assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Explicit offline request to investigate allocation across the complete declared collision group; no bank item is completed by a proposal.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "acceptable_outcomes": [
+      "retrieve_local"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and obligation, validated semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": null,
+    "label_reason": "Provisional source reading of the explicit payment relationship; not independent adjudication.",
+    "prior_art": "data/evals/fixtures/jev-routed/route-010.json",
+    "legacy_fixture_sha256": "4ed9a13a78efa466735764065ac9968cd322fa79748866ec80f7e7568682765c",
+    "positive_paths": []
+  },
+  "semantic_statuses": {
+    "opaque-tx-10-a": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    },
+    "opaque-tx-10-b": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "retrieve_local",
+    "proposals": []
+  }
+}

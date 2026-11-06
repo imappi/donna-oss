@@ -1,0 +1,70 @@
+{
+  "id": "kl-b06",
+  "title": "Kultalanka 02/2025 6.2. Google Ireland −13,60",
+  "split": "development",
+  "family": "kultalanka-reverse_charge",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "reverse_charge",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-06",
+    "description": "KORTTIOSTO GOOGLE *WORKSPACE GOOGLE.COM IE",
+    "money_in": 0,
+    "money_out": 13.6,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "supplier_bill",
+    "party": "Google Ireland Limited",
+    "total_amount": 13.6,
+    "tax_amount": 0,
+    "lines": [
+      {
+        "description": "Google Workspace Business Starter (reverse charge, Art. 196)",
+        "amount": 13.6,
+        "tax_rate": 0
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Software subscriptions",
+          "direction": "debit",
+          "amount": 13.6,
+          "tax_code": "ALV_EU_SERVICE_ACQUISITION"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 13.6,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B06"
+  }
+}

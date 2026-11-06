@@ -1,0 +1,15 @@
+-- Procountor M2M (Client Credentials) connect — API-key storage.
+--
+-- Procountor's API client `DonnaTestClient` is provisioned for the M2M
+-- (client_credentials) grant, NOT the interactive authorization_code grant (a
+-- code→token exchange returns `unauthorized_client`). M2M authenticates with a
+-- long-lived API KEY (a JWT bound to user+company+client, carrying `cid`), which
+-- the customer creates in the Procountor UI and pastes into Donna. Donna mints a
+-- 1-hour access token from it via client_credentials and re-mints on expiry —
+-- there is no refresh_token in this flow, so the API key IS the durable
+-- credential and must be persisted alongside the connection.
+--
+-- api_key is nullable: the column is shared with any legacy/auth-code rows that
+-- predate M2M (they carry refresh_token instead). A row is an M2M connection iff
+-- api_key is present.
+alter table procountor_connections add column if not exists api_key text;

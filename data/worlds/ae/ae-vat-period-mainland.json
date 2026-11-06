@@ -1,0 +1,136 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/vat-period/mainland-q2",
+  "seed": "ae-vat-period-mainland-q2-v1",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.vat-period-world.v1",
+    "capabilityId": "prepare_ae_vat_period",
+    "jurisdiction": "AE",
+    "entityType": "ae-llc",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_vat_documents_and_return",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": ["full_and_simplified_invoices", "credit_notes_and_deposits", "foreign_currency_vat", "customs_and_imported_services", "input_tax_apportionment"],
+    "permittedActions": ["prepare_vat201", "request_missing_vat_fact"],
+    "maximumAuthority": "prepare_only",
+    "fallback": {"terminalState": "blocked", "responsibleActor": "owner_or_firm", "nextPermittedAction": "request_missing_vat_fact"},
+    "protectedFailures": ["customs_import_swapped_with_imported_service", "foreign_currency_vat_not_in_aed", "blocked_input_vat_recovered", "simplified_invoice_over_limit", "fta_due_date_inferred"]
+  },
+  "policySources": [
+    {"id": "policy/ae-vat-designated-zones", "authority": "Federal Tax Authority", "title": "Designated Zones VAT Guide VATGDZ1", "url": "https://tax.gov.ae/DownloadOpenTextFile?fileUrl=en%2FVAT_VAT_Guides%2FDesignated_Zones_VAT_Guide%2FDesignated_Zones_VAT_Guide_EN.pdf", "effectiveFrom": "2018-01-01", "asOf": "2026-08-31"},
+    {"id": "policy/ae-vat-invoices", "authority": "Federal Tax Authority", "title": "Tax Invoices — Article 59 explanatory material", "url": "https://tax.gov.ae/DataFolder/Files/Pdf/06-Tax-Invoices.pdf", "effectiveFrom": "2018-01-01", "asOf": "2026-08-31"},
+    {"id": "policy/ae-vat-return", "authority": "Federal Tax Authority", "title": "Value Added Tax Returns User Guide", "url": "https://tax.gov.ae/-/media/Files/EN/PDF/Guides/VAT-Returns-User-Guide.pdf", "effectiveFrom": "2018-01-01", "asOf": "2026-08-31"},
+    {"id": "policy/ae-vat-fx", "authority": "Federal Tax Authority", "title": "VATP004 — Use of Exchange Rates for VAT Purposes", "url": "https://tax.gov.ae/DataFolder/Files/Pdf/2022/AR/04-use-of-exchange-rates.pdf", "effectiveFrom": "2018-01-01", "asOf": "2026-08-31"},
+    {"id": "policy/ae-vat-apportionment", "authority": "Federal Tax Authority", "title": "Input Tax Apportionment Guide", "url": "https://tax.gov.ae/Datafolder/Files/Pdf/2023/Input%20Tax%20Apportionment%20Guide%20-%20EN%20-%2016%2006%202023.pdf", "effectiveFrom": "2018-01-01", "asOf": "2026-08-31"}
+  ],
+  "entities": [
+    {
+      "id": "entity/ae-mainland-llc",
+      "kind": "company",
+      "legalForm": "ae-llc",
+      "activeFrom": "2026-01-01",
+      "facts": {
+        "freeZoneStanding": [{"standing": "mainland", "licensingAuthority": "Dubai Department of Economy and Tourism", "emirate": "DXB", "effectiveFrom": "2026-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/trade-licence"}],
+        "designatedZone": [{"status": "not_designated", "zoneName": null, "effectiveFrom": "2026-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/designated-zone-check", "policySourceId": "policy/ae-vat-designated-zones"}],
+        "vatRegistration": [{"status": "registered", "registrationSubject": "legal_entity", "registrationSubjectId": "entity/ae-mainland-llc", "trn": "100123456789012", "registrationBasis": "mandatory", "returnCadence": "quarter", "effectiveFrom": "2026-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/vat-registration"}],
+        "ftaVatPeriods": [{"periodKey": "2026-Q2", "startsOn": "2026-04-01", "endsOn": "2026-06-30", "dueOn": "2026-07-28", "sourceArtifactId": "artifact/fta-period"}]
+      }
+    }
+  ],
+  "vatPeriodKey": "2026-Q2",
+  "returnDueOn": "2026-07-28",
+  "vatDocuments": [
+    {
+      "id": "document/usd-full-sale", "documentType": "full_tax_invoice", "lane": "domestic_sale", "policySourceId": "policy/ae-vat-invoices", "sourceArtifactId": "artifact/usd-full-sale", "title": "Tax Invoice", "invoiceNumber": "INV-2026-0401", "issueDate": "2026-04-01", "dateOfSupply": "2026-04-01", "description": "Consulting services", "seller": {"name": "Desert Lantern Services LLC", "address": "Dubai, UAE", "trn": "100123456789012", "vatRegistered": true}, "buyer": {"name": "Gulf Buyer LLC", "address": "Abu Dhabi, UAE", "trn": "100987654321098", "vatRegistered": true}, "currency": "USD", "foreignTaxableAmount": "1000.00", "exchangeRate": {"aedPerUnit": "3.672500", "rateDate": "2026-04-01", "authority": "Central Bank of the UAE", "policySourceId": "policy/ae-vat-fx"}, "taxableAmountAed": "3672.50", "vatAmountAed": "183.63", "grossAmountAed": "3856.13", "discountAed": "0.00", "lines": [{"description": "Consulting services", "unitPriceAed": "3672.50", "quantity": 1, "vatRatePercent": "5.00"}], "emirate": "DXB"
+    },
+    {
+      "id": "document/simplified-sale", "documentType": "simplified_tax_invoice", "lane": "domestic_sale", "policySourceId": "policy/ae-vat-invoices", "sourceArtifactId": "artifact/simplified-sale", "title": "Tax Invoice", "invoiceNumber": "INV-2026-0410", "issueDate": "2026-04-10", "dateOfSupply": "2026-04-10", "description": "Workshop", "seller": {"name": "Desert Lantern Services LLC", "address": "Dubai, UAE", "trn": "100123456789012", "vatRegistered": true}, "buyer": {"name": "Registered Studio LLC", "address": "Sharjah, UAE", "trn": "100111222333444", "vatRegistered": true}, "currency": "AED", "taxableAmountAed": "5000.00", "vatAmountAed": "250.00", "grossAmountAed": "5250.00", "emirate": "DXB"
+    },
+    {
+      "id": "document/sale-credit", "documentType": "tax_credit_note", "lane": "domestic_sale", "policySourceId": "policy/ae-vat-invoices", "sourceArtifactId": "artifact/sale-credit", "title": "Tax Credit Note", "invoiceNumber": "CN-2026-0415", "issueDate": "2026-04-15", "dateOfSupply": "2026-04-10", "description": "Workshop scope reduction", "seller": {"name": "Desert Lantern Services LLC", "address": "Dubai, UAE", "trn": "100123456789012", "vatRegistered": true}, "buyer": {"name": "Registered Studio LLC", "address": "Sharjah, UAE", "trn": "100111222333444", "vatRegistered": true}, "currency": "AED", "taxableAmountAed": "-500.00", "vatAmountAed": "-25.00", "grossAmountAed": "-525.00", "originalDocumentId": "document/simplified-sale", "adjustmentReason": "Reduced workshop scope", "emirate": "DXB"
+    },
+    {
+      "id": "document/deposit-sale", "documentType": "deposit_tax_invoice", "lane": "domestic_sale", "policySourceId": "policy/ae-vat-return", "sourceArtifactId": "artifact/deposit-sale", "title": "Tax Invoice", "invoiceNumber": "DEP-2026-0505", "issueDate": "2026-05-05", "dateOfSupply": "2026-05-05", "paymentReceivedOn": "2026-05-05", "description": "Part-payment deposit for implementation", "seller": {"name": "Desert Lantern Services LLC", "address": "Dubai, UAE", "trn": "100123456789012", "vatRegistered": true}, "buyer": {"name": "Private Customer", "address": "Dubai, UAE", "trn": null, "vatRegistered": false}, "currency": "AED", "taxableAmountAed": "2000.00", "vatAmountAed": "100.00", "grossAmountAed": "2100.00", "emirate": "DXB"
+    },
+    {
+      "id": "document/domestic-purchase", "documentType": "full_tax_invoice", "lane": "domestic_purchase", "policySourceId": "policy/ae-vat-invoices", "sourceArtifactId": "artifact/domestic-purchase", "title": "Tax Invoice", "invoiceNumber": "SUP-1001", "issueDate": "2026-05-10", "dateOfSupply": "2026-05-10", "description": "Business software", "seller": {"name": "UAE Software LLC", "address": "Dubai, UAE", "trn": "100555666777888", "vatRegistered": true}, "buyer": {"name": "Desert Lantern Services LLC", "address": "Dubai, UAE", "trn": "100123456789012", "vatRegistered": true}, "currency": "AED", "taxableAmountAed": "1000.00", "vatAmountAed": "50.00", "grossAmountAed": "1050.00", "discountAed": "0.00", "lines": [{"description": "Business software", "unitPriceAed": "1000.00", "quantity": 1, "vatRatePercent": "5.00"}], "inputRecovery": {"basis": "direct_taxable", "recoveryBps": 10000, "recoverableVatAed": "50.00"}
+    },
+    {
+      "id": "document/blocked-entertainment", "documentType": "simplified_tax_invoice", "lane": "domestic_purchase", "policySourceId": "policy/ae-vat-return", "sourceArtifactId": "artifact/blocked-entertainment", "title": "Tax Invoice", "invoiceNumber": "REST-2026-22", "issueDate": "2026-05-12", "dateOfSupply": "2026-05-12", "description": "Client entertainment", "seller": {"name": "Restaurant LLC", "address": "Dubai, UAE", "trn": "100222333444555", "vatRegistered": true}, "buyer": {"name": "Desert Lantern Services LLC", "address": "Dubai, UAE", "trn": "100123456789012", "vatRegistered": true}, "currency": "AED", "taxableAmountAed": "400.00", "vatAmountAed": "20.00", "grossAmountAed": "420.00", "inputRecovery": {"basis": "blocked", "recoveryBps": 0, "recoverableVatAed": "0.00"}
+    },
+    {
+      "id": "document/residual-purchase", "documentType": "full_tax_invoice", "lane": "domestic_purchase", "policySourceId": "policy/ae-vat-apportionment", "sourceArtifactId": "artifact/residual-purchase", "title": "Tax Invoice", "invoiceNumber": "RENT-2026-Q2", "issueDate": "2026-06-01", "dateOfSupply": "2026-06-01", "description": "Shared office rent", "seller": {"name": "Landlord LLC", "address": "Dubai, UAE", "trn": "100333444555666", "vatRegistered": true}, "buyer": {"name": "Desert Lantern Services LLC", "address": "Dubai, UAE", "trn": "100123456789012", "vatRegistered": true}, "currency": "AED", "taxableAmountAed": "2000.00", "vatAmountAed": "100.00", "grossAmountAed": "2100.00", "discountAed": "0.00", "lines": [{"description": "Shared office rent", "unitPriceAed": "2000.00", "quantity": 1, "vatRatePercent": "5.00"}], "inputRecovery": {"basis": "residual_standard_method", "taxableUseAed": "60000.00", "totalUseAed": "100000.00", "recoveryBps": 6000, "recoverableVatAed": "60.00"}
+    },
+    {
+      "id": "document/imported-service", "documentType": "imported_service_invoice", "lane": "imported_service_rcm", "policySourceId": "policy/ae-vat-return", "sourceArtifactId": "artifact/imported-service", "issueDate": "2026-06-10", "dateOfSupply": "2026-06-10", "description": "Foreign cloud services", "seller": {"name": "Foreign Cloud Inc", "address": "United States", "trn": null, "vatRegistered": false}, "buyer": {"name": "Desert Lantern Services LLC", "address": "Dubai, UAE", "trn": "100123456789012", "vatRegistered": true}, "currency": "USD", "foreignTaxableAmount": "1000.00", "exchangeRate": {"aedPerUnit": "3.672500", "rateDate": "2026-06-10", "authority": "Central Bank of the UAE", "policySourceId": "policy/ae-vat-fx"}, "taxableAmountAed": "3672.50", "vatAmountAed": "183.63", "grossAmountAed": "3856.13", "reverseCharge": true, "inputRecovery": {"basis": "direct_taxable", "recoveryBps": 10000, "recoverableVatAed": "183.63"}
+    },
+    {
+      "id": "document/customs-goods", "documentType": "customs_import_declaration", "lane": "customs_declared_goods", "policySourceId": "policy/ae-vat-return", "sourceArtifactId": "artifact/customs-goods", "issueDate": "2026-06-20", "dateOfSupply": "2026-06-20", "currency": "AED", "taxableAmountAed": "10000.00", "vatAmountAed": "500.00", "grossAmountAed": "10500.00", "customsDeclarationNumber": "SYNTH-CUSTOMS-2026-001", "portalBox": "goods_imports", "inputRecovery": {"basis": "direct_taxable", "recoveryBps": 10000, "recoverableVatAed": "500.00"}
+    }
+  ],
+  "candidateJournalLines": [
+    {"id":"jl-001","documentId":"document/usd-full-sale","lineKind":"counterparty","debitAed":"3856.13","creditAed":"0.00","accountType":"asset","taxType":"NONE"},
+    {"id":"jl-002","documentId":"document/usd-full-sale","lineKind":"taxable_base","debitAed":"0.00","creditAed":"3672.50","accountType":"revenue","taxType":"AE_VAT_SR_5_OUTPUT"},
+    {"id":"jl-003","documentId":"document/usd-full-sale","lineKind":"vat_output","debitAed":"0.00","creditAed":"183.63","accountType":"liability","taxType":"NONE","role":"vat_output"},
+    {"id":"jl-004","documentId":"document/simplified-sale","lineKind":"counterparty","debitAed":"5250.00","creditAed":"0.00","accountType":"asset","taxType":"NONE"},
+    {"id":"jl-005","documentId":"document/simplified-sale","lineKind":"taxable_base","debitAed":"0.00","creditAed":"5000.00","accountType":"revenue","taxType":"AE_VAT_SR_5_OUTPUT"},
+    {"id":"jl-006","documentId":"document/simplified-sale","lineKind":"vat_output","debitAed":"0.00","creditAed":"250.00","accountType":"liability","taxType":"NONE","role":"vat_output"},
+    {"id":"jl-007","documentId":"document/sale-credit","lineKind":"counterparty","debitAed":"0.00","creditAed":"525.00","accountType":"asset","taxType":"NONE"},
+    {"id":"jl-008","documentId":"document/sale-credit","lineKind":"taxable_base","debitAed":"500.00","creditAed":"0.00","accountType":"revenue","taxType":"AE_VAT_SR_5_OUTPUT"},
+    {"id":"jl-009","documentId":"document/sale-credit","lineKind":"vat_output","debitAed":"25.00","creditAed":"0.00","accountType":"liability","taxType":"NONE","role":"vat_output"},
+    {"id":"jl-010","documentId":"document/deposit-sale","lineKind":"counterparty","debitAed":"2100.00","creditAed":"0.00","accountType":"asset","taxType":"NONE"},
+    {"id":"jl-011","documentId":"document/deposit-sale","lineKind":"taxable_base","debitAed":"0.00","creditAed":"2000.00","accountType":"revenue","taxType":"AE_VAT_SR_5_OUTPUT"},
+    {"id":"jl-012","documentId":"document/deposit-sale","lineKind":"vat_output","debitAed":"0.00","creditAed":"100.00","accountType":"liability","taxType":"NONE","role":"vat_output"},
+    {"id":"jl-013","documentId":"document/domestic-purchase","lineKind":"taxable_base","debitAed":"1000.00","creditAed":"0.00","accountType":"expense","taxType":"AE_VAT_SR_5_INPUT"},
+    {"id":"jl-014","documentId":"document/domestic-purchase","lineKind":"vat_input","debitAed":"50.00","creditAed":"0.00","accountType":"liability","taxType":"NONE","role":"vat_input_deductible"},
+    {"id":"jl-015","documentId":"document/domestic-purchase","lineKind":"counterparty","debitAed":"0.00","creditAed":"1050.00","accountType":"liability","taxType":"NONE"},
+    {"id":"jl-016","documentId":"document/blocked-entertainment","lineKind":"taxable_base","debitAed":"400.00","creditAed":"0.00","accountType":"expense","taxType":"AE_VAT_BLOCKED_INPUT"},
+    {"id":"jl-017","documentId":"document/blocked-entertainment","lineKind":"irrecoverable_vat","debitAed":"20.00","creditAed":"0.00","accountType":"expense","taxType":"AE_VAT_BLOCKED_INPUT"},
+    {"id":"jl-018","documentId":"document/blocked-entertainment","lineKind":"counterparty","debitAed":"0.00","creditAed":"420.00","accountType":"liability","taxType":"NONE"},
+    {"id":"jl-019","documentId":"document/residual-purchase","lineKind":"taxable_base","debitAed":"2000.00","creditAed":"0.00","accountType":"expense","taxType":"AE_VAT_SR_5_INPUT"},
+    {"id":"jl-020","documentId":"document/residual-purchase","lineKind":"vat_input","debitAed":"60.00","creditAed":"0.00","accountType":"liability","taxType":"NONE","role":"vat_input_deductible"},
+    {"id":"jl-021","documentId":"document/residual-purchase","lineKind":"irrecoverable_vat","debitAed":"40.00","creditAed":"0.00","accountType":"expense","taxType":"AE_VAT_BLOCKED_INPUT"},
+    {"id":"jl-022","documentId":"document/residual-purchase","lineKind":"counterparty","debitAed":"0.00","creditAed":"2100.00","accountType":"liability","taxType":"NONE"},
+    {"id":"jl-023","documentId":"document/imported-service","lineKind":"taxable_base","debitAed":"3672.50","creditAed":"0.00","accountType":"expense","taxType":"AE_VAT_RCM_5_INPUT"},
+    {"id":"jl-024","documentId":"document/imported-service","lineKind":"counterparty","debitAed":"0.00","creditAed":"3672.50","accountType":"liability","taxType":"NONE"},
+    {"id":"jl-025","documentId":"document/imported-service","lineKind":"vat_input","debitAed":"183.63","creditAed":"0.00","accountType":"liability","taxType":"NONE","role":"vat_rcm_input"},
+    {"id":"jl-026","documentId":"document/imported-service","lineKind":"vat_output","debitAed":"0.00","creditAed":"183.63","accountType":"liability","taxType":"NONE","role":"vat_rcm_output"},
+    {"id":"jl-027","documentId":"document/customs-goods","lineKind":"taxable_base","debitAed":"10000.00","creditAed":"0.00","accountType":"fixed_asset","taxType":"AE_VAT_CUSTOMS_GOODS_INPUT"},
+    {"id":"jl-028","documentId":"document/customs-goods","lineKind":"counterparty","debitAed":"0.00","creditAed":"10000.00","accountType":"liability","taxType":"NONE"},
+    {"id":"jl-029","documentId":"document/customs-goods","lineKind":"vat_input","debitAed":"500.00","creditAed":"0.00","accountType":"liability","taxType":"NONE","role":"vat_import_input"},
+    {"id":"jl-030","documentId":"document/customs-goods","lineKind":"vat_output","debitAed":"0.00","creditAed":"500.00","accountType":"liability","taxType":"NONE","role":"vat_import_output"}
+  ],
+  "events": [],
+  "observations": [
+    {"id":"obs-trade","artifactId":"artifact/trade-licence","observedAt":"2026-01-02"},
+    {"id":"obs-zone","artifactId":"artifact/designated-zone-check","observedAt":"2026-01-02"},
+    {"id":"obs-reg","artifactId":"artifact/vat-registration","observedAt":"2026-01-03"},
+    {"id":"obs-period","artifactId":"artifact/fta-period","observedAt":"2026-06-15"},
+    {"id":"obs-01","artifactId":"artifact/usd-full-sale","observedAt":"2026-04-01"},
+    {"id":"obs-02","artifactId":"artifact/simplified-sale","observedAt":"2026-04-10"},
+    {"id":"obs-03","artifactId":"artifact/sale-credit","observedAt":"2026-04-15"},
+    {"id":"obs-04","artifactId":"artifact/deposit-sale","observedAt":"2026-05-05"},
+    {"id":"obs-05","artifactId":"artifact/domestic-purchase","observedAt":"2026-05-10"},
+    {"id":"obs-06","artifactId":"artifact/blocked-entertainment","observedAt":"2026-05-12"},
+    {"id":"obs-07","artifactId":"artifact/residual-purchase","observedAt":"2026-06-01"},
+    {"id":"obs-08","artifactId":"artifact/imported-service","observedAt":"2026-06-10"},
+    {"id":"obs-09","artifactId":"artifact/customs-goods","observedAt":"2026-06-20"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {"id":"artifact/trade-licence","kind":"trade_licence","format":"json","trusted":true,"title":"Synthetic UAE Trade Licence","fields":{"legalName":"Desert Lantern Services LLC"}},
+    {"id":"artifact/designated-zone-check","kind":"designated_zone_register_extract","format":"json","trusted":true,"title":"Synthetic Designated-Zone Check","fields":{"status":"not_designated"}},
+    {"id":"artifact/vat-registration","kind":"vat_registration_certificate","format":"json","trusted":true,"title":"Synthetic VAT Registration","fields":{"trn":"100123456789012"}},
+    {"id":"artifact/fta-period","kind":"emara_tax_period_assignment","format":"json","trusted":true,"title":"Synthetic FTA Period","fields":{"periodKey":"2026-Q2","dueOn":"2026-07-28"}},
+    {"id":"artifact/usd-full-sale","kind":"tax_invoice","format":"json","trusted":true,"title":"Synthetic USD Full Tax Invoice","fields":{"documentId":"document/usd-full-sale"}},
+    {"id":"artifact/simplified-sale","kind":"tax_invoice","format":"json","trusted":true,"title":"Synthetic Simplified Tax Invoice","fields":{"documentId":"document/simplified-sale"}},
+    {"id":"artifact/sale-credit","kind":"tax_credit_note","format":"json","trusted":true,"title":"Synthetic Tax Credit Note","fields":{"documentId":"document/sale-credit"}},
+    {"id":"artifact/deposit-sale","kind":"deposit_tax_invoice","format":"json","trusted":true,"title":"Synthetic Deposit Tax Invoice","fields":{"documentId":"document/deposit-sale"}},
+    {"id":"artifact/domestic-purchase","kind":"tax_invoice","format":"json","trusted":true,"title":"Synthetic Supplier Tax Invoice","fields":{"documentId":"document/domestic-purchase"}},
+    {"id":"artifact/blocked-entertainment","kind":"tax_invoice","format":"json","trusted":true,"title":"Synthetic Entertainment Tax Invoice","fields":{"documentId":"document/blocked-entertainment"}},
+    {"id":"artifact/residual-purchase","kind":"tax_invoice","format":"json","trusted":true,"title":"Synthetic Residual Input Tax Invoice","fields":{"documentId":"document/residual-purchase"}},
+    {"id":"artifact/imported-service","kind":"foreign_supplier_invoice","format":"json","trusted":true,"title":"Synthetic Foreign Service Invoice","fields":{"documentId":"document/imported-service"}},
+    {"id":"artifact/customs-goods","kind":"customs_import_declaration","format":"json","trusted":true,"title":"Synthetic Customs Import Declaration","fields":{"documentId":"document/customs-goods"}}
+  ]
+}

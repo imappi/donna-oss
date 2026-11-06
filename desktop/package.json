@@ -1,0 +1,17 @@
+{
+  "name": "donna-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Donna Desktop — thin Electron shell over the existing runtime (docs/design-donna-desktop-technical-plan.md)",
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "node ../scripts/write_desktop_build_identity.mjs && electron-builder --config electron-builder.yml --mac",
+    "dist:mac:unsigned": "node ../scripts/write_desktop_build_identity.mjs && DONNA_UNSIGNED_LOCAL=1 electron-builder --config electron-builder.yml --mac -c.mac.identity=- -c.mac.notarize=false -c.mac.signIgnore=Contents/Resources/pg16/"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.12"
+  }
+}

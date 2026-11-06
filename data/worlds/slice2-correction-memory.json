@@ -1,0 +1,111 @@
+{
+  "version": "eaw.correction-memory.v1",
+  "correction": {
+    "kind": "owner_correction",
+    "eventId": "event/owner-correction-1",
+    "targetAnswerRecordIndex": 0
+  },
+  "case1": {
+    "caseId": "case/director-charge-1",
+    "equivalenceKey": "client-1/director-rail-purpose",
+    "initialTreatment": "travel_expense",
+    "correctedTreatment": "director_loan_account",
+    "asks": [
+      {
+        "record": {
+          "version": "eaw.ask.v1",
+          "ask_id": "ask/director-purpose-1",
+          "case_id": "case/director-charge-1",
+          "fact_class": "business_purpose",
+          "affected_obligations": [
+            "obligation/director-charge-1"
+          ],
+          "remaining_hypotheses": [
+            "business",
+            "personal"
+          ],
+          "evidence_already_checked": [],
+          "expected_answer_type": "enum",
+          "reliability_required": "owner",
+          "next_state_if_answered": "resumed",
+          "deferrable_until": null,
+          "bundle_id": null
+        },
+        "asked_at": "2026-08-01"
+      }
+    ],
+    "ownerAnswerRecords": [
+      {
+        "kind": "owner_answer",
+        "askId": "ask/director-purpose-1",
+        "hiddenFactId": "hidden/director-purpose",
+        "factKind": "business_purpose",
+        "answeredAt": "2026-08-02",
+        "reliability": "mistaken",
+        "value": "business_travel"
+      },
+      {
+        "kind": "owner_corrected_answer",
+        "askId": "ask/director-purpose-1",
+        "hiddenFactId": "hidden/director-purpose",
+        "factKind": "business_purpose",
+        "answeredAt": "2026-08-03",
+        "reliability": "corrected",
+        "correctsRecordIndex": 0,
+        "value": "personal"
+      }
+    ],
+    "answers": [
+      {
+        "ask_id": "ask/director-purpose-1",
+        "fact_class": "business_purpose",
+        "answered_at": "2026-08-03"
+      }
+    ],
+    "transitions": [
+      {
+        "case_id": "case/director-charge-1",
+        "at": "2026-08-04",
+        "state": "resumed"
+      }
+    ]
+  },
+  "case2": {
+    "caseId": "case/director-charge-2",
+    "equivalenceKey": "client-1/director-rail-purpose",
+    "treatment": "director_loan_account",
+    "memoryApplied": true,
+    "asks": []
+  },
+  "runnerReceipt": {
+    "evalMintedMemory": false,
+    "memory": {
+      "memoryId": "firm-fact/director-rail-purpose",
+      "store": "firm_facts",
+      "operation": "read_after_correction",
+      "writer": "production_correction_path",
+      "persisted": true,
+      "sourceCorrectionEventId": "event/owner-correction-1"
+    }
+  },
+  "askEvaluation": {
+    "world": {
+      "hiddenFacts": [
+        {
+          "id": "hidden/director-purpose",
+          "kind": "business_purpose",
+          "askEvaluation": {
+            "affectedObligations": [
+              "obligation/director-charge-1"
+            ]
+          }
+        }
+      ],
+      "observations": []
+    },
+    "schedule": {
+      "observations": [],
+      "ownerFactContracts": []
+    }
+  }
+}

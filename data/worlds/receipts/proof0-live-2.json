@@ -1,0 +1,227 @@
+{
+  "suite": "world-close",
+  "mode": "production-path",
+  "model": "provider-resolved-per-case",
+  "ranAt": "2026-08-07T12:24:43.250Z",
+  "totals": {
+    "fixtures": 1,
+    "passed": 0,
+    "failed": 1,
+    "errored": 0,
+    "expected_match_count": 1,
+    "proposed_match_count": 1,
+    "true_positive": 0,
+    "false_positive": 0,
+    "false_negative": 1,
+    "name_checked": 0,
+    "name_correct": 0
+  },
+  "metrics": {
+    "precision": null,
+    "recall": 0,
+    "f1": null,
+    "accuracy": 0,
+    "name_accuracy": null
+  },
+  "cases": [
+    {
+      "id": "proof0/processor-settlement",
+      "title": null,
+      "status": "fail",
+      "score": {
+        "status": "fail",
+        "truePositive": 0,
+        "falsePositive": 0,
+        "falseNegative": 1,
+        "expectedSize": 1,
+        "actualSize": 1,
+        "unmatchableExpected": null,
+        "unmatchableActual": null
+      },
+      "expected": null,
+      "actual": {
+        "status": "fail",
+        "worldId": "proof0/processor-settlement",
+        "candidateClose": {
+          "candidateId": "donna-production-path/proof0/processor-settlement",
+          "entries": [],
+          "ownerFacts": [],
+          "actions": []
+        },
+        "oracleVerdict": {
+          "ok": false,
+          "version": "proof0.oracleSuite.v1",
+          "errors": [],
+          "failures": [
+            "entry.event/processor-settlement.bank_cash expected 100 got 0",
+            "entry.event/processor-settlement.foreign_exchange_gain_loss expected 0.8 got 0",
+            "entry.event/processor-settlement.processor_fees_expense expected 3.15 got 0",
+            "entry.event/processor-settlement.sales_revenue expected 102.35 got 0",
+            "ownerFact.event/director-charge.business_purpose missing"
+          ],
+          "receipts": [
+            {
+              "id": "oracle-receipt/proof0/processor-settlement",
+              "oracleVersion": "proof0.oracleSuite.v1",
+              "policyPackVersion": "gb.uk_ltd.management_books.v1",
+              "computedFrom": "candidate_entries_and_actions",
+              "candidateId": "donna-production-path/proof0/processor-settlement"
+            }
+          ]
+        },
+        "traceReceipts": [
+          {
+            "receiptVersion": "proof0.traceReceipts.v1",
+            "worldId": "proof0/processor-settlement",
+            "capabilityId": "reconcile_processor_settlement",
+            "obligationIds": [],
+            "retrievedMemoryRefs": [],
+            "policyRefs": [],
+            "admissibleBranches": [],
+            "oracleFailureIds": [],
+            "externalConsequence": "none",
+            "reversibility": "no_mutation",
+            "runtimeSnapshot": {
+              "extractedDocuments": 3
+            },
+            "decisionId": "decision/proof0/processor-settlement/extraction",
+            "stage": "extracted_structured_state",
+            "evidenceRefs": [
+              "artifact/invoice-a",
+              "artifact/invoice-b",
+              "artifact/malicious-invoice"
+            ],
+            "selectedAction": "extract_documents_via_production_extractor",
+            "authorityBasis": "offline_eval_read_only",
+            "sourceTrust": "mixed_trusted_and_untrusted_evidence",
+            "nextState": "documents_extracted",
+            "modelId": "claude-opus-4-8",
+            "expectedState": "documents_extracted",
+            "observedState": "documents_extracted",
+            "confidence": "high",
+            "sequence": 1
+          },
+          {
+            "receiptVersion": "proof0.traceReceipts.v1",
+            "worldId": "proof0/processor-settlement",
+            "capabilityId": "reconcile_processor_settlement",
+            "obligationIds": [],
+            "retrievedMemoryRefs": [],
+            "policyRefs": [],
+            "admissibleBranches": [],
+            "oracleFailureIds": [],
+            "externalConsequence": "none",
+            "reversibility": "no_mutation",
+            "runtimeSnapshot": {},
+            "decisionId": "decision/proof0/processor-settlement/owner-ask",
+            "stage": "owner_ask_and_response",
+            "evidenceRefs": [],
+            "selectedAction": "no_owner_ask_channel_offline",
+            "authorityBasis": "offline_eval_no_owner_channel",
+            "sourceTrust": "not_applicable",
+            "nextState": "owner_fact_unanswered",
+            "modelId": "claude-opus-4-8",
+            "expectedState": "owner_only_facts_asked_and_answered",
+            "observedState": "owner_ask_path_not_wired_offline",
+            "confidence": "high",
+            "sequence": 2
+          },
+          {
+            "receiptVersion": "proof0.traceReceipts.v1",
+            "worldId": "proof0/processor-settlement",
+            "capabilityId": "reconcile_processor_settlement",
+            "obligationIds": [],
+            "retrievedMemoryRefs": [],
+            "policyRefs": [],
+            "admissibleBranches": [],
+            "oracleFailureIds": [],
+            "externalConsequence": "none",
+            "reversibility": "no_mutation",
+            "runtimeSnapshot": {
+              "proposedMatches": 0,
+              "donnaCommit": "local",
+              "firmContext": {
+                "settlement": {
+                  "settledCount": 0,
+                  "paymentStatus": "unknown; the client settles card/online payments via a payment processor; processor settlement report batch BATCH-001: gross GBP 102.35, fees GBP 3.15, FX GBP 0.80, net GBP 100.00"
+                },
+                "evidenceRefs": [
+                  "artifact/processor-report"
+                ]
+              }
+            },
+            "decisionId": "decision/proof0/processor-settlement/close",
+            "stage": "posting_reconciliation_or_blocked_obligation",
+            "evidenceRefs": [
+              "artifact/invoice-a",
+              "artifact/invoice-b",
+              "artifact/malicious-invoice",
+              "artifact/bank-line",
+              "artifact/processor-report"
+            ],
+            "selectedAction": "stop_before_db_backed_close",
+            "authorityBasis": "offline_eval_no_write_authority",
+            "sourceTrust": "evidence_source_only_for_authority",
+            "nextState": "blocked_on_database_runtime",
+            "modelId": "claude-opus-4-8",
+            "expectedState": "production_close_completed",
+            "observedState": "no_match_proposed_db_close_not_run",
+            "confidence": "high",
+            "sequence": 3
+          }
+        ],
+        "traceReceiptErrors": [],
+        "failureReceipt": {
+          "receiptVersion": "proof0.traceReceipts.v1",
+          "failureId": "failure/proof0/processor-settlement",
+          "worldId": "proof0/processor-settlement",
+          "capabilityId": "reconcile_processor_settlement",
+          "failureClass": "production_close_path_incomplete",
+          "earliestObservableDivergence": {
+            "stage": "owner_ask_and_response",
+            "expectedState": "owner_only_facts_asked_and_answered",
+            "observedState": "owner_ask_path_not_wired_offline",
+            "confidence": "high",
+            "decisionId": "decision/proof0/processor-settlement/owner-ask"
+          },
+          "loadBearingFact": null,
+          "consequence": {
+            "extractedDocuments": 3,
+            "proposedMatches": 0
+          },
+          "protectedGate": "oracle_suite",
+          "reproductionPredicate": "oracle_verdict_failures_recur",
+          "permittedPatchSurfaces": [],
+          "protectedSurfaces": [
+            "causal_world",
+            "oracle",
+            "policy_pack",
+            "accounting_invariants"
+          ],
+          "oracleReceiptIds": [
+            "oracle-receipt/proof0/processor-settlement"
+          ],
+          "oracleFailures": [
+            "entry.event/processor-settlement.bank_cash expected 100 got 0",
+            "entry.event/processor-settlement.foreign_exchange_gain_loss expected 0.8 got 0",
+            "entry.event/processor-settlement.processor_fees_expense expected 3.15 got 0",
+            "entry.event/processor-settlement.sales_revenue expected 102.35 got 0",
+            "ownerFact.event/director-charge.business_purpose missing"
+          ]
+        },
+        "provenance": {
+          "capabilityManifestVersion": "proof0.v1",
+          "worldSchemaVersion": "proof0.world.v1",
+          "worldSeed": "proof0-processor-settlement-001",
+          "policyPackVersion": "gb.uk_ltd.management_books.v1",
+          "resolvedModelId": "claude-opus-4-8",
+          "donnaCommit": "local",
+          "runtimeConfig": {},
+          "schedulerVersion": "proof0.observationSchedule.v1",
+          "rendererVersion": "proof0.worldRenderer.v1",
+          "oracleVersion": "proof0.oracleSuite.v1"
+        }
+      }
+    }
+  ]
+}

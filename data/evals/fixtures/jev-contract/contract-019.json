@@ -1,0 +1,224 @@
+{
+  "id": "contract-019",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "contract-019",
+    "scope": {
+      "firm_id": "fixture-firm",
+      "client_id": "fixture-client",
+      "generation": "fixture-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "bank-source-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "{\"contact\": \"SPRUCE COMMS\", \"currency\": \"EUR\", \"date\": \"2026-08-10\", \"description\": \"SPRUCE COMMS BILL-8119\", \"money_in\": 0, \"money_out\": 605, \"raw_description\": \"SPRUCE COMMS BILL-8119\", \"reconciliation_status\": null}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "{\"currency\": \"EUR\", \"document_date\": \"2026-08-03\", \"document_type\": \"supplier_bill\", \"due_date\": \"2026-09-03\", \"payment_status\": \"unpaid\", \"reference_number\": \"BILL-8119\", \"total_amount\": 605, \"vendor_name\": \"Spruce Communications Ltd\"}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "remittance-source-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "remittance",
+        "content": "{\"bank_currency\": \"EUR\", \"counterparty\": \"Spruce Communications Ltd\", \"fee_bank_amount\": 0, \"gross_bank_amount\": 605, \"invoice_amount\": 605, \"invoice_currency\": \"EUR\", \"invoice_reference\": \"BILL-8119\", \"net_bank_amount\": 605, \"text\": \"Spruce Comms is the bank trading name of Spruce Communications Ltd; allocation: BILL-8119.\"}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Offline investigation of the identified invoice at the requested snapshot. This does not assert that payment has occurred or that a customer owes evidence.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "opaque-tx-19-a",
+        "source_id": "bank-source-1",
+        "date": "2026-08-10",
+        "money_in_minor": 0,
+        "money_out_minor": 60500,
+        "currency": "EUR",
+        "contact": "SPRUCE COMMS",
+        "description": "SPRUCE COMMS BILL-8119",
+        "raw_description": "SPRUCE COMMS BILL-8119",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-remittance-1",
+        "kind": "remittance",
+        "source_id": "remittance-source-1",
+        "transaction_id": "opaque-tx-19-a",
+        "invoice_id": "opaque-doc-19",
+        "invoice_amount_minor": 60500,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 60500,
+        "bank_currency": "EUR",
+        "gross_minor": 60500,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "opaque-doc-19",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-03",
+      "due_date": "2026-09-03",
+      "amount_minor": 60500,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "BILL-8119",
+      "counterparty": "Spruce Communications Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "opaque-doc-19",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-source-1",
+        "invoice-source",
+        "remittance-source-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-source-1",
+        "invoice-source",
+        "remittance-source-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "opaque-tx-19-a"
+      ],
+      "invoice_ids": [
+        "opaque-doc-19"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "source_family": "data/evals/fixtures/jev-routed/route-019.json",
+    "limitations": [
+      "Authored synthetic evidence; source relationships are assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "opaque-doc-19",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and obligation, validated semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": null,
+    "label_reason": "Provisional source reading of the explicit payment relationship; not independent adjudication.",
+    "prior_art": "data/evals/fixtures/jev-routed/route-019.json",
+    "legacy_fixture_sha256": "83d11e58ed0adf8390b6377e873e9a0f4011cc8d3c23cde5f17efd0cc3973396",
+    "positive_paths": [
+      {
+        "kind": "remittance",
+        "transaction_id": "opaque-tx-19-a",
+        "invoice_id": "opaque-doc-19",
+        "source_id": "remittance-source-1",
+        "required_semantics": [
+          "affirmative_obligation_connection",
+          "direct_counterparty_or_documented_processor",
+          "reference_association"
+        ],
+        "constraints": [
+          "current_scoped_sources",
+          "eligible_bank_row",
+          "allocation_arithmetic",
+          "resolved_relevant_competitors"
+        ]
+      }
+    ]
+  },
+  "semantic_statuses": {
+    "opaque-tx-19-a": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "opaque-tx-19-a",
+        "invoice_id": "opaque-doc-19",
+        "amount_minor": 60500
+      }
+    ]
+  }
+}

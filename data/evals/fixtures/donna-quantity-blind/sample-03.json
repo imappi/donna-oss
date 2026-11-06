@@ -1,0 +1,30 @@
+{
+  "id": "sample-03",
+  "input": {
+    "scope": {
+      "firmId": "deterministic-fixture",
+      "clientId": "deterministic-fixture",
+      "locationId": "shelf"
+    },
+    "protocolVersion": "physical-quantity-blind.v1",
+    "candidates": [
+      {
+        "itemId": "item-a",
+        "sku": "FIXTURE-A",
+        "baseUom": "EA"
+      },
+      {
+        "itemId": "item-b",
+        "sku": "FIXTURE-B",
+        "baseUom": "EA"
+      }
+    ],
+    "evidence": [
+      {
+        "id": "sample-03-frame-1",
+        "checksum": "7e6f0ab9a239cb69be8e4c5096a70b2c3a0dcc5845111f9d96868551c5c6df41",
+        "sourceGroupId": "sample-03-scene"
+      }
+    ]
+  }
+}

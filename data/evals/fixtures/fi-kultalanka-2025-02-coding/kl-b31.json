@@ -1,0 +1,86 @@
+{
+  "id": "kl-b31",
+  "title": "Kultalanka 02/2025 26.2. Taksi −17,50",
+  "split": "development",
+  "family": "kultalanka-dated_rate",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "dated_rate",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-26",
+    "description": "KORTTIOSTO TAKSI TAMPERE OY TAMPERE",
+    "money_in": 0,
+    "money_out": 17.5,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "Taksi Tampere Oy",
+    "total_amount": 17.5,
+    "tax_amount": 1.59,
+    "lines": [
+      {
+        "description": "Kyyti 3,4 km",
+        "amount": 17.5,
+        "tax_rate": 10
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Travel",
+          "direction": "debit",
+          "amount": 15.91,
+          "tax_code": "ALV_10_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 1.59,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 17.5,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": {
+      "terminal": "ask_owner",
+      "journal": [],
+      "ask": {
+        "evidence_type": "document_discrepancy",
+        "kind": "ask_supply_timing"
+      }
+    },
+    "adjudication": {
+      "status": "adjudicated",
+      "reviewer": "Ilkka Halonen (operator; not professional review)",
+      "date": "2026-09-24"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B31"
+  }
+}

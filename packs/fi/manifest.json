@@ -1,0 +1,372 @@
+{
+  "pack": { "id": "fi", "country": "FI", "version": 8 },
+  "currency": { "home": "EUR" },
+  "locale": {
+    "number_locale": "fi-FI",
+    "date_format": "dmy",
+    "correspondence_locales": { "fi": "fi-FI", "sv": "fi-FI", "en": "fi-FI" }
+  },
+  "languages": { "default": "fi", "supported": ["fi", "sv", "en"] },
+  "reference": { "scheme": "fi_viitenumero", "note": "Viitenumero (national bank reference, SFS check digit). Minted and validated by finland/verkkolasku.js arithmetic; the OUTBOUND issuance builder mints it too via the scheme-keyed referenceSchemes registry (viite base = the allocated invoice number), so a Donna-issued outbound FI invoice carries its viite from day one. Parsed/imported anchors still consume the persisted value (draft.finvoice or draft.invoice.referenceNumber). A reminder in this pack states the viite ({{reference_number}}); an anchor without one rests on the owner as a named gap rather than sending a reference-less FI reminder." },
+  "einvoice": { "lane": "finvoice_email", "operator": "planned", "note": "D3 (defer-but-schedule, 2026-07-24): Finvoice 3.0 XML + PDF attached to email ships now (exists on the FI lane); the operator network (Maventa-class verkkolasku) is the FI-B2B credibility unlock, committed as 'planned' so this manifest's shape is honest before the lane ships. Pull forward if an early FI customer's buyers demand operator delivery." },
+  "tax": { "vocabulary": null, "note": "The FI ALV vocabulary predates taxVocabularies.js and routes via FINLAND_ALV_CODING (deliberately absent from the registry's jurisdiction map) — null is the honest marker, not a gap." },
+  "reconciliation": {
+    "materiality_ceiling": 500,
+    "disposition_ceiling": 500
+  },
+  "payment_rails": [
+    { "kind": "iban", "note": "IBAN + viitenumero is the Finnish payment norm; no pay-link rail is declared (D4, 2026-07-24: pay-links are the US settlement signal — Finland's is the viite). The G11 virtual barcode (virtuaaliviivakoodi) rides the FI invoice PDF, not this manifest." }
+  ],
+  "correspondence": {
+    "languages": ["fi", "sv", "en"],
+    "tone": "muistutus",
+    "dunning_cadence": [
+      { "step": 1, "days_after_due": 7, "tone": "muistutus", "template": "reminder_step_1" },
+      { "step": 2, "days_after_due": 14, "tone": "maksukehotus", "template": "reminder_step_2" },
+      { "step": 3, "days_after_due": 30, "tone": "viimeinen_maksukehotus", "template": "reminder_step_3" }
+    ],
+    "escalation": { "after_step": 3, "to": "owner" },
+    "quote_follow_up_cadence": [
+      { "step": 1, "days_after_sent": 7, "tone": "ystavallinen", "template": "quote_follow_up_1" }
+    ],
+    "statutory": {
+      "late_interest": {
+        "source": "Korkolaki 633/1982 § 4 a — viivästyskorko kaupallisissa sopimuksissa: Suomen Pankin puolivuosittain vahvistama viitekorko + 8 prosenttiyksikköä",
+        "jurisdiction": "fi",
+        "as_of": "2026-07-24",
+        "basis": "reference_rate_plus_margin",
+        "rate_percent": null,
+        "note": "D5: the RULE is provenanced here; the numeric half-year reference rate is deliberately NOT carried until it is recorded from Suomen Pankki with its own as_of date. No Phase-1 template states an interest amount or fee — a future interest-bearing reminder requires rate_percent filled with that provenance first, never a computed or remembered number."
+      },
+      "constraints": [
+        "D5 (2026-07-24): dunning is B2B-only, muistutus/maksukehotus tone. No late fees and no interest amounts render in any Phase-1 reminder; late_interest above carries the statutory rule for the later slice that earns them.",
+        "Perintalaki 513/1999: consumer collection is regulated (reminder timing, fee caps) — B2C dunning and fee-bearing collection are explicitly out of scope until reviewed."
+      ]
+    }
+  },
+  "documents": {
+    "mandatory_fields": {
+      "invoice": [
+        "invoice_number", "issue_date", "due_date", "total", "currency",
+        "seller_name", "buyer_name", "reference_number", "payment_instructions"
+      ],
+      "note": "reference_number binds the outbound builder to mint a viite per draft (the referenceSchemes registry — bound 2026-07-24, closing the M3 refusal; pack v3). The statutory ALV content (AVL 209 e §) is enforced by the FI lane's buildInvoice/buildFinvoice, not restated here — the finland/ issuance lane keeps serving its existing flows unchanged."
+    },
+    "quote_number_prefix": "T",
+    "invoice_pdf": { "page": "a4" },
+    "quote_pdf": { "page": "a4" },
+    "templates": {
+      "quote_pdf": {
+        "fi": {
+          "subject": "Tarjous {{quote_number}}",
+          "body": "{{owner_business_name}}\n\nTarjous {{quote_number}}\nVastaanottaja: {{counterparty_name}}\nPäiväys: {{issue_date}}\nVoimassa: {{valid_until}} asti\n\n{{lines_block}}\n\nYhteensä: {{quote_total}} {{currency}}"
+        },
+        "sv": {
+          "subject": "Offert {{quote_number}}",
+          "body": "{{owner_business_name}}\n\nOffert {{quote_number}}\nMottagare: {{counterparty_name}}\nDatum: {{issue_date}}\nGiltig till: {{valid_until}}\n\n{{lines_block}}\n\nSammanlagt: {{quote_total}} {{currency}}"
+        },
+        "en": {
+          "subject": "Quote {{quote_number}}",
+          "body": "{{owner_business_name}}\n\nQuote {{quote_number}}\nPrepared for: {{counterparty_name}}\nIssue date: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}"
+        }
+      },
+      "invoice_pdf": {
+        "fi": {
+          "subject": "Lasku {{invoice_number}}",
+          "body": "{{owner_business_name}}\n\nLasku {{invoice_number}}\nVastaanottaja: {{counterparty_name}}\nLaskun päiväys: {{issue_date}}\nEräpäivä: {{due_date}}\n\n{{lines_block}}\n\nYhteensä: {{invoice_total}} {{currency}}\n\nMaksutiedot:\n{{payment_instructions}}\nViitenumero: {{reference_number}}"
+        },
+        "sv": {
+          "subject": "Faktura {{invoice_number}}",
+          "body": "{{owner_business_name}}\n\nFaktura {{invoice_number}}\nMottagare: {{counterparty_name}}\nFakturadatum: {{issue_date}}\nFörfallodag: {{due_date}}\n\n{{lines_block}}\n\nSammanlagt: {{invoice_total}} {{currency}}\n\nBetalningsuppgifter:\n{{payment_instructions}}\nReferensnummer: {{reference_number}}"
+        },
+        "en": {
+          "subject": "Invoice {{invoice_number}}",
+          "body": "{{owner_business_name}}\n\nInvoice {{invoice_number}}\nBilled to: {{counterparty_name}}\nIssue date: {{issue_date}}\nDue date: {{due_date}}\n\n{{lines_block}}\n\nTotal: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}\nReference number: {{reference_number}}"
+        }
+      },
+      "invoice_issue": {
+        "fi": {
+          "subject": "Lasku {{invoice_number}} — {{owner_business_name}}",
+          "body": "Hyvä {{counterparty_name}},\n\nOhessa lasku {{invoice_number}} yritykseltä {{owner_business_name}}.\n\nLaskun päiväys: {{issue_date}}\nEräpäivä: {{due_date}}\n\n{{lines_block}}\n\nYhteensä: {{invoice_total}} {{currency}}\n\nMaksutiedot:\n{{payment_instructions}}\nViitenumero: {{reference_number}}\n\nJos laskussa on mielestänne virhe, vastatkaa tähän viestiin, niin selvitämme asian.\n\nYstävällisin terveisin,\n{{owner_business_name}}\n\n--\nTämän laskun lähetti Donna yrityksen {{owner_business_name}} puolesta."
+        },
+        "sv": {
+          "subject": "Faktura {{invoice_number}} — {{owner_business_name}}",
+          "body": "Bästa {{counterparty_name}},\n\nHär är faktura {{invoice_number}} från {{owner_business_name}}.\n\nFakturadatum: {{issue_date}}\nFörfallodag: {{due_date}}\n\n{{lines_block}}\n\nTotalt: {{invoice_total}} {{currency}}\n\nBetalningsuppgifter:\n{{payment_instructions}}\nReferensnummer: {{reference_number}}\n\nOm något i fakturan inte stämmer, svara på detta meddelande så reder vi ut saken.\n\nMed vänlig hälsning,\n{{owner_business_name}}\n\n--\nDenna faktura skickades av Donna för {{owner_business_name}}."
+        },
+        "en": {
+          "subject": "Invoice {{invoice_number}} from {{owner_business_name}}",
+          "body": "Dear {{counterparty_name}},\n\nPlease find below invoice {{invoice_number}} from {{owner_business_name}}.\n\nInvoice date: {{issue_date}}\nDue date: {{due_date}}\n\n{{lines_block}}\n\nTotal: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}\nReference number: {{reference_number}}\n\nIf anything about this invoice looks off, just reply to this email and we will sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis invoice was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "quote_send": {
+        "fi": {
+          "subject": "Tarjous {{quote_number}} — {{owner_business_name}}",
+          "body": "Hyvä {{counterparty_name}},\n\nKiitos yhteydenotostanne — ohessa tarjous {{quote_number}} yritykseltä {{owner_business_name}}.\n\nPäiväys: {{issue_date}}\nVoimassa: {{valid_until}} asti\n\n{{lines_block}}\n\nYhteensä: {{quote_total}} {{currency}}\n\nVoitte hyväksyä tarjouksen vastaamalla tähän viestiin. Vastaamme mielellämme myös kysymyksiin ja muutostoiveisiin.\n\nYstävällisin terveisin,\n{{owner_business_name}}\n\n--\nTämän tarjouksen lähetti Donna yrityksen {{owner_business_name}} puolesta."
+        },
+        "sv": {
+          "subject": "Offert {{quote_number}} — {{owner_business_name}}",
+          "body": "Bästa {{counterparty_name}},\n\nTack för er förfrågan — här är offert {{quote_number}} från {{owner_business_name}}.\n\nDatum: {{issue_date}}\nGiltig till: {{valid_until}}\n\n{{lines_block}}\n\nTotalt: {{quote_total}} {{currency}}\n\nNi kan godkänna offerten genom att svara på detta meddelande. Frågor och ändringsönskemål är också välkomna.\n\nMed vänlig hälsning,\n{{owner_business_name}}\n\n--\nDenna offert skickades av Donna för {{owner_business_name}}."
+        },
+        "en": {
+          "subject": "Quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Dear {{counterparty_name}},\n\nThank you for your interest — here is quote {{quote_number}} from {{owner_business_name}}.\n\nDate: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}\n\nTo accept, just reply to this email. Questions and changes are welcome too.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis quote was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "quote_follow_up_1": {
+        "fi": {
+          "subject": "Tarjouksesta {{quote_number}} — {{owner_business_name}}",
+          "body": "Hyvä {{counterparty_name}},\n\nPalaan vielä tarjoukseen {{quote_number}} ({{quote_total}} {{currency}}), joka on voimassa {{valid_until}} asti.\n\nJos haluatte edetä, teillä on kysyttävää tai toivotte muutoksia, vastatkaa tähän viestiin.\n\nYstävällisin terveisin,\n{{owner_business_name}}\n\n--\nTämän viestin lähetti Donna yrityksen {{owner_business_name}} puolesta."
+        },
+        "sv": {
+          "subject": "Angående offert {{quote_number}} — {{owner_business_name}}",
+          "body": "Bästa {{counterparty_name}},\n\nJag återkommer angående offert {{quote_number}} ({{quote_total}} {{currency}}), som är giltig till {{valid_until}}.\n\nOm ni vill gå vidare, har frågor eller önskar ändringar, svara på detta meddelande.\n\nMed vänlig hälsning,\n{{owner_business_name}}\n\n--\nDetta meddelande skickades av Donna för {{owner_business_name}}."
+        },
+        "en": {
+          "subject": "Following up on quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Dear {{counterparty_name}},\n\nJust following up on quote {{quote_number}} ({{quote_total}} {{currency}}), valid until {{valid_until}}.\n\nIf you would like to go ahead, have questions, or want any changes, just reply to this email.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis follow-up was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "payable_notice": {
+        "fi": {
+          "subject": "Muistutus: ostolasku erääntyy {{due_date}} — {{counterparty_name}}",
+          "body": "Hei,\n\nYrityksen {{owner_business_name}} ostolasku on erääntymässä:\n\nToimittaja: {{counterparty_name}}\nSumma: {{amount_due}} {{currency}}\nEräpäivä: {{due_date}} ({{days_until_due}} pv)\n\nHaluatteko ajastaa maksun? Donna ei siirrä rahaa — tämä viesti on vain siksi, ettei lasku unohdu. Jos lasku on jo maksettu tai siinä on virhe, vastatkaa tähän viestiin, niin Donna kirjaa asian.\n\n— Donna, yrityksen {{owner_business_name}} puolesta"
+        },
+        "sv": {
+          "subject": "Påminnelse: leverantörsfaktura förfaller {{due_date}} — {{counterparty_name}}",
+          "body": "Hej,\n\nEn leverantörsfaktura för {{owner_business_name}} förfaller snart:\n\nLeverantör: {{counterparty_name}}\nBelopp: {{amount_due}} {{currency}}\nFörfallodag: {{due_date}} ({{days_until_due}} dagar)\n\nVill ni schemalägga betalningen? Donna flyttar inga pengar — det här meddelandet finns bara för att fakturan inte ska glömmas bort. Om fakturan redan är betald eller innehåller ett fel, svara på detta meddelande så noterar Donna det.\n\n— Donna, för {{owner_business_name}}"
+        },
+        "en": {
+          "subject": "Reminder: supplier bill due {{due_date}} — {{counterparty_name}}",
+          "body": "Hi,\n\nA supplier bill for {{owner_business_name}} is coming due:\n\nSupplier: {{counterparty_name}}\nAmount: {{amount_due}} {{currency}}\nDue: {{due_date}} (in {{days_until_due}} days)\n\nWould you like to schedule the payment? Donna does not move money — this note is only so the bill does not slip. If it is already paid or looks wrong, just reply and Donna will record it.\n\n— Donna, on behalf of {{owner_business_name}}"
+        }
+      },
+      "reminder_step_1": {
+        "fi": {
+          "subject": "Maksumuistutus: lasku {{invoice_number}}",
+          "body": "Hyvä {{counterparty_name}},\n\nMuistutamme ystävällisesti, että lasku {{invoice_number}} ({{amount_due}} {{currency}}) erääntyi {{due_date}}. Jos maksu on jo lähtenyt, tämä viesti ei vaadi toimenpiteitä — kiitos.\n\nMaksaessanne käyttäkää viitenumeroa {{reference_number}}.\n\nMaksutiedot:\n{{payment_instructions}}\n\nJos laskussa on mielestänne virhe, vastatkaa tähän viestiin, niin selvitämme asian.\n\nYstävällisin terveisin,\n{{owner_business_name}}\n\n--\nTämän muistutuksen lähetti Donna yrityksen {{owner_business_name}} puolesta. Jos ette halua vastaanottaa muistutuksia tästä laskusta: {{unsubscribe_url}}"
+        },
+        "sv": {
+          "subject": "Betalningspåminnelse: faktura {{invoice_number}}",
+          "body": "Bästa {{counterparty_name}},\n\nVi vill vänligen påminna om att faktura {{invoice_number}} ({{amount_due}} {{currency}}) förföll {{due_date}}. Om betalningen redan är på väg behöver ni inte göra något — tack.\n\nVänligen använd referensnummer {{reference_number}} vid betalningen.\n\nBetalningsuppgifter:\n{{payment_instructions}}\n\nOm något i fakturan inte stämmer, svara på detta meddelande så reder vi ut saken.\n\nMed vänlig hälsning,\n{{owner_business_name}}\n\n--\nDenna påminnelse skickades av Donna för {{owner_business_name}}. Om ni inte vill få påminnelser om denna faktura: {{unsubscribe_url}}"
+        },
+        "en": {
+          "subject": "Payment reminder: invoice {{invoice_number}}",
+          "body": "Dear {{counterparty_name}},\n\nThis is a friendly reminder that invoice {{invoice_number}} ({{amount_due}} {{currency}}) was due on {{due_date}}. If payment is already on its way, no action is needed — thank you.\n\nPlease use reference number {{reference_number}} when paying.\n\nPayment details:\n{{payment_instructions}}\n\nIf anything about this invoice looks off, just reply to this email and we will sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis reminder was sent by Donna on behalf of {{owner_business_name}}. To stop receiving reminders about this invoice: {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_2": {
+        "fi": {
+          "subject": "Maksukehotus: lasku {{invoice_number}}",
+          "body": "Hyvä {{counterparty_name}},\n\nLasku {{invoice_number}} ({{amount_due}} {{currency}}, eräpäivä {{due_date}}) on edelleen maksamatta — eräpäivästä on kulunut {{days_overdue}} päivää. Pyydämme suorittamaan maksun mahdollisimman pian.\n\nMaksaessanne käyttäkää viitenumeroa {{reference_number}}.\n\nMaksutiedot:\n{{payment_instructions}}\n\nJos maksu on jo matkalla tai laskusta on kysyttävää, vastatkaa tähän viestiin.\n\nYstävällisin terveisin,\n{{owner_business_name}}\n\n--\nTämän maksukehotuksen lähetti Donna yrityksen {{owner_business_name}} puolesta. Jos ette halua vastaanottaa muistutuksia tästä laskusta: {{unsubscribe_url}}"
+        },
+        "sv": {
+          "subject": "Betalningsuppmaning: faktura {{invoice_number}}",
+          "body": "Bästa {{counterparty_name}},\n\nFaktura {{invoice_number}} ({{amount_due}} {{currency}}, förfallodag {{due_date}}) är fortfarande obetald — {{days_overdue}} dagar har gått sedan förfallodagen. Vi ber er betala så snart som möjligt.\n\nVänligen använd referensnummer {{reference_number}} vid betalningen.\n\nBetalningsuppgifter:\n{{payment_instructions}}\n\nOm betalningen redan är på väg eller om ni har frågor om fakturan, svara på detta meddelande.\n\nMed vänlig hälsning,\n{{owner_business_name}}\n\n--\nDenna betalningsuppmaning skickades av Donna för {{owner_business_name}}. Om ni inte vill få påminnelser om denna faktura: {{unsubscribe_url}}"
+        },
+        "en": {
+          "subject": "Payment request: invoice {{invoice_number}} is {{days_overdue}} days past due",
+          "body": "Dear {{counterparty_name}},\n\nInvoice {{invoice_number}} ({{amount_due}} {{currency}}, due {{due_date}}) is still unpaid — {{days_overdue}} days past its due date. We would appreciate payment at your earliest convenience.\n\nPlease use reference number {{reference_number}} when paying.\n\nPayment details:\n{{payment_instructions}}\n\nIf payment is already on its way, or if you have a question about this invoice, please reply and let us know.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis payment request was sent by Donna on behalf of {{owner_business_name}}. To stop receiving reminders about this invoice: {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_3": {
+        "fi": {
+          "subject": "Viimeinen maksukehotus: lasku {{invoice_number}}",
+          "body": "Hyvä {{counterparty_name}},\n\nAiemmista muistutuksista huolimatta lasku {{invoice_number}} ({{amount_due}} {{currency}}, eräpäivä {{due_date}}, {{days_overdue}} päivää eräpäivästä) on yhä maksamatta. Pyydämme suorittamaan maksun viipymättä.\n\nMaksaessanne käyttäkää viitenumeroa {{reference_number}}.\n\nMaksutiedot:\n{{payment_instructions}}\n\nJos laskuun liittyy epäselvyyttä tai erimielisyys, vastatkaa tähän viestiin nyt, niin selvitämme asian yhdessä. Voimme myös sopia maksujärjestelystä.\n\nYstävällisin terveisin,\n{{owner_business_name}}\n\n--\nTämän maksukehotuksen lähetti Donna yrityksen {{owner_business_name}} puolesta. Jos ette halua vastaanottaa muistutuksia tästä laskusta: {{unsubscribe_url}}"
+        },
+        "sv": {
+          "subject": "Sista betalningsuppmaning: faktura {{invoice_number}}",
+          "body": "Bästa {{counterparty_name}},\n\nTrots tidigare påminnelser är faktura {{invoice_number}} ({{amount_due}} {{currency}}, förfallodag {{due_date}}, {{days_overdue}} dagar efter förfallodagen) fortfarande obetald. Vi ber er betala utan dröjsmål.\n\nVänligen använd referensnummer {{reference_number}} vid betalningen.\n\nBetalningsuppgifter:\n{{payment_instructions}}\n\nOm det finns oklarheter eller en tvist kring fakturan, svara på detta meddelande nu så reder vi ut saken tillsammans. Vi kan också komma överens om en betalningsplan.\n\nMed vänlig hälsning,\n{{owner_business_name}}\n\n--\nDenna betalningsuppmaning skickades av Donna för {{owner_business_name}}. Om ni inte vill få påminnelser om denna faktura: {{unsubscribe_url}}"
+        },
+        "en": {
+          "subject": "Final payment request: invoice {{invoice_number}} remains unpaid",
+          "body": "Dear {{counterparty_name}},\n\nDespite earlier reminders, invoice {{invoice_number}} ({{amount_due}} {{currency}}, due {{due_date}}, now {{days_overdue}} days past due) remains unpaid. Please arrange payment promptly.\n\nPlease use reference number {{reference_number}} when paying.\n\nPayment details:\n{{payment_instructions}}\n\nIf there is a problem or dispute concerning this invoice, please reply now so we can resolve it together. A payment arrangement is also possible.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis payment request was sent by Donna on behalf of {{owner_business_name}}. To stop receiving reminders about this invoice: {{unsubscribe_url}}"
+        }
+      }
+    }
+  },
+  "chart_of_accounts": {
+    "note": "The fallback coding menu for a Finnish client with no synced chart of accounts. Before this leg every such client — in every market — was coded against XERO_ACCOUNT_OPTIONS, a Singapore-flavoured list carrying 'CPF payable' and no ALV account at all. 'Suoritettava arvonlisävero' is carried under its established Finnish name because that exact string is the ALV settlement account the FI posting path already resolves; the remaining names are English pending a localized-display-name slice. That deferral is safe BECAUSE each account declares its canonical role: the role is the machine identity, the name is a view, so renaming later is a display change and not a re-coding. Roles, not names, are what the posting paths resolve.",
+    "fallback_accounts": [
+      {
+        "name": "Sales",
+        "role": "revenue.operating"
+      },
+      {
+        "name": "Other income",
+        "role": "revenue.other"
+      },
+      {
+        "name": "Interest income",
+        "role": "revenue.interest"
+      },
+      {
+        "name": "Cost of sales",
+        "role": "expense.cost_of_sales"
+      },
+      {
+        "name": "Operating supplies",
+        "role": "expense.operating_supplies"
+      },
+      {
+        "name": "Software subscriptions",
+        "role": "expense.software"
+      },
+      {
+        "name": "Travel",
+        "role": "expense.travel"
+      },
+      {
+        "name": "Meals and entertainment",
+        "role": "expense.meals"
+      },
+      {
+        "name": "Marketing",
+        "role": "expense.marketing"
+      },
+      {
+        "name": "Professional fees",
+        "role": "expense.professional_fees"
+      },
+      {
+        "name": "Accounting fees",
+        "role": "expense.accounting_fees"
+      },
+      {
+        "name": "Statutory filing fees",
+        "role": "expense.statutory_fees"
+      },
+      {
+        "name": "Payroll",
+        "role": "expense.payroll"
+      },
+      {
+        "name": "Rent",
+        "role": "expense.rent"
+      },
+      {
+        "name": "Utilities",
+        "role": "expense.utilities"
+      },
+      {
+        "name": "Telecommunications",
+        "role": "expense.telecom"
+      },
+      {
+        "name": "Insurance",
+        "role": "expense.insurance"
+      },
+      {
+        "name": "Office expenses",
+        "role": "expense.office"
+      },
+      {
+        "name": "Motor expenses",
+        "role": "expense.motor"
+      },
+      {
+        "name": "Interest expense",
+        "role": "expense.interest"
+      },
+      {
+        "name": "Bank fees",
+        "role": "expense.bank_fees"
+      },
+      {
+        "name": "Platform and processor fees",
+        "role": "expense.platform_fees"
+      },
+      {
+        "name": "Foreign exchange gain/loss",
+        "role": "expense.fx"
+      },
+      {
+        "name": "Director loan",
+        "role": "liability.director_loan"
+      },
+      {
+        "name": "Loan payable",
+        "role": "liability.loan"
+      },
+      {
+        "name": "Shareholder receivable",
+        "role": "asset.receivable_from_owner"
+      },
+      {
+        "name": "Owner drawings",
+        "role": "equity.owner_drawings"
+      },
+      {
+        "name": "Share capital",
+        "role": "equity.share_capital"
+      },
+      {
+        "name": "Share premium",
+        "role": "equity.share_premium"
+      },
+      {
+        "name": "Retained earnings",
+        "role": "equity.retained_earnings"
+      },
+      {
+        "name": "Intercompany transfer",
+        "role": "clearing.intercompany"
+      },
+      {
+        "name": "Payment processor clearing",
+        "role": "clearing.payment_processor"
+      },
+      {
+        "name": "Suoritettava arvonlisävero",
+        "role": "liability.sales_tax_payable"
+      },
+      {
+        "name": "Ennakkovero payable",
+        "role": "liability.tax_payable"
+      },
+      {
+        "name": "TyEL and payroll contributions payable",
+        "role": "liability.payroll_payable"
+      },
+      {
+        "name": "Payroll withholding and employer health-insurance payable",
+        "role": "liability.payroll_payable"
+      },
+      {
+        "name": "YEL contributions",
+        "role": "expense.payroll"
+      },
+      {
+        "name": "Suspense",
+        "role": "control.suspense"
+      }
+    ]
+  },
+  "obligations": {
+    "survey": "surveyed",
+    "as_of": "2026-07-27",
+    "note": "The statutory duties this pack's market imposes that generate work on their own clock. Enumerated here as pack DATA — nothing under server/donna/finland/ is edited by this leg. The two bound entries below are exactly the two drains the country-named `finland_watches` cron already ran; binding them by name is what lets the cron become jurisdiction-neutral (`statutory_watches`) instead of growing a `uk_watches` sibling. This list is NOT the whole of Finnish statutory bookkeeping duty — it is the set core currently watches; further duties (ALV return periods, ennakkovero, tilinpäätös/annual return) are served today by modules the loop runtime drives, and move onto this leg as they are bound.",
+    "items": [
+      {
+        "id": "fi_alv_registration_threshold",
+        "name": "ALV registration threshold watch",
+        "authority": "Verohallinto",
+        "source": "Arvonlisäverolaki 1501/1993 — vähäinen liiketoiminta: a business must register for ALV once its taxable turnover for the accounting period exceeds the small-business threshold, and Donna must raise it with the owner before the boundary is crossed unnoticed",
+        "as_of": "2026-07-27",
+        "status": "bound",
+        "binding": "fi_alv_threshold_escalation",
+        "note": "The numeric threshold is NOT carried here: it lives with the deterministic watch that reads it, provenanced there. This entry declares the DUTY and who imposes it. Direct sibling of the GB pack's gb_vat_registration_threshold — the same duty shape in two markets is the parallel build's evidence that the leg generalises."
+      },
+      {
+        "id": "fi_scope_drift_posting_review",
+        "name": "Posting-time scope-drift owner review",
+        "authority": "Verohallinto",
+        "source": "Kirjanpitolaki 1336/1997 — the owner is responsible for the accuracy of the books; where posting detects activity outside the scope Donna was told to keep, the owner must be asked rather than have a treatment assumed on their behalf",
+        "as_of": "2026-07-27",
+        "status": "bound",
+        "binding": "fi_scope_drift_ask_delivery",
+        "note": "The ask is minted in the posting transaction (portal-visible immediately — the on-owner terminal); this obligation is the daily delivery leg, which cannot ride the posting transaction because it does network I/O. Two-terminal-states: the ask rests on the OWNER, never on us."
+      }
+    ]
+  },
+  "platforms": ["procountor"]
+}

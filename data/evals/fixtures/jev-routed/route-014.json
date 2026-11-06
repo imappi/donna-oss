@@ -1,0 +1,52 @@
+{
+  "id": "route-014",
+  "split": "evaluation",
+  "source_family": "authored-014",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-14",
+    "document_type": "sales_invoice",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 965,
+    "currency": "EUR",
+    "reference_number": "BILL-8114",
+    "payment_status": "unpaid",
+    "customer_name": "Nettle Design Ltd"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-14-a",
+      "money_in": 965,
+      "money_out": 0,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Nettle Design Ltd",
+      "description": "BANK TRANSFER Nettle Design Ltd BILL-8114",
+      "raw_description": "BANK TRANSFER Nettle Design Ltd BILL-8114",
+      "reconciliation_status": "reconciled",
+      "payload": {}
+    }
+  ],
+  "matches": [
+    {
+      "id": "opaque-match-route-014",
+      "firm_id": "fixture-firm",
+      "client_id": "fixture-client",
+      "bank_transaction_id": "opaque-tx-14-a",
+      "matched_object_id": "opaque-doc-14",
+      "matched_object_type": "sales_invoice",
+      "status": "confirmed",
+      "amount": 965,
+      "currency": "EUR"
+    }
+  ],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "already_settled",
+    "matches": []
+  },
+  "label_basis": "Current scoped confirmed match covers the document; the only bank candidate is no longer eligible."
+}

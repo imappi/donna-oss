@@ -1,0 +1,58 @@
+{
+  "id": "013-ap-equal-amount-near-date-decoy",
+  "title": "Equal-amount decoy, closer date — target precision under temptation (AP)",
+  "narrative": "AP mirror of 009. A EUR 430 supplier bill from Acme Office Supplies (ref AOS-2026-7781). Two outgoing lines are exactly EUR 430: the correct one carries the bill reference and the vendor name; the DECOY is the same amount to a DIFFERENT vendor (Fenno Cleaning) and is two days CLOSER to the bill date. GOLD: auto_match the reference-matching line only. FAILURE TO CATCH: matching the decoy (false target / false-auto-match) or proposing both.",
+  "tags": ["negative_decoy", "equal_amount", "near_date", "reference_match", "supplier_bill", "ap", "target_precision"],
+  "document": {
+    "id": "sb-acme-013",
+    "document_type": "supplier_bill",
+    "vendor_name": "Acme Office Supplies Oy",
+    "document_date": "2026-05-02",
+    "due_date": "2026-05-30",
+    "total_amount": 430.00,
+    "currency": "EUR",
+    "reference_number": "AOS-2026-7781",
+    "extraction_confidence": 0.95,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-acme-correct",
+      "money_out": 430.00,
+      "currency": "EUR",
+      "date": "2026-05-06",
+      "description": "SEPA DD ACME OFFICE SUPPLIES AOS-2026-7781",
+      "raw_description": "SEPA DD ACME OFFICE SUPPLIES OY AOS-2026-7781",
+      "contact": "Acme Office Supplies Oy"
+    },
+    {
+      "id": "tx-fenno-decoy",
+      "money_out": 430.00,
+      "currency": "EUR",
+      "date": "2026-05-04",
+      "description": "SEPA DD FENNO CLEANING SERVICES",
+      "raw_description": "SEPA DD FENNO CLEANING SERVICES OY MONTHLY",
+      "contact": "Fenno Cleaning Services Oy"
+    },
+    {
+      "id": "tx-unrelated-software-013",
+      "money_out": 89.00,
+      "currency": "EUR",
+      "date": "2026-05-05",
+      "description": "Card NOTION LABS",
+      "raw_description": "Card NOTION LABS INC SUBSCRIPTION",
+      "contact": "Notion Labs"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      {
+        "bank_transaction_id": "tx-acme-correct",
+        "status": "auto_matched",
+        "required_hops_any_of": ["reference_match", "vendor_overlap"]
+      }
+    ],
+    "unmatchable_reason": null
+  }
+}

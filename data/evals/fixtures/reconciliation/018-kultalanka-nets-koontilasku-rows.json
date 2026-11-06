@@ -1,0 +1,516 @@
+{
+  "id": "018-kultalanka-nets-koontilasku-rows",
+  "title": "Kultalanka — Nets monthly koontilasku: four weekly card settlements, one statement (RT-21)",
+  "tags": [
+    "processor",
+    "payout_statement",
+    "settlement_rows",
+    "koontilasku",
+    "fi",
+    "regression",
+    "rt-21"
+  ],
+  "narrative": "Kampaamo Kultalanka Oy, February 2025 (the first clean run of the Finnish test book, 2026-09-08). ONE document — the Nets monthly report, a koontilasku listing four weekly card settlements VKO5–VKO8, each with its own gross, transaction count, 1.10 % fee and net, plus a total — and FOUR bank credits, one per week at that week's NET. Before RT-21 the payout lane's one-to-one contract forced the model to tag every credit partial_payment; authorizeMatch then held each with below_floor + insufficient_separation + above_materiality_ceiling and 10 206,48 EUR of card sales rested on nobody. The contract (prompt §2): bank line ↔ statement row, full settlement at that row's NET, exact; proposals against DIFFERENT rows are not ties; the document converges when every row is settled. Decoys: a customer transfer equal to VKO5's GROSS (a credit equal to a row's gross is NOT that row) and an unrelated refund credit.",
+  "provenance": "RECONSTRUCTED from the 2026-09-08 receipts (prompt docs/prompt-2026-09-08-rt-21-koontilasku-settlement-rows.md §1/§5): statement net 10 206,48; fee 1,10 % = 113,52 (gross 10 320,00); VKO5 gross 2 480,00; the note that VKO9 settles 3.3. The VKO6–VKO8 grosses and the transaction counts were NOT recorded in the receipts and are chosen so the rows foot; replace them (and document_text) with the printed figures from `14 Nets kuukausiraportti 02-2025.pdf` on the laptop appliance when scoring the real extraction.",
+  "document_text": [
+    "NETS FINLAND OY                                   KUUKAUSIRAPORTTI / KOONTILASKU",
+    "Kauppias: Kampaamo Kultalanka Oy                 Raportointikausi: 02/2025",
+    "Kauppiasnumero: 35194800                          Raportin päivämäärä: 28.2.2025",
+    "",
+    "Korttitilitykset (tilitetty viikoittain kauppiaan tilille)",
+    "Tilitysjakso              Tapahtumia   Bruttomyynti   Palkkio 1,10 %   Nettotilitys   Maksupäivä",
+    "VKO5 2025 (27.1.–2.2.)            31       2 480,00            27,28       2 452,72   3.2.2025",
+    "VKO6 2025 (3.2.–9.2.)             33       2 610,00            28,71       2 581,29   10.2.2025",
+    "VKO7 2025 (10.2.–16.2.)           30       2 490,00            27,39       2 462,61   17.2.2025",
+    "VKO8 2025 (17.2.–23.2.)           35       2 740,00            30,14       2 709,86   24.2.2025",
+    "",
+    "Yhteensä                         129      10 320,00          113,52      10 206,48",
+    "",
+    "Palkkio on arvonlisäverotonta rahoituspalvelua (AVL 41 §)."
+  ],
+  "raw_extraction": {
+    "source_business_use": { "classification": "not_stated", "source_quote": null, "business_use_percent": null },
+    "document_type": "payout_statement",
+    "extraction_status": "validated",
+    "extraction_confidence": 0.95,
+    "warnings": [],
+    "header": {
+      "counterparty_name": "Nets",
+      "counterparty_role": "processor",
+      "counterparty_tax_id": null,
+      "own_name": "Kampaamo Kultalanka Oy",
+      "own_tax_id": null,
+      "document_date": "2025-02-28",
+      "due_date": null,
+      "currency": "EUR",
+      "subtotal_amount": null,
+      "tax_amount": null,
+      "shipping_amount": 0,
+      "discount_amount": 0,
+      "rounding_amount": 0,
+      "total_amount": 10206.48,
+      "line_amounts_include_tax": true,
+      "payment_status": "paid",
+      "payment_terms": null,
+      "references": []
+    },
+    "lines": [],
+    "settlement": {
+      "period_start": "2025-01-27",
+      "period_end": "2025-02-23",
+      "payout_date": null,
+      "gross_sales": 10320.0,
+      "gross_components": [
+        {
+          "description": "VKO5 2025 (27.1.–2.2.)",
+          "amount": 2480.0
+        },
+        {
+          "description": "VKO6 2025 (3.2.–9.2.)",
+          "amount": 2610.0
+        },
+        {
+          "description": "VKO7 2025 (10.2.–16.2.)",
+          "amount": 2490.0
+        },
+        {
+          "description": "VKO8 2025 (17.2.–23.2.)",
+          "amount": 2740.0
+        }
+      ],
+      "refunds": 0,
+      "fees": [
+        {
+          "description": "Palkkio 1,10 %",
+          "amount": 113.52,
+          "tax_amount": 0
+        }
+      ],
+      "adjustments": [],
+      "net_payout": 10206.48,
+      "transaction_count": 129,
+      "payout_reference": null,
+      "deposit_reference": null,
+      "bank_last4": null,
+      "rows": [
+        {
+          "period_label": "VKO5 2025 (27.1.–2.2.)",
+          "period_start": "2025-01-27",
+          "period_end": "2025-02-02",
+          "paid_on": "2025-02-03",
+          "gross": 2480.0,
+          "fee": 27.28,
+          "fee_tax": 0,
+          "net": 2452.72,
+          "transaction_count": 31,
+          "reference": null
+        },
+        {
+          "period_label": "VKO6 2025 (3.2.–9.2.)",
+          "period_start": "2025-02-03",
+          "period_end": "2025-02-09",
+          "paid_on": "2025-02-10",
+          "gross": 2610.0,
+          "fee": 28.71,
+          "fee_tax": 0,
+          "net": 2581.29,
+          "transaction_count": 33,
+          "reference": null
+        },
+        {
+          "period_label": "VKO7 2025 (10.2.–16.2.)",
+          "period_start": "2025-02-10",
+          "period_end": "2025-02-16",
+          "paid_on": "2025-02-17",
+          "gross": 2490.0,
+          "fee": 27.39,
+          "fee_tax": 0,
+          "net": 2462.61,
+          "transaction_count": 30,
+          "reference": null
+        },
+        {
+          "period_label": "VKO8 2025 (17.2.–23.2.)",
+          "period_start": "2025-02-17",
+          "period_end": "2025-02-23",
+          "paid_on": "2025-02-24",
+          "gross": 2740.0,
+          "fee": 30.14,
+          "fee_tax": 0,
+          "net": 2709.86,
+          "transaction_count": 35,
+          "reference": null
+        }
+      ]
+    },
+    "contract": {
+      "contract_type": "not_a_contract",
+      "effective_start_date": null,
+      "effective_end_date": null,
+      "auto_renew": null,
+      "notice_period_days": null,
+      "recurring_amount": null,
+      "recurring_frequency": "none",
+      "obligations": []
+    }
+  },
+  "document": {
+    "id": "doc-nets-koontilasku-02-2025",
+    "document_type": "payout_statement",
+    "filename": "14 Nets kuukausiraportti 02-2025.pdf",
+    "vendor_name": "Nets",
+    "customer_name": null,
+    "document_date": "2025-02-28",
+    "due_date": null,
+    "total_amount": 10206.48,
+    "currency": "EUR",
+    "reference_number": null,
+    "extraction_confidence": 0.95,
+    "payment_status": "paid",
+    "parse_summary": {
+      "warnings": [],
+      "period_start_date": "2025-01-27",
+      "period_end_date": "2025-02-23",
+      "settlement": {
+        "kind": "payout_statement",
+        "provider_name": "Nets",
+        "merchant_name": "Kampaamo Kultalanka Oy",
+        "period_start": "2025-01-27",
+        "period_end": "2025-02-23",
+        "payout_date": null,
+        "currency": "EUR",
+        "gross_sales": 10320.0,
+        "gross_components": [
+          {
+            "description": "VKO5 2025 (27.1.–2.2.)",
+            "amount": 2480.0
+          },
+          {
+            "description": "VKO6 2025 (3.2.–9.2.)",
+            "amount": 2610.0
+          },
+          {
+            "description": "VKO7 2025 (10.2.–16.2.)",
+            "amount": 2490.0
+          },
+          {
+            "description": "VKO8 2025 (17.2.–23.2.)",
+            "amount": 2740.0
+          }
+        ],
+        "refunds": 0,
+        "fees": [
+          {
+            "description": "Palkkio 1,10 %",
+            "amount": 113.52,
+            "tax_amount": 0
+          }
+        ],
+        "fee_total": 113.52,
+        "fee_tax_total": 0,
+        "adjustments": [],
+        "adjustment_total": 0,
+        "net_payout": 10206.48,
+        "transaction_count": 129,
+        "payout_reference": null,
+        "deposit_reference": null,
+        "bank_last4": null,
+        "rows": [
+          {
+            "row_no": 1,
+            "period_label": "VKO5 2025 (27.1.–2.2.)",
+            "period_start": "2025-01-27",
+            "period_end": "2025-02-02",
+            "paid_on": "2025-02-03",
+            "gross": 2480.0,
+            "fee": 27.28,
+            "fee_tax": 0,
+            "net": 2452.72,
+            "net_derived": false,
+            "transaction_count": 31,
+            "reference": null
+          },
+          {
+            "row_no": 2,
+            "period_label": "VKO6 2025 (3.2.–9.2.)",
+            "period_start": "2025-02-03",
+            "period_end": "2025-02-09",
+            "paid_on": "2025-02-10",
+            "gross": 2610.0,
+            "fee": 28.71,
+            "fee_tax": 0,
+            "net": 2581.29,
+            "net_derived": false,
+            "transaction_count": 33,
+            "reference": null
+          },
+          {
+            "row_no": 3,
+            "period_label": "VKO7 2025 (10.2.–16.2.)",
+            "period_start": "2025-02-10",
+            "period_end": "2025-02-16",
+            "paid_on": "2025-02-17",
+            "gross": 2490.0,
+            "fee": 27.39,
+            "fee_tax": 0,
+            "net": 2462.61,
+            "net_derived": false,
+            "transaction_count": 30,
+            "reference": null
+          },
+          {
+            "row_no": 4,
+            "period_label": "VKO8 2025 (17.2.–23.2.)",
+            "period_start": "2025-02-17",
+            "period_end": "2025-02-23",
+            "paid_on": "2025-02-24",
+            "gross": 2740.0,
+            "fee": 30.14,
+            "fee_tax": 0,
+            "net": 2709.86,
+            "net_derived": false,
+            "transaction_count": 35,
+            "reference": null
+          }
+        ],
+        "rows_validation": {
+          "matches": true,
+          "row_count": 4,
+          "rows_missing_net": 0,
+          "expected": 10206.48,
+          "total": 10206.48,
+          "drift": 0,
+          "tolerance": 0.04,
+          "reason": null
+        }
+      },
+      "totals_validation": {
+        "matches": true,
+        "basis": "lines",
+        "expected": 10206.48,
+        "total": 10206.48,
+        "drift": 0
+      }
+    },
+    "lines": [
+      {
+        "id": "doc-nets-koontilasku-02-2025-ln-1",
+        "line_no": 1,
+        "description": "VKO5 2025 (27.1.–2.2.)",
+        "amount": 2452.72,
+        "payload": {
+          "raw_extraction": {
+            "description": "VKO5 2025 (27.1.–2.2.)",
+            "quantity": 1,
+            "unit_price": 2452.72,
+            "amount": 2452.72,
+            "tax_rate": null,
+            "settlement_row": {
+              "row_no": 1,
+              "period_label": "VKO5 2025 (27.1.–2.2.)",
+              "period_start": "2025-01-27",
+              "period_end": "2025-02-02",
+              "paid_on": "2025-02-03",
+              "gross": 2480.0,
+              "fee": 27.28,
+              "fee_tax": 0,
+              "net": 2452.72,
+              "net_derived": false,
+              "transaction_count": 31,
+              "reference": null
+            }
+          }
+        }
+      },
+      {
+        "id": "doc-nets-koontilasku-02-2025-ln-2",
+        "line_no": 2,
+        "description": "VKO6 2025 (3.2.–9.2.)",
+        "amount": 2581.29,
+        "payload": {
+          "raw_extraction": {
+            "description": "VKO6 2025 (3.2.–9.2.)",
+            "quantity": 1,
+            "unit_price": 2581.29,
+            "amount": 2581.29,
+            "tax_rate": null,
+            "settlement_row": {
+              "row_no": 2,
+              "period_label": "VKO6 2025 (3.2.–9.2.)",
+              "period_start": "2025-02-03",
+              "period_end": "2025-02-09",
+              "paid_on": "2025-02-10",
+              "gross": 2610.0,
+              "fee": 28.71,
+              "fee_tax": 0,
+              "net": 2581.29,
+              "net_derived": false,
+              "transaction_count": 33,
+              "reference": null
+            }
+          }
+        }
+      },
+      {
+        "id": "doc-nets-koontilasku-02-2025-ln-3",
+        "line_no": 3,
+        "description": "VKO7 2025 (10.2.–16.2.)",
+        "amount": 2462.61,
+        "payload": {
+          "raw_extraction": {
+            "description": "VKO7 2025 (10.2.–16.2.)",
+            "quantity": 1,
+            "unit_price": 2462.61,
+            "amount": 2462.61,
+            "tax_rate": null,
+            "settlement_row": {
+              "row_no": 3,
+              "period_label": "VKO7 2025 (10.2.–16.2.)",
+              "period_start": "2025-02-10",
+              "period_end": "2025-02-16",
+              "paid_on": "2025-02-17",
+              "gross": 2490.0,
+              "fee": 27.39,
+              "fee_tax": 0,
+              "net": 2462.61,
+              "net_derived": false,
+              "transaction_count": 30,
+              "reference": null
+            }
+          }
+        }
+      },
+      {
+        "id": "doc-nets-koontilasku-02-2025-ln-4",
+        "line_no": 4,
+        "description": "VKO8 2025 (17.2.–23.2.)",
+        "amount": 2709.86,
+        "payload": {
+          "raw_extraction": {
+            "description": "VKO8 2025 (17.2.–23.2.)",
+            "quantity": 1,
+            "unit_price": 2709.86,
+            "amount": 2709.86,
+            "tax_rate": null,
+            "settlement_row": {
+              "row_no": 4,
+              "period_label": "VKO8 2025 (17.2.–23.2.)",
+              "period_start": "2025-02-17",
+              "period_end": "2025-02-23",
+              "paid_on": "2025-02-24",
+              "gross": 2740.0,
+              "fee": 30.14,
+              "fee_tax": 0,
+              "net": 2709.86,
+              "net_derived": false,
+              "transaction_count": 35,
+              "reference": null
+            }
+          }
+        }
+      }
+    ]
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-nets-vko5",
+      "money_in": 2452.72,
+      "currency": "EUR",
+      "date": "2025-02-03",
+      "description": "NETS FINLAND OY",
+      "raw_description": "NETS FINLAND OY TILITYS VKO5",
+      "contact": "Nets Finland Oy"
+    },
+    {
+      "id": "tx-nets-vko6",
+      "money_in": 2581.29,
+      "currency": "EUR",
+      "date": "2025-02-10",
+      "description": "NETS FINLAND OY",
+      "raw_description": "NETS FINLAND OY TILITYS VKO6",
+      "contact": "Nets Finland Oy"
+    },
+    {
+      "id": "tx-nets-vko7",
+      "money_in": 2462.61,
+      "currency": "EUR",
+      "date": "2025-02-17",
+      "description": "NETS FINLAND OY",
+      "raw_description": "NETS FINLAND OY TILITYS VKO7",
+      "contact": "Nets Finland Oy"
+    },
+    {
+      "id": "tx-nets-vko8",
+      "money_in": 2709.86,
+      "currency": "EUR",
+      "date": "2025-02-24",
+      "description": "NETS FINLAND OY",
+      "raw_description": "NETS FINLAND OY TILITYS VKO8",
+      "contact": "Nets Finland Oy"
+    },
+    {
+      "id": "tx-decoy-gross-2480",
+      "money_in": 2480.0,
+      "currency": "EUR",
+      "date": "2025-02-05",
+      "description": "TILISIIRTO ASIAKAS",
+      "raw_description": "TILISIIRTO ASIAKAS LAHJAKORTIT",
+      "contact": "Yksityishenkilö"
+    },
+    {
+      "id": "tx-decoy-rent-refund",
+      "money_in": 650.0,
+      "currency": "EUR",
+      "date": "2025-02-12",
+      "description": "VUOKRANANTAJA PALAUTUS",
+      "raw_description": "KIINTEISTO OY VAKUUDEN PALAUTUS",
+      "contact": "Kiinteistö Oy"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      {
+        "bank_transaction_id": "tx-nets-vko5",
+        "matched_line_no": 1,
+        "required_hops_any_of": [
+          "statement_row:1"
+        ],
+        "forbidden_hops": [
+          "partial_payment"
+        ]
+      },
+      {
+        "bank_transaction_id": "tx-nets-vko6",
+        "matched_line_no": 2,
+        "required_hops_any_of": [
+          "statement_row:2"
+        ],
+        "forbidden_hops": [
+          "partial_payment"
+        ]
+      },
+      {
+        "bank_transaction_id": "tx-nets-vko7",
+        "matched_line_no": 3,
+        "required_hops_any_of": [
+          "statement_row:3"
+        ],
+        "forbidden_hops": [
+          "partial_payment"
+        ]
+      },
+      {
+        "bank_transaction_id": "tx-nets-vko8",
+        "matched_line_no": 4,
+        "required_hops_any_of": [
+          "statement_row:4"
+        ],
+        "forbidden_hops": [
+          "partial_payment"
+        ]
+      }
+    ],
+    "unmatchable_reason": null,
+    "note": "Status is deliberately unpinned: each row is above the FI pack's 500 EUR materiality ceiling, so the band is the authority plane's call (RT-21e), not the matcher's. matched_line_no / forbidden_hops are read by the RT-21c scorer extension; the id-only set comparison holds today."
+  }
+}

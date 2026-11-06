@@ -1,0 +1,189 @@
+{
+  "id": "holdout-043",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-043",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "LASKU\nLaskun numero: 7745    Laskun päivä: 20.08.2026    Eräpäivä: 19.09.2026    Maksuehto: 30 pv netto\nLaskuttaja: Kuusela Design Oy, Y-tunnus 2345678-9\nMaksaja: Kotkan Kalastajat Osk, Y-tunnus 9900112-3\nErittely: Verkkosivujen uudistus\nVeroton yhteensä: 1 250,20 €\nALV 25,5 %: 318,80 €\nMaksettava yhteensä: 1 569,00 €\nViitenumero: 7 74501    Tilinumero: FI21 1234 5600 0007 85    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n14.09.2026;14.09.2026;+1569,00;Tilisiirto;Maksu;Kotkan Kalastajat Osk;;;Lasku 7745 / Kuusela;202609140001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-14",
+        "money_in_minor": 156900,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Kotkan Kalastajat Osk",
+        "description": "Tilisiirto Maksu Lasku 7745 / Kuusela",
+        "raw_description": "14.09.2026;14.09.2026;+1569,00;Tilisiirto;Maksu;Kotkan Kalastajat Osk;;;Lasku 7745 / Kuusela;202609140001",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 156900,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 156900,
+        "bank_currency": "EUR",
+        "gross_minor": 156900,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-20",
+      "due_date": "2026-09-19",
+      "amount_minor": 156900,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "7745",
+      "counterparty": "Kotkan Kalastajat Osk"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-fi-invoice-number-in-message-instead-of-viite",
+    "family_description": "A Finnish customer pays with a free-text message naming the invoice number and leaves the viite field empty or fills it with another invoice's viite.",
+    "market": "FI",
+    "variant": "a",
+    "error_mode": "message-only reference; message naming a sibling; message and viite disagreeing",
+    "label_reason": "The transfer message reads \"Lasku 7745\"; the invoice number is the reference the bank text carries; exact amount.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 156900
+      }
+    ]
+  }
+}

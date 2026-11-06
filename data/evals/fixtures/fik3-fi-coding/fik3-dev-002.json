@@ -1,0 +1,61 @@
+{
+  "id": "fik3-dev-002",
+  "title": "Bank service charge with no source: no input deduction (sentinel)",
+  "split": "development",
+  "family": "fi-oy-bank-fee-no-source",
+  "entity": "synthetic-oy-a",
+  "period": "2026-04",
+  "decision_class": "source_absent_tax",
+  "strong_is_alternative": false,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Synteettinen Alfa Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2026-04-30",
+    "description": "PALVELUMAKSU / BANK SERVICE CHARGE",
+    "money_in": 0,
+    "money_out": 6.0,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Bank fees",
+          "direction": "debit",
+          "amount": 6,
+          "tax_code": "ALV_OUT_OF_SCOPE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 6,
+          "tax_code": "NONE"
+        }
+      ],
+      "forbidden": {
+        "tax_treatments": [
+          "ALV 25,5 %"
+        ],
+        "tax_codes": [
+          "ALV_25_5_INPUT"
+        ],
+        "refusal_code": "TRANSACTION_ALV_EVIDENCE_REQUIRED"
+      }
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  }
+}

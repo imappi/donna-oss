@@ -1,0 +1,82 @@
+{
+  "sourceDigest": "27b79b79039504bfe54d309bcccf677ecfdf67de336103d22159ae749ac00bd6",
+  "cohort": "fixture",
+  "materialityPolicyReference": "synthetic-policy/1",
+  "pairedGroundTruth": [
+    {
+      "sessionId": "1",
+      "lineId": "1",
+      "observationDigest": "observation-0",
+      "expectationDigest": "basis-0",
+      "quantity": 10,
+      "actorId": "independent-counter",
+      "independent": true,
+      "blind": true,
+      "observedAt": "2026-10-07T10:01:30.000Z",
+      "sourceReference": "synthetic-count-sheet:0",
+      "environment": "synthetic_shelf",
+      "failureClass": "match",
+      "material": false
+    },
+    {
+      "sessionId": "1",
+      "lineId": "2",
+      "observationDigest": "observation-1",
+      "expectationDigest": "basis-1",
+      "quantity": 8,
+      "actorId": "independent-counter",
+      "independent": true,
+      "blind": true,
+      "observedAt": "2026-10-07T10:01:30.000Z",
+      "sourceReference": "synthetic-count-sheet:1",
+      "environment": "synthetic_shelf",
+      "failureClass": "shortage",
+      "material": false
+    },
+    {
+      "sessionId": "1",
+      "lineId": "3",
+      "observationDigest": "observation-2",
+      "expectationDigest": "basis-2",
+      "quantity": 12,
+      "actorId": "independent-counter",
+      "independent": true,
+      "blind": true,
+      "observedAt": "2026-10-07T10:01:30.000Z",
+      "sourceReference": "synthetic-count-sheet:2",
+      "environment": "synthetic_shelf",
+      "failureClass": "found_stock",
+      "material": false
+    },
+    {
+      "sessionId": "1",
+      "lineId": "4",
+      "observationDigest": "observation-3",
+      "expectationDigest": "basis-3",
+      "quantity": 7,
+      "actorId": "independent-counter",
+      "independent": true,
+      "blind": true,
+      "observedAt": "2026-10-07T10:01:30.000Z",
+      "sourceReference": "synthetic-count-sheet:3",
+      "environment": "synthetic_shelf",
+      "failureClass": "occluded",
+      "material": false
+    },
+    {
+      "sessionId": "1",
+      "lineId": "5",
+      "observationDigest": "observation-4",
+      "expectationDigest": "basis-4",
+      "quantity": 8,
+      "actorId": "independent-counter",
+      "independent": true,
+      "blind": true,
+      "observedAt": "2026-10-07T10:01:30.000Z",
+      "sourceReference": "synthetic-count-sheet:4",
+      "environment": "synthetic_shelf",
+      "failureClass": "wrong_confident",
+      "material": true
+    }
+  ]
+}

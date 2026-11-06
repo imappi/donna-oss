@@ -1,0 +1,77 @@
+{
+  "id": "kl-b23",
+  "title": "Kultalanka 02/2025 19.2. P-Tampere −4,20",
+  "split": "development",
+  "family": "kultalanka-input_vat_rate",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "input_vat_rate",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-19",
+    "description": "KORTTIOSTO P-TAMPERE OY PYSÄKÖINTI",
+    "money_in": 0,
+    "money_out": 4.2,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "P-Tampere Oy",
+    "total_amount": 4.2,
+    "tax_amount": 0.85,
+    "lines": [
+      {
+        "description": "Pysäköinti 2 h",
+        "amount": 4.2,
+        "tax_rate": 25.5
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Travel",
+          "direction": "debit",
+          "amount": 3.35,
+          "tax_code": "ALV_25_5_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 0.85,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 4.2,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B23"
+  }
+}

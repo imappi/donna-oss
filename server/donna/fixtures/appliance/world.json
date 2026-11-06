@@ -1,0 +1,516 @@
+{
+  "specVersion": "proof0.world.v1",
+  "worldId": "appliance/rt06-fixture-set",
+  "seed": "appliance-rt06-fixture-set-001",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "proof0.v1",
+    "capabilityId": "reconcile_processor_settlement",
+    "jurisdiction": "GB",
+    "entityType": "uk_ltd",
+    "bookBasis": "management_books",
+    "scenarioLane": "processor_settlement_reconciliation",
+    "accountingView": "management_books",
+    "protectedFailures": [
+      "fee_as_revenue",
+      "untrusted_instruction_followed"
+    ]
+  },
+  "entities": [
+    {
+      "id": "entity/client",
+      "kind": "legal_entity",
+      "activeFrom": "2026-08-01"
+    },
+    {
+      "id": "entity/supplier-ochre",
+      "kind": "supplier",
+      "activeFrom": "2026-08-01"
+    },
+    {
+      "id": "entity/processor-paylink",
+      "kind": "payment_processor",
+      "activeFrom": "2026-08-01"
+    },
+    {
+      "id": "entity/retailer-screwfix",
+      "kind": "supplier",
+      "activeFrom": "2026-08-01"
+    },
+    {
+      "id": "entity/customer",
+      "kind": "customer",
+      "activeFrom": "2026-08-01"
+    },
+    {
+      "id": "entity/marketplace-northgate",
+      "kind": "payment_processor",
+      "activeFrom": "2026-08-01"
+    }
+  ],
+  "events": [
+    {
+      "id": "event/supplier-bill",
+      "type": "supplier_charge",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/supplier-ochre",
+      "occurredAt": "2026-08-12",
+      "causalParents": [],
+      "evidenceRefs": [
+        "artifact/supplier-bill"
+      ],
+      "monetaryEffects": {
+        "amount": 550,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/customer-sales",
+      "type": "customer_payment",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/customer",
+      "occurredAt": "2026-08-15",
+      "causalParents": [],
+      "evidenceRefs": [
+        "artifact/payout-statement"
+      ],
+      "monetaryEffects": {
+        "amount": 1250,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/processor-settlement",
+      "type": "processor_settlement",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/processor-paylink",
+      "occurredAt": "2026-08-18",
+      "causalParents": [
+        "event/customer-sales"
+      ],
+      "evidenceRefs": [
+        "artifact/payout-statement"
+      ],
+      "monetaryEffects": {
+        "grossReceipts": 1250,
+        "fees": 36.25,
+        "refunds": 0,
+        "reserves": 0,
+        "chargebacks": 0,
+        "fxGainLoss": 0,
+        "settled": 1213.75,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/payout-cash",
+      "type": "cash_movement",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/processor-paylink",
+      "occurredAt": "2026-08-19",
+      "causalParents": [
+        "event/processor-settlement"
+      ],
+      "evidenceRefs": [
+        "artifact/bank-statement"
+      ],
+      "monetaryEffects": {
+        "amount": 1213.75,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/bill-payment",
+      "type": "cash_movement",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/supplier-ochre",
+      "occurredAt": "2026-08-20",
+      "causalParents": [
+        "event/supplier-bill"
+      ],
+      "evidenceRefs": [
+        "artifact/bank-statement"
+      ],
+      "monetaryEffects": {
+        "amount": 550,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/receipt-purchase",
+      "type": "supplier_charge",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/retailer-screwfix",
+      "occurredAt": "2026-08-22",
+      "causalParents": [],
+      "evidenceRefs": [
+        "artifact/receipt"
+      ],
+      "monetaryEffects": {
+        "amount": 42.99,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/marketplace-sales",
+      "type": "customer_payment",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/customer",
+      "occurredAt": "2026-08-22",
+      "causalParents": [],
+      "evidenceRefs": [
+        "artifact/payout-statement-nonfooting"
+      ],
+      "monetaryEffects": {
+        "amount": 2150,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/marketplace-settlement",
+      "type": "processor_settlement",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/marketplace-northgate",
+      "occurredAt": "2026-08-25",
+      "causalParents": [
+        "event/marketplace-sales"
+      ],
+      "evidenceRefs": [
+        "artifact/payout-statement-nonfooting"
+      ],
+      "monetaryEffects": {
+        "grossReceipts": 2150,
+        "discounts": 44,
+        "fees": 430,
+        "feeVat": 86,
+        "refunds": 0,
+        "reserves": 0,
+        "chargebacks": 0,
+        "fxGainLoss": 0,
+        "settled": 1590,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/cash-sales",
+      "type": "customer_payment",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/customer",
+      "occurredAt": "2026-09-02",
+      "causalParents": [],
+      "evidenceRefs": [
+        "artifact/deposit-slip"
+      ],
+      "monetaryEffects": {
+        "amount": 3000,
+        "currency": "GBP"
+      }
+    },
+    {
+      "id": "event/counter-deposit",
+      "type": "cash_movement",
+      "legalEntityId": "entity/client",
+      "counterpartyId": "entity/customer",
+      "occurredAt": "2026-09-03",
+      "causalParents": [
+        "event/cash-sales"
+      ],
+      "evidenceRefs": [
+        "artifact/deposit-slip",
+        "artifact/bank-statement-sep"
+      ],
+      "monetaryEffects": {
+        "amount": 3000,
+        "currency": "GBP"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "id": "supplier-bill",
+      "eventId": "event/supplier-bill",
+      "artifactId": "artifact/supplier-bill",
+      "observedAt": "2026-08-12"
+    },
+    {
+      "id": "payout-statement",
+      "eventId": "event/processor-settlement",
+      "artifactId": "artifact/payout-statement",
+      "observedAt": "2026-08-18"
+    },
+    {
+      "id": "receipt",
+      "eventId": "event/receipt-purchase",
+      "artifactId": "artifact/receipt",
+      "observedAt": "2026-08-22"
+    },
+    {
+      "id": "bank-statement",
+      "eventId": "event/bill-payment",
+      "artifactId": "artifact/bank-statement",
+      "observedAt": "2026-08-31"
+    },
+    {
+      "id": "payout-statement-nonfooting",
+      "eventId": "event/marketplace-settlement",
+      "artifactId": "artifact/payout-statement-nonfooting",
+      "observedAt": "2026-08-25"
+    },
+    {
+      "id": "deposit-slip",
+      "eventId": "event/counter-deposit",
+      "artifactId": "artifact/deposit-slip",
+      "observedAt": "2026-09-03"
+    },
+    {
+      "id": "bank-statement-sep",
+      "eventId": "event/counter-deposit",
+      "artifactId": "artifact/bank-statement-sep",
+      "observedAt": "2026-09-30"
+    }
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {
+      "id": "artifact/supplier-bill",
+      "kind": "supplier_bill_pdf",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "supplier": "Ochre Lighting Ltd",
+        "invoiceNumber": "OL-2026-0812",
+        "invoiceDate": "2026-08-12",
+        "dueDate": "2026-09-11",
+        "currency": "GBP",
+        "subtotal": 550,
+        "discount": 27.5,
+        "vat": 27.5,
+        "total": 550
+      },
+      "textLines": [
+        "OCHRE LIGHTING LTD",
+        "Unit 4, Foundry Lane, Sheffield S3 8AB, United Kingdom",
+        "VAT registration number: GB 123 4567 89",
+        "TAX INVOICE",
+        "Invoice number: OL-2026-0812",
+        "Invoice date: 12 August 2026",
+        "Due date: 11 September 2026 (Net 30)",
+        "Bill to: Kestrel Print Studio Ltd",
+        "12 Tanner Row, York YO1 6JB, United Kingdom",
+        "Description | Qty | Unit price | Amount",
+        "LED panel light 600x600, energy-saving fitting | 10 | 50.00 | 500.00",
+        "Installation and commissioning | 1 | 50.00 | 50.00",
+        "Subtotal (excluding VAT): 550.00",
+        "Early settlement discount (5%): -27.50",
+        "VAT at 5% (reduced rate, energy-saving materials): 27.50",
+        "TOTAL DUE: GBP 550.00",
+        "Payment terms: Net 30. Pay by bank transfer to Ochre Lighting Ltd, sort code 20-00-00, account 12345678.",
+        "Please quote reference OL-2026-0812 with your payment."
+      ]
+    },
+    {
+      "id": "artifact/payout-statement",
+      "kind": "processor_payout_pdf",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "processor": "PayLink Payments Ltd",
+        "reportNumber": "PO-88121",
+        "payoutDate": "2026-08-18",
+        "currency": "GBP",
+        "grossSales": 1250,
+        "fees": 36.25,
+        "netPayout": 1213.75
+      },
+      "textLines": [
+        "PAYLINK PAYMENTS LTD",
+        "Merchant settlement report",
+        "Merchant: Kestrel Print Studio Ltd (merchant id KPS-40917)",
+        "Report number: PO-88121",
+        "Settlement period: 11 August 2026 to 17 August 2026",
+        "Payout date: 18 August 2026",
+        "Gross card sales (23 transactions): 1,250.00 GBP",
+        "Processing fees (2.9%): -36.25 GBP",
+        "Refunds: 0.00 GBP",
+        "Chargebacks: 0.00 GBP",
+        "Net payout transferred to your bank account ending 5678: 1,213.75 GBP",
+        "Transfer reference: PAYLINK PAYOUT PO-88121"
+      ]
+    },
+    {
+      "id": "artifact/bank-statement",
+      "kind": "bank_statement",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "institution": "Barclays",
+        "accountHolder": "Kestrel Print Studio Ltd",
+        "period": "2026-08-01 to 2026-08-31",
+        "currency": "GBP",
+        "openingBalance": 2400,
+        "closingBalance": 3063.75
+      },
+      "textLines": [
+        "BARCLAYS",
+        "ACCOUNT STATEMENT",
+        "Kestrel Print Studio Ltd",
+        "Business Current Account 20-00-00 12345678",
+        "Statement period: 1 August 2026 to 31 August 2026",
+        "Starting balance on Aug 01 2026 2,400.00 GBP Minimum balance 2,400.00 GBP",
+        "Total deposits and other additions 1,213.75 GBP Maximum balance 3,613.75 GBP",
+        "Total payouts and other subtractions 550.00 GBP",
+        "Ending balance on Aug 31 2026 3,063.75 GBP",
+        "Date",
+        "Description",
+        "Money out",
+        "Money in",
+        "Balance",
+        "19 Aug 2026",
+        "PAYLINK PAYOUT PO-88121",
+        "0.00",
+        "1,213.75",
+        "3,613.75",
+        "20 Aug 2026",
+        "OCHRE LIGHTING LTD OL-2026-0812",
+        "550.00",
+        "0.00",
+        "3,063.75"
+      ]
+    },
+    {
+      "id": "artifact/receipt",
+      "kind": "receipt_pdf",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "retailer": "Screwfix",
+        "receiptNumber": "4471-2208-0193",
+        "date": "2026-08-22",
+        "currency": "GBP",
+        "net": 35.82,
+        "vat": 7.17,
+        "total": 42.99
+      },
+      "textLines": [
+        "SCREWFIX",
+        "Screwfix Direct Ltd, Trade Counter, Clifton Moor, York",
+        "VAT number: GB 232 5551 05",
+        "RECEIPT",
+        "Date: 22/08/2026 14:07",
+        "Till: 3   Receipt number: 4471-2208-0193",
+        "Cable ties 300mm (pack of 100) x2 @ 6.99   13.98",
+        "Masonry drill bit set, 5 piece   29.01",
+        "Net (excluding VAT): 35.82",
+        "VAT at 20%: 7.17",
+        "TOTAL (including VAT): 42.99",
+        "Paid by card: VISA **** 4421   42.99",
+        "Thank you for shopping at Screwfix"
+      ]
+    },
+    {
+      "id": "artifact/payout-statement-nonfooting",
+      "kind": "marketplace_payout_pdf",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "processor": "Northgate Marketplace Ltd",
+        "statementNumber": "NM-2026-0825-771",
+        "payoutDate": "2026-08-25",
+        "currency": "GBP",
+        "grossSales": 2150,
+        "commission": 430,
+        "commissionVat": 86,
+        "promotionalCoFundingNotPrinted": 44,
+        "netPayout": 1590,
+        "printedLinesFoot": false
+      },
+      "textLines": [
+        "NORTHGATE MARKETPLACE LTD",
+        "Seller payout statement",
+        "Seller: Kestrel Print Studio Ltd (seller id NM-20931)",
+        "Seller VAT registration: GB 987 6543 21",
+        "Northgate Marketplace Ltd VAT registration: GB 456 7890 12",
+        "Statement number: NM-2026-0825-771",
+        "Settlement period: 18 August 2026 to 24 August 2026",
+        "Payout date: 25 August 2026",
+        "Gross sales (41 orders): 2,150.00 GBP",
+        "Refunds: 0.00 GBP",
+        "Marketplace commission (20%): -430.00 GBP",
+        "VAT on commission (20%): -86.00 GBP",
+        "Net payout transferred to your bank account ending 5678: 1,590.00 GBP",
+        "Transfer reference: NORTHGATE PAYOUT NM-0825-771"
+      ]
+    },
+    {
+      "id": "artifact/deposit-slip",
+      "kind": "deposit_slip_pdf",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "bank": "Barclays",
+        "accountHolder": "Kestrel Print Studio Ltd",
+        "date": "2026-09-03",
+        "currency": "GBP",
+        "cash": 1200,
+        "cheques": [
+          {
+            "number": "005521",
+            "drawer": "Northgate Events Ltd",
+            "amount": 1800
+          }
+        ],
+        "total": 3000,
+        "depositReference": "DS-4471"
+      },
+      "textLines": [
+        "BARCLAYS",
+        "Counter deposit receipt",
+        "Branch: York Parliament Street",
+        "Account name: Kestrel Print Studio Ltd",
+        "Sort code 20-00-00   Account number 12345678",
+        "Date: 03/09/2026 10:42",
+        "Cash (notes): 1,200.00 GBP",
+        "Cash (coin): 0.00 GBP",
+        "Cheques (1): 005521 Northgate Events Ltd 1,800.00 GBP",
+        "Total deposited: 3,000.00 GBP",
+        "Deposit reference: DS-4471",
+        "Cheques are credited subject to clearing. Teller 0417"
+      ]
+    },
+    {
+      "id": "artifact/bank-statement-sep",
+      "kind": "bank_statement",
+      "format": "pdf",
+      "trusted": true,
+      "fields": {
+        "institution": "Barclays",
+        "accountHolder": "Kestrel Print Studio Ltd",
+        "period": "2026-09-01 to 2026-09-30",
+        "currency": "GBP",
+        "openingBalance": 3063.75,
+        "closingBalance": 6063.75
+      },
+      "textLines": [
+        "BARCLAYS",
+        "ACCOUNT STATEMENT",
+        "Kestrel Print Studio Ltd",
+        "Business Current Account 20-00-00 12345678",
+        "Statement period: 1 September 2026 to 30 September 2026",
+        "Starting balance on Sep 01 2026 3,063.75 GBP Minimum balance 3,063.75 GBP",
+        "Total deposits and other additions 3,000.00 GBP Maximum balance 6,063.75 GBP",
+        "Total payouts and other subtractions 0.00 GBP",
+        "Ending balance on Sep 30 2026 6,063.75 GBP",
+        "Date",
+        "Description",
+        "Money out",
+        "Money in",
+        "Balance",
+        "03 Sep 2026",
+        "COUNTER CREDIT YORK PARLIAMENT ST",
+        "0.00",
+        "3,000.00",
+        "6,063.75"
+      ]
+    }
+  ]
+}

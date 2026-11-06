@@ -1,0 +1,342 @@
+{
+  "pack": { "id": "ae", "country": "AE", "version": 6 },
+  "currency": { "home": "AED" },
+  "locale": {
+    "number_locale": "en-AE",
+    "date_format": "dmy",
+    "correspondence_locales": { "en": "en-AE", "ar": "ar-AE" }
+  },
+  "languages": {
+    "default": "en",
+    "supported": ["en", "ar"],
+    "note": "Arabic outbound correspondence is available as Preview Alpha. The complete 21-string machine-authored Modern Standard Arabic catalog passed the production validator, issuance/executor, bidi-safe plain-text/HTML, searchable PDF, locale, fallback, drift and receipt proofs documented in docs/ar4f-ae-native-review-packet.md. Formal native-finance and independent second-review registers remain optional later evidence and intentionally blank; no metadata claims they occurred. English remains the default and no runtime flag, UI availability or parser capability is implied by this outbound-pack declaration."
+  },
+  "reference": {
+    "scheme": "none",
+    "note": "The UAE has no national structured payment reference in the FI viitenumero sense. Domestic transfers run over IBAN (UAEFTS/IPP) and payers quote the invoice number in the transfer narrative, so settlement matching relies on the invoice number plus amount/date — the GB posture exactly. Declared 'none' explicitly rather than omitted: an absent scheme is a fact about the market, not a gap in the pack."
+  },
+  "einvoice": {
+    "lane": "none",
+    "operator": "planned",
+    "note": "Declared 'none' because DONNA ships no AE e-invoice lane — not because the market has none. The UAE is mid-mandate: Ministerial Decision No. 243 of 2025 established the Electronic Invoicing System and No. 244 of 2025 its phased implementation — B2B/B2G invoices in the PINT AE format exchanged through Accredited Service Providers under the Peppol five-corner (DCTCE) model; voluntary adoption opened 2026-07-01 and mandatory phases begin 2027 by taxpayer size. The DUTY lives where duties live: obligations item 'ae_einvoicing_mandate' below, which the sweep reports every run. operator: 'planned' commits the shape honestly — when Donna's lane ships here it is an ASP/Peppol operator lane, not the FI finvoice_email shape. AS OF 2026-08-30 — the timeline has moved once already (the large-taxpayer ASP-appointment deadline slipped 2026-07-31 → 2026-10-30 while go-live held at 2027-01-01); RE-CHECK against MoF/FTA primary source before relying on any date here."
+  },
+  "tax": {
+    "vocabulary": "ae_vat",
+    "note": "Consumed as-is from taxVocabularies.js (AE_VAT_TAX_VOCABULARY) — a registry-native marker like GB's, so this pack names it and core resolves it. Routing rides JURISDICTION_TAX_CODING, which the desktop appliance SEEDS auto for every client since 2026-08-31 (Kari, 'nothing dark' — DESKTOP_CLIENT_FLAG_SEEDS, hostPlaneSeed.js), so an AE client on the appliance codes against ae_vat from creation. Cloud staging is unchanged (per-client config plane, the GB rule)."
+  },
+  "reconciliation": {
+    "materiality_ceiling": 500,
+    "disposition_ceiling": 500
+  },
+  "payment_rails": [
+    {
+      "kind": "iban",
+      "note": "The primary and effectively only domestic rail: the Central Bank of the UAE mandates IBAN for domestic credit transfers, so every AE business account carries an AE-prefixed IBAN and B2B settlement quotes it. The payer puts the invoice number in the transfer narrative (see reference.scheme)."
+    },
+    {
+      "kind": "payment_link",
+      "instructions_template": {
+        "en": "Pay securely online: {{payment_link_url}}",
+        "ar": "ادفع بأمان عبر الإنترنت: {{payment_link_url}}"
+      },
+      "note": "Where a pay-link exists it replaces the standing payment_instructions block, exactly as on the US and GB lanes. Like GB, the UAE has no reference scheme, so the link is the only deterministic settlement signal available to this pack."
+    }
+  ],
+  "correspondence": {
+    "languages": ["en", "ar"],
+    "tone": "professional_friendly",
+    "dunning_cadence": [
+      { "step": 1, "days_after_due": 7, "tone": "friendly", "template": "reminder_step_1" },
+      { "step": 2, "days_after_due": 14, "tone": "firm", "template": "reminder_step_2" },
+      { "step": 3, "days_after_due": 30, "tone": "final", "template": "reminder_step_3" }
+    ],
+    "escalation": { "after_step": 3, "to": "owner" },
+    "quote_follow_up_cadence": [
+      { "step": 1, "days_after_sent": 7, "tone": "friendly", "template": "quote_follow_up_1" }
+    ],
+    "statutory": {
+      "late_interest": null,
+      "constraints": [
+        "The UAE has NO statutory late-payment interest scheme in the FI korkolaki / UK 1998-Act shape — no reference-rate-plus-margin formula a reminder could cite. Interest on commercial debts is a contractual and judicial matter (the Commercial Transactions Law permits agreed interest and courts may award it), which is a claim the OWNER makes, never a number Donna asserts. late_interest is therefore null as honest absence, not an unrecorded gap. AS OF 2026-08-30; re-verify against primary source before any interest-bearing reminder is ever contemplated here.",
+        "Phase 1: dunning is B2B-only, reminder tone. No interest, fee, or penalty amount renders in any reminder.",
+        "Donna does not assert a right to interest or compensation on the owner's behalf. Claiming contractual or judicial interest is the owner's commercial decision, and a reminder that asserted it would be Donna taking a position the owner has not taken."
+      ]
+    }
+  },
+  "documents": {
+    "mandatory_fields": {
+      "invoice": [
+        "invoice_number",
+        "issue_date",
+        "supply_date",
+        "due_date",
+        "total",
+        "currency",
+        "seller_name",
+        "seller_address",
+        "buyer_name",
+        "buyer_address",
+        "line_description",
+        "line_quantity",
+        "line_unit_price",
+        "payment_instructions"
+      ],
+      "invoice_when_tax_registered": [
+        "seller_tax_registration_id",
+        "tax_amount",
+        "total_excluding_tax",
+        "line_tax_rate"
+      ],
+      "invoice_forbidden_when_not_tax_registered": [
+        "seller_tax_registration_id",
+        "line_tax_rate"
+      ],
+      "conditional_floor_note": "Same split as GB (gap 9), for the same statutory reason: a UAE business below the VAT registration threshold issues an ordinary commercial invoice — it has no TRN and must not present a document styled as a tax invoice or show a VAT rate — while a registrant must issue a tax invoice carrying the TRN, the VAT amount, and per-line rates. Selecting a limb requires seller.taxRegistered resolved true/false; core refuses rather than inferring it. Field names are core's jurisdiction-neutral vocabulary: the FTA's TRN (Tax Registration Number) maps onto seller_tax_registration_id, the date of supply onto supply_date.",
+      "note": "Full invoice scope under Executive Regulation Article 59(1), including recipient TRN where the buyer is a UAE Registrant. Buyer registration has an explicit jurisdiction, status, effective date and source; absence of a TRN never establishes non-registration. Verified against the FTA September 2025 consolidation and Cabinet Decision 149 of 2026 (effective 1 October 2026, which does not amend Article 59), on 2026-09-09. The pack deliberately does not issue simplified tax invoices. Gap 14 remains OPEN: foreign-currency issuance is unsupported; only AED may be issued until an approved conversion and AED statutory display contract exists.",
+      "invoice_when_buyer_tax_registered": [
+        "buyer_tax_registration_id"
+      ]
+    },
+    "statutory_titles_by_language": {
+      "en": {
+        "invoice_when_tax_registered": "Tax Invoice",
+        "invoice_otherwise": "Invoice"
+      },
+      "ar": {
+        "invoice_when_tax_registered": "فاتورة ضريبية",
+        "invoice_otherwise": "فاتورة"
+      }
+    },
+    "quote_number_prefix": "Q",
+    "invoice_pdf": {
+      "page": "a4"
+    },
+    "quote_pdf": {
+      "page": "a4"
+    },
+    "templates": {
+      "invoice_pdf": {
+        "en": {
+          "subject": "{{document_title}} {{invoice_number}}",
+          "body": "{{owner_business_name}}\n{{seller_address}}\n{{seller_tax_registration_block}}\n\n{{document_title}} {{invoice_number}}\nBilled to: {{counterparty_name}}\n{{buyer_address}}\n{{buyer_tax_registration_block}}\nIssued: {{issue_date}}\nSupply date: {{supply_date}}\nDue: {{due_date}}\n\n{{lines_block}}\n\n{{invoice_tax_totals_block}}\nTotal due: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}"
+        },
+        "ar": {
+          "subject": "{{document_title}} {{invoice_number}}",
+          "body": "{{owner_business_name}}\n{{seller_address}}\n{{seller_tax_registration_block}}\n\n{{document_title}} {{invoice_number}}\nالعميل: {{counterparty_name}}\n{{buyer_address}}\n{{buyer_tax_registration_block}}\nتاريخ الإصدار: {{issue_date}}\nتاريخ التوريد: {{supply_date}}\nتاريخ الاستحقاق: {{due_date}}\n\n{{lines_block}}\n\n{{invoice_tax_totals_block}}\nإجمالي المبلغ المستحق: {{invoice_total}} {{currency}}\n\nتفاصيل الدفع:\n{{payment_instructions}}"
+        }
+      },
+      "quote_pdf": {
+        "en": {
+          "subject": "Quote {{quote_number}}",
+          "body": "{{owner_business_name}}\n\nQuote {{quote_number}}\nPrepared for: {{counterparty_name}}\nIssued: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}"
+        },
+        "ar": {
+          "subject": "عرض السعر {{quote_number}}",
+          "body": "{{owner_business_name}}\n\nعرض السعر {{quote_number}}\nمُعدّ لصالح: {{counterparty_name}}\nتاريخ الإصدار: {{issue_date}}\nصالح حتى: {{valid_until}}\n\n{{lines_block}}\n\nالإجمالي: {{quote_total}} {{currency}}"
+        }
+      },
+      "invoice_issue": {
+        "en": {
+          "subject": "{{document_title}} {{invoice_number}} from {{owner_business_name}} — {{invoice_total}} {{currency}}",
+          "body": "Hi {{counterparty_name}},\n\nPlease find your invoice below.\n\n{{owner_business_name}}\n{{seller_address}}\n{{seller_tax_registration_block}}\n\n{{document_title}} {{invoice_number}}\nBilled to: {{counterparty_name}}\n{{buyer_address}}\n{{buyer_tax_registration_block}}\nIssued: {{issue_date}}\nSupply date: {{supply_date}}\nDue: {{due_date}}\n\n{{lines_block}}\n\n{{invoice_tax_totals_block}}\nTotal due: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}\n\nPlease quote invoice {{invoice_number}} as the transfer reference so we can match it up.\n\nIf anything about this invoice looks off, just reply to this email and we'll sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis invoice was sent by Donna on behalf of {{owner_business_name}}."
+        },
+        "ar": {
+          "subject": "{{document_title}} {{invoice_number}} من {{owner_business_name}} — {{invoice_total}} {{currency}}",
+          "body": "مرحبًا {{counterparty_name}}،\n\nيرجى الاطلاع على الفاتورة أدناه.\n\n{{owner_business_name}}\n{{seller_address}}\n{{seller_tax_registration_block}}\n\n{{document_title}} {{invoice_number}}\nالعميل: {{counterparty_name}}\n{{buyer_address}}\n{{buyer_tax_registration_block}}\nتاريخ الإصدار: {{issue_date}}\nتاريخ التوريد: {{supply_date}}\nتاريخ الاستحقاق: {{due_date}}\n\n{{lines_block}}\n\n{{invoice_tax_totals_block}}\nإجمالي المبلغ المستحق: {{invoice_total}} {{currency}}\n\nتفاصيل الدفع:\n{{payment_instructions}}\n\nيرجى ذكر رقم الفاتورة {{invoice_number}} في خانة مرجع التحويل حتى نتمكن من مطابقة الدفعة.\n\nإذا بدت لكم أي بيانات في هذه الفاتورة غير صحيحة، فما عليكم سوى الرد على هذا البريد الإلكتروني وسنعالج الأمر.\n\nمع أطيب التحيات،\n{{owner_business_name}}\n\n--\nأرسلت دونا هذه الفاتورة نيابةً عن {{owner_business_name}}."
+        }
+      },
+      "quote_send": {
+        "en": {
+          "subject": "Quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nThank you for your interest — here is your quote from {{owner_business_name}}.\n\nQuote {{quote_number}}\nIssued: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}\n\nTo accept, just reply to this email. Questions and changes are welcome too.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis quote was sent by Donna on behalf of {{owner_business_name}}."
+        },
+        "ar": {
+          "subject": "عرض السعر {{quote_number}} من {{owner_business_name}}",
+          "body": "مرحبًا {{counterparty_name}}،\n\nشكرًا لاهتمامكم — نرفق عرض السعر المقدم من {{owner_business_name}}.\n\nعرض السعر {{quote_number}}\nتاريخ الإصدار: {{issue_date}}\nصالح حتى: {{valid_until}}\n\n{{lines_block}}\n\nالإجمالي: {{quote_total}} {{currency}}\n\nلقبول العرض، يكفي الرد على هذا البريد الإلكتروني. كما نرحب بأي أسئلة أو تعديلات.\n\nمع أطيب التحيات،\n{{owner_business_name}}\n\n--\nأرسلت دونا عرض السعر هذا نيابةً عن {{owner_business_name}}."
+        }
+      },
+      "quote_follow_up_1": {
+        "en": {
+          "subject": "Following up on quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nJust checking in on quote {{quote_number}} for {{quote_total}} {{currency}}, sent on {{issue_date}} and valid until {{valid_until}}.\n\nIf you'd like to go ahead, have questions, or want any changes, just reply to this email.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis follow-up was sent by Donna on behalf of {{owner_business_name}}."
+        },
+        "ar": {
+          "subject": "متابعة بشأن عرض السعر {{quote_number}} من {{owner_business_name}}",
+          "body": "مرحبًا {{counterparty_name}}،\n\nنتابع معكم بشأن عرض السعر {{quote_number}} بقيمة {{quote_total}} {{currency}}، المرسل بتاريخ {{issue_date}} والصالح حتى {{valid_until}}.\n\nإذا رغبتم في المتابعة أو كانت لديكم أسئلة أو تعديلات، فما عليكم سوى الرد على هذا البريد الإلكتروني.\n\nمع أطيب التحيات،\n{{owner_business_name}}\n\n--\nأرسلت دونا رسالة المتابعة هذه نيابةً عن {{owner_business_name}}."
+        }
+      },
+      "reminder_step_1": {
+        "en": {
+          "subject": "Reminder: invoice {{invoice_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nA quick reminder that invoice {{invoice_number}} for {{amount_due}} {{currency}} fell due on {{due_date}} — that's {{days_overdue}} days ago.\n\nPayment details:\n{{payment_instructions}}\n\nPlease quote invoice {{invoice_number}} as the transfer reference.\n\nIf it's already paid, or if something about the invoice isn't right, just reply and we'll sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nSent by Donna on behalf of {{owner_business_name}}. {{unsubscribe_url}}"
+        },
+        "ar": {
+          "subject": "تذكير: الفاتورة {{invoice_number}} من {{owner_business_name}}",
+          "body": "مرحبًا {{counterparty_name}}،\n\nنود تذكيركم بأن الفاتورة {{invoice_number}} بقيمة {{amount_due}} {{currency}} استحقت في {{due_date}} — أي قبل {{days_overdue}} أيام.\n\nتفاصيل الدفع:\n{{payment_instructions}}\n\nيرجى ذكر رقم الفاتورة {{invoice_number}} في خانة مرجع التحويل.\n\nإذا كنتم قد سددتم المبلغ، أو كانت هناك أي بيانات غير صحيحة في الفاتورة، فما عليكم سوى الرد وسنعالج الأمر.\n\nمع أطيب التحيات،\n{{owner_business_name}}\n\n--\nأرسلت دونا هذه الرسالة نيابةً عن {{owner_business_name}}. {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_2": {
+        "en": {
+          "subject": "Second reminder: invoice {{invoice_number}} is {{days_overdue}} days overdue",
+          "body": "Hi {{counterparty_name}},\n\nInvoice {{invoice_number}} for {{amount_due}} {{currency}} was due on {{due_date}} and is now {{days_overdue}} days overdue. This is our second reminder.\n\nPayment details:\n{{payment_instructions}}\n\nPlease quote invoice {{invoice_number}} as the transfer reference.\n\nIf there's a problem with the invoice, or payment is on its way, please reply and let us know.\n\nBest regards,\n{{owner_business_name}}\n\n--\nSent by Donna on behalf of {{owner_business_name}}. {{unsubscribe_url}}"
+        },
+        "ar": {
+          "subject": "التذكير الثاني: تأخر سداد الفاتورة {{invoice_number}} لمدة {{days_overdue}} يومًا",
+          "body": "مرحبًا {{counterparty_name}}،\n\nكان تاريخ استحقاق الفاتورة {{invoice_number}} بقيمة {{amount_due}} {{currency}} هو {{due_date}}، وقد تأخر سدادها الآن لمدة {{days_overdue}} يومًا. هذا هو تذكيرنا الثاني.\n\nتفاصيل الدفع:\n{{payment_instructions}}\n\nيرجى ذكر رقم الفاتورة {{invoice_number}} في خانة مرجع التحويل.\n\nإذا كانت هناك مشكلة في الفاتورة أو كانت الدفعة قيد التحويل، فيرجى الرد وإبلاغنا.\n\nمع أطيب التحيات،\n{{owner_business_name}}\n\n--\nأرسلت دونا هذه الرسالة نيابةً عن {{owner_business_name}}. {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_3": {
+        "en": {
+          "subject": "Final reminder: invoice {{invoice_number}}, {{days_overdue}} days overdue",
+          "body": "Hi {{counterparty_name}},\n\nInvoice {{invoice_number}} for {{amount_due}} {{currency}} was due on {{due_date}} and is now {{days_overdue}} days overdue. This is our final reminder before we raise it with {{owner_business_name}} directly.\n\nPayment details:\n{{payment_instructions}}\n\nPlease quote invoice {{invoice_number}} as the transfer reference.\n\nIf payment has been made, or there is a dispute we should know about, please reply today.\n\nBest regards,\n{{owner_business_name}}\n\n--\nSent by Donna on behalf of {{owner_business_name}}. {{unsubscribe_url}}"
+        },
+        "ar": {
+          "subject": "التذكير الأخير: تأخر سداد الفاتورة {{invoice_number}} لمدة {{days_overdue}} يومًا",
+          "body": "مرحبًا {{counterparty_name}}،\n\nكان تاريخ استحقاق الفاتورة {{invoice_number}} بقيمة {{amount_due}} {{currency}} هو {{due_date}}، وقد تأخر سدادها الآن لمدة {{days_overdue}} يومًا. هذا هو تذكيرنا الأخير قبل إحالة الأمر مباشرةً إلى {{owner_business_name}}.\n\nتفاصيل الدفع:\n{{payment_instructions}}\n\nيرجى ذكر رقم الفاتورة {{invoice_number}} في خانة مرجع التحويل.\n\nإذا تم السداد أو كان هناك نزاع ينبغي أن نعرفه، فيرجى الرد اليوم.\n\nمع أطيب التحيات،\n{{owner_business_name}}\n\n--\nأرسلت دونا هذه الرسالة نيابةً عن {{owner_business_name}}. {{unsubscribe_url}}"
+        }
+      },
+      "payable_notice": {
+        "en": {
+          "subject": "Heads up: {{counterparty_name}}'s bill is due {{due_date}}",
+          "body": "Hi,\n\nA supplier bill for {{owner_business_name}} is coming due:\n\nSupplier: {{counterparty_name}}\nAmount: {{amount_due}} {{currency}}\nDue: {{due_date}} (in {{days_until_due}} days)\n\nWant to schedule the payment? Donna doesn't move money — this note is only so the bill doesn't slip. If it's already paid, looks wrong, or shouldn't be tracked, just reply and Donna will record it.\n\n— Donna, for {{owner_business_name}}"
+        },
+        "ar": {
+          "subject": "تنبيه: تستحق فاتورة المورد {{counterparty_name}} في {{due_date}}",
+          "body": "مرحبًا،\n\nاقترب موعد استحقاق فاتورة مورد تخص {{owner_business_name}}:\n\nالمورد: {{counterparty_name}}\nالمبلغ: {{amount_due}} {{currency}}\nتاريخ الاستحقاق: {{due_date}} (بعد {{days_until_due}} أيام)\n\nهل ترغبون في جدولة الدفع؟ لا تُجري دونا أي تحويلات مالية — هذا التنبيه فقط لضمان عدم تفويت موعد الفاتورة. إذا كانت قد سُددت بالفعل، أو بدت بياناتها غير صحيحة، أو كان ينبغي عدم متابعتها، فما عليكم سوى الرد وستسجل دونا ذلك.\n\n— دونا، نيابةً عن {{owner_business_name}}"
+        }
+      }
+    },
+    "buyer_tax_registration": {
+      "jurisdiction": "ae",
+      "registration_id_pattern": "^[0-9]{15}$"
+    },
+    "invoice_statutory_labels": {
+      "en": {
+        "seller_tax_registration": "Seller TRN",
+        "buyer_tax_registration": "Buyer TRN",
+        "subtotal": "Total excluding tax",
+        "tax_total": "VAT total",
+        "line_tax": "VAT",
+        "line_payable": "Line total"
+      },
+      "ar": {
+        "seller_tax_registration": "رقم التسجيل الضريبي للمورد",
+        "buyer_tax_registration": "رقم التسجيل الضريبي للعميل",
+        "subtotal": "الإجمالي غير شامل الضريبة",
+        "tax_total": "إجمالي ضريبة القيمة المضافة",
+        "line_tax": "ضريبة القيمة المضافة",
+        "line_payable": "إجمالي البند"
+      }
+    }
+  },
+  "chart_of_accounts": {
+    "note": "The fallback coding menu for a UAE client with no synced chart of accounts. VAT and corporate tax get separate accounts (separately assessed, separately paid, separately reconciled — the GB lesson). The UAE payroll block differs in kind from every prior market: there is NO payroll income tax and no PAYE/CPF-shaped withholding for private-sector expatriate staff; the statutory payroll liabilities are end-of-service gratuity (accrued, settled at exit) and pension contributions for GCC-national employees (GPSSA and emirate schemes). Visa and immigration costs are a real recurring UAE SME cost with no natural home in other markets' palettes, so they get a named account instead of dissolving into office expenses.",
+    "fallback_accounts": [
+      { "name": "Sales", "role": "revenue.operating" },
+      { "name": "Other income", "role": "revenue.other" },
+      { "name": "Interest income", "role": "revenue.interest" },
+      { "name": "Cost of sales", "role": "expense.cost_of_sales" },
+      { "name": "Operating supplies", "role": "expense.operating_supplies" },
+      { "name": "Software subscriptions", "role": "expense.software" },
+      { "name": "Travel", "role": "expense.travel" },
+      { "name": "Meals and entertainment", "role": "expense.meals" },
+      { "name": "Marketing", "role": "expense.marketing" },
+      { "name": "Professional fees", "role": "expense.professional_fees" },
+      { "name": "Accounting fees", "role": "expense.accounting_fees" },
+      { "name": "Licence and statutory fees", "role": "expense.statutory_fees" },
+      { "name": "Visa and immigration costs", "role": "expense.statutory_fees" },
+      { "name": "Payroll", "role": "expense.payroll" },
+      { "name": "Pension contributions (GCC nationals)", "role": "expense.payroll" },
+      { "name": "Rent", "role": "expense.rent" },
+      { "name": "Utilities", "role": "expense.utilities" },
+      { "name": "Telecommunications", "role": "expense.telecom" },
+      { "name": "Insurance", "role": "expense.insurance" },
+      { "name": "Office expenses", "role": "expense.office" },
+      { "name": "Motor expenses", "role": "expense.motor" },
+      { "name": "Repairs and maintenance", "role": "expense.repairs_maintenance" },
+      { "name": "Fines and penalties", "role": "expense.fines_penalties" },
+      { "name": "Bank fees", "role": "expense.bank_fees" },
+      { "name": "Platform and processor fees", "role": "expense.platform_fees" },
+      { "name": "Foreign exchange gain/loss", "role": "expense.fx" },
+      { "name": "Shareholder current account", "role": "liability.director_loan" },
+      { "name": "Loan payable", "role": "liability.loan" },
+      { "name": "Owner drawings", "role": "equity.owner_drawings" },
+      { "name": "Share capital", "role": "equity.share_capital" },
+      { "name": "Retained earnings", "role": "equity.retained_earnings" },
+      { "name": "Intercompany transfer", "role": "clearing.intercompany" },
+      { "name": "Payment processor clearing", "role": "clearing.payment_processor" },
+      { "name": "VAT payable", "role": "liability.sales_tax_payable" },
+      { "name": "Corporate tax payable", "role": "liability.tax_payable" },
+      { "name": "End of service benefits payable", "role": "liability.payroll_payable" },
+      { "name": "Suspense", "role": "control.suspense" }
+    ]
+  },
+  "obligations": {
+    "survey": "surveyed",
+    "as_of": "2026-08-30",
+    "note": "Surveyed for the AE ICP shape: a UAE-resident single-entity SME (mainland or free zone), inside the narrow ICP (no unscoped inventory/COGS, no book remediation). Declared in full because that is what the market REQUIRES, not trimmed to what core serves today; as of 2026-08-30 every entry is declared_unbuilt and the engine reports each on every statutory_watches run rather than silently skipping it. AE is not production-ready for statutory work until they are bound. Deliberately OUT of this ICP-shaped survey (reviewed, excluded, named so the exclusion is visible): excise tax (specific goods, outside the service/commerce ICP), customs duties, Emiratisation quotas, and WPS mechanics (an employment-compliance surface, not a books duty). VERIFY each entry against primary source before any AE client is onboarded onto a statutory lane — this survey is a reading taken on as_of, not a standing guarantee.",
+    "items": [
+      {
+        "id": "ae_vat_registration_threshold",
+        "name": "VAT registration threshold watch",
+        "authority": "Federal Tax Authority",
+        "source": "Federal Decree-Law No. 8 of 2017 on Value Added Tax, Article 13, with the Executive Regulation (Cabinet Decision No. 52 of 2017) — mandatory registration once taxable supplies and imports exceed the mandatory registration threshold over the preceding 12 months, or are expected to exceed it within the coming 30 days; a voluntary registration threshold sits at half the mandatory one",
+        "as_of": "2026-08-30",
+        "status": "bound",
+        "binding": "ae_vat_threshold_escalation",
+        "note": "BOUND 2026-08-30, same day the survey landed — the first AE statutory duty core can serve, and the third market on the fi/gb threshold-watch shape (the obligations leg's generalisation evidence compounding). The direct sibling of fi_alv_registration_threshold and gb_vat_registration_threshold. Both GB limbs recur here: a rolling 12-month backward test AND a forward-looking 30-day limb that turns on the OWNER'S expectation, which Donna cannot read from a ledger — the watch reports a conservative committed-supplies floor and the ask asks the owner for the expectation itself. The AED threshold amounts are deliberately NOT carried here — they live with the deterministic watch that reads them (server/donna/ae/vatRegistrationThreshold.js), provenanced there with their own as_of, the same posture as FI and GB. One shape difference from GB's drain: the registered-client exclusion gates on the AE registration RECORD (ae/vatRegistration.js) rather than a return-lane flag, since ae_vat_return is still declared_unbuilt."
+      },
+      {
+        "id": "ae_vat_registration",
+        "name": "VAT registration (status and TRN on file)",
+        "authority": "Federal Tax Authority",
+        "source": "Federal Decree-Law No. 8 of 2017 on Value Added Tax, Articles 13 and 17, with the Executive Regulation (Cabinet Decision No. 52 of 2017) — a taxable person that must (or elects to) register applies to the FTA through EmaraTax; on approval the FTA issues a 15-digit Tax Registration Number and assigns the registrant its tax periods, and the TRN must appear on every tax invoice the registrant issues",
+        "as_of": "2026-09-01",
+        "status": "bound",
+        "binding": "ae_vat_registration_escalation",
+        "note": "A REGISTRY duty — the VAT twin of ae_corporate_tax_registration — declared and BOUND 2026-09-01 (RT-19 of docs/plan-2026-09-01-runtime-refactor-slices.md; forensics F-23). The standing fact is the tri-state record on clients.profile.vat_registration (ae/vatRegistration.js); what was missing was the ASK: the threshold watch asks only once turnover crosses the mandatory threshold and the return lane's period-intake ask covers registrants only, so a client whose statement already carried an FTA VAT payment had an unknown registration, an empty ae_vat_periods table and no owner question — the VAT lane could not self-start. The binding (ae/vatRegistrationEscalation.js pure half, ae/vatRegistrationEscalationDb.js drain, ae/vatRegistrationReply.js reply path) asks the owner for the registration status, the TRN, the effective date and the FTA-assigned tax period, keyed on persisted VAT-activity evidence (a bank line coded to the VAT payable role, a posted line on it, a sales invoice carrying VAT), dedupes on an open ask per client, records a 'not registered' answer so the question does not recur for 90 days unless the book contradicts it, and records periods only through the audited period writer (the TRN comes from the persisted record, never the caller). It ALSO runs on the sweep's hourly cadence. UNCONDITIONAL for every AE-jurisdiction client (Kari 2026-08-31, 'nothing dark'). Statutory numbers are not carried here: the threshold lives with ae/vatRegistrationThreshold.js and the 28-day due-date rule with ae/vatPeriods.js, each with its own as_of and confirmedAgainstPrimary posture (the tax.gov.ae primary read is still owed). Pack version deliberately NOT bumped: the version is the chart-contract handshake Certificate B pins against data/worlds/admitted-entity-profiles.json, and the chart did not change."
+      },
+      {
+        "id": "ae_vat_return",
+        "name": "VAT return and payment",
+        "authority": "Federal Tax Authority",
+        "source": "Federal Decree-Law No. 8 of 2017 and the Executive Regulation — a registrant files a VAT return and pays the net tax due for each tax period (commonly quarterly; monthly for the largest registrants) within 28 days of the period end, through the FTA's EmaraTax portal",
+        "as_of": "2026-08-30",
+        "status": "bound",
+        "binding": "ae_vat_return_deadline_escalation",
+        "note": "BOUND 2026-08-30, preparation-first (docs/design-donna-ae-vat-return.md): the ae_vat coded-book computation (ae/vatReturn.js), the FTA-assigned period store recorded from the owner's EmaraTax view (ae/vatPeriods.js — the per-registrant stagger means the due-date clock is client-specific data, never a pack constant), the preparation route, and the deadline watch this binding runs — UNCONDITIONAL for every AE-jurisdiction client since 2026-08-31 (Kari, 'nothing dark'; the born-dark AE_VAT_RETURN_WATCH flag was deleted). The OWNER files in EmaraTax — the transmit seam is a typed refusal pending FTA Digital Tax Integrator accreditation (a Kari business decision), which corrected the earlier premise here: a sanctioned third-party filing rail EXISTS (the FI transmit-lane shape stands as the eventual channel design)."
+      },
+      {
+        "id": "ae_corporate_tax_registration",
+        "name": "Corporate tax registration",
+        "authority": "Federal Tax Authority",
+        "source": "Federal Decree-Law No. 47 of 2022 on the Taxation of Corporations and Businesses — every taxable person, including most free zone persons, must register for corporate tax with the FTA; FTA decisions set registration timelines, with administrative penalties for late registration",
+        "as_of": "2026-08-30",
+        "status": "bound",
+        "binding": "ae_ct_registration_escalation",
+        "note": "A REGISTRY duty (obtain and hold a registration), nearer the Companies House confirmation-statement shape than a filing — its watch is 'is this client registered, and can we evidence it', an onboarding-time check plus a standing fact, not a periodic computation. BOUND 2026-08-31 on the pure halves that landed 2026-08-30 (docs/design-donna-ae-corporate-tax.md): the tri-state registration record (ae/ctRegistration.js) is the evidence, the pure deadline rows (ae/ctRegistrationDeadlines.js) compute only the profile-settleable limb and refuse the rest by name, and the drain this binding runs — UNCONDITIONAL for every AE-jurisdiction client (Kari 2026-08-31, 'nothing dark'; its flag was deleted the day it was born) — turns each verdict into an owner ask: status unknown, deadline facts missing, or a computed deadline due/overdue. Entity-neutral by pinned test: free-zone standing never enters (gap 6's OPEN axis question gates the RETURN duty, not this one). The owner registers in EmaraTax; Donna never registers. The primary read (tax.gov.ae — Decision 3 timelines, TRN shape, penalty schedule) is still owed; every constant rides confirmedAgainstPrimary: false."
+      },
+      {
+        "id": "ae_corporate_tax_return",
+        "name": "Corporate tax return and payment",
+        "authority": "Federal Tax Authority",
+        "source": "Federal Decree-Law No. 47 of 2022 — a taxable person files its corporate tax return and settles the tax due within nine months of the end of the relevant tax period; the headline regime is 0% up to a profit threshold and 9% above it, with an elective small business relief for resident persons below a revenue ceiling (extended to tax periods ending on or before 2029-12-31 by Ministerial Decision No. 131 of 2026) and a 0% regime on qualifying income for qualifying free zone persons",
+        "as_of": "2026-08-30",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "The AED thresholds and the relief ceiling are deliberately described, not encoded — no core code computes them until the obligation is bound, and the numbers must then be recorded from primary source with their own as_of. Qualifying-free-zone-person status is judgment-heavy (qualifying income, substance, de-minimis) and is a flag-and-escalate surface when it arises inside the ICP, never a silent guess; whether free-zone standing lives on the entity-type axis or its own profile axis is the gap-6 question the AE pack forces (see docs/donna-country-pack-contract-gaps.md, AE addendum)."
+      },
+      {
+        "id": "ae_einvoicing_mandate",
+        "name": "E-invoicing mandate readiness",
+        "authority": "UAE Ministry of Finance / Federal Tax Authority",
+        "source": "Ministerial Decision No. 243 of 2025 (the Electronic Invoicing System) and Ministerial Decision No. 244 of 2025 (its phased implementation) — B2B and B2G invoices in the PINT AE format exchanged through Accredited Service Providers under the Peppol five-corner (DCTCE) model; voluntary adoption opened 2026-07-01, with mandatory phases from 2027 by taxpayer size",
+        "as_of": "2026-08-30",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "The first pack entry whose duty is BECOMING mandatory on a published schedule rather than standing law — the einvoice leg above declares Donna's capability ('none', operator 'planned'); THIS entry is the statutory clock, kept visible by the sweep so mandate arrival is a watched date, not a surprise. The timeline has moved once already (large-taxpayer ASP-appointment deadline extended 2026-07-31 → 2026-10-30, go-live held at 2027-01-01): RE-CHECK against MoF/FTA primary source before relying on any date, and before any AE client is promised issuance compliance into 2027."
+      }
+    ]
+  },
+  "platforms": ["xero", "qbo"]
+}

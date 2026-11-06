@@ -1,0 +1,202 @@
+{
+  "id": "holdout-016",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-016",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "LASKU\nLaskun numero: 7731    Laskun päivä: 12.08.2026    Eräpäivä: 11.09.2026    Maksuehto: 30 pv netto\nLaskuttaja: Kymen Kalustetukku Oy, Y-tunnus 6677889-0\nMaksaja: Kuusela Design Oy\nErittely: Neuvottelupöytä ja tuolit\nVeroton yhteensä: 592,83 €\nALV 25,5 %: 151,17 €\nMaksettava yhteensä: 744,00 €\nViitenumero: 7 73104    Tilinumero: FI58 4055 0011 2233 44    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n02.09.2026;02.09.2026;-744,00;Tilisiirto;Maksu;Kymen Kalustetukku Oy;FI58 4055 0011 2233 44;;Kalusteet elokuu;202609020001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "statement-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_statement",
+        "content": "Kymen Kalustetukku Oy — Saldoerittely 10.09.2026, asiakas Kuusela Design Oy (asiakasnro 10441)\nLasku 7731, 12.08.2026, 744,00 € — suoritus 02.09.2026 744,00 € (viesti \"Kalusteet elokuu\"), saldo 0,00 €\nAvoin saldo yhteensä: 0,00 €",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-02",
+        "money_in_minor": 0,
+        "money_out_minor": 74400,
+        "currency": "EUR",
+        "contact": "Kymen Kalustetukku Oy",
+        "description": "Tilisiirto Maksu Kalusteet elokuu",
+        "raw_description": "02.09.2026;02.09.2026;-744,00;Tilisiirto;Maksu;Kymen Kalustetukku Oy;FI58 4055 0011 2233 44;;Kalusteet elokuu;202609020001",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "remittance",
+        "source_id": "statement-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 74400,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 74400,
+        "bank_currency": "EUR",
+        "gross_minor": 74400,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-12",
+      "due_date": "2026-09-11",
+      "amount_minor": 74400,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "773104",
+      "counterparty": "Kymen Kalustetukku Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "statement-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "statement-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-fi-supplier-statement-of-account",
+    "family_description": "The Finnish Oy paid a supplier bill with a free-text message instead of the viite; the supplier's saldoerittely (statement of account) shows how it applied the payment.",
+    "market": "FI",
+    "variant": "a",
+    "error_mode": "supplier statement as payment-specific evidence; statement applies the payment to an older bill; concordant statement and bank message",
+    "label_reason": "The supplier's statement records our 02.09.2026 payment as applied to lasku 7731; the bank message carries no viite.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "contradicted"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 74400
+      }
+    ]
+  }
+}

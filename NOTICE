@@ -1,0 +1,9 @@
+Donna
+Copyright 2026 Kari Honkanen
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+The name "Donna" is not licensed by it (section 6).
+
+This product bundles Noto Sans Arabic (server/donna/outbound/fonts/),
+Copyright 2022 The Noto Project Authors, licensed under the SIL Open Font
+License, Version 1.1 (see server/donna/outbound/fonts/OFL.txt).

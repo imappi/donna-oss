@@ -1,0 +1,205 @@
+{
+  "id": "contract-020",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "contract-020",
+    "scope": {
+      "firm_id": "fixture-firm",
+      "client_id": "fixture-client",
+      "generation": "fixture-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "bank-source-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "{\"contact\": \"Thistle Supplies Ltd\", \"currency\": \"EUR\", \"date\": \"2026-08-10\", \"description\": \"THISTLE SUPPLIES REFUND BILL-8120\", \"money_in\": 940, \"money_out\": 0, \"raw_description\": \"THISTLE SUPPLIES REFUND BILL-8120\", \"reconciliation_status\": null}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "{\"currency\": \"EUR\", \"document_date\": \"2026-08-03\", \"document_type\": \"supplier_bill\", \"due_date\": \"2026-09-03\", \"payment_status\": \"unpaid\", \"reference_number\": \"BILL-8120\", \"total_amount\": 940, \"vendor_name\": \"Thistle Supplies Ltd\"}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Offline investigation of the identified invoice at the requested snapshot. This does not assert that payment has occurred or that a customer owes evidence.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "opaque-tx-20-a",
+        "source_id": "bank-source-1",
+        "date": "2026-08-10",
+        "money_in_minor": 94000,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Thistle Supplies Ltd",
+        "description": "THISTLE SUPPLIES REFUND BILL-8120",
+        "raw_description": "THISTLE SUPPLIES REFUND BILL-8120",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-opaque-tx-20-a",
+        "kind": "reference",
+        "source_id": "bank-source-1",
+        "transaction_id": "opaque-tx-20-a",
+        "invoice_id": "opaque-doc-20",
+        "invoice_amount_minor": 94000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 94000,
+        "bank_currency": "EUR",
+        "gross_minor": 94000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "opaque-doc-20",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-03",
+      "due_date": "2026-09-03",
+      "amount_minor": 94000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "BILL-8120",
+      "counterparty": "Thistle Supplies Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "opaque-doc-20",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-source-1",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-source-1",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "opaque-tx-20-a"
+      ],
+      "invoice_ids": [
+        "opaque-doc-20"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "source_family": "data/evals/fixtures/jev-routed/route-020.json",
+    "limitations": [
+      "Authored synthetic evidence; source relationships are assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "opaque-doc-20",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "acceptable_outcomes": [
+      "unresolved_research"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and obligation, validated semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": null,
+    "label_reason": "Old needs_evidence label does not establish a customer obligation. Rejecting this candidate leaves the invoice investigation unresolved without an ask.",
+    "prior_art": "data/evals/fixtures/jev-routed/route-020.json",
+    "legacy_fixture_sha256": "a10a147c039d9ed557a74e59ceef7e6afdd40354ccd64da865c1e1bdc509e928",
+    "positive_paths": [
+      {
+        "kind": "reference",
+        "transaction_id": "opaque-tx-20-a",
+        "invoice_id": "opaque-doc-20",
+        "source_id": "bank-source-1",
+        "required_semantics": [
+          "affirmative_obligation_connection",
+          "direct_counterparty_or_documented_processor",
+          "reference_association"
+        ],
+        "constraints": [
+          "current_scoped_sources",
+          "eligible_bank_row",
+          "allocation_arithmetic",
+          "resolved_relevant_competitors"
+        ]
+      }
+    ]
+  },
+  "semantic_statuses": {
+    "opaque-tx-20-a": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "unresolved_research",
+    "proposals": []
+  }
+}

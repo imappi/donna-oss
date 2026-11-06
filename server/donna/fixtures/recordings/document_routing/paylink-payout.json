@@ -1,0 +1,35 @@
+{
+  "lane": "document_routing",
+  "endpoint_class": "openai",
+  "provenance": "synthetic \u2014 authored from documentRouter.js ROUTER_SCHEMA for the appliance fixture world (artifact/payout-statement); never a captured provider response. RT-18: the family is payout_statement (before RT-18 the recording answered payment_confirmation/ar).",
+  "fixture": "payout_statement",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_route_paylink_payout",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_route_paylink_payout",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"document_family\":\"payout_statement\",\"confidence\":0.95,\"direction_hint\":\"ar\",\"candidate_families\":[{\"family\":\"payout_statement\",\"confidence\":0.95},{\"family\":\"payment_confirmation\",\"confidence\":0.03}],\"language_hint\":\"en\",\"reason\":\"A PayLink merchant settlement report showing gross card sales, processing fees deducted and one net payout transferred to the client's bank account \\u2014 the client's own revenue arriving through a processor, so money flows in.\"}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

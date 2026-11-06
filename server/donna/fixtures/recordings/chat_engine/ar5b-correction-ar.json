@@ -1,0 +1,16 @@
+{
+  "lane": "chat_engine",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — authored from the AR-5B attributed code-switched correction and client-portal structured-reply contract; never a captured provider response",
+  "fixture": "unsupported-correction-bi",
+  "status": 200,
+  "body": {
+    "id": "msg_ar5b_correction_ar",
+    "type": "message",
+    "role": "assistant",
+    "model": "recorded-provider-model",
+    "content": [{ "type": "tool_use", "id": "tool_ar5b_correction_ar", "name": "submit_structured_reply", "input": { "text": "أستطيع شرح القيد الحالي، لكن تعديل التصنيف غير متاح من هذه المحادثة بعد، لذلك لن يُسجّل من هنا.", "actions": [] } }],
+    "stop_reason": "tool_use",
+    "usage": { "input_tokens": 0, "output_tokens": 0 }
+  }
+}

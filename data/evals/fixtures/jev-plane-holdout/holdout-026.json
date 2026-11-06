@@ -1,0 +1,211 @@
+{
+  "id": "holdout-026",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-026",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "LASKU\nLaskun numero: 2077-K    Laskun päivä: 01.09.2026    Eräpäivä: 01.10.2026    Maksuehto: 30 pv netto\nLaskuttaja: Kuusela Design Oy, Y-tunnus 2345678-9\nMaksaja: Oulun Kuntokeskus Oy, Y-tunnus 7788990-1\nErittely: Jäsensovelluksen kehitys, elokuu (korjattu lasku, korvaa laskun 2077)\nVeroton yhteensä: 1 394,42 €\nALV 25,5 %: 355,58 €\nMaksettava yhteensä: 1 750,00 €\nViitenumero: 2 07719    Tilinumero: FI21 1234 5600 0007 85    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "LASKU\nLaskun numero: 2077    Laskun päivä: 19.08.2026    Eräpäivä: 18.09.2026    Maksuehto: 30 pv netto\nLaskuttaja: Kuusela Design Oy, Y-tunnus 2345678-9\nMaksaja: Oulun Kuntokeskus Oy, Y-tunnus 7788990-1\nErittely: Jäsensovelluksen kehitys, elokuu\nVeroton yhteensä: 1 498,01 €\nALV 25,5 %: 381,99 €\nMaksettava yhteensä: 1 880,00 €\nViitenumero: 2 07706    Tilinumero: FI21 1234 5600 0007 85    BIC: OKOYFIHH\nMitätöity hyvityslaskulla 2077-H 01.09.2026",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n14.09.2026;14.09.2026;+1750,00;Tilisiirto;Viitemaksu;Oulun Kuntokeskus Oy;;207719;;202609140001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-14",
+        "money_in_minor": 175000,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Oulun Kuntokeskus Oy",
+        "description": "Tilisiirto Viitemaksu",
+        "raw_description": "14.09.2026;14.09.2026;+1750,00;Tilisiirto;Viitemaksu;Oulun Kuntokeskus Oy;;207719;;202609140001",
+        "structured_reference": "207719",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 175000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 175000,
+        "bank_currency": "EUR",
+        "gross_minor": 175000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-08-19",
+        "reference": "207706"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-09-01",
+      "due_date": "2026-10-01",
+      "amount_minor": 175000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "207719",
+      "counterparty": "Oulun Kuntokeskus Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-fi-invoice-copy-uploaded-twice",
+    "family_description": "A re-sent copy of a Finnish sales invoice was uploaded as a second document; the customer pays with the viite.",
+    "market": "FI",
+    "variant": "b",
+    "error_mode": "repeated viite from a duplicate document; corrected invoice with a new viite; prior confirmed settlement",
+    "label_reason": "The second document is a corrected invoice 2077-K with a new viite; the payment carries the corrected viite and the corrected invoice is focal.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 175000
+      }
+    ]
+  }
+}

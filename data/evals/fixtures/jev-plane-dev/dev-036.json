@@ -1,0 +1,217 @@
+{
+  "id": "dev-036",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-036",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "INVOICE INV-2270\nFrom: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nVAT registration: GB 312 4567 89\nBill to: Oakridge Vets Ltd\nInvoice date: 01/09/2026    Due date: 08/09/2026    Terms: Direct Debit, 7 days\nDescription: Hosting and support, September 2026\nNet total: £500.00\nVAT @ 20%: £100.00\nTOTAL DUE: £600.00\nPayment: bank transfer to sort code 20-45-67, account 12345678, quoting INV-2270.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "INVOICE INV-2222\nFrom: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nVAT registration: GB 312 4567 89\nBill to: Oakridge Vets Ltd\nInvoice date: 01/08/2026    Due date: 08/08/2026    Terms: Direct Debit, 7 days\nDescription: Hosting and support, August 2026\nNet total: £500.00\nVAT @ 20%: £100.00\nTOTAL DUE: £600.00\nPayment: bank transfer to sort code 20-45-67, account 12345678, quoting INV-2222.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n11/09/2026,BAC,\"GOCARDLESS LTD PAYOUT\",,593.40,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "payout-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "processor_payout_report",
+        "content": "GoCardless payout — paid out 11/09/2026 to account ending 5678\nPayment: Oakridge Vets Ltd (mandate MD00F2K7), collected 09/09/2026, £600.00, description \"Invoice INV-2222 (retry)\"\nGoCardless fee: £6.60\nNet payout: £593.40 (1 payment)",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-11",
+        "money_in_minor": 59340,
+        "money_out_minor": 0,
+        "currency": "GBP",
+        "contact": "GoCardless Ltd",
+        "description": "GOCARDLESS LTD PAYOUT",
+        "raw_description": "11/09/2026,BAC,\"GOCARDLESS LTD PAYOUT\",,593.40,GBP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "remittance",
+        "source_id": "payout-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-r1",
+        "invoice_amount_minor": 60000,
+        "invoice_currency": "GBP",
+        "bank_amount_minor": 59340,
+        "bank_currency": "GBP",
+        "gross_minor": 60000,
+        "fee_minor": 660
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-08-01",
+        "reference": "INV-2222"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-09-01",
+      "due_date": "2026-09-08",
+      "amount_minor": 60000,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "INV-2270",
+      "counterparty": "Oakridge Vets Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "payout-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "payout-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-gb-gocardless-direct-debit-payout",
+    "family_description": "GoCardless collects a Direct Debit from the customer and pays out net of fees; the payout report names the mandate, customer and invoice.",
+    "market": "GB",
+    "variant": "b",
+    "error_mode": "processor payout; report may name another invoice of the same customer",
+    "label_reason": "The payout report names the customer's August invoice, not the focal September invoice; the payout is allocated elsewhere.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "unresolved_research"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "not_established",
+      "reference": "contradicted",
+      "obligation": "contradicted",
+      "exclusion": "supported"
+    }
+  },
+  "expected": {
+    "route": "unresolved_research",
+    "proposals": []
+  }
+}

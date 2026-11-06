@@ -1,0 +1,57 @@
+{
+  "id": "kl-b11",
+  "title": "Kultalanka 02/2025 12.2. Verohallinto ALV −1 245,00",
+  "split": "development",
+  "family": "kultalanka-statutory_payment",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "statutory_payment",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-12",
+    "description": "OMA-ALOITTEINEN VERO VEROHALLINTO ALV Q4/2024",
+    "money_in": 0,
+    "money_out": 1245,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "2939",
+          "direction": "debit",
+          "amount": 1245,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 1245,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "disputed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B11"
+  }
+}

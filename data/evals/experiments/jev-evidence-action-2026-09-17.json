@@ -1,0 +1,3578 @@
+{
+  "version": "jev-evidence-action-v1",
+  "evidence_kind": "injected_development_contract_checks",
+  "provider_calls": 0,
+  "harness_metric_unit": "one development behavior assertion, not a financial match or model judgment",
+  "hash_encoding": "sha256 of canonical JSON encoded as UTF-8, except explicitly named legacy fixture byte digests",
+  "independently_reviewed_labels": 0,
+  "capability_verdict": "not_measured",
+  "production_completions": 0,
+  "declaration": "Passing an expected unresolved route proves contract behavior, not successful bookkeeping or reduced fallback.",
+  "corpus_sha256": "27f65e73a1cfcb6f3d2a64f3a1790cc2af6d70a64d213baaa8355d3118cac699",
+  "code_sha256": {
+    "scripts/jev_evidence_action_contract.js": "c41f80cafcf70fe3c9bfc727a2ee8ef1cd880a7045fcac0eb1737694c0063174",
+    "scripts/jev_evidence_action.js": "3d4d55b60a18f4c060041ae562f2a4184d74f86e87d287ab9359cc44cb55ac1d",
+    "scripts/jev_routed_protocol.js": "54528612ee1782f11a1f5e740fdfa77feaa2e322347c5544f03393a258db803e",
+    "server/donna/localEvidenceInventory.js": "50bdace8249fe57720832cd0beecdacdc73123d498c022b7a1f7925ed5f228f8",
+    "server/donna/reconciliationLlmCore.js": "77172349becde2b59d0e3882fa1224a24c31d350f571f8d41feb3853f340c784",
+    "server/donna/issuedInvoiceSettlementMath.js": "b5e27fd8bd5bcc7f6d01221bcbf044a40c7426007a6ffb430a5ec2addb8addaf",
+    "server/donna/evalHarness.js": "d2cad69cbfc4ca66b3dd59db85764ea3c6cbc1795fc6552aa75ca488e2917ac1"
+  },
+  "routes": {
+    "supported_proposal": 13,
+    "strong_reasoning": 10,
+    "not_admitted": 3,
+    "unresolved_research": 6,
+    "retrieve_local": 1,
+    "customer_question": 1
+  },
+  "evaluation": {
+    "suite": "jev-evidence-action",
+    "mode": "injected_ideal",
+    "model": null,
+    "ranAt": "2026-09-17T00:00:00.000Z",
+    "totals": {
+      "fixtures": 34,
+      "passed": 34,
+      "failed": 0,
+      "errored": 0,
+      "expected_match_count": 34,
+      "proposed_match_count": 34,
+      "true_positive": 34,
+      "false_positive": 0,
+      "false_negative": 0,
+      "name_checked": 0,
+      "name_correct": 0
+    },
+    "metrics": {
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "accuracy": 1,
+      "name_accuracy": null
+    },
+    "cases": [
+      {
+        "id": "contract-001",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-1-a",
+              "invoice_id": "opaque-doc-1",
+              "amount_minor": 42000
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "c04a05478a4bc75665c90a3781d146e39408e5a326c8bcc41ded33c86865613c",
+          "questions_sha256": "4fda33ca74cec5be0ae7adbba08638a2d9d1497c52408736de25817b573dc4db",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "c04a05478a4bc75665c90a3781d146e39408e5a326c8bcc41ded33c86865613c",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "c2bf99a1e94ebd12ca19aa285b70f8e5da0f3dbbee73c8319431e5301bfc6449",
+                "packet_sha256": "c04a05478a4bc75665c90a3781d146e39408e5a326c8bcc41ded33c86865613c",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "6c1a293f08eabb8062d944b8974e0e6e08279ec3e0f1043ddb0508e919d36894",
+                "packet_sha256": "c04a05478a4bc75665c90a3781d146e39408e5a326c8bcc41ded33c86865613c",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "fbf167a1b3cb5e39dd0f51b680c2a38342d124cd6e9e958a0e5020977ebb10ba",
+                "packet_sha256": "c04a05478a4bc75665c90a3781d146e39408e5a326c8bcc41ded33c86865613c",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_reference",
+                "question_sha256": "6f8a99f0855bfaff3e05c1ee353c73e5aede413afee50ea65c3b26c54921f30a",
+                "packet_sha256": "c04a05478a4bc75665c90a3781d146e39408e5a326c8bcc41ded33c86865613c",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-1-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-1-a",
+                "invoice_id": "opaque-doc-1",
+                "amount_minor": 42000,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "bank-source-1"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-001.json"
+        }
+      },
+      {
+        "id": "contract-002",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "725d4f999fb887d5c89ef9e40dc0158d4c3cd84d1aa42aaa9135b12c25bb2a1f",
+          "questions_sha256": "8cbd5d90fb230d2eb436ed71a22919556c666b83d636863b6d9ecbb2d72696d0",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "725d4f999fb887d5c89ef9e40dc0158d4c3cd84d1aa42aaa9135b12c25bb2a1f",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "5fbd7bbd4038d202cad539e6dcd9d70d1b617bcfaf983ddec6fed88e55bbea9b",
+                "packet_sha256": "725d4f999fb887d5c89ef9e40dc0158d4c3cd84d1aa42aaa9135b12c25bb2a1f",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_2_obligation",
+                "question_sha256": "50e660479ff10ef70a4226e428d2498b11e8dd56202ec2d47fb6b2309137115b",
+                "packet_sha256": "725d4f999fb887d5c89ef9e40dc0158d4c3cd84d1aa42aaa9135b12c25bb2a1f",
+                "action_id": "link_candidate_2",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "bank-source-2",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-2-a",
+                "disposition": "not_completed_by_offline_contract"
+              },
+              {
+                "source_id": "opaque-tx-2-b",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              },
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_2",
+                "candidate": "candidate_2",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_2_counterparty",
+                  "link_candidate_2_processor",
+                  "link_candidate_2_reference",
+                  "link_candidate_2_obligation",
+                  "link_candidate_2_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-002.json"
+        }
+      },
+      {
+        "id": "contract-003",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "4b867b2ba9cc3a81d385286a2e1c14a1db04f5ca58a95e7045ebcad6b2e26a65",
+          "questions_sha256": "c0c4c8ec93003675509e3427eaf71200c8bf9d997c37d437d6a17d13fb1634b6",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "4b867b2ba9cc3a81d385286a2e1c14a1db04f5ca58a95e7045ebcad6b2e26a65",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "41d510c50b60091e68d78acb186dc04909592b10cda741d7c7fd7d23b863e254",
+                "packet_sha256": "4b867b2ba9cc3a81d385286a2e1c14a1db04f5ca58a95e7045ebcad6b2e26a65",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-3-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-003.json"
+        }
+      },
+      {
+        "id": "contract-004",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "not_admitted",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "d5da89bc8809aee6b4ff726524d10d2b51eb9b245f5bef23f063b342610f18e5",
+          "questions_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "d5da89bc8809aee6b4ff726524d10d2b51eb9b245f5bef23f063b342610f18e5",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [],
+            "assumed_synthetic_sources": [
+              "allocation-source-opaque-match-route-004",
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-4-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "not_admitted",
+            "reason": "invoice_already_allocated",
+            "proposals": [],
+            "dependencies": [],
+            "admission_basis": [
+              "allocation-source-opaque-match-route-004"
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-004.json"
+        }
+      },
+      {
+        "id": "contract-005",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-5-a",
+              "invoice_id": "opaque-doc-5",
+              "amount_minor": 58700
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "a15fecc93e41aa3bae44cf443e6f38c696035534cc44f50c2e4bda9515eb757d",
+          "questions_sha256": "2b6389f5cd9070e99955355886cd3e324cb1a6f538b81fcbc04aa94a7803b4ae",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "a15fecc93e41aa3bae44cf443e6f38c696035534cc44f50c2e4bda9515eb757d",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "ecd3183ae475522207cda3fcb7d3c2281aa9aa27ab235a865b8533cfb57be906",
+                "packet_sha256": "a15fecc93e41aa3bae44cf443e6f38c696035534cc44f50c2e4bda9515eb757d",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "9fbc37ed4bea67e2dba62d230f66c80a786f9b166d120fcec6cf0e9582bf469b",
+                "packet_sha256": "a15fecc93e41aa3bae44cf443e6f38c696035534cc44f50c2e4bda9515eb757d",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "557d6e8bce79d46088dce61e4c1168d89a07d1d7746f2a35af346a5eb0a2a845",
+                "packet_sha256": "a15fecc93e41aa3bae44cf443e6f38c696035534cc44f50c2e4bda9515eb757d",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_reference",
+                "question_sha256": "7426322f0051fa177ae20c68a70fe4d14effc0cdc8cb4c74e8aaca4b87967ee0",
+                "packet_sha256": "a15fecc93e41aa3bae44cf443e6f38c696035534cc44f50c2e4bda9515eb757d",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-5-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-5-a",
+                "invoice_id": "opaque-doc-5",
+                "amount_minor": 58700,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "bank-source-1"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-005.json"
+        }
+      },
+      {
+        "id": "contract-006",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-6-a",
+              "invoice_id": "opaque-doc-6",
+              "amount_minor": 91000
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "d9bb5fa0616142f8d3c095c6dccc1db301af51d117345788619b528d4996e562",
+          "questions_sha256": "9e2a7c14559f45705fc059a3f7b50ba26a66bbeeac828c571c4f94d69aa897e0",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "d9bb5fa0616142f8d3c095c6dccc1db301af51d117345788619b528d4996e562",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "44fadae9a54c98179f6bbe2d362062ed5e793b7eaa7983aa42bc573a829c7563",
+                "packet_sha256": "d9bb5fa0616142f8d3c095c6dccc1db301af51d117345788619b528d4996e562",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "e51aee5f689c401657f82707ec0140b8651000d5e3d2e4764a94013d1d8c4cbe",
+                "packet_sha256": "d9bb5fa0616142f8d3c095c6dccc1db301af51d117345788619b528d4996e562",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "d297f5e33457ca6da8ac2cc51f6cc1169ca7462811cd70c77af6dc8ce08ff8b7",
+                "packet_sha256": "d9bb5fa0616142f8d3c095c6dccc1db301af51d117345788619b528d4996e562",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_reference",
+                "question_sha256": "921e577ee3364487e223aa4e7421d6d7da73c466d1ac54caa47bf24e89374caf",
+                "packet_sha256": "d9bb5fa0616142f8d3c095c6dccc1db301af51d117345788619b528d4996e562",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "remittance-source-1",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-6-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-6-a",
+                "invoice_id": "opaque-doc-6",
+                "amount_minor": 91000,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "remittance-source-1"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-006.json"
+        }
+      },
+      {
+        "id": "contract-007",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "unresolved_research",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "add26412649c6bda4c71c4e8ea71247089ab11abcec26577951957e6d60a9dce",
+          "questions_sha256": "73742d3c11460cdd3e8066af85a52785b23a3cec1970b1066fc93f3be3e6faed",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "add26412649c6bda4c71c4e8ea71247089ab11abcec26577951957e6d60a9dce",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "55b9ede95e0d6ef7f622d0f38c1ded18b247217a5a70593a92c95533e7620cca",
+                "packet_sha256": "add26412649c6bda4c71c4e8ea71247089ab11abcec26577951957e6d60a9dce",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-7-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "unresolved_research",
+            "reason": "no_link_does_not_establish_customer_obligation",
+            "proposals": [],
+            "dependencies": []
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-007.json"
+        }
+      },
+      {
+        "id": "contract-008",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "cb8c0adb7224d7738078aca67f2680ec3ad82270420afde5573f28d54606018f",
+          "questions_sha256": "b57d5264bd8e9d4a6f359ab4622b509ec06a3aee506d05cb6a193db465e29cb2",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "cb8c0adb7224d7738078aca67f2680ec3ad82270420afde5573f28d54606018f",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "fbcd618e88ab97ec075324426708b509761278dffc9695bb7759c681ec1d73aa",
+                "packet_sha256": "cb8c0adb7224d7738078aca67f2680ec3ad82270420afde5573f28d54606018f",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_2_obligation",
+                "question_sha256": "3ad4e56d32b1c7a67bf080bcc1b3400e642fcf1a14fd3ac65c3a7437e00d8da2",
+                "packet_sha256": "cb8c0adb7224d7738078aca67f2680ec3ad82270420afde5573f28d54606018f",
+                "action_id": "link_candidate_2",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "bank-source-2",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-8-a",
+                "disposition": "not_completed_by_offline_contract"
+              },
+              {
+                "source_id": "opaque-tx-8-b",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              },
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_2",
+                "candidate": "candidate_2",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_2_counterparty",
+                  "link_candidate_2_processor",
+                  "link_candidate_2_reference",
+                  "link_candidate_2_obligation",
+                  "link_candidate_2_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-008.json"
+        }
+      },
+      {
+        "id": "contract-009",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "ff4cf5c58e44bf5166e2530c8fa85212dbefabdcac7de33cff3925af7e4e8e2d",
+          "questions_sha256": "08af3e660e3c517cde66014692e63941d01d9443c9ed47d446db8841c1d187a1",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "ff4cf5c58e44bf5166e2530c8fa85212dbefabdcac7de33cff3925af7e4e8e2d",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "2f71767060064592760f6777bd6b98c58868105c1f8695d080b916bf801f8dec",
+                "packet_sha256": "ff4cf5c58e44bf5166e2530c8fa85212dbefabdcac7de33cff3925af7e4e8e2d",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_2_exclusion",
+                "question_sha256": "c458d452de105178fc8a7cf93e0901c6f8ac9366de1802155007a3e61cab6c15",
+                "packet_sha256": "ff4cf5c58e44bf5166e2530c8fa85212dbefabdcac7de33cff3925af7e4e8e2d",
+                "action_id": "link_candidate_2",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_2_obligation",
+                "question_sha256": "532b5a94e071118d74dc1628efdcd25d3a8c14747c0cde09c163387e8b8b7cbb",
+                "packet_sha256": "ff4cf5c58e44bf5166e2530c8fa85212dbefabdcac7de33cff3925af7e4e8e2d",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_counterparty",
+                "question_sha256": "e2c4e655b17f73f3f222a03c94bef9d4412065e45952911649ff7ea6257b3d78",
+                "packet_sha256": "ff4cf5c58e44bf5166e2530c8fa85212dbefabdcac7de33cff3925af7e4e8e2d",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_reference",
+                "question_sha256": "8da19dcea7bd31176af05135bf92e14b0928561dda144029b472b4c30007674c",
+                "packet_sha256": "ff4cf5c58e44bf5166e2530c8fa85212dbefabdcac7de33cff3925af7e4e8e2d",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "bank-source-2",
+              "invoice-source",
+              "remittance-source-1",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-9-a",
+                "disposition": "not_completed_by_offline_contract"
+              },
+              {
+                "source_id": "opaque-tx-9-b",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-009.json"
+        }
+      },
+      {
+        "id": "contract-010",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "retrieve_local",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "46069e16dbedbec4b6d0ddeadc5fe6af2aeb8da27ea6bc18ffaa5dae0924085d",
+          "questions_sha256": "f8a3ed5465d36299c40a4ec891143cefe9b735973ba5f81e33fcca9cec834b1c",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "46069e16dbedbec4b6d0ddeadc5fe6af2aeb8da27ea6bc18ffaa5dae0924085d",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "bank-source-2",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-10-a",
+                "disposition": "not_completed_by_offline_contract"
+              },
+              {
+                "source_id": "opaque-tx-10-b",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "retrieve_local",
+            "reason": "inventory_not_proven_within_declared_scope",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "retrieval",
+                "scope_id": "fixture-manifest",
+                "status": "not_performed",
+                "collision_status": "complete_within_scope",
+                "limitations": [
+                  "No production discovery or absence claim."
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-010.json"
+        }
+      },
+      {
+        "id": "contract-011",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "94a8926247feeb4474c212578f4070e7ddb70c9472719ab5199898415fcbf6ab",
+          "questions_sha256": "03c79ddc3eeb70f7c764fceff230b1fc91ce25985499f8fc18b9c969987b92e7",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "94a8926247feeb4474c212578f4070e7ddb70c9472719ab5199898415fcbf6ab",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "4ca4e67cf151f0ce1875b622e1c77f8faa2e5a1e52afe8de1bbd6bb03d533d7b",
+                "packet_sha256": "94a8926247feeb4474c212578f4070e7ddb70c9472719ab5199898415fcbf6ab",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-11-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-011.json"
+        }
+      },
+      {
+        "id": "contract-012",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-12-a",
+              "invoice_id": "opaque-doc-12",
+              "amount_minor": 73000
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "22a75367e85e3f07a9086ce8c5211c5a67b170b01f6fe80d4246e0c5dd96b835",
+          "questions_sha256": "5163ae89ac2fad2feea1a4687c4f0a1fed91a5a53f21d78097e6f969ebc5d6eb",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "22a75367e85e3f07a9086ce8c5211c5a67b170b01f6fe80d4246e0c5dd96b835",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "7f3e4679ac263d8548687b9f95ab23d8af286ef8726a3cbecc9bb6fe44aa2d01",
+                "packet_sha256": "22a75367e85e3f07a9086ce8c5211c5a67b170b01f6fe80d4246e0c5dd96b835",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "64b1dd4657d63ae7ce5bc4ac8e02db34a777b01cceea21bcbb1e7a88d9b87e58",
+                "packet_sha256": "22a75367e85e3f07a9086ce8c5211c5a67b170b01f6fe80d4246e0c5dd96b835",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "bdc160971eb12cc92e883b315750d39fbedd64ee36f17ab5740513da360e6cbe",
+                "packet_sha256": "22a75367e85e3f07a9086ce8c5211c5a67b170b01f6fe80d4246e0c5dd96b835",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_processor",
+                "question_sha256": "7d2323847f5f2917bc74acaaea025eb5210d193a1241935aa0660872cfe4b23c",
+                "packet_sha256": "22a75367e85e3f07a9086ce8c5211c5a67b170b01f6fe80d4246e0c5dd96b835",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_reference",
+                "question_sha256": "b1c6e41128630cc7d8ba7f91dc3b5a8b495b2cfda840b97f0c3ecf1b8e8eb3ad",
+                "packet_sha256": "22a75367e85e3f07a9086ce8c5211c5a67b170b01f6fe80d4246e0c5dd96b835",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "remittance-source-1",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-12-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-12-a",
+                "invoice_id": "opaque-doc-12",
+                "amount_minor": 73000,
+                "currency": "GBP",
+                "evidence_source_ids": [
+                  "remittance-source-1"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-012.json"
+        }
+      },
+      {
+        "id": "contract-013",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-13-a",
+              "invoice_id": "opaque-doc-13",
+              "amount_minor": 38100
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "a2ba95a9db6cc5dbb98aa5a5320222aa193fdd528cc3bd51d23a2dda2a39b31d",
+          "questions_sha256": "ce17669c8c15cf59e5029bb07d60984011774f689485525405c4b70a9cf2cbef",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "a2ba95a9db6cc5dbb98aa5a5320222aa193fdd528cc3bd51d23a2dda2a39b31d",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "79aac55f028c83a72ba474a79d8c57a9cc34650828ab332ba381833ab0317558",
+                "packet_sha256": "a2ba95a9db6cc5dbb98aa5a5320222aa193fdd528cc3bd51d23a2dda2a39b31d",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "e43ac83701c57f12ed1ebca9c7fd7d6c4f15ba560d636b80b5658650bb452c41",
+                "packet_sha256": "a2ba95a9db6cc5dbb98aa5a5320222aa193fdd528cc3bd51d23a2dda2a39b31d",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "9014b7e116cf467e46b62fe914e6bfde00e3bdeb7643cc4151988d9400e7f663",
+                "packet_sha256": "a2ba95a9db6cc5dbb98aa5a5320222aa193fdd528cc3bd51d23a2dda2a39b31d",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_reference",
+                "question_sha256": "5c5bcb7b7d670e3db6e5f9d8faf873757a74a46c5235171c46eb1646fa37fb92",
+                "packet_sha256": "a2ba95a9db6cc5dbb98aa5a5320222aa193fdd528cc3bd51d23a2dda2a39b31d",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-13-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-13-a",
+                "invoice_id": "opaque-doc-13",
+                "amount_minor": 38100,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "bank-source-1"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-013.json"
+        }
+      },
+      {
+        "id": "contract-014",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "not_admitted",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "491cfb48fbf55aef9041d4c9b71325572b9ea0375724dc9fdf9c0e23272a64c5",
+          "questions_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "491cfb48fbf55aef9041d4c9b71325572b9ea0375724dc9fdf9c0e23272a64c5",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [],
+            "assumed_synthetic_sources": [
+              "allocation-source-opaque-match-route-014",
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-14-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "not_admitted",
+            "reason": "invoice_already_allocated",
+            "proposals": [],
+            "dependencies": [],
+            "admission_basis": [
+              "allocation-source-opaque-match-route-014"
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-014.json"
+        }
+      },
+      {
+        "id": "contract-015",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-15-b",
+              "invoice_id": "opaque-doc-15",
+              "amount_minor": 60000
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "6d3d8b3834a497708918f143e94997825ac6acbd7973ae89b490c90c06080794",
+          "questions_sha256": "cef2f85eb9c8c1c7aae172c8551db5a221eed055a06884af950a8b178c09c6ee",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "6d3d8b3834a497708918f143e94997825ac6acbd7973ae89b490c90c06080794",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_2_exclusion",
+                "question_sha256": "fdba365a8509270b307a14c8111ffbba5623e5f95e53cf52ec0744f994ee6a9b",
+                "packet_sha256": "6d3d8b3834a497708918f143e94997825ac6acbd7973ae89b490c90c06080794",
+                "action_id": "link_candidate_2",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_2_obligation",
+                "question_sha256": "04e4924b965608dc22cd24ab9340f8c8b90ce9eab5a00295a5d30e26f0413c02",
+                "packet_sha256": "6d3d8b3834a497708918f143e94997825ac6acbd7973ae89b490c90c06080794",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_counterparty",
+                "question_sha256": "c7d0bc55ee8c8b3078ecda91914c30be10512968501767ffb75a17a4e16197cd",
+                "packet_sha256": "6d3d8b3834a497708918f143e94997825ac6acbd7973ae89b490c90c06080794",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_reference",
+                "question_sha256": "9c4dc5f874bda44fd07d8162da199e10836a6f0bd4e87688ad380f6ebeb14115",
+                "packet_sha256": "6d3d8b3834a497708918f143e94997825ac6acbd7973ae89b490c90c06080794",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "allocation-source-opaque-match-route-015",
+              "bank-source-1",
+              "bank-source-2",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-15-a",
+                "disposition": "not_completed_by_offline_contract"
+              },
+              {
+                "source_id": "opaque-tx-15-b",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_2",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-15-b",
+                "invoice_id": "opaque-doc-15",
+                "amount_minor": 60000,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "bank-source-2"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-015.json"
+        }
+      },
+      {
+        "id": "contract-016",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "8d8e00f321f112e98075dd931cd79ad4488313bfc6b6d1ebdbaaa087b5a88892",
+          "questions_sha256": "4af42e18e671018bc38384c58be7362c2f646743477f1068e5e5c6285392a5e7",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "8d8e00f321f112e98075dd931cd79ad4488313bfc6b6d1ebdbaaa087b5a88892",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "5e4fdbdcfe057316f3fc3433bff48b71ace5ab48e555595fbdb59210633e2314",
+                "packet_sha256": "8d8e00f321f112e98075dd931cd79ad4488313bfc6b6d1ebdbaaa087b5a88892",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-16-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-016.json"
+        }
+      },
+      {
+        "id": "contract-017",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "unresolved_research",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "5e4538065a4eb2d8da64afd8f553d771d5156ba40933983055675088696f5fc0",
+          "questions_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "5e4538065a4eb2d8da64afd8f553d771d5156ba40933983055675088696f5fc0",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-17-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "unresolved_research",
+            "reason": "no_link_does_not_establish_customer_obligation",
+            "proposals": [],
+            "dependencies": []
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-017.json"
+        }
+      },
+      {
+        "id": "contract-018",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "unresolved_research",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "a04de03910bbd367861d90588c9abbdfa2369e02dbbafa00e59acb91d8d3eae8",
+          "questions_sha256": "78b189f63a5ee4ada380ec603291b7e06d5261d6ef7371970d71e7262259a10d",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "a04de03910bbd367861d90588c9abbdfa2369e02dbbafa00e59acb91d8d3eae8",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "2aad9f9e2cae4c30761344fe502d6aaaf2e84b1a3cb1eb561e10d09c1bf936d7",
+                "packet_sha256": "a04de03910bbd367861d90588c9abbdfa2369e02dbbafa00e59acb91d8d3eae8",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-18-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "unresolved_research",
+            "reason": "no_link_does_not_establish_customer_obligation",
+            "proposals": [],
+            "dependencies": []
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-018.json"
+        }
+      },
+      {
+        "id": "contract-019",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-19-a",
+              "invoice_id": "opaque-doc-19",
+              "amount_minor": 60500
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "8dddc861d3986b7d18efee3582072a687ddbfbf55e34b7771b3a17061a0ca3c1",
+          "questions_sha256": "666e09a78ab9133f4439f390eb1033ecdd214c100c989a3c465a1ed43d04c05a",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "8dddc861d3986b7d18efee3582072a687ddbfbf55e34b7771b3a17061a0ca3c1",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "34d12e5f855651a5890339a6c3d3131373b12372dfd5bdfeaaaef70745fc6c42",
+                "packet_sha256": "8dddc861d3986b7d18efee3582072a687ddbfbf55e34b7771b3a17061a0ca3c1",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "f2a9fc3afe138eb3be0c5af0063736673bea45a4b7307c5073cf63bda9a72fab",
+                "packet_sha256": "8dddc861d3986b7d18efee3582072a687ddbfbf55e34b7771b3a17061a0ca3c1",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "a4578498f49c88d12a9a3ec528389fd17f722b58e18d3eaa6f0b7ef6938bdcac",
+                "packet_sha256": "8dddc861d3986b7d18efee3582072a687ddbfbf55e34b7771b3a17061a0ca3c1",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_reference",
+                "question_sha256": "5b9cc670d06c7ac018d970b6df3e72441cf62f00bdcd907b8189a35be2d8b4b0",
+                "packet_sha256": "8dddc861d3986b7d18efee3582072a687ddbfbf55e34b7771b3a17061a0ca3c1",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "remittance-source-1",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-19-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-19-a",
+                "invoice_id": "opaque-doc-19",
+                "amount_minor": 60500,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "remittance-source-1"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-019.json"
+        }
+      },
+      {
+        "id": "contract-020",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "unresolved_research",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "7fac643d9414a22e1a95a471fd840b32ece63645bf63cc161fa32e0c914e5ac1",
+          "questions_sha256": "8db7440114372dede102968a8de6b22c7cee3545d0bf8e8a1c4b783dccbe6007",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "7fac643d9414a22e1a95a471fd840b32ece63645bf63cc161fa32e0c914e5ac1",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-20-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "unresolved_research",
+            "reason": "no_link_does_not_establish_customer_obligation",
+            "proposals": [],
+            "dependencies": []
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-020.json"
+        }
+      },
+      {
+        "id": "contract-021",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-21-a",
+              "invoice_id": "opaque-doc-21",
+              "amount_minor": 44400
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "93520768fa8f1e20bee58a856ba544f7e11f53b03b67c482a01729fe047031d7",
+          "questions_sha256": "adf919d9fdc0bac92f68945cf15c1a2172b8e1866fa9f6468fb4b9887c7371c1",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "93520768fa8f1e20bee58a856ba544f7e11f53b03b67c482a01729fe047031d7",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "9a1ecd04c9289f9d42bf97778b92567529243974b1b241f0b9ccc3464a60362f",
+                "packet_sha256": "93520768fa8f1e20bee58a856ba544f7e11f53b03b67c482a01729fe047031d7",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "4450d2c80a92323216b8b82b49eb4d763106e6b3ed77d797e95fe90cd2e3c173",
+                "packet_sha256": "93520768fa8f1e20bee58a856ba544f7e11f53b03b67c482a01729fe047031d7",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "8cd9ce635fbc43f1a41d75f42b034915fcedf7d35c3578e364e9c7c3045c1c5c",
+                "packet_sha256": "93520768fa8f1e20bee58a856ba544f7e11f53b03b67c482a01729fe047031d7",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_reference",
+                "question_sha256": "25ab1ff5938d2e77919504c7b35c22f006a8b6a9cec056d182d37f3c89f5a9a1",
+                "packet_sha256": "93520768fa8f1e20bee58a856ba544f7e11f53b03b67c482a01729fe047031d7",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-21-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-21-a",
+                "invoice_id": "opaque-doc-21",
+                "amount_minor": 44400,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "bank-source-1"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-021.json"
+        }
+      },
+      {
+        "id": "contract-022",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-22-b",
+              "invoice_id": "opaque-doc-22",
+              "amount_minor": 32700
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "13e9307db8204e1ada65c1761494af6b47caedbf40f48490d472b38925b2471e",
+          "questions_sha256": "962bd01060b4a6142e2efc92fe9329604e94786f2d544e8046e2755815cf8683",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "13e9307db8204e1ada65c1761494af6b47caedbf40f48490d472b38925b2471e",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_2_exclusion",
+                "question_sha256": "d3da78d0da80d665de1f84bf91d07a44899bc570949533de197beb7558d3b7c0",
+                "packet_sha256": "13e9307db8204e1ada65c1761494af6b47caedbf40f48490d472b38925b2471e",
+                "action_id": "link_candidate_2",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_2_obligation",
+                "question_sha256": "df3b93d80215a5bd09b020a5cfe80e700e0fb6293214a54a0a6dafc4f49c73e2",
+                "packet_sha256": "13e9307db8204e1ada65c1761494af6b47caedbf40f48490d472b38925b2471e",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_counterparty",
+                "question_sha256": "6b9499975242ace7c1acc07d215ce84c73ea6e5907c5158e62d54a0b68268e32",
+                "packet_sha256": "13e9307db8204e1ada65c1761494af6b47caedbf40f48490d472b38925b2471e",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_reference",
+                "question_sha256": "d7763a8f994bf6168d908c52ab0767ed0ade1a1fc1eabfeda647223e6c4b7a55",
+                "packet_sha256": "13e9307db8204e1ada65c1761494af6b47caedbf40f48490d472b38925b2471e",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "allocation-source-opaque-match-route-022",
+              "bank-source-1",
+              "bank-source-2",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-22-a",
+                "disposition": "not_completed_by_offline_contract"
+              },
+              {
+                "source_id": "opaque-tx-22-b",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_2",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-22-b",
+                "invoice_id": "opaque-doc-22",
+                "amount_minor": 32700,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "bank-source-2"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-022.json"
+        }
+      },
+      {
+        "id": "contract-023",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "unresolved_research",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "a9d613b42390e881f73b106c23828e3e652b9afe783f3869c6356cba472ff6a9",
+          "questions_sha256": "5fc0fd7d2826b2014d9278a2d69acc6c880a68268dea8ad3632574d37f29ae86",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "a9d613b42390e881f73b106c23828e3e652b9afe783f3869c6356cba472ff6a9",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "54f3057fa89e5e0787e25821fa3d3c5c3746df7eaf942bc867ad36edce3347c8",
+                "packet_sha256": "a9d613b42390e881f73b106c23828e3e652b9afe783f3869c6356cba472ff6a9",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-23-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "unresolved_research",
+            "reason": "no_link_does_not_establish_customer_obligation",
+            "proposals": [],
+            "dependencies": []
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-023.json"
+        }
+      },
+      {
+        "id": "contract-024",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "unresolved_research",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "331f0dac4f84a0a0aabacfa6cad4ef3064be865b04fa41bea0faaa9f905f7fd0",
+          "questions_sha256": "8edec6fb2c0ab861d001dc120eda00acfbead801f5e5cf00e8c9714c526a032f",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "331f0dac4f84a0a0aabacfa6cad4ef3064be865b04fa41bea0faaa9f905f7fd0",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "62bb00569756e9619fb0ca059e35e11dcab536e43e1bdccd4311447dd03558eb",
+                "packet_sha256": "331f0dac4f84a0a0aabacfa6cad4ef3064be865b04fa41bea0faaa9f905f7fd0",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-24-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "unresolved_research",
+            "reason": "no_link_does_not_establish_customer_obligation",
+            "proposals": [],
+            "dependencies": []
+          },
+          "label_status": "provisional",
+          "source_family": "data/evals/fixtures/jev-routed/route-024.json"
+        }
+      },
+      {
+        "id": "contract-025",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-16-a",
+              "invoice_id": "opaque-doc-16",
+              "amount_minor": 27800
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "6d3e5781a625ebc8716096bca072e52e355e5f020b05a693df42bb383f6b3c3e",
+          "questions_sha256": "21aedc7603fbb3e3b32a08d9be15224f065991111f84eaa440a954a217c4c13b",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "6d3e5781a625ebc8716096bca072e52e355e5f020b05a693df42bb383f6b3c3e",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "38ba6567e15ae58accda19f4ff5ed4c4f8343adae4ec306b7d52a07279c2c40a",
+                "packet_sha256": "6d3e5781a625ebc8716096bca072e52e355e5f020b05a693df42bb383f6b3c3e",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "6b72e2b2091c00f5fc2cd88f318eacf54ab45d2933ac5146644641fc4fa72787",
+                "packet_sha256": "6d3e5781a625ebc8716096bca072e52e355e5f020b05a693df42bb383f6b3c3e",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "bea0978134f002d977d0ecff9f72a101dc69adb4a6f134109ebf9b8ec8f2016d",
+                "packet_sha256": "6d3e5781a625ebc8716096bca072e52e355e5f020b05a693df42bb383f6b3c3e",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "receipt-authorization-opaque-tx-16-a",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-16-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-16-a",
+                "invoice_id": "opaque-doc-16",
+                "amount_minor": 27800,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "receipt-authorization-opaque-tx-16-a"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "authored-reference-free"
+        }
+      },
+      {
+        "id": "contract-026",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "79fe13e670dcd3b600cdc6b7ab01a889877536e1d3540bffb198ddfaacb57f7c",
+          "questions_sha256": "915d5a8c1d3c81e3021abf14eb01d35dec5ee5aa41699be7869b9f831b1edb18",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "79fe13e670dcd3b600cdc6b7ab01a889877536e1d3540bffb198ddfaacb57f7c",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "da1031c1958cb74fb4b8bd2481d74360241c167b8364075c727130425d2ffc67",
+                "packet_sha256": "79fe13e670dcd3b600cdc6b7ab01a889877536e1d3540bffb198ddfaacb57f7c",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-16-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "authored-reference-free"
+        }
+      },
+      {
+        "id": "contract-027",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-12-a",
+              "invoice_id": "opaque-doc-12",
+              "amount_minor": 73000
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "3da19b7c6cbe0e719b5f073291906b5be0f16a47d525f1471279edd89b5dc331",
+          "questions_sha256": "784180e737b62562209a76e85a9ab47979948c4482a29e0a1ea547dcba60d9fe",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "3da19b7c6cbe0e719b5f073291906b5be0f16a47d525f1471279edd89b5dc331",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "6602b1e6a0db36539eacf39c79fadf0dc8f03fe5f38daacc92b3b01ff0fb4bec",
+                "packet_sha256": "3da19b7c6cbe0e719b5f073291906b5be0f16a47d525f1471279edd89b5dc331",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "07350740a6a04651986614ac930e57a98d840d9a14ea8bcf91d083a4270643a4",
+                "packet_sha256": "3da19b7c6cbe0e719b5f073291906b5be0f16a47d525f1471279edd89b5dc331",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "4a87da955da991eec609b7fa3419e1d106e86e5f1f4d03ba150e94df6e5dce20",
+                "packet_sha256": "3da19b7c6cbe0e719b5f073291906b5be0f16a47d525f1471279edd89b5dc331",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_processor",
+                "question_sha256": "84ad5fae93d0ed35db72138865308db4061de3e6d13843c8d55ebc0de05a17c9",
+                "packet_sha256": "3da19b7c6cbe0e719b5f073291906b5be0f16a47d525f1471279edd89b5dc331",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_reference",
+                "question_sha256": "2c55ce1be6c8a377243844fab5f89988a921907511c4b684bf595cccaef55938",
+                "packet_sha256": "3da19b7c6cbe0e719b5f073291906b5be0f16a47d525f1471279edd89b5dc331",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "remittance-source-1",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-12-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-12-a",
+                "invoice_id": "opaque-doc-12",
+                "amount_minor": 73000,
+                "currency": "GBP",
+                "evidence_source_ids": [
+                  "remittance-source-1"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "authored-remittance-duplicate"
+        }
+      },
+      {
+        "id": "contract-028",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "a4071a0cef350b65fec8502c44eea72dbd7ffdae4baee629284278297588e89f",
+          "questions_sha256": "33651f58fcbc0798c69e10a5fc3aa955fba1dd6ddef9c4506c6a1c43f68fbf04",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "a4071a0cef350b65fec8502c44eea72dbd7ffdae4baee629284278297588e89f",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "d2d7d5b537177209bc519a9b282bd3e0cb3f7bd3f46053554d8349be9da9a553",
+                "packet_sha256": "a4071a0cef350b65fec8502c44eea72dbd7ffdae4baee629284278297588e89f",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-12-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "affirmative_payment_obligation_evidence_missing",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "authored-remittance-removed"
+        }
+      },
+      {
+        "id": "contract-029",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "59d5869a240d6325ead2380bfc16d3202c1ca9f391923b9c199e0f05880062d4",
+          "questions_sha256": "e77456b531f153a3562e03eae5c4eeb139a3060f8a8b74e681b2be3c64c010ef",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "59d5869a240d6325ead2380bfc16d3202c1ca9f391923b9c199e0f05880062d4",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "conflicting-remittance",
+              "invoice-source",
+              "other-invoice-source",
+              "remittance-source-1",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-12-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "conflicting_allocations",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "authored-conflicting-remittance"
+        }
+      },
+      {
+        "id": "contract-030",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "strong_reasoning",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "901b8379d770d0d31791e40e69f840351298ce137a77c58889525363f08107e4",
+          "questions_sha256": "5fbdb33c2974929c5f83d4739dc5ffeb56bf3216d6b4f6174ff48dfc2ebc53f1",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "901b8379d770d0d31791e40e69f840351298ce137a77c58889525363f08107e4",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "e95a040abfebeb2e6f1ed55945ef3e63d1d7185816b52966d8e27b434b87a6a8",
+                "packet_sha256": "901b8379d770d0d31791e40e69f840351298ce137a77c58889525363f08107e4",
+                "action_id": "link_candidate_1",
+                "status": "not_established",
+                "confidence": 1,
+                "citations": []
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "c2870ef527a443a3f5445cdc94ac62a49af9ae3a24058e52ac621ae817ac714e",
+                "packet_sha256": "901b8379d770d0d31791e40e69f840351298ce137a77c58889525363f08107e4",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "repeated-ref-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-5-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "strong_reasoning",
+            "reason": "unresolved_relevant_relationships",
+            "proposals": [],
+            "dependencies": [
+              {
+                "kind": "strong_interpretation",
+                "action_id": "link_candidate_1",
+                "candidate": "candidate_1",
+                "reason": "repeated_reference_requires_specific_evidence",
+                "question_ids": [
+                  "link_candidate_1_counterparty",
+                  "link_candidate_1_processor",
+                  "link_candidate_1_reference",
+                  "link_candidate_1_obligation",
+                  "link_candidate_1_exclusion"
+                ]
+              }
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "authored-repeated-reference"
+        }
+      },
+      {
+        "id": "contract-031",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "not_admitted",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "ef58d079cde6c763d9c952a52541d164d06da36844f1211756c74a4ebad95f9d",
+          "questions_sha256": "fb8c9fbd6f1e270a9a736086a4c76ed601f00cd8c86dc44d6f007ecb1bc63d50",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "ef58d079cde6c763d9c952a52541d164d06da36844f1211756c74a4ebad95f9d",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-16-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "not_admitted",
+            "reason": "invoice_not_due",
+            "proposals": [],
+            "dependencies": [],
+            "admission_basis": [
+              "work-source"
+            ]
+          },
+          "label_status": "provisional",
+          "source_family": "authored-not-due"
+        }
+      },
+      {
+        "id": "contract-032",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "customer_question",
+          "proposals": []
+        },
+        "actual": {
+          "packet_sha256": "c87fecaaa479f8d5bbb25b5e277e98d84c84673dba0b780e19653df230c2d43e",
+          "questions_sha256": "e278efb6ae79719c0350ee1dd6c9fe9389cc92a56d0028f996df5cabf881675b",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "c87fecaaa479f8d5bbb25b5e277e98d84c84673dba0b780e19653df230c2d43e",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "85a5c7b07ae3f11e049d0b1d13c504fe24f477ec3e0b404d8750b18aafaf264c",
+                "packet_sha256": "c87fecaaa479f8d5bbb25b5e277e98d84c84673dba0b780e19653df230c2d43e",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "ask_fact",
+                "question_sha256": "9a5444054fd72604bbae45abfd35003e46a0bd11dc3a312a503bcde049f748ee",
+                "packet_sha256": "c87fecaaa479f8d5bbb25b5e277e98d84c84673dba0b780e19653df230c2d43e",
+                "action_id": "ask_customer",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "customer-source",
+              "invoice-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-7-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "customer_question",
+            "reason": "explicit_customer_only_fact",
+            "proposals": [],
+            "dependencies": [],
+            "question_specification": {
+              "work_item_id": "work-1",
+              "fact": "Whether this transfer was for the customer’s private purchase or the business.",
+              "question": "Was this transfer for a private purchase or for the business?",
+              "customer_id": "fixture-customer",
+              "why_customer_only": "The customer explicitly reports that the unrecorded purpose is known only to them.",
+              "why_local_cannot_supply": "The declared source inventory and customer statement contain no record of the purpose.",
+              "basis_source_ids": [
+                "customer-source",
+                "bank-source-1"
+              ],
+              "retrieval_scope_id": "fixture-manifest",
+              "delivery_required": true,
+              "freshness_check_required": true
+            }
+          },
+          "label_status": "provisional",
+          "source_family": "authored-customer-fact"
+        }
+      },
+      {
+        "id": "contract-033",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-16-a",
+              "invoice_id": "opaque-doc-16",
+              "amount_minor": 60000
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "a5a6416c330abe800e36c18117e032729f5b31197872417f84d2fb5812473947",
+          "questions_sha256": "e45cef2ffd2ced192d3dcb36343eec501f7b695d5234436ae9df8a67905255f0",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "a5a6416c330abe800e36c18117e032729f5b31197872417f84d2fb5812473947",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "712716f487f059d79e177b4bd19096cd37782c8df92736e8eb24dcc316261018",
+                "packet_sha256": "a5a6416c330abe800e36c18117e032729f5b31197872417f84d2fb5812473947",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "a6f0217bc5f5c811f3d5b800edbb5906e0f5b2521197384c4c45a10248877ca4",
+                "packet_sha256": "a5a6416c330abe800e36c18117e032729f5b31197872417f84d2fb5812473947",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "89aac062bc3777a953601f1fcf21abcd874d7453211cb6aba6c1ee2be2602dba",
+                "packet_sha256": "a5a6416c330abe800e36c18117e032729f5b31197872417f84d2fb5812473947",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "receipt-authorization-opaque-tx-16-a",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-16-a",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-16-a",
+                "invoice_id": "opaque-doc-16",
+                "amount_minor": 60000,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "receipt-authorization-opaque-tx-16-a"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 40000
+          },
+          "label_status": "provisional",
+          "source_family": "authored-partial"
+        }
+      },
+      {
+        "id": "contract-034",
+        "title": null,
+        "status": "pass",
+        "score": {
+          "status": "pass",
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "expectedSize": 1,
+          "actualSize": 1
+        },
+        "expected": {
+          "route": "supported_proposal",
+          "proposals": [
+            {
+              "transaction_id": "opaque-tx-16-a",
+              "invoice_id": "opaque-doc-16",
+              "amount_minor": 60000
+            },
+            {
+              "transaction_id": "second-partial",
+              "invoice_id": "opaque-doc-16",
+              "amount_minor": 40000
+            }
+          ]
+        },
+        "actual": {
+          "packet_sha256": "ddfddaceb9d11b2e6d68c6b2842c88eeaa8b208be3babd4f12e27ec4c6a6903e",
+          "questions_sha256": "5453b9529b5f63bb4c249b16518aef6eda0424042483a3af3a2b81ff49d5cef6",
+          "decision": {
+            "version": "jev-evidence-action-v1",
+            "scope": "offline_research",
+            "packet_sha256": "ddfddaceb9d11b2e6d68c6b2842c88eeaa8b208be3babd4f12e27ec4c6a6903e",
+            "production_terminal": false,
+            "writer_authority": false,
+            "proposal_applied": false,
+            "question_delivered": false,
+            "consumed_answers": [
+              {
+                "question_id": "link_candidate_1_exclusion",
+                "question_sha256": "135094fe736df6c390d56faf3d9cc6cfa60e1c248730b35df06cdf8d7bc04b4e",
+                "packet_sha256": "ddfddaceb9d11b2e6d68c6b2842c88eeaa8b208be3babd4f12e27ec4c6a6903e",
+                "action_id": "link_candidate_1",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_obligation",
+                "question_sha256": "d8b4481e685b5c9ef7a6e6eefd9e9235583ce08a840c995f1dad177d6c3c89de",
+                "packet_sha256": "ddfddaceb9d11b2e6d68c6b2842c88eeaa8b208be3babd4f12e27ec4c6a6903e",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_1_counterparty",
+                "question_sha256": "a3e87dab0b4da905506816313811f5612d18761fc251dc9670454a55894ae202",
+                "packet_sha256": "ddfddaceb9d11b2e6d68c6b2842c88eeaa8b208be3babd4f12e27ec4c6a6903e",
+                "action_id": "link_candidate_1",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_1",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_3",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_exclusion",
+                "question_sha256": "5ccd7ec95e5d98062fb6f20290f855cd0f75a0cd197981cb9bd4ffaecf04a43b",
+                "packet_sha256": "ddfddaceb9d11b2e6d68c6b2842c88eeaa8b208be3babd4f12e27ec4c6a6903e",
+                "action_id": "link_candidate_2",
+                "status": "contradicted",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_5",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_obligation",
+                "question_sha256": "7f93f9c4d8aba5c6cf4826051d81da0c698e7e02fe54f8ef326a5571e27a2639",
+                "packet_sha256": "ddfddaceb9d11b2e6d68c6b2842c88eeaa8b208be3babd4f12e27ec4c6a6903e",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_5",
+                    "version": "1"
+                  }
+                ]
+              },
+              {
+                "question_id": "link_candidate_2_counterparty",
+                "question_sha256": "e4dbb4d41b11f9b5e8f2ca7b3ef347b6518d1c530e9c0ad39e7c9dd1b5ccca82",
+                "packet_sha256": "ddfddaceb9d11b2e6d68c6b2842c88eeaa8b208be3babd4f12e27ec4c6a6903e",
+                "action_id": "link_candidate_2",
+                "status": "supported",
+                "confidence": 1,
+                "citations": [
+                  {
+                    "source_handle": "source_2",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_4",
+                    "version": "1"
+                  },
+                  {
+                    "source_handle": "source_5",
+                    "version": "1"
+                  }
+                ]
+              }
+            ],
+            "assumed_synthetic_sources": [
+              "bank-source-1",
+              "invoice-source",
+              "receipt-authorization-opaque-tx-16-a",
+              "receipt-authorization-second-partial",
+              "second-bank-source",
+              "work-source"
+            ],
+            "remaining_work": [
+              {
+                "source_id": "opaque-tx-16-a",
+                "disposition": "not_completed_by_offline_contract"
+              },
+              {
+                "source_id": "second-partial",
+                "disposition": "not_completed_by_offline_contract"
+              }
+            ],
+            "route": "supported_proposal",
+            "reason": "evidence_path_satisfied",
+            "proposals": [
+              {
+                "action_id": "link_candidate_1",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "opaque-tx-16-a",
+                "invoice_id": "opaque-doc-16",
+                "amount_minor": 60000,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "receipt-authorization-opaque-tx-16-a"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              },
+              {
+                "action_id": "link_candidate_2",
+                "kind": "allocate_payment_to_invoice",
+                "transaction_id": "second-partial",
+                "invoice_id": "opaque-doc-16",
+                "amount_minor": 40000,
+                "currency": "EUR",
+                "evidence_source_ids": [
+                  "receipt-authorization-second-partial"
+                ],
+                "evidence_provenance": [
+                  "assumed_synthetic"
+                ],
+                "authority_check_required": true
+              }
+            ],
+            "dependencies": [],
+            "remaining_if_applied_minor": 0
+          },
+          "label_status": "provisional",
+          "source_family": "authored-split"
+        }
+      }
+    ]
+  }
+}

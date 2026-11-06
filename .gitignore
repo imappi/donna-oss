@@ -1,0 +1,16 @@
+.donna/
+data/private/
+data/firms/private/
+src/private/
+node_modules
+dist/
+# Desktop packaging: the staged PG payload (~50MB of binaries, machine-built
+# by scripts/desktop-stage-pg.mjs) and electron-builder output never commit.
+desktop/vendor/
+dist-desktop/
+desktop/build-identity.json
+.DS_Store
+*.env
+.env.*
+.vercel
+backups/

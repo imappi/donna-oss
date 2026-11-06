@@ -1,0 +1,240 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/arabic-pint/evidence-certification",
+  "seed": "ae-arabic-pint-evidence-v1",
+  "effectiveDate": "2026-09-01",
+  "manifest": {
+    "manifestVersion": "ae.arabic-pint-evidence.v1",
+    "capabilityId": "certify_ae_arabic_pint_evidence",
+    "jurisdiction": "AE",
+    "entityType": "ae-llc",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_arabic_pint_evidence",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": [
+      "language_invariant_billing_economics",
+      "mixed_direction_native_pdf",
+      "pint_invoice_and_credit_note",
+      "structured_near_miss_refusal",
+      "unstructured_lookalike_boundary"
+    ],
+    "permittedActions": ["evaluate_evidence", "render_send_inert_artifact"],
+    "maximumAuthority": "evidence_only_no_send",
+    "fallback": {
+      "terminalState": "blocked",
+      "responsibleActor": "owner_or_firm",
+      "nextPermittedAction": "request_valid_structured_payload"
+    },
+    "protectedFailures": [
+      "digit_system_alters_amount_or_date",
+      "bidi_control_alters_identifier",
+      "copied_visual_order_used_as_logical",
+      "page_order_reversed",
+      "missing_font_or_shaping_receipt",
+      "invoice_credit_lane_swapped",
+      "malformed_structured_payload_promoted",
+      "pdf_image_or_email_promoted_to_pint",
+      "raw_payload_hash_mismatch",
+      "language_changes_accounting",
+      "cross_artifact_identity_leak"
+    ]
+  },
+  "policySources": [
+    {
+      "id": "policy/ae-vat-designated-zones",
+      "authority": "Federal Tax Authority",
+      "title": "Designated Zones VAT Guide VATGDZ1",
+      "url": "https://tax.gov.ae/DownloadOpenTextFile?fileUrl=en%2FVAT_VAT_Guides%2FDesignated_Zones_VAT_Guide%2FDesignated_Zones_VAT_Guide_EN.pdf",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-09-01"
+    },
+    {
+      "id": "policy/ae-mof-einvoicing",
+      "authority": "UAE Ministry of Finance",
+      "title": "UAE eInvoicing portal — structured eInvoice boundary",
+      "url": "https://mof.gov.ae/en/about-us/initiatives/einvoicing/",
+      "effectiveFrom": "2025-01-01",
+      "asOf": "2026-09-01"
+    },
+    {
+      "id": "policy/pint-ae-1.0.4",
+      "authority": "OpenPeppol UAE Peppol Authority",
+      "title": "PINT AE 1.0.4 Invoice and CreditNote transactions",
+      "url": "https://docs.peppol.eu/poac/ae/pint-ae/",
+      "effectiveFrom": "2026-06-02",
+      "asOf": "2026-09-01"
+    },
+    {
+      "id": "policy/unicode-uax9-51",
+      "authority": "Unicode Consortium",
+      "title": "Unicode Standard Annex 9, revision 51",
+      "url": "https://www.unicode.org/reports/tr9/",
+      "effectiveFrom": "2025-08-13",
+      "asOf": "2026-09-01"
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity/ae6-mainland-llc",
+      "kind": "company",
+      "legalForm": "ae-llc",
+      "activeFrom": "2026-01-01",
+      "facts": {
+        "freeZoneStanding": [{
+          "standing": "mainland",
+          "licensingAuthority": "Dubai Department of Economy and Tourism",
+          "emirate": "DXB",
+          "effectiveFrom": "2026-01-01",
+          "effectiveTo": null,
+          "sourceArtifactId": "artifact/ae6-trade-licence"
+        }],
+        "designatedZone": [{
+          "status": "not_designated",
+          "zoneName": null,
+          "effectiveFrom": "2026-01-01",
+          "effectiveTo": null,
+          "sourceArtifactId": "artifact/ae6-zone-check",
+          "policySourceId": "policy/ae-vat-designated-zones"
+        }],
+        "vatRegistration": [{
+          "status": "registered",
+          "registrationSubject": "legal_entity",
+          "registrationSubjectId": "entity/ae6-mainland-llc",
+          "trn": "100000000000003",
+          "registrationBasis": "mandatory",
+          "returnCadence": "quarter",
+          "effectiveFrom": "2026-01-01",
+          "effectiveTo": null,
+          "sourceArtifactId": "artifact/ae6-vat-registration"
+        }],
+        "ftaVatPeriods": [{
+          "periodKey": "2026-Q3",
+          "startsOn": "2026-07-01",
+          "endsOn": "2026-09-30",
+          "dueOn": "2026-10-28",
+          "sourceArtifactId": "artifact/ae6-fta-period"
+        }]
+      }
+    }
+  ],
+  "events": [],
+  "observations": [
+    {"id":"observation/ae6-trade","artifactId":"artifact/ae6-trade-licence","observedAt":"2026-01-02"},
+    {"id":"observation/ae6-zone","artifactId":"artifact/ae6-zone-check","observedAt":"2026-01-02"},
+    {"id":"observation/ae6-registration","artifactId":"artifact/ae6-vat-registration","observedAt":"2026-01-03"},
+    {"id":"observation/ae6-period","artifactId":"artifact/ae6-fta-period","observedAt":"2026-06-15"},
+    {"id":"observation/pint-invoice-en","artifactId":"artifact/pint-invoice-en","observedAt":"2026-08-12"},
+    {"id":"observation/pint-invoice-ar","artifactId":"artifact/pint-invoice-ar","observedAt":"2026-08-12"},
+    {"id":"observation/pint-invoice-bilingual","artifactId":"artifact/pint-invoice-bilingual","observedAt":"2026-08-12"},
+    {"id":"observation/pint-credit-note-ar","artifactId":"artifact/pint-credit-note-ar","observedAt":"2026-08-12"},
+    {"id":"observation/pint-near-miss-customization","artifactId":"artifact/pint-near-miss-customization","observedAt":"2026-08-12"},
+    {"id":"observation/pint-near-miss-footing","artifactId":"artifact/pint-near-miss-footing","observedAt":"2026-08-12"},
+    {"id":"observation/pint-near-miss-mandatory","artifactId":"artifact/pint-near-miss-mandatory","observedAt":"2026-08-12"},
+    {"id":"observation/invoice-lookalike-email","artifactId":"artifact/invoice-lookalike-email","observedAt":"2026-08-12"},
+    {"id":"observation/invoice-scan-en","artifactId":"artifact/invoice-scan-en","observedAt":"2026-08-12"},
+    {"id":"observation/invoice-scan-ar","artifactId":"artifact/invoice-scan-ar","observedAt":"2026-08-12"},
+    {"id":"observation/invoice-scan-bilingual","artifactId":"artifact/invoice-scan-bilingual","observedAt":"2026-08-12"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {"id":"artifact/ae6-trade-licence","kind":"trade_licence","format":"json","trusted":true,"fields":{"legalName":"Gulf Trading LLC"}},
+    {"id":"artifact/ae6-zone-check","kind":"designated_zone_register_extract","format":"json","trusted":true,"fields":{"status":"not_designated"}},
+    {"id":"artifact/ae6-vat-registration","kind":"vat_registration_certificate","format":"json","trusted":true,"fields":{"trn":"100000000000003"}},
+    {"id":"artifact/ae6-fta-period","kind":"emara_tax_period_assignment","format":"json","trusted":true,"fields":{"periodKey":"2026-Q3"}},
+    {"id":"artifact/pint-invoice-en","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/pint-invoice-en.xml"}},
+    {"id":"artifact/pint-invoice-ar","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/pint-invoice-ar.xml"}},
+    {"id":"artifact/pint-invoice-bilingual","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/pint-invoice-bilingual.xml"}},
+    {"id":"artifact/pint-credit-note-ar","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/pint-credit-note-ar.xml"}},
+    {"id":"artifact/pint-near-miss-customization","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/pint-near-miss-customization.xml"}},
+    {"id":"artifact/pint-near-miss-footing","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/pint-near-miss-footing.xml"}},
+    {"id":"artifact/pint-near-miss-mandatory","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/pint-near-miss-mandatory.xml"}},
+    {"id":"artifact/invoice-lookalike-email","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/invoice-lookalike.eml"}},
+    {"id":"artifact/invoice-scan-en","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/invoice-scan-en.svg"}},
+    {"id":"artifact/invoice-scan-ar","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/invoice-scan-ar.svg"}},
+    {"id":"artifact/invoice-scan-bilingual","kind":"billing_evidence","format":"json","trusted":false,"fields":{"rawPath":"data/worlds/ae/artifacts/ae6/invoice-scan-bilingual.svg"}}
+  ],
+  "arabicPintEvidence": {
+    "version": "ae.arabic-pint-evidence.v1",
+    "shippingArabicDeclaration": false,
+    "humanReviewStatus": "deferred_until_preview_alpha",
+    "canonicalEconomics": [
+      {
+        "id": "economics/invoice-1250",
+        "value": {
+          "schema": "ae.canonical-billing-economics.v1",
+          "documentKind": "invoice",
+          "documentNumber": "AE-INV-2026-0042",
+          "typeCode": "380",
+          "issueDate": "2026-08-12",
+          "dueDate": "2026-09-11",
+          "currency": "AED",
+          "taxCurrency": null,
+          "supplierTrn": "100000000000003",
+          "buyerTrn": "100000000000101",
+          "creditNoteReasonCode": null,
+          "precedingInvoiceReferences": [],
+          "lines": [
+            {"linePosition":1,"lineId":"1","quantity":"10.00","unitPrice":"100.00","lineNet":"1000.00","vatCategory":"S","vatRatePercent":"5.00"},
+            {"linePosition":2,"lineId":"2","quantity":"1.00","unitPrice":"200.00","lineNet":"200.00","vatCategory":"Z","vatRatePercent":"0.00"}
+          ],
+          "totals": {"lineTotal":"1200.00","subtotal":"1200.00","vatTotal":"50.00","vatTotalInTaxCurrency":null,"total":"1250.00","payable":"1250.00"},
+          "vatBreakdown": [
+            {"category":"S","ratePercent":"5.00","taxableAmount":"1000.00","taxAmount":"50.00"},
+            {"category":"Z","ratePercent":"0.00","taxableAmount":"200.00","taxAmount":"0.00"}
+          ]
+        }
+      },
+      {
+        "id": "economics/credit-note-525",
+        "value": {
+          "schema": "ae.canonical-billing-economics.v1",
+          "documentKind": "credit_note",
+          "documentNumber": "AE-CN-2026-0007",
+          "typeCode": "381",
+          "issueDate": "2026-08-12",
+          "dueDate": "2026-09-11",
+          "currency": "AED",
+          "taxCurrency": null,
+          "supplierTrn": "100000000000003",
+          "buyerTrn": "100000000000101",
+          "creditNoteReasonCode": "DL8.61.1.A",
+          "precedingInvoiceReferences": ["AE-INV-2026-0042"],
+          "lines": [{"linePosition":1,"lineId":"1","quantity":"-5.00","unitPrice":"100.00","lineNet":"-500.00","vatCategory":"S","vatRatePercent":"5.00"}],
+          "totals": {"lineTotal":"-500.00","subtotal":"-500.00","vatTotal":"-25.00","vatTotalInTaxCurrency":null,"total":"-525.00","payable":"-525.00"},
+          "vatBreakdown": [{"category":"S","ratePercent":"5.00","taxableAmount":"-500.00","taxAmount":"-25.00"}]
+        }
+      }
+    ],
+    "evidenceArtifacts": [
+      {"id":"artifact/pint-invoice-en","rawPath":"data/worlds/ae/artifacts/ae6/pint-invoice-en.xml","rawSha256":"cb3a0dd12b840a3154ab992bc613866e22f78af67592258811e7b5d83774344b","rawByteLength":3138,"contentClass":"structured_xml","mediaType":"application/xml","presentation":"english","digitSystem":"western","expectedLane":"pint_ae_structured","canonicalEconomicId":"economics/invoice-1250","pintExpectation":{"status":"accepted","documentKind":"invoice"}},
+      {"id":"artifact/pint-invoice-ar","rawPath":"data/worlds/ae/artifacts/ae6/pint-invoice-ar.xml","rawSha256":"649ce676b410012b4f1277bd5fb3e29c0e769961457e9f22ed89740047ebbf60","rawByteLength":3033,"contentClass":"structured_xml","mediaType":"application/xml","presentation":"arabic","digitSystem":"western","expectedLane":"pint_ae_structured","canonicalEconomicId":"economics/invoice-1250","pintExpectation":{"status":"accepted","documentKind":"invoice"}},
+      {"id":"artifact/pint-invoice-bilingual","rawPath":"data/worlds/ae/artifacts/ae6/pint-invoice-bilingual.xml","rawSha256":"f50fcfca006e0da947bed72e1ee26c4103618c10dc338fc88dddc0293fa2dfc7","rawByteLength":3085,"contentClass":"structured_xml","mediaType":"application/xml","presentation":"bilingual","digitSystem":"western","expectedLane":"pint_ae_structured","canonicalEconomicId":"economics/invoice-1250","pintExpectation":{"status":"accepted","documentKind":"invoice"}},
+      {"id":"artifact/pint-credit-note-ar","rawPath":"data/worlds/ae/artifacts/ae6/pint-credit-note-ar.xml","rawSha256":"b5c4a31bb215b9118c50d98722cc742f6d2a24afd0358e010fd7dca683f9fc12","rawByteLength":2591,"contentClass":"structured_xml","mediaType":"application/xml","presentation":"arabic","digitSystem":"western","expectedLane":"pint_ae_structured","canonicalEconomicId":"economics/credit-note-525","pintExpectation":{"status":"accepted","documentKind":"credit_note"}},
+      {"id":"artifact/pint-near-miss-customization","rawPath":"data/worlds/ae/artifacts/ae6/pint-near-miss-customization.xml","rawSha256":"45df43ce3a418b7b70d85f7ad376e0495a5e8576cd5ed2d0c20b7bb68cd7bc0c","rawByteLength":2270,"contentClass":"structured_xml","mediaType":"application/xml","presentation":"english","digitSystem":"western","expectedLane":"structured_refused","pintExpectation":{"status":"refused","refusalCode":"not_pint_ae"}},
+      {"id":"artifact/pint-near-miss-footing","rawPath":"data/worlds/ae/artifacts/ae6/pint-near-miss-footing.xml","rawSha256":"26be023afd1aeba26ef45e4e5352847a6afecdfe7ce0d342cdb161b6d944aaa8","rawByteLength":2579,"contentClass":"structured_xml","mediaType":"application/xml","presentation":"arabic","digitSystem":"western","expectedLane":"structured_refused","pintExpectation":{"status":"refused","refusalCode":"amount_mismatch"}},
+      {"id":"artifact/pint-near-miss-mandatory","rawPath":"data/worlds/ae/artifacts/ae6/pint-near-miss-mandatory.xml","rawSha256":"feb7f545d8271efcb30fdcef0d78537d7849acb0756baaf81e136d6b0451ce09","rawByteLength":463,"contentClass":"structured_xml","mediaType":"application/xml","presentation":"english","digitSystem":"western","expectedLane":"structured_refused","pintExpectation":{"status":"refused","refusalCode":"missing_mandatory"}},
+      {"id":"artifact/invoice-lookalike-email","rawPath":"data/worlds/ae/artifacts/ae6/invoice-lookalike.eml","rawSha256":"6b7f8f4399b30eebaa4310fdc2802a10b0f1522c39ce2b6133d62d120181869e","rawByteLength":304,"contentClass":"email","mediaType":"message/rfc822","presentation":"bilingual","digitSystem":"western","expectedLane":"ordinary_evidence","pintExpectation":{"status":"not_applicable"}},
+      {"id":"artifact/invoice-scan-en","rawPath":"data/worlds/ae/artifacts/ae6/invoice-scan-en.svg","rawSha256":"3960f2740e380a24a7d136278b0c21133b4097e69975d643465ad0fe895022ff","rawByteLength":312,"contentClass":"scan_image","mediaType":"image/svg+xml","presentation":"english","digitSystem":"western","expectedLane":"ordinary_evidence","pintExpectation":{"status":"not_applicable"}},
+      {"id":"artifact/invoice-scan-ar","rawPath":"data/worlds/ae/artifacts/ae6/invoice-scan-ar.svg","rawSha256":"9d5841d058c2e5b8c55012913efcba47e8f789305d28b3cafdfe4d861e389582","rawByteLength":472,"contentClass":"scan_image","mediaType":"image/svg+xml","presentation":"arabic","digitSystem":"arabic_indic","expectedLane":"ordinary_evidence","pintExpectation":{"status":"not_applicable"}},
+      {"id":"artifact/invoice-scan-bilingual","rawPath":"data/worlds/ae/artifacts/ae6/invoice-scan-bilingual.svg","rawSha256":"99019e66b96e1e4d21c13efec1e187f661a6847668bf8e8567dc2995618c130c","rawByteLength":346,"contentClass":"scan_image","mediaType":"image/svg+xml","presentation":"bilingual","digitSystem":"western","expectedLane":"ordinary_evidence","pintExpectation":{"status":"not_applicable"}}
+    ],
+    "renderCases": [
+      {
+        "id":"render/credit-note-en-western","canonicalEconomicId":"economics/credit-note-525","presentation":"english","digitSystem":"western","issueDateDisplay":"12 Aug 2026","subtotalDisplay":"-500.00","taxDisplay":"-25.00","totalDisplay":"-525.00","counterpartyName":"Desert Bloom Trading FZE","adjustmentReason":"Supply cancelled and equipment returned","lineDescription":"Returned equipment","repeatCount":1,
+        "logicalNeedles":["Credit Note AE-CN-2026-0007","AE-INV-2026-0042","-525.00","100000000000003","AE070331234567890123456","billing@example-ae.example","https://example-ae.example/credit/AE-CN-2026-0007"],"pageOrderMarkers":[]
+      },
+      {
+        "id":"render/credit-note-ar-western","canonicalEconomicId":"economics/credit-note-525","presentation":"arabic","digitSystem":"western","issueDateDisplay":"12 أغسطس 2026","subtotalDisplay":"-500.00","taxDisplay":"-25.00","totalDisplay":"-525.00","counterpartyName":"شركة زهرة الصحراء للتجارة","adjustmentReason":"إلغاء التوريد وإعادة المعدات","lineDescription":"معدات معادة","repeatCount":1,
+        "logicalNeedles":["إشعار دائن AE-CN-2026-0007","AE-INV-2026-0042","-525.00","100000000000003","AE070331234567890123456","billing@example-ae.example","https://example-ae.example/credit/AE-CN-2026-0007"],"pageOrderMarkers":[]
+      },
+      {
+        "id":"render/credit-note-ar-arabic-indic","canonicalEconomicId":"economics/credit-note-525","presentation":"arabic","digitSystem":"arabic_indic","issueDateDisplay":"١٢ أغسطس ٢٠٢٦","subtotalDisplay":"-٥٠٠٫٠٠","taxDisplay":"-٢٥٫٠٠","totalDisplay":"-٥٢٥٫٠٠","counterpartyName":"شركة زهرة الصحراء للتجارة","adjustmentReason":"إلغاء التوريد وإعادة المعدات","lineDescription":"معدات معادة بالأرقام العربية الهندية ١٢٣٤٥٦٧٨٩٠","repeatCount":1,
+        "logicalNeedles":["إشعار دائن AE-CN-2026-0007","١٢ أغسطس ٢٠٢٦","٥٢٥٫٠٠","١٢٣٤٥٦٧٨٩٠","100000000000003","AE070331234567890123456"],"pageOrderMarkers":[]
+      },
+      {
+        "id":"render/credit-note-bilingual-multipage","canonicalEconomicId":"economics/credit-note-525","presentation":"bilingual","digitSystem":"western","issueDateDisplay":"12 Aug 2026 / 12 أغسطس 2026","subtotalDisplay":"-500.00","taxDisplay":"-25.00","totalDisplay":"-525.00","counterpartyName":"Desert Bloom Trading FZE / شركة زهرة الصحراء للتجارة","adjustmentReason":"Supply cancelled / إلغاء التوريد","lineDescription":"Returned equipment / معدات معادة","repeatCount":48,
+        "logicalNeedles":["إشعار دائن AE-CN-2026-0007","AE-INV-2026-0042","-525.00","100000000000003","AE070331234567890123456"],"pageOrderMarkers":["Phase 01 / المرحلة 01","Phase 24 / المرحلة 24","Phase 48 / المرحلة 48"]
+      }
+    ]
+  }
+}

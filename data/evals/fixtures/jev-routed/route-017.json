@@ -1,0 +1,43 @@
+{
+  "id": "route-017",
+  "split": "evaluation",
+  "source_family": "authored-017",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-17",
+    "document_type": "supplier_bill",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 772,
+    "currency": "EUR",
+    "reference_number": "BILL-8117",
+    "payment_status": "unpaid",
+    "vendor_name": "Quince Rentals Ltd"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-17-a",
+      "money_in": 0,
+      "money_out": 772,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Quince Rentals Ltd",
+      "description": "BANK TRANSFER Quince Rentals Ltd BILL-8117",
+      "raw_description": "BANK TRANSFER Quince Rentals Ltd BILL-8117",
+      "reconciliation_status": "posted",
+      "payload": {
+        "ai_suggestion_status": "accepted",
+        "reconciliation_match_type": "bank_line"
+      }
+    }
+  ],
+  "matches": [],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "needs_evidence",
+    "matches": []
+  },
+  "label_basis": "Human posting is not eligible for automated rematching; no eligible payment evidence remains for this document."
+}

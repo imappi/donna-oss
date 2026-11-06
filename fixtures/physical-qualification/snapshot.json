@@ -1,0 +1,491 @@
+{
+  "version": 1,
+  "scope": {
+    "firmId": "synthetic-firm",
+    "clientId": "synthetic-client"
+  },
+  "asOf": "2026-10-07T11:00:00.000Z",
+  "sessions": [
+    {
+      "id": "1",
+      "state": "open",
+      "opened_at": "2026-10-07T10:00:00.000Z",
+      "closed_at": null,
+      "scope": {
+        "locationId": "shelf",
+        "protocol": "physical-human-count/1"
+      }
+    },
+    {
+      "id": "2",
+      "state": "open",
+      "opened_at": "2026-10-07T10:00:00.000Z",
+      "closed_at": null,
+      "scope": {
+        "locationId": "shelf",
+        "protocol": "physical-human-count/1"
+      }
+    }
+  ],
+  "lines": [
+    {
+      "id": "1",
+      "count_session_id": "1",
+      "item_id": "item-0",
+      "location_id": "shelf",
+      "uom_id": "each",
+      "expected_quantity": "10",
+      "counted_quantity": 10,
+      "physical_status": "matched",
+      "physical_basis": {
+        "inputDigest": "basis-0",
+        "protocol": "physical-human-count/1",
+        "cutoff": "2026-10-07T10:00:00.000Z",
+        "operationIds": [],
+        "valuation": {
+          "status": "priced",
+          "currency": "GBP",
+          "unitCost": 5,
+          "carryingValue": 50
+        }
+      },
+      "physical_observation": {
+        "quantity": 10,
+        "variance": 0,
+        "humanConfirmed": true,
+        "uncertain": false,
+        "confidence": null,
+        "actorId": "counter",
+        "inputDigest": "observation-0",
+        "expectedDigest": "basis-0",
+        "version": 1,
+        "receivedAt": "2026-10-07T10:02:00.000Z",
+        "observedAt": "2026-10-07T10:01:00.000Z",
+        "modelStatus": "not_used",
+        "evidenceRefs": [
+          {
+            "documentId": "photo",
+            "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 42,
+            "sourceGroup": "customer:fixture",
+            "receivedAt": "2026-10-07T10:00:00.000Z"
+          }
+        ]
+      },
+      "physical_resolution": null,
+      "payload": {
+        "versions": [
+          {
+            "kind": "observation",
+            "observation": {
+              "quantity": 10,
+              "variance": 0,
+              "humanConfirmed": true,
+              "uncertain": false,
+              "confidence": null,
+              "actorId": "counter",
+              "inputDigest": "observation-0",
+              "expectedDigest": "basis-0",
+              "version": 1,
+              "receivedAt": "2026-10-07T10:02:00.000Z",
+              "observedAt": "2026-10-07T10:01:00.000Z",
+              "modelStatus": "not_used",
+              "evidenceRefs": [
+                {
+                  "documentId": "photo",
+                  "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "size": 42,
+                  "sourceGroup": "customer:fixture",
+                  "receivedAt": "2026-10-07T10:00:00.000Z"
+                }
+              ]
+            }
+          }
+        ],
+        "laterOutcome": {
+          "status": "unknown"
+        },
+        "owner": null
+      }
+    },
+    {
+      "id": "2",
+      "count_session_id": "1",
+      "item_id": "item-1",
+      "location_id": "shelf",
+      "uom_id": "each",
+      "expected_quantity": "10",
+      "counted_quantity": 8,
+      "physical_status": "variance",
+      "physical_basis": {
+        "inputDigest": "basis-1",
+        "protocol": "physical-human-count/1",
+        "cutoff": "2026-10-07T10:00:00.000Z",
+        "operationIds": [],
+        "valuation": {
+          "status": "priced",
+          "currency": "GBP",
+          "unitCost": 5,
+          "carryingValue": 50
+        }
+      },
+      "physical_observation": {
+        "quantity": 8,
+        "variance": -2,
+        "humanConfirmed": true,
+        "uncertain": false,
+        "confidence": null,
+        "actorId": "counter",
+        "inputDigest": "observation-1",
+        "expectedDigest": "basis-1",
+        "version": 1,
+        "receivedAt": "2026-10-07T10:02:00.000Z",
+        "observedAt": "2026-10-07T10:01:00.000Z",
+        "modelStatus": "not_used",
+        "evidenceRefs": [
+          {
+            "documentId": "photo",
+            "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 42,
+            "sourceGroup": "customer:fixture",
+            "receivedAt": "2026-10-07T10:00:00.000Z"
+          }
+        ]
+      },
+      "physical_resolution": null,
+      "payload": {
+        "versions": [
+          {
+            "kind": "observation",
+            "observation": {
+              "quantity": 8,
+              "variance": -2,
+              "humanConfirmed": true,
+              "uncertain": false,
+              "confidence": null,
+              "actorId": "counter",
+              "inputDigest": "observation-1",
+              "expectedDigest": "basis-1",
+              "version": 1,
+              "receivedAt": "2026-10-07T10:02:00.000Z",
+              "observedAt": "2026-10-07T10:01:00.000Z",
+              "modelStatus": "not_used",
+              "evidenceRefs": [
+                {
+                  "documentId": "photo",
+                  "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "size": 42,
+                  "sourceGroup": "customer:fixture",
+                  "receivedAt": "2026-10-07T10:00:00.000Z"
+                }
+              ]
+            }
+          }
+        ],
+        "laterOutcome": {
+          "status": "unknown"
+        },
+        "owner": {
+          "actorId": "reviewer"
+        }
+      }
+    },
+    {
+      "id": "3",
+      "count_session_id": "1",
+      "item_id": "item-2",
+      "location_id": "shelf",
+      "uom_id": "each",
+      "expected_quantity": "10",
+      "counted_quantity": 12,
+      "physical_status": "variance",
+      "physical_basis": {
+        "inputDigest": "basis-2",
+        "protocol": "physical-human-count/1",
+        "cutoff": "2026-10-07T10:00:00.000Z",
+        "operationIds": [],
+        "valuation": {
+          "status": "insufficient_evidence",
+          "reason": "missing_cost"
+        }
+      },
+      "physical_observation": {
+        "quantity": 12,
+        "variance": 2,
+        "humanConfirmed": true,
+        "uncertain": false,
+        "confidence": null,
+        "actorId": "counter",
+        "inputDigest": "observation-2",
+        "expectedDigest": "basis-2",
+        "version": 1,
+        "receivedAt": "2026-10-07T10:02:00.000Z",
+        "observedAt": "2026-10-07T10:01:00.000Z",
+        "modelStatus": "not_used",
+        "evidenceRefs": [
+          {
+            "documentId": "photo",
+            "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 42,
+            "sourceGroup": "customer:fixture",
+            "receivedAt": "2026-10-07T10:00:00.000Z"
+          }
+        ]
+      },
+      "physical_resolution": null,
+      "payload": {
+        "versions": [
+          {
+            "kind": "observation",
+            "observation": {
+              "quantity": 12,
+              "variance": 2,
+              "humanConfirmed": true,
+              "uncertain": false,
+              "confidence": null,
+              "actorId": "counter",
+              "inputDigest": "observation-2",
+              "expectedDigest": "basis-2",
+              "version": 1,
+              "receivedAt": "2026-10-07T10:02:00.000Z",
+              "observedAt": "2026-10-07T10:01:00.000Z",
+              "modelStatus": "not_used",
+              "evidenceRefs": [
+                {
+                  "documentId": "photo",
+                  "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "size": 42,
+                  "sourceGroup": "customer:fixture",
+                  "receivedAt": "2026-10-07T10:00:00.000Z"
+                }
+              ]
+            }
+          }
+        ],
+        "laterOutcome": {
+          "status": "unknown"
+        },
+        "owner": {
+          "actorId": "reviewer"
+        }
+      }
+    },
+    {
+      "id": "4",
+      "count_session_id": "1",
+      "item_id": "item-3",
+      "location_id": "shelf",
+      "uom_id": "each",
+      "expected_quantity": "10",
+      "counted_quantity": null,
+      "physical_status": "uncertain",
+      "physical_basis": {
+        "inputDigest": "basis-3",
+        "protocol": "physical-human-count/1",
+        "cutoff": "2026-10-07T10:00:00.000Z",
+        "operationIds": [],
+        "valuation": {
+          "status": "priced",
+          "currency": "GBP",
+          "unitCost": 5,
+          "carryingValue": 50
+        }
+      },
+      "physical_observation": {
+        "quantity": null,
+        "variance": null,
+        "humanConfirmed": true,
+        "uncertain": true,
+        "confidence": null,
+        "actorId": "counter",
+        "inputDigest": "observation-3",
+        "expectedDigest": "basis-3",
+        "version": 1,
+        "receivedAt": "2026-10-07T10:02:00.000Z",
+        "observedAt": "2026-10-07T10:01:00.000Z",
+        "modelStatus": "not_used",
+        "evidenceRefs": [
+          {
+            "documentId": "photo",
+            "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 42,
+            "sourceGroup": "customer:fixture",
+            "receivedAt": "2026-10-07T10:00:00.000Z"
+          }
+        ]
+      },
+      "physical_resolution": null,
+      "payload": {
+        "versions": [
+          {
+            "kind": "observation",
+            "observation": {
+              "quantity": null,
+              "variance": null,
+              "humanConfirmed": true,
+              "uncertain": true,
+              "confidence": null,
+              "actorId": "counter",
+              "inputDigest": "observation-3",
+              "expectedDigest": "basis-3",
+              "version": 1,
+              "receivedAt": "2026-10-07T10:02:00.000Z",
+              "observedAt": "2026-10-07T10:01:00.000Z",
+              "modelStatus": "not_used",
+              "evidenceRefs": [
+                {
+                  "documentId": "photo",
+                  "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "size": 42,
+                  "sourceGroup": "customer:fixture",
+                  "receivedAt": "2026-10-07T10:00:00.000Z"
+                }
+              ]
+            }
+          }
+        ],
+        "laterOutcome": {
+          "status": "unknown"
+        },
+        "owner": {
+          "actorId": "reviewer"
+        }
+      }
+    },
+    {
+      "id": "5",
+      "count_session_id": "1",
+      "item_id": "item-4",
+      "location_id": "shelf",
+      "uom_id": "each",
+      "expected_quantity": "10",
+      "counted_quantity": 10,
+      "physical_status": "matched",
+      "physical_basis": {
+        "inputDigest": "basis-4",
+        "protocol": "physical-human-count/1",
+        "cutoff": "2026-10-07T10:00:00.000Z",
+        "operationIds": [],
+        "valuation": {
+          "status": "priced",
+          "currency": "GBP",
+          "unitCost": 5,
+          "carryingValue": 50
+        }
+      },
+      "physical_observation": {
+        "quantity": 10,
+        "variance": 0,
+        "humanConfirmed": true,
+        "uncertain": false,
+        "confidence": 0.99,
+        "actorId": "counter",
+        "inputDigest": "observation-4",
+        "expectedDigest": "basis-4",
+        "version": 1,
+        "receivedAt": "2026-10-07T10:02:00.000Z",
+        "observedAt": "2026-10-07T10:01:00.000Z",
+        "modelStatus": "not_used",
+        "evidenceRefs": [
+          {
+            "documentId": "photo",
+            "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 42,
+            "sourceGroup": "customer:fixture",
+            "receivedAt": "2026-10-07T10:00:00.000Z"
+          }
+        ]
+      },
+      "physical_resolution": null,
+      "payload": {
+        "versions": [
+          {
+            "kind": "observation",
+            "observation": {
+              "quantity": 10,
+              "variance": 0,
+              "humanConfirmed": true,
+              "uncertain": false,
+              "confidence": 0.99,
+              "actorId": "counter",
+              "inputDigest": "observation-4",
+              "expectedDigest": "basis-4",
+              "version": 1,
+              "receivedAt": "2026-10-07T10:02:00.000Z",
+              "observedAt": "2026-10-07T10:01:00.000Z",
+              "modelStatus": "not_used",
+              "evidenceRefs": [
+                {
+                  "documentId": "photo",
+                  "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "size": 42,
+                  "sourceGroup": "customer:fixture",
+                  "receivedAt": "2026-10-07T10:00:00.000Z"
+                }
+              ]
+            }
+          }
+        ],
+        "laterOutcome": {
+          "status": "unknown"
+        },
+        "owner": null
+      }
+    },
+    {
+      "id": "6",
+      "count_session_id": "2",
+      "item_id": "item-0",
+      "location_id": "shelf",
+      "uom_id": "each",
+      "expected_quantity": "10",
+      "physical_status": "awaiting_observation",
+      "physical_basis": {
+        "inputDigest": "basis-6",
+        "protocol": "physical-human-count/1",
+        "cutoff": "2026-10-07T10:00:00.000Z",
+        "operationIds": [],
+        "valuation": {
+          "status": "priced",
+          "currency": "GBP",
+          "unitCost": 5,
+          "carryingValue": 50
+        }
+      },
+      "physical_observation": null,
+      "physical_resolution": null,
+      "payload": {
+        "versions": [],
+        "owner": {
+          "actorId": "counter"
+        }
+      }
+    }
+  ],
+  "asks": [
+    {
+      "id": "draft",
+      "status": "draft",
+      "send_count": 0,
+      "audience": "seat",
+      "addressee_principal_id": "counter",
+      "due_at": "2026-10-07T10:30:00.000Z",
+      "request_payload": {
+        "physical_session_id": "2",
+        "physical_count_line_id": "6"
+      }
+    }
+  ],
+  "documents": [
+    {
+      "id": "photo",
+      "checksum_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "storage_object_key": "synthetic/photo"
+    }
+  ],
+  "operations": [],
+  "audit": [],
+  "cases": [],
+  "caseEvents": [],
+  "sourceDigest": "27b79b79039504bfe54d309bcccf677ecfdf67de336103d22159ae749ac00bd6"
+}

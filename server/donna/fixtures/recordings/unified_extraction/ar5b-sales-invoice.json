@@ -1,0 +1,24 @@
+{
+  "lane": "unified_extraction",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — authored from the AR-5B attributed sales-invoice fixture and unifiedExtractor response contract; never a captured provider response; re-shaped to the RT-12 unified schema (settlement/contract blocks, tax ids; reference_number derived, not carried)",
+  "fixture": "sales-invoice-native",
+  "status": 200,
+  "body": {
+    "id": "msg_ar5b_sales_invoice",
+    "type": "message",
+    "role": "assistant",
+    "model": "recorded-provider-model",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"document_type\": \"sales_invoice\", \"extraction_status\": \"validated\", \"extraction_confidence\": 0.99, \"warnings\": [], \"header\": {\"counterparty_name\": \"Desert Bloom Café / مقهى زهرة الصحراء\", \"counterparty_role\": \"customer\", \"counterparty_tax_id\": null, \"own_name\": null, \"own_tax_id\": null, \"document_date\": \"2026-08-18\", \"due_date\": \"2026-09-17\", \"currency\": \"AED\", \"subtotal_amount\": 2400, \"tax_amount\": 120, \"shipping_amount\": 0, \"discount_amount\": 0, \"rounding_amount\": 0, \"total_amount\": 2520, \"line_amounts_include_tax\": false, \"payment_status\": \"unpaid\", \"payment_terms\": \"Net 30\", \"references\": [{\"type\": \"invoice_number\", \"value\": \"AE-SI-2026-0107\"}]}, \"lines\": [{\"description\": \"Consulting services / خدمات استشارية\", \"quantity\": 1, \"unit_price\": 2400, \"amount\": 2400, \"tax_rate\": 0.05}], \"settlement\": {\"period_start\": null, \"period_end\": null, \"payout_date\": null, \"gross_sales\": null, \"gross_components\": [], \"refunds\": null, \"fees\": [], \"adjustments\": [], \"net_payout\": null, \"transaction_count\": null, \"payout_reference\": null, \"deposit_reference\": null, \"bank_last4\": null, \"rows\": []}, \"contract\": {\"contract_type\": \"not_a_contract\", \"effective_start_date\": null, \"effective_end_date\": null, \"auto_renew\": null, \"notice_period_days\": null, \"recurring_amount\": null, \"recurring_frequency\": \"none\", \"obligations\": []}, \"source_business_use\": {\"classification\": \"not_stated\", \"source_quote\": null, \"business_use_percent\": null}}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+}

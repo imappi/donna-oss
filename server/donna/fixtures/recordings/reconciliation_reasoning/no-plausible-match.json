@@ -1,0 +1,25 @@
+{
+  "lane": "reconciliation_reasoning",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic \u2014 authored from reconciliationLlmCore.js parseProposeMatchesResponse for the appliance fixture world: a settlement whose net appears on no candidate line (the Northgate Marketplace payout, net 1,590, against the August statement) \u2014 the model's honest no-match; never a captured provider response",
+  "fixture": "payout_statement_nonfooting",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_match_none",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-4-8",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"proposals\":[],\"unmatchable_reason\":\"no_plausible_match\"}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+}

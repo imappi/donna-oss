@@ -1,0 +1,283 @@
+{
+  "id": "holdout-074",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-074",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0477\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Pasir Ris Swim School Pte. Ltd.  UEN 201612345U\nInvoice date: 24 Aug 2026    Due date: 23 Sep 2026    Terms: 50% deposit, balance on delivery\nDescription: Class scheduling app\nSubtotal: S$4,000.00\nGST 9%: S$360.00\nTOTAL: S$4,360.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0477.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n26 Aug 2026,ICT,,2180.00,PAYNOW TRANSFER,PASIR RIS SWIM SCHOOL,INV-2026-0477 DEPOSIT",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n14 Sep 2026,ICT,,2180.00,PAYNOW TRANSFER,PASIR RIS SWIM SCHOOL,INV-2026-0477 BALANCE",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "allocation-source-a1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "allocation_record",
+        "content": "Reconciliation record a1: bank line dated 26 Aug 2026 for S$2,180.00 is recorded as CONFIRMED to INV-2026-0477 (sales invoice) on 27 Aug 2026. Deposit, 50%",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "allocation-source-a2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "allocation_record",
+        "content": "Reconciliation record a2: bank line dated 14 Sep 2026 for S$2,180.00 is recorded as CONFIRMED to INV-2026-0477 (sales invoice) on 14 Sep 2026. Balance",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-26",
+        "money_in_minor": 218000,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "PASIR RIS SWIM SCHOOL PTE LTD",
+        "description": "PAYNOW TRANSFER PASIR RIS SWIM SCHOOL INV-2026-0477 DEPOSIT",
+        "raw_description": "26 Aug 2026,ICT,,2180.00,PAYNOW TRANSFER,PASIR RIS SWIM SCHOOL,INV-2026-0477 DEPOSIT",
+        "lifecycle": "reconciled",
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-14",
+        "money_in_minor": 218000,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "PASIR RIS SWIM SCHOOL PTE LTD",
+        "description": "PAYNOW TRANSFER PASIR RIS SWIM SCHOOL INV-2026-0477 BALANCE",
+        "raw_description": "14 Sep 2026,ICT,,2180.00,PAYNOW TRANSFER,PASIR RIS SWIM SCHOOL,INV-2026-0477 BALANCE",
+        "lifecycle": "reconciled",
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 218000,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 218000,
+        "bank_currency": "SGD",
+        "gross_minor": 218000,
+        "fee_minor": 0
+      },
+      {
+        "id": "link-2-t2",
+        "kind": "reference",
+        "source_id": "bank-t2",
+        "transaction_id": "tx-t2",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 218000,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 218000,
+        "bank_currency": "SGD",
+        "gross_minor": 218000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [
+      {
+        "id": "allocation-a1",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "source_id": "allocation-source-a1",
+        "version": "1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "status": "confirmed",
+        "amount_minor": 218000,
+        "currency": "SGD",
+        "object_type": "sales_invoice"
+      },
+      {
+        "id": "allocation-a2",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "source_id": "allocation-source-a2",
+        "version": "1",
+        "transaction_id": "tx-t2",
+        "invoice_id": "invoice-focal",
+        "status": "confirmed",
+        "amount_minor": 218000,
+        "currency": "SGD",
+        "object_type": "sales_invoice"
+      }
+    ],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-24",
+      "due_date": "2026-09-23",
+      "amount_minor": 436000,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "INV-2026-0477",
+      "counterparty": "Pasir Ris Swim School Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "allocation-source-a1",
+        "allocation-source-a2",
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "allocation-source-a1",
+        "allocation-source-a2",
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-sg-deposit-then-balance-with-prior-allocation",
+    "family_description": "A 50% deposit already confirmed against the invoice; the balance arrives later, both by PayNow quoting the invoice.",
+    "market": "SG",
+    "variant": "b",
+    "error_mode": "prior partial allocation; full prior settlement; both payments unallocated",
+    "label_reason": "Both the deposit and the balance are already confirmed against the invoice; nothing remains and the invoice is not admitted.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "not_admitted"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": false,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "not_admitted",
+    "proposals": []
+  }
+}

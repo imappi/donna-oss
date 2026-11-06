@@ -1,0 +1,97 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/vat-registration/threshold-boundaries",
+  "seed": "ae-vat-registration-threshold-boundaries-v1",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.vat-registration-assessment.v1",
+    "capabilityId": "assess_ae_vat_registration",
+    "jurisdiction": "AE",
+    "entityType": "ae-sole-establishment",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_vat_registration_threshold",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": ["vat_registration_preceding_12_months_boundary", "vat_registration_next_30_days_boundary", "natural_person_vat_aggregation"],
+    "permittedActions": ["assess_registration_boundary", "request_owner_expectation"],
+    "maximumAuthority": "observe_only",
+    "fallback": {"terminalState": "blocked", "responsibleActor": "owner_or_firm", "nextPermittedAction": "request_missing_threshold_fact"},
+    "protectedFailures": ["vat_threshold_corporate_tax_band_conflated", "threshold_exactness_lost", "sole_establishment_threshold_per_licence", "forward_limb_annualised"]
+  },
+  "policySources": [
+    {
+      "id": "policy/ae-vat-designated-zones",
+      "authority": "Federal Tax Authority",
+      "title": "Designated Zones VAT Guide VATGDZ1",
+      "url": "https://tax.gov.ae/DownloadOpenTextFile?fileUrl=en%2FVAT_VAT_Guides%2FDesignated_Zones_VAT_Guide%2FDesignated_Zones_VAT_Guide_EN.pdf",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-08-31"
+    },
+    {
+      "id": "policy/ae-vat-registration",
+      "authority": "Federal Tax Authority",
+      "title": "Value Added Tax Registration service and FAQ",
+      "url": "https://www.tax.gov.ae/en/services/vat.registration.aspx",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-08-31"
+    }
+  ],
+  "thresholdBoundarySet": {
+    "thresholdAed": "375000.00",
+    "limbs": ["preceding_12_months", "next_30_days"],
+    "deltasFils": [-1, 0, 1],
+    "policySourceId": "policy/ae-vat-registration"
+  },
+  "entities": [
+    {
+      "id": "entity/ae-threshold-sole-establishment",
+      "kind": "sole_establishment",
+      "legalForm": "ae-sole-establishment",
+      "activeFrom": "2026-01-01",
+      "facts": {
+        "freeZoneStanding": [
+          {"standing": "mainland", "licensingAuthority": "Abu Dhabi Department of Economic Development", "emirate": "AUH", "effectiveFrom": "2026-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-threshold-sole-licence"}
+        ],
+        "designatedZone": [
+          {"status": "not_designated", "zoneName": null, "effectiveFrom": "2026-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-designated-zone-register-threshold-sole", "policySourceId": "policy/ae-vat-designated-zones"}
+        ],
+        "vatRegistration": [
+          {"status": "not_registered", "registrationSubject": "natural_person_all_sole_establishments", "registrationSubjectId": "natural-person/mariam-al-nuaimi", "trn": null, "registrationBasis": null, "effectiveFrom": "2026-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-threshold-owner-vat-status"}
+        ],
+        "ftaVatPeriods": []
+      }
+    }
+  ],
+  "events": [],
+  "observations": [
+    {"id": "observation/ae-threshold-sole-licence", "artifactId": "artifact/ae-threshold-sole-licence", "observedAt": "2026-01-02"},
+    {"id": "observation/ae-designated-zone-register-threshold-sole", "artifactId": "artifact/ae-designated-zone-register-threshold-sole", "observedAt": "2026-01-02"},
+    {"id": "observation/ae-threshold-owner-vat-status", "artifactId": "artifact/ae-threshold-owner-vat-status", "observedAt": "2026-01-03"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {
+      "id": "artifact/ae-threshold-sole-licence",
+      "kind": "trade_licence",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic UAE Sole-Establishment Trade Licence",
+      "fields": {"tradeName": "Mangrove Field Services", "owner": "Mariam Al Nuaimi", "licenceNumber": "SYNTH-AE-SE-000002", "licensingAuthority": "Abu Dhabi Department of Economic Development", "issueDate": "2026-01-01"}
+    },
+    {
+      "id": "artifact/ae-designated-zone-register-threshold-sole",
+      "kind": "designated_zone_register_extract",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic FTA Designated-Zone Register Check",
+      "fields": {"establishment": "Abu Dhabi mainland", "status": "not_designated", "checkedOn": "2026-01-02"}
+    },
+    {
+      "id": "artifact/ae-threshold-owner-vat-status",
+      "kind": "owner_fact_confirmation",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic Owner VAT-Registration Confirmation",
+      "fields": {"owner": "Mariam Al Nuaimi", "registrationSubject": "All sole establishments owned by Mariam Al Nuaimi", "vatRegistrationStatus": "not_registered", "confirmedOn": "2026-01-03"}
+    }
+  ]
+}

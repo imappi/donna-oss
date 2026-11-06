@@ -1,0 +1,40 @@
+{
+  "id": "route-018",
+  "split": "evaluation",
+  "source_family": "authored-018",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-18",
+    "document_type": "supplier_bill",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 1130,
+    "currency": "EUR",
+    "reference_number": "BILL-8118",
+    "payment_status": "unpaid",
+    "vendor_name": "Rowan Metalworks Ltd"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-18-a",
+      "money_in": 0,
+      "money_out": 1130,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Rowan Metalworks Ltd",
+      "description": "ROWAN METALWORKS PAYMENT FOR OTHER INVOICE RW-7777",
+      "raw_description": "ROWAN METALWORKS PAYMENT FOR OTHER INVOICE RW-7777",
+      "reconciliation_status": null,
+      "payload": {}
+    }
+  ],
+  "matches": [],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "needs_evidence",
+    "matches": []
+  },
+  "label_basis": "Same party and amount but explicitly a different invoice."
+}

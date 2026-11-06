@@ -1,0 +1,94 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/entity-context/free-zone-service",
+  "seed": "ae-entity-context-free-zone-service-v1",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.entity-context.v1",
+    "capabilityId": "record_ae_entity_tax_context",
+    "jurisdiction": "AE",
+    "entityType": "ae-free-zone-co",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_entity_tax_context",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": ["free_zone_service_entity_context", "designated_zone_fact_separation", "fta_assigned_vat_period"],
+    "permittedActions": ["record_context", "request_missing_entity_fact"],
+    "maximumAuthority": "observe_only",
+    "fallback": {"terminalState": "blocked", "responsibleActor": "owner_or_firm", "nextPermittedAction": "request_missing_entity_fact"},
+    "protectedFailures": ["free_zone_assumed_designated", "free_zone_assumed_qfzp", "fta_period_inferred_from_cadence", "period_tax_status_stored_as_profile"]
+  },
+  "policySources": [
+    {
+      "id": "policy/ae-vat-designated-zones",
+      "authority": "Federal Tax Authority",
+      "title": "Designated Zones VAT Guide VATGDZ1",
+      "url": "https://tax.gov.ae/DownloadOpenTextFile?fileUrl=en%2FVAT_VAT_Guides%2FDesignated_Zones_VAT_Guide%2FDesignated_Zones_VAT_Guide_EN.pdf",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-08-31"
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity/ae-free-zone-service",
+      "kind": "company",
+      "legalForm": "ae-free-zone-co",
+      "activeFrom": "2026-02-01",
+      "facts": {
+        "freeZoneStanding": [
+          {"standing": "free_zone", "licensingAuthority": "Dubai Multi Commodities Centre Authority", "emirate": "DXB", "effectiveFrom": "2026-02-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-dmcc-service-licence"}
+        ],
+        "designatedZone": [
+          {"status": "not_designated", "zoneName": "Dubai Multi Commodities Centre", "effectiveFrom": "2026-02-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-designated-zone-register-dmcc", "policySourceId": "policy/ae-vat-designated-zones"}
+        ],
+        "vatRegistration": [
+          {"status": "registered", "registrationSubject": "legal_entity", "registrationSubjectId": "entity/ae-free-zone-service", "trn": "100223456789012", "registrationBasis": "voluntary", "returnCadence": "quarter", "effectiveFrom": "2026-03-01", "effectiveTo": null, "sourceArtifactId": "artifact/ae-vat-registration-certificate-free-zone-service"}
+        ],
+        "ftaVatPeriods": [
+          {"periodKey": "2026-Q3", "startsOn": "2026-07-01", "endsOn": "2026-09-30", "dueOn": "2026-10-28", "sourceArtifactId": "artifact/ae-fta-period-assignment-free-zone-service"}
+        ]
+      }
+    }
+  ],
+  "events": [],
+  "observations": [
+    {"id": "observation/ae-dmcc-service-licence", "artifactId": "artifact/ae-dmcc-service-licence", "observedAt": "2026-02-02"},
+    {"id": "observation/ae-designated-zone-register-dmcc", "artifactId": "artifact/ae-designated-zone-register-dmcc", "observedAt": "2026-02-02"},
+    {"id": "observation/ae-vat-registration-certificate-free-zone-service", "artifactId": "artifact/ae-vat-registration-certificate-free-zone-service", "observedAt": "2026-03-02"},
+    {"id": "observation/ae-fta-period-assignment-free-zone-service", "artifactId": "artifact/ae-fta-period-assignment-free-zone-service", "observedAt": "2026-06-15"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {
+      "id": "artifact/ae-dmcc-service-licence",
+      "kind": "trade_licence",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic UAE Free-Zone Trade Licence",
+      "fields": {"legalName": "Pearl Circuit Consulting FZCO", "licenceNumber": "SYNTH-AE-FZ-000001", "licensingAuthority": "Dubai Multi Commodities Centre Authority", "activities": ["Technology consulting"], "issueDate": "2026-02-01"}
+    },
+    {
+      "id": "artifact/ae-designated-zone-register-dmcc",
+      "kind": "designated_zone_register_extract",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic FTA Designated-Zone Register Check",
+      "fields": {"zoneName": "Dubai Multi Commodities Centre", "status": "not_designated", "checkedOn": "2026-02-02"}
+    },
+    {
+      "id": "artifact/ae-vat-registration-certificate-free-zone-service",
+      "kind": "vat_registration_certificate",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic FTA VAT Registration Certificate",
+      "fields": {"taxablePerson": "Pearl Circuit Consulting FZCO", "trn": "100223456789012", "effectiveFrom": "2026-03-01"}
+    },
+    {
+      "id": "artifact/ae-fta-period-assignment-free-zone-service",
+      "kind": "emara_tax_period_assignment",
+      "format": "json",
+      "trusted": true,
+      "title": "Synthetic EmaraTax VAT Period Assignment",
+      "fields": {"periodKey": "2026-Q3", "startsOn": "2026-07-01", "endsOn": "2026-09-30", "dueOn": "2026-10-28"}
+    }
+  ]
+}

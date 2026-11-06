@@ -1,0 +1,58 @@
+{
+  "sample-01": {
+    "candidateItemId": "item-a",
+    "baseUom": "EA",
+    "quantity": 3,
+    "mustAbstain": false,
+    "labelBasis": "independent_deterministic_scene_spec"
+  },
+  "sample-02": {
+    "candidateItemId": "item-a",
+    "baseUom": "EA",
+    "quantity": null,
+    "mustAbstain": true,
+    "labelBasis": "independent_deterministic_scene_spec"
+  },
+  "sample-03": {
+    "candidateItemId": "item-a",
+    "baseUom": "EA",
+    "quantity": null,
+    "mustAbstain": true,
+    "labelBasis": "independent_deterministic_scene_spec"
+  },
+  "sample-04": {
+    "candidateItemId": "item-a",
+    "baseUom": "EA",
+    "quantity": null,
+    "mustAbstain": true,
+    "labelBasis": "independent_deterministic_scene_spec"
+  },
+  "sample-05": {
+    "candidateItemId": "item-a",
+    "baseUom": "EA",
+    "quantity": 4,
+    "mustAbstain": false,
+    "labelBasis": "independent_deterministic_scene_spec"
+  },
+  "sample-06": {
+    "candidateItemId": "item-a",
+    "baseUom": "EA",
+    "quantity": null,
+    "mustAbstain": true,
+    "labelBasis": "independent_deterministic_scene_spec"
+  },
+  "sample-07": {
+    "candidateItemId": "item-a",
+    "baseUom": "EA",
+    "quantity": null,
+    "mustAbstain": true,
+    "labelBasis": "independent_deterministic_scene_spec"
+  },
+  "sample-08": {
+    "candidateItemId": "item-a",
+    "baseUom": "EA",
+    "quantity": null,
+    "mustAbstain": true,
+    "labelBasis": "independent_deterministic_scene_spec"
+  }
+}

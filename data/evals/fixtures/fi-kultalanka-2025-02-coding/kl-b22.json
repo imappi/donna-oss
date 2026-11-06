@@ -1,0 +1,105 @@
+{
+  "id": "kl-b22",
+  "title": "Kultalanka 02/2025 18.2. Suomalainen Kirjakauppa −43,45",
+  "split": "development",
+  "family": "kultalanka-dated_rate",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "dated_rate",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-18",
+    "description": "KORTTIOSTO SUOMALAINEN KIRJAKAUPPA TAMPERE",
+    "money_in": 0,
+    "money_out": 43.45,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "Suomalainen Kirjakauppa",
+    "total_amount": 43.45,
+    "tax_amount": 7.14,
+    "lines": [
+      {
+        "description": "Kuittirulla, kuulakynät, Post-it",
+        "amount": 28.44,
+        "tax_rate": 25.5
+      },
+      {
+        "description": "Kirja: Kampaamoyrityksen talous",
+        "amount": 15.01,
+        "tax_rate": 10
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Office expenses",
+          "direction": "debit",
+          "amount": 22.66,
+          "tax_code": "ALV_25_5_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 5.78,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Office expenses",
+          "direction": "debit",
+          "amount": 13.65,
+          "tax_code": "ALV_10_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 1.36,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 43.45,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": {
+      "terminal": "ask_owner",
+      "journal": [],
+      "ask": {
+        "evidence_type": "document_discrepancy",
+        "kind": "ask_supply_timing"
+      }
+    },
+    "adjudication": {
+      "status": "adjudicated",
+      "reviewer": "Ilkka Halonen (operator; not professional review)",
+      "date": "2026-09-24"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B22"
+  }
+}

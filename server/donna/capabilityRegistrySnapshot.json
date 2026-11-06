@@ -1,0 +1,2186 @@
+{
+  "fingerprint": "capreg-53aa1a002893a9422da4447ff612a62dfbe57062fdbacdb59a89a88ee97e3976",
+  "capabilities": [
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.accept_match.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "owner_confirms_suggested_match_in_chat_and_the_line_settles_reconciled",
+        "already_settled_match_or_stale_document_guard_refused_never_double_confirmed"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "reconciliation_match_status_confirmed_and_line_reconciled_persisted",
+      "executor": "updateReconciliationMatchInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "document_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "transaction_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "type": "boolean"
+          },
+          "consequence": {
+            "type": "string"
+          },
+          "from_status": {
+            "enum": [
+              "suggested"
+            ],
+            "type": "string"
+          },
+          "match_id": {
+            "type": "string"
+          },
+          "matched_object_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "match_id",
+          "from_status",
+          "confirmed",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "none",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "internal_state",
+      "verb": "accept_match",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "owner_ask",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.amend_ask.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "sent_ask_amended_keeps_original_visible_and_records_the_structured_amendment",
+        "draft_and_answered_asks_refuse_amendment_and_reply_names_the_right_path"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "client_evidence_request_question_amended_with_history_persisted",
+      "executor": "amendClientEvidenceRequestInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "amendment_text": {
+            "type": "string"
+          },
+          "ask_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ask_id",
+          "amendment_text",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "amendment_count": {
+            "type": "number"
+          },
+          "ask_id": {
+            "type": "string"
+          },
+          "consequence": {
+            "type": "string"
+          },
+          "prior_question": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ask_id",
+          "prior_question",
+          "amendment_count",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "client_visible",
+      "verb": "amend_ask",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.answer_evidence_request.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "none",
+      "execution_verifier": null,
+      "executor": "resolveClientEvidenceRequestInDb",
+      "idempotency": "none",
+      "idempotency_note": "the resolve write converges on the ask id (no duplicate rows; responded_at keeps the first answer), but the post-commit reply-recode re-invokes the coder on a replay (bounded: high-confidence-only apply through the guarded review writer, degrades to manual review) and the loops inbox event is at-least-once by design",
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "client_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "none",
+      "preflight_alternative": null,
+      "reversibility": "recode_before_posting",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "answer_evidence_request",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.apply_category.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "updateTransactionReviewItemInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat",
+          "drawer"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": "recode_before_posting",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "apply_category",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "authority",
+        "grant_required": "none",
+        "required_capability_class": "founder"
+      },
+      "capability": "finance.approve_role_grant.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "owner_delegates_reminder_sends_in_chat_grant_minted_ceilinged_and_time_bounded",
+        "grant_outside_role_leash_or_on_unhired_role_refused_by_writer"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "action_authority_grant_active_with_role_provenance_persisted",
+      "executor": "approveRoleGrant",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "grant_action": {
+            "type": "string"
+          },
+          "grant_ceiling": {
+            "type": "number"
+          },
+          "grant_currency": {
+            "type": "string"
+          },
+          "grant_scope_key": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "grant_action",
+          "grant_scope_key",
+          "grant_ceiling",
+          "grant_currency",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_ceiling": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "grant_action": {
+            "type": "string"
+          },
+          "grant_id": {
+            "type": "string"
+          },
+          "review_after": {
+            "type": "string"
+          },
+          "role_id": {
+            "type": "string"
+          },
+          "scope_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "grant_id",
+          "role_id",
+          "grant_action",
+          "scope_key",
+          "amount_ceiling",
+          "currency",
+          "review_after"
+        ],
+        "type": "object"
+      },
+      "preflight": "shadow_feed",
+      "preflight_alternative": "roleEmployment writer guards: owner actor + active hire + shape offered + authority ⊆ leash + mandatory time bound + store ceiling/currency rules, all in one refusing transaction",
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "high",
+      "schema_status": "declared",
+      "side_effect_class": "internal_state",
+      "verb": "approve_role_grant",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "owner_ask",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.ask_client.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "createClientEvidenceRequestInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "client_visible",
+      "verb": "ask_client",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "owner_ask",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.cancel_ask.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "moot_ask_cancelled_via_chat_frees_the_anchor_and_receipt_reports_line_left_hanging",
+        "answered_ask_refused_by_writer_and_reply_points_at_correcting_the_answer"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "client_evidence_request_status_cancelled_persisted",
+      "executor": "cancelClientEvidenceRequestInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "ask_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ask_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "ask_id": {
+            "type": "string"
+          },
+          "consequence": {
+            "type": "string"
+          },
+          "leaves_line_hanging": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "prior_status": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "cancelled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "ask_id",
+          "prior_status",
+          "status",
+          "leaves_line_hanging",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "client_visible",
+      "verb": "cancel_ask",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.correct_document_field.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "none",
+      "execution_verifier": null,
+      "executor": "recordDocumentCorrectionInDb",
+      "idempotency": "none",
+      "idempotency_note": "append-only correction journal (random event id, no natural key); a replay adds a self-evident no-op row (prior_value == corrected_value) while the document writeback converges under its row lock; few-shot reads dedupe per (field_path, document_type) — double-execution bounded and harmless",
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "transaction_chat",
+          "document_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "none",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "correct_document_field",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "owner_ask",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.draft_evidence_request.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "doc_missing_artifact_ask_minted_once_and_deduped_on_replay"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "open_evidence_request_exists_for_document",
+      "executor": "createClientEvidenceRequestInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recipient": {
+            "enum": [
+              "customer",
+              "vendor",
+              "client_owner",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "question",
+          "recipient",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "document_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "consequence": {
+            "type": "string"
+          },
+          "evidence_request_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "evidence_request_id",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "client_visible",
+      "verb": "draft_evidence_request",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "partner"
+      },
+      "capability": "finance.forget_fact.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "stale_fact_stopped_via_chat_never_retrieved_again_and_replay_reports_skip"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "firm_fact_status_dismissed_persisted",
+      "executor": "dismissFirmFact",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "fact_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "consequence": {
+            "type": "string"
+          },
+          "fact_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "dismissed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact_id",
+          "status",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "governed_memory",
+      "verb": "forget_fact",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "workflow",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.leave_review_note.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "updateTransactionReviewItemInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat",
+          "document_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "low",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "leave_review_note",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.link_document.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "none",
+      "execution_verifier": null,
+      "executor": "createManualReconciliationMatchInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "transaction_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "none",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "link_document",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.link_transaction.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "createManualReconciliationMatchInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "document_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "link_transaction",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "owner_ask",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.mark_evidence_owed.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "setTransactionAiEvidenceRequiredInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "mark_evidence_owed",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.mark_immaterial.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "small_clean_doc_marked_immaterial_and_material_doc_refused_by_preflight"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "document_payload_immaterial_verdict_persisted",
+      "executor": "updateDocumentInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "threshold_amount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "reason",
+          "threshold_amount"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "document_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "consequence": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "preflight": {
+            "type": "object"
+          },
+          "verdict": {
+            "enum": [
+              "immaterial"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "verdict",
+          "consequence",
+          "preflight"
+        ],
+        "type": "object"
+      },
+      "preflight": "live",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "internal_state",
+      "verb": "mark_immaterial",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.mark_personal.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "none",
+      "execution_verifier": null,
+      "executor": "updateTransactionReviewItemInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "transaction_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "none",
+      "preflight_alternative": null,
+      "reversibility": "recode_before_posting",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "mark_personal",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "founder"
+      },
+      "capability": "finance.post_inventory_journal.v1",
+      "domain": "finance",
+      "dry_run": "supported",
+      "eval_scenarios": [],
+      "execution_receipt": "live",
+      "execution_verifier": null,
+      "executor": "postInventoryJournalFromDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "inventory_executor"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "live",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "high",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "external_ledger",
+      "verb": "post_inventory_journal",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "partner"
+      },
+      "capability": "finance.recode_decided.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "none",
+      "execution_verifier": null,
+      "executor": "updateTransactionReviewItemInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "transaction_chat",
+          "drawer"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "none",
+      "preflight_alternative": null,
+      "reversibility": "recode_before_posting",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "recode_decided",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.record_mileage.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "us_owner_stated_business_mileage_books_balanced_journal"
+      ],
+      "execution_receipt": "live",
+      "execution_verifier": "ledger_journal_posted_and_balanced",
+      "executor": "recordOwnerMileageExpenseInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "type": "string"
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "miles": {
+            "type": "number"
+          },
+          "purpose": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "miles",
+          "purpose",
+          "date",
+          "confidence"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "client_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "consequence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ledger_journal_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "ledger_journal_id",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "live",
+      "preflight_alternative": "deterministic mileage rate + materiality ceiling + period-lock checks + balanced journal + apply receipt",
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "high",
+      "schema_status": "declared",
+      "side_effect_class": "external_ledger",
+      "verb": "record_mileage",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.reject_match.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "none",
+      "execution_verifier": null,
+      "executor": "updateReconciliationMatchInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "transaction_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "none",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "reject_match",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "partner"
+      },
+      "capability": "finance.remember_fact.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "saveFirmFact",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "governed_memory",
+      "verb": "remember_fact",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "partner"
+      },
+      "capability": "finance.remember_merchant.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "saveMerchantRuleForPayload",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "governed_memory",
+      "verb": "remember_merchant",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "owner_ask",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.resend_ask.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "unanswered_open_ask_resent_on_existing_channels_bumps_send_count_and_mints_no_second_ask",
+        "resend_with_every_channel_dark_reports_not_delivered_and_stays_proposed",
+        "resend_replayed_within_the_window_is_refused_and_the_owner_is_nudged_once"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "client_evidence_request_send_count_incremented",
+      "executor": "deliverEvidenceAsksOnAllChannels",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "ask_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ask_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "ask_id": {
+            "type": "string"
+          },
+          "consequence": {
+            "type": "string"
+          },
+          "delivered": {
+            "type": "boolean"
+          },
+          "send_count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "ask_id",
+          "delivered",
+          "send_count",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "client_visible",
+      "verb": "resend_ask",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "reviewer"
+      },
+      "capability": "finance.resolve_match_group.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "distinct_same_amount_receipts_pair_by_unique_dates_and_apply_atomically",
+        "stale_or_incomplete_collision_group_refuses_without_partial_reconciliation"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "every_selected_match_confirmed_every_line_reconciled_and_crossed_suggestions_rejected_in_one_transaction",
+      "executor": "createManualReconciliationMatchInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "match_pairs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "document_id": {
+                  "type": "string"
+                },
+                "transaction_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "transaction_id",
+                "document_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "match_pairs",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "transaction_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "consequence": {
+            "type": "string"
+          },
+          "pairings": {
+            "type": "array"
+          },
+          "reconciled_count": {
+            "type": "number"
+          },
+          "retired_match_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pairings",
+          "retired_match_ids",
+          "reconciled_count",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "none",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "internal_state",
+      "verb": "resolve_match_group",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "partner"
+      },
+      "capability": "finance.retire_rule.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "active_rule_retired_via_chat_stops_matching_and_replay_refused"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "client_rule_status_retired_persisted",
+      "executor": "updateClientRuleStatusInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "consequence": {
+            "type": "string"
+          },
+          "prior_status": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "retired"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "prior_status",
+          "status",
+          "consequence"
+        ],
+        "type": "object"
+      },
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "governed_memory",
+      "verb": "retire_rule",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "remedial",
+        "grant_required": "none",
+        "required_capability_class": "junior"
+      },
+      "capability": "finance.retry_parse.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "retryParseRunsInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "low",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "internal_state",
+      "verb": "retry_parse",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "authority",
+        "grant_required": "none",
+        "required_capability_class": "founder"
+      },
+      "capability": "finance.revoke_role_grant.v1",
+      "domain": "finance",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "owner_revokes_standing_grant_in_chat_teammate_returns_to_asking",
+        "revoking_unknown_or_already_revoked_grant_reports_skipped_never_silent"
+      ],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": "action_authority_grant_status_revoked_persisted",
+      "executor": "revokeRoleGrant",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "grant_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "grant_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "grant_id": {
+            "type": "string"
+          },
+          "role_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "grant_id",
+          "role_id"
+        ],
+        "type": "object"
+      },
+      "preflight": "shadow_feed",
+      "preflight_alternative": "conservative-direction writer: owner actor required; an unknown/already-revoked grant reports skipped, never a forced flip",
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "high",
+      "schema_status": "declared",
+      "side_effect_class": "internal_state",
+      "verb": "revoke_role_grant",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "accounting",
+        "grant_required": "none",
+        "required_capability_class": "partner"
+      },
+      "capability": "finance.sync_to_accounting.v1",
+      "domain": "finance",
+      "dry_run": "supported",
+      "eval_scenarios": [],
+      "execution_receipt": "shadow_feed",
+      "execution_verifier": null,
+      "executor": "postLedgerTransactionInDb",
+      "idempotency": "natural_key",
+      "idempotency_note": null,
+      "input_schema": null,
+      "legacy_entrypoint_bindings": {
+        "surfaces": [
+          "feed_chat",
+          "transaction_chat"
+        ]
+      },
+      "output_schema": null,
+      "preflight": "shadow_feed",
+      "preflight_alternative": null,
+      "reversibility": "irreversible_external",
+      "risk_class": "high",
+      "schema_status": "legacy_untyped",
+      "side_effect_class": "external_ledger",
+      "verb": "sync_to_accounting",
+      "version": 1
+    },
+    {
+      "access": "read",
+      "audit_record": "gap",
+      "authority_requirements": {
+        "autonomy_class": "workflow",
+        "grant_required": "none",
+        "required_capability_class": "viewer"
+      },
+      "capability": "knowledge.retrieve.v1",
+      "data_access_class": "public",
+      "domain": "knowledge",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "knowledge_owner_knowledge_answer",
+        "knowledge_operator_knowledge_answer"
+      ],
+      "execution_receipt": "live",
+      "execution_verifier": null,
+      "executor": "retrieveKnowledge",
+      "idempotency": "natural_key",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "budget_override": {
+                "type": "object"
+              },
+              "decision_date": {
+                "type": "string"
+              },
+              "purpose_id": {
+                "type": "string"
+              },
+              "question_text": {
+                "type": "string"
+              },
+              "topics": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "purpose_id"
+            ],
+            "type": "object"
+          },
+          "trusted_context": {
+            "additionalProperties": false,
+            "properties": {
+              "config_snapshot": {
+                "type": "object"
+              },
+              "config_snapshot_id": {
+                "type": "string"
+              },
+              "consumer_capability_id": {
+                "type": "string"
+              },
+              "legal_entity": {
+                "type": "object"
+              },
+              "model_id": {
+                "type": "string"
+              },
+              "occurred_at": {
+                "type": "string"
+              },
+              "resolved_audience": {
+                "type": "object"
+              },
+              "source_event_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "legal_entity",
+              "resolved_audience",
+              "consumer_capability_id",
+              "occurred_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "trusted_context",
+          "request"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": []
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "grounding": {
+            "type": "object"
+          },
+          "receipt": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "grounding",
+          "receipt"
+        ],
+        "type": "object"
+      },
+      "preflight": "none",
+      "preflight_alternative": "deterministic_read_projection",
+      "reversibility": null,
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "none",
+      "verb": "retrieve",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "founder"
+      },
+      "capability": "memory.correct.v1",
+      "domain": "memory",
+      "dry_run": "supported",
+      "eval_scenarios": [
+        "memory_conflicting_assertions",
+        "memory_stale_review_after"
+      ],
+      "execution_receipt": "live",
+      "execution_verifier": "verifyMemoryRecordPersisted",
+      "executor": "supersedeMemory",
+      "idempotency": "natural_key",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "type": "object"
+          },
+          "prior_memory_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prior_memory_id",
+          "changes"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": []
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string"
+          },
+          "memory_key": {
+            "type": "string"
+          },
+          "record_state": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "memory_key",
+          "memory_id",
+          "revision",
+          "content_hash",
+          "record_state"
+        ],
+        "type": "object"
+      },
+      "preflight": "live",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "governed_memory",
+      "verb": "correct",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "founder"
+      },
+      "capability": "memory.dismiss.v1",
+      "domain": "memory",
+      "dry_run": "supported",
+      "eval_scenarios": [
+        "memory_erased_exclusion"
+      ],
+      "execution_receipt": "live",
+      "execution_verifier": "verifyMemoryRecordState",
+      "executor": "dismissMemory",
+      "idempotency": "natural_key",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "memory_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memory_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": []
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string"
+          },
+          "memory_key": {
+            "type": "string"
+          },
+          "record_state": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "memory_key",
+          "memory_id",
+          "revision",
+          "content_hash",
+          "record_state"
+        ],
+        "type": "object"
+      },
+      "preflight": "live",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "governed_memory",
+      "verb": "dismiss",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "founder"
+      },
+      "capability": "memory.erase.v1",
+      "domain": "memory",
+      "dry_run": "supported",
+      "eval_scenarios": [
+        "memory_erased_exclusion",
+        "memory_cross_tenant_isolation"
+      ],
+      "execution_receipt": "live",
+      "execution_verifier": "verifyMemoryErased",
+      "executor": "eraseUserMemories",
+      "idempotency": "natural_key",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "lifecycle_owner_id": {
+            "type": "string"
+          },
+          "lifecycle_owner_type": {
+            "type": "string"
+          },
+          "memory_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "lifecycle_owner_type",
+          "lifecycle_owner_id",
+          "memory_ids"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": []
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string"
+          },
+          "memory_key": {
+            "type": "string"
+          },
+          "record_state": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "memory_key",
+          "memory_id",
+          "revision",
+          "content_hash",
+          "record_state"
+        ],
+        "type": "object"
+      },
+      "preflight": "live",
+      "preflight_alternative": null,
+      "reversibility": null,
+      "risk_class": "high",
+      "schema_status": "declared",
+      "side_effect_class": "governed_memory",
+      "verb": "erase",
+      "version": 1
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "founder"
+      },
+      "capability": "memory.remember.v1",
+      "domain": "memory",
+      "dry_run": "supported",
+      "eval_scenarios": [
+        "memory_poisoned_quoted_content",
+        "memory_ambiguous_subject",
+        "memory_cross_tenant_isolation"
+      ],
+      "execution_receipt": "live",
+      "execution_verifier": "verifyMemoryRecordPersisted",
+      "executor": "saveMemory",
+      "idempotency": "natural_key",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "record": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "record"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": []
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string"
+          },
+          "memory_key": {
+            "type": "string"
+          },
+          "record_state": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "memory_key",
+          "memory_id",
+          "revision",
+          "content_hash",
+          "record_state"
+        ],
+        "type": "object"
+      },
+      "preflight": "live",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "governed_memory",
+      "verb": "remember",
+      "version": 1
+    },
+    {
+      "access": "read",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "workflow",
+        "grant_required": "none",
+        "required_capability_class": "viewer"
+      },
+      "capability": "memory.retrieve.v2",
+      "data_access_class": "restricted",
+      "domain": "memory",
+      "dry_run": "unsupported",
+      "eval_scenarios": [
+        "memory_stale_review_after",
+        "memory_poisoned_quoted_content",
+        "memory_conflicting_assertions",
+        "memory_ambiguous_subject",
+        "memory_erased_exclusion",
+        "memory_cross_tenant_isolation"
+      ],
+      "execution_receipt": "live",
+      "execution_verifier": null,
+      "executor": "buildMemoryBundle",
+      "idempotency": "natural_key",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "budget_override": {
+                "type": "object"
+              },
+              "purpose_id": {
+                "type": "string"
+              },
+              "subject_refs": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "subject_id": {
+                      "type": "string"
+                    },
+                    "subject_type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "subject_type",
+                    "subject_id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "purpose_id"
+            ],
+            "type": "object"
+          },
+          "trusted_context": {
+            "additionalProperties": false,
+            "properties": {
+              "authenticated_principal": {
+                "type": "object"
+              },
+              "config_snapshot_id": {
+                "type": "string"
+              },
+              "consumer_capability_id": {
+                "type": "string"
+              },
+              "conversation_ref": {
+                "type": "string"
+              },
+              "delegated_principal": {
+                "type": "object"
+              },
+              "occurred_at": {
+                "type": "string"
+              },
+              "resolved_audience": {
+                "type": "object"
+              },
+              "source_event_id": {
+                "type": "string"
+              },
+              "source_surface": {
+                "type": "string"
+              },
+              "tenant_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tenant_id",
+              "authenticated_principal",
+              "delegated_principal",
+              "resolved_audience",
+              "source_surface",
+              "consumer_capability_id",
+              "source_event_id",
+              "occurred_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "trusted_context",
+          "request"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": []
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "authoritative_read_requirements": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "confirmation_candidates": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "conflict_markers": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "context_items": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "receipt": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "context_items",
+          "conflict_markers",
+          "confirmation_candidates",
+          "authoritative_read_requirements",
+          "receipt"
+        ],
+        "type": "object"
+      },
+      "preflight": "none",
+      "preflight_alternative": "deterministic_read_projection",
+      "reversibility": null,
+      "risk_class": "high",
+      "schema_status": "declared",
+      "side_effect_class": "none",
+      "verb": "retrieve",
+      "version": 2
+    },
+    {
+      "access": "write",
+      "audit_record": "yes",
+      "authority_requirements": {
+        "autonomy_class": "memory",
+        "grant_required": "none",
+        "required_capability_class": "founder"
+      },
+      "capability": "memory.supersede.v1",
+      "domain": "memory",
+      "dry_run": "supported",
+      "eval_scenarios": [
+        "memory_conflicting_assertions"
+      ],
+      "execution_receipt": "live",
+      "execution_verifier": "verifyMemoryRecordPersisted",
+      "executor": "supersedeMemory",
+      "idempotency": "natural_key",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "prior_memory_id": {
+            "type": "string"
+          },
+          "record": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "prior_memory_id",
+          "record"
+        ],
+        "type": "object"
+      },
+      "legacy_entrypoint_bindings": {
+        "surfaces": []
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string"
+          },
+          "memory_key": {
+            "type": "string"
+          },
+          "record_state": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "memory_key",
+          "memory_id",
+          "revision",
+          "content_hash",
+          "record_state"
+        ],
+        "type": "object"
+      },
+      "preflight": "live",
+      "preflight_alternative": null,
+      "reversibility": "reversible_via_adjustment",
+      "risk_class": "medium",
+      "schema_status": "declared",
+      "side_effect_class": "governed_memory",
+      "verb": "supersede",
+      "version": 1
+    }
+  ]
+}

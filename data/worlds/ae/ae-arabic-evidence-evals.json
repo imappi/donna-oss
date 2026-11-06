@@ -1,0 +1,256 @@
+{
+  "version": "ae.arabic-evidence-eval.v1",
+  "world_id": "ae-arabic-evidence-owner-chat-v1",
+  "provenance": {
+    "kind": "synthetic_attributable_evaluation_corpus",
+    "authority": "AR-5 in docs/design-donna-arabic-localization.md",
+    "source_refs": [
+      "docs/design-donna-arabic-localization.md",
+      "data/worlds/ae/PLAN.md",
+      "data/worlds/ae/ae-arabic-pint-evidence.json"
+    ],
+    "customer_data": false,
+    "author_note": "Purpose-built UAE bookkeeping cases. Provider recordings are synthetic schema-shaped replay evidence, never measured model-quality evidence."
+  },
+  "limits": {
+    "live_runs": 3,
+    "max_provider_calls_per_run": 16,
+    "max_anthropic_calls_per_run": 14,
+    "max_openai_calls_per_run": 2,
+    "max_artifact_bytes": 2000000,
+    "max_owner_message_chars": 500
+  },
+  "live_provider_caps": [
+    { "lane": "document_and_owner_chat", "provider": "anthropic", "max_calls_per_run": 14, "max_input_tokens_per_call": 50000, "max_output_tokens_per_call": 8192 },
+    { "lane": "bank_statement", "provider": "openai", "max_calls_per_run": 2, "max_input_tokens_per_call": 50000, "max_output_tokens_per_call": 4096 }
+  ],
+  "client_identity": {
+    "company_name": "Gulf Trading LLC / شركة الخليج للتجارة ذ.م.م",
+    "legal_name": "Gulf Trading LLC",
+    "jurisdiction": "AE",
+    "tax_registration_number": "100000000000003",
+    "iban": "AE070331234567890123456"
+  },
+  "evidence_pairs": [
+    {
+      "id": "tax-invoice-scan",
+      "kind": "unified_document",
+      "expected": {
+        "kind": "completed_header",
+        "document_type": "supplier_bill",
+        "header": {
+          "vendor_name": null,
+          "customer_name": null,
+          "counterparty_role": "vendor",
+          "document_date": null,
+          "currency": "AED",
+          "subtotal_amount": null,
+          "tax_amount": null,
+          "total_amount": 1250,
+          "payment_status": "unpaid",
+          "reference_number": "AE-INV-2026-0042",
+          "references": [{ "type": "invoice_number", "value": "AE-INV-2026-0042" }]
+        }
+      },
+      "structural_fields": ["kind", "document_type", "header.counterparty_role", "header.currency"],
+      "material_fields": ["header.document_date", "header.total_amount", "header.payment_status", "header.reference_number", "header.references"],
+      "cases": [
+        {
+          "id": "tax-invoice-scan-en",
+          "presentation": "english",
+          "recording": "unified_extraction/ar5b-tax-invoice-scan",
+          "artifact": { "kind": "versioned_scan_png", "mime_type": "image/png", "path": "data/worlds/ae/artifacts/ar5b/tax-invoice-scan-en.png", "source_path": "data/worlds/ae/artifacts/ae6/invoice-scan-en.svg" }
+        },
+        {
+          "id": "tax-invoice-scan-ar",
+          "presentation": "arabic",
+          "recording": "unified_extraction/ar5b-tax-invoice-scan",
+          "artifact": { "kind": "versioned_scan_png", "mime_type": "image/png", "path": "data/worlds/ae/artifacts/ar5b/tax-invoice-scan-ar.png", "source_path": "data/worlds/ae/artifacts/ae6/invoice-scan-ar.svg" }
+        }
+      ]
+    },
+    {
+      "id": "sales-invoice-native",
+      "kind": "unified_document",
+      "expected": {
+        "kind": "completed_header",
+        "document_type": "sales_invoice",
+        "header": {
+          "vendor_name": null,
+          "customer_name": "Desert Bloom Café / مقهى زهرة الصحراء",
+          "counterparty_role": "customer",
+          "document_date": "2026-08-18",
+          "due_date": "2026-09-17",
+          "currency": "AED",
+          "subtotal_amount": 2400,
+          "tax_amount": 120,
+          "total_amount": 2520,
+          "payment_status": "unpaid",
+          "reference_number": "AE-SI-2026-0107",
+          "references": [{ "type": "invoice_number", "value": "AE-SI-2026-0107" }]
+        }
+      },
+      "structural_fields": ["kind", "document_type", "header.counterparty_role", "header.currency"],
+      "material_fields": ["header.customer_name", "header.document_date", "header.due_date", "header.subtotal_amount", "header.tax_amount", "header.total_amount", "header.payment_status", "header.reference_number", "header.references"],
+      "cases": [
+        {
+          "id": "sales-invoice-native-en",
+          "presentation": "english",
+          "recording": "unified_extraction/ar5b-sales-invoice",
+          "artifact": {
+            "kind": "rendered_native_pdf",
+            "mime_type": "application/pdf",
+            "filename": "AE-SI-2026-0107-en.pdf",
+            "subject": "Sales Invoice AE-SI-2026-0107",
+            "body": "Issued by: Gulf Trading LLC / شركة الخليج للتجارة ذ.م.م\nCustomer: Desert Bloom Café / مقهى زهرة الصحراء\nCustomer TRN: 100000000000101\nIssue date: 2026-08-18\nDue date: 2026-09-17\nConsulting services: AED 2,400.00\nVAT 5%: AED 120.00\nTotal: AED 2,520.00\nIBAN: AE070331234567890123456"
+          }
+        },
+        {
+          "id": "sales-invoice-native-bi",
+          "presentation": "bilingual",
+          "recording": "unified_extraction/ar5b-sales-invoice",
+          "artifact": {
+            "kind": "rendered_native_pdf",
+            "mime_type": "application/pdf",
+            "filename": "AE-SI-2026-0107-ar.pdf",
+            "subject": "فاتورة مبيعات / Sales Invoice AE-SI-2026-0107",
+            "body": "صادرة من: شركة الخليج للتجارة ذ.م.م / Gulf Trading LLC\nالعميل: مقهى زهرة الصحراء / Desert Bloom Café\nالرقم الضريبي للعميل: ١٠٠٠٠٠٠٠٠٠٠٠١٠١\nتاريخ الإصدار: ١٨/٠٨/٢٠٢٦\nتاريخ الاستحقاق: ١٧/٠٩/٢٠٢٦\nخدمات استشارية: ٢٬٤٠٠٫٠٠ د.إ\nضريبة القيمة المضافة ٥٪: ١٢٠٫٠٠ د.إ\nالإجمالي: ٢٬٥٢٠٫٠٠ د.إ\nIBAN: AE070331234567890123456"
+          }
+        }
+      ]
+    },
+    {
+      "id": "receipt-native",
+      "kind": "unified_document",
+      "expected": {
+        "kind": "completed_header",
+        "document_type": "receipt",
+        "header": {
+          "vendor_name": "Al Noor Stationery / مكتبة النور",
+          "customer_name": null,
+          "counterparty_role": "vendor",
+          "document_date": "2026-08-19",
+          "currency": "AED",
+          "subtotal_amount": 300,
+          "tax_amount": 15,
+          "total_amount": 315,
+          "payment_status": "paid",
+          "reference_number": "RCPT-AE-883104",
+          "references": [{ "type": "receipt_number", "value": "RCPT-AE-883104" }]
+        }
+      },
+      "structural_fields": ["kind", "document_type", "header.counterparty_role", "header.currency"],
+      "material_fields": ["header.vendor_name", "header.document_date", "header.subtotal_amount", "header.tax_amount", "header.total_amount", "header.payment_status", "header.reference_number", "header.references"],
+      "cases": [
+        {
+          "id": "receipt-native-en",
+          "presentation": "english",
+          "recording": "unified_extraction/ar5b-receipt",
+          "artifact": { "kind": "rendered_native_pdf", "mime_type": "application/pdf", "filename": "RCPT-AE-883104-en.pdf", "subject": "Paid Receipt RCPT-AE-883104", "body": "Al Noor Stationery / مكتبة النور\nDate: 2026-08-19\nOffice paper: AED 300.00\nVAT 5%: AED 15.00\nPaid total: AED 315.00\nCard payment\nVendor TRN: 100000000000222" }
+        },
+        {
+          "id": "receipt-native-ar",
+          "presentation": "arabic",
+          "recording": "unified_extraction/ar5b-receipt",
+          "artifact": { "kind": "rendered_native_pdf", "mime_type": "application/pdf", "filename": "RCPT-AE-883104-ar.pdf", "subject": "إيصال مدفوع RCPT-AE-883104", "body": "مكتبة النور / Al Noor Stationery\nالتاريخ: ١٩/٠٨/٢٠٢٦\nورق مكتبي: ٣٠٠٫٠٠ د.إ\nضريبة القيمة المضافة ٥٪: ١٥٫٠٠ د.إ\nالإجمالي المدفوع: ٣١٥٫٠٠ د.إ\nالدفع بالبطاقة\nالرقم الضريبي: ١٠٠٠٠٠٠٠٠٠٠٠٢٢٢" }
+        }
+      ]
+    },
+    {
+      "id": "credit-note-native",
+      "kind": "unified_document",
+      "expected": {
+        "kind": "completed_header",
+        "document_type": "supplier_bill",
+        "header": {
+          "vendor_name": "Pearl Logistics LLC / لؤلؤة للخدمات اللوجستية ذ.م.م",
+          "customer_name": null,
+          "counterparty_role": "vendor",
+          "document_date": "2026-08-20",
+          "currency": "AED",
+          "subtotal_amount": -500,
+          "tax_amount": -25,
+          "total_amount": -525,
+          "payment_status": "credit_note",
+          "reference_number": "AE-CN-2026-0007",
+          "references": [
+            { "type": "invoice_number", "value": "AE-CN-2026-0007" },
+            { "type": "other", "value": "AE-INV-2026-0042" }
+          ]
+        }
+      },
+      "structural_fields": ["kind", "document_type", "header.counterparty_role", "header.currency"],
+      "material_fields": ["header.vendor_name", "header.document_date", "header.subtotal_amount", "header.tax_amount", "header.total_amount", "header.payment_status", "header.reference_number", "header.references"],
+      "cases": [
+        {
+          "id": "credit-note-native-en",
+          "presentation": "english",
+          "recording": "unified_extraction/ar5b-credit-note",
+          "artifact": { "kind": "rendered_native_pdf", "mime_type": "application/pdf", "filename": "AE-CN-2026-0007-en.pdf", "subject": "Credit Note AE-CN-2026-0007", "body": "Pearl Logistics LLC / لؤلؤة للخدمات اللوجستية ذ.م.م\nOriginal invoice: AE-INV-2026-0042\nDate: 2026-08-20\nService adjustment: AED -500.00\nVAT 5%: AED -25.00\nCredit total: AED -525.00\nTRN: 100000000000333" }
+        },
+        {
+          "id": "credit-note-native-ar",
+          "presentation": "arabic",
+          "recording": "unified_extraction/ar5b-credit-note",
+          "artifact": { "kind": "rendered_native_pdf", "mime_type": "application/pdf", "filename": "AE-CN-2026-0007-ar.pdf", "subject": "إشعار دائن AE-CN-2026-0007", "body": "لؤلؤة للخدمات اللوجستية ذ.م.م / Pearl Logistics LLC\nمرجع الفاتورة الأصلية: AE-INV-2026-0042\nالتاريخ: ٢٠/٠٨/٢٠٢٦\nتعديل الخدمة: -٥٠٠٫٠٠ د.إ\nضريبة القيمة المضافة ٥٪: -٢٥٫٠٠ د.إ\nإجمالي الرصيد الدائن: -٥٢٥٫٠٠ د.إ\nالرقم الضريبي: ١٠٠٠٠٠٠٠٠٠٠٠٣٣٣" }
+        }
+      ]
+    },
+    {
+      "id": "bank-statement-native",
+      "kind": "bank_statement",
+      "expected": {
+        "transactions": [
+          { "date": "2026-08-21", "counterparty": "Desert Bloom Café / مقهى زهرة الصحراء", "reference": "PAY-AE-2026-778899001122", "money_in": 2520, "money_out": 0, "balance": 12520, "currency": "AED" },
+          { "date": "2026-08-22", "counterparty": "Al Noor Stationery / مكتبة النور", "reference": "RCPT-AE-883104", "money_in": 0, "money_out": 315, "balance": 12205, "currency": "AED" }
+        ],
+        "statement_summary": { "opening_balance": 10000, "closing_balance": 12205, "total_deposits": 2520, "total_payouts": 315, "currency": "AED", "period_start": "2026-08-01", "period_end": "2026-08-31", "account_identifier": "AE070331234567890123456" }
+      },
+      "structural_fields": ["statement_summary.currency", "statement_summary.period_start", "statement_summary.period_end"],
+      "material_fields": ["transactions.0.date", "transactions.0.counterparty", "transactions.0.reference", "transactions.0.money_in", "transactions.0.money_out", "transactions.0.balance", "transactions.1.date", "transactions.1.counterparty", "transactions.1.reference", "transactions.1.money_in", "transactions.1.money_out", "transactions.1.balance", "statement_summary.opening_balance", "statement_summary.closing_balance", "statement_summary.total_deposits", "statement_summary.total_payouts", "statement_summary.account_identifier"],
+      "cases": [
+        {
+          "id": "bank-statement-native-en",
+          "presentation": "english",
+          "recording": "bank_statement_extraction/ar5b-ae-statement",
+          "artifact": { "kind": "rendered_native_pdf", "mime_type": "application/pdf", "filename": "AE-bank-statement-2026-08-en.pdf", "subject": "Bank Statement August 2026", "body": "Account / IBAN: AE070331234567890123456\nPeriod: 2026-08-01 to 2026-08-31\nOpening balance: AED 10,000.00\nDate | Description | Debit | Credit | Balance\n2026-08-21 | Desert Bloom Café / مقهى زهرة الصحراء | | AED 2,520.00 | AED 12,520.00 | PAY-AE-2026-778899001122\n2026-08-22 | Al Noor Stationery / مكتبة النور | AED 315.00 | | AED 12,205.00 | RCPT-AE-883104\nTotal deposits: AED 2,520.00\nTotal payouts: AED 315.00\nClosing balance: AED 12,205.00" }
+        },
+        {
+          "id": "bank-statement-native-bi",
+          "presentation": "bilingual",
+          "recording": "bank_statement_extraction/ar5b-ae-statement",
+          "artifact": { "kind": "rendered_native_pdf", "mime_type": "application/pdf", "filename": "AE-bank-statement-2026-08-ar.pdf", "subject": "كشف حساب بنكي / Bank Statement أغسطس ٢٠٢٦", "body": "الحساب / IBAN: AE070331234567890123456\nالفترة: ٠١/٠٨/٢٠٢٦ إلى ٣١/٠٨/٢٠٢٦\nالرصيد الافتتاحي: ١٠٬٠٠٠٫٠٠ د.إ\nالتاريخ | الوصف | مدين | دائن | الرصيد\n٢١/٠٨/٢٠٢٦ | مقهى زهرة الصحراء / Desert Bloom Café | | ٢٬٥٢٠٫٠٠ د.إ | ١٢٬٥٢٠٫٠٠ د.إ | PAY-AE-2026-778899001122\n٢٢/٠٨/٢٠٢٦ | مكتبة النور / Al Noor Stationery | ٣١٥٫٠٠ د.إ | | ١٢٬٢٠٥٫٠٠ د.إ | RCPT-AE-883104\nإجمالي الإيداعات: ٢٬٥٢٠٫٠٠ د.إ\nإجمالي المدفوعات: ٣١٥٫٠٠ د.إ\nالرصيد الختامي: ١٢٬٢٠٥٫٠٠ د.إ" }
+        }
+      ]
+    }
+  ],
+  "owner_chat_pairs": [
+    {
+      "id": "recorded-state-question",
+      "context": { "client": { "name": "Gulf Trading LLC / شركة الخليج للتجارة ذ.م.م", "jurisdiction": "AE" }, "open_asks": [], "documents": [], "transactions": [], "ledger_summary": { "period_start": "2026-08-01", "period_end": "2026-08-31", "currency": "AED", "revenue": 2520, "expenses": 315, "net_income": 2205 }, "today": "2026-09-02" },
+      "expected": { "action_types": [], "required_text": ["2,205"], "forbidden_text": ["I've updated", "notified the firm", "ask your accountant"] },
+      "cases": [
+        { "id": "recorded-state-question-en", "presentation": "english", "user_message": "What is the draft profit for August?", "required_text": ["August"], "recording": "chat_engine/ar5b-state-question-en" },
+        { "id": "recorded-state-question-ar", "presentation": "arabic", "user_message": "كم صافي الربح المسجل مبدئياً لشهر أغسطس؟", "required_text": ["أغسطس"], "forbidden_text": ["حدّثت", "أبلغت الشركة", "اسأل محاسبك"], "recording": "chat_engine/ar5b-state-question-ar" }
+      ]
+    },
+    {
+      "id": "open-ask-answer",
+      "context": { "client": { "name": "Gulf Trading LLC / شركة الخليج للتجارة ذ.م.م", "jurisdiction": "AE" }, "open_asks": [{ "id": "ask-ae-vat-1", "question": "Which liability does the AED 5,250 payment settle?", "evidence_type": "business_purpose" }], "documents": [], "transactions": [], "ledger_summary": null, "today": "2026-09-02" },
+      "expected": { "action_types": ["answer_evidence_request"], "evidence_request_id": "ask-ae-vat-1", "required_text": [], "forbidden_text": ["I've filed", "I've updated", "notified the firm"] },
+      "cases": [
+        { "id": "open-ask-answer-en", "presentation": "english", "user_message": "That AED 5,250 payment settles the August VAT liability.", "required_text": ["confirm"], "recording": "chat_engine/ar5b-ask-answer-en" },
+        { "id": "open-ask-answer-ar", "presentation": "arabic", "user_message": "دفعة ٥٬٢٥٠ د.إ تسدد التزام ضريبة القيمة المضافة لشهر أغسطس.", "required_text": ["أكد"], "forbidden_text": ["سجّلت إجابتك", "حدّثت", "أبلغت الشركة"], "recording": "chat_engine/ar5b-ask-answer-ar" }
+      ]
+    },
+    {
+      "id": "unsupported-correction",
+      "context": { "client": { "name": "Gulf Trading LLC / شركة الخليج للتجارة ذ.م.م", "jurisdiction": "AE" }, "open_asks": [], "documents": [], "transactions": [{ "id": "tx-ae-315", "date": "2026-08-22", "description": "Al Noor Stationery", "money_out": 315, "currency": "AED", "coded_account": "Office expenses", "review_state": "decided", "reconciliation_status": "reconciled" }], "ledger_summary": null, "today": "2026-09-02" },
+      "expected": { "action_types": [], "required_text": [], "forbidden_text": ["I've changed", "I've updated", "notified the firm", "ask your accountant"] },
+      "cases": [
+        { "id": "unsupported-correction-en", "presentation": "english", "user_message": "Change the AED 315 stationery payment to marketing.", "required_text": ["will not be recorded"], "recording": "chat_engine/ar5b-correction-en" },
+        { "id": "unsupported-correction-bi", "presentation": "bilingual", "user_message": "غيّر تصنيف دفعة القرطاسية AED 315 إلى Marketing، please.", "required_text": ["لن يُسجّل"], "forbidden_text": ["غيّرت", "حدّثت", "أبلغت الشركة", "اسأل محاسبك"], "recording": "chat_engine/ar5b-correction-ar" }
+      ]
+    }
+  ]
+}

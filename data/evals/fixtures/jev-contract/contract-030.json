@@ -1,0 +1,225 @@
+{
+  "id": "contract-030",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "contract-030",
+    "scope": {
+      "firm_id": "fixture-firm",
+      "client_id": "fixture-client",
+      "generation": "fixture-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "bank-source-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "{\"contact\": \"ELM OFFICE SUPPLIES\", \"currency\": \"EUR\", \"date\": \"2026-08-10\", \"description\": \"SEPA ELM OFFICE SUPPLIES BILL-8105\", \"money_in\": 0, \"money_out\": 587, \"raw_description\": \"SEPA DD ELM OFFICE SUPPLIES BILL-8105\", \"reconciliation_status\": null}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "{\"currency\": \"EUR\", \"document_date\": \"2026-08-03\", \"document_type\": \"supplier_bill\", \"due_date\": \"2026-09-03\", \"payment_status\": \"unpaid\", \"reference_number\": \"BILL-8105\", \"total_amount\": 587, \"vendor_name\": \"Elm Office Supplies Limited\"}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "repeated-ref-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "A separate current invoice reuses the same reference.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Offline investigation of the identified invoice at the requested snapshot. This does not assert that payment has occurred or that a customer owes evidence.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "opaque-tx-5-a",
+        "source_id": "bank-source-1",
+        "date": "2026-08-10",
+        "money_in_minor": 0,
+        "money_out_minor": 58700,
+        "currency": "EUR",
+        "contact": "ELM OFFICE SUPPLIES",
+        "description": "SEPA ELM OFFICE SUPPLIES BILL-8105",
+        "raw_description": "SEPA DD ELM OFFICE SUPPLIES BILL-8105",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-opaque-tx-5-a",
+        "kind": "reference",
+        "source_id": "bank-source-1",
+        "transaction_id": "opaque-tx-5-a",
+        "invoice_id": "opaque-doc-5",
+        "invoice_amount_minor": 58700,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 58700,
+        "bank_currency": "EUR",
+        "gross_minor": 58700,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "other-invoice",
+        "source_id": "repeated-ref-source",
+        "date": "2026-08-05",
+        "reference": "BILL-8105"
+      }
+    ],
+    "invoice": {
+      "id": "opaque-doc-5",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-03",
+      "due_date": "2026-09-03",
+      "amount_minor": 58700,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "BILL-8105",
+      "counterparty": "Elm Office Supplies Limited"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "opaque-doc-5",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-source-1",
+        "invoice-source",
+        "repeated-ref-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-source-1",
+        "invoice-source",
+        "repeated-ref-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "opaque-tx-5-a"
+      ],
+      "invoice_ids": [
+        "opaque-doc-5",
+        "other-invoice"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "source_family": "authored-repeated-reference",
+    "limitations": [
+      "Authored synthetic evidence; source relationships are assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "opaque-doc-5",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and obligation, validated semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": null,
+    "label_reason": "Repeated reference requires evidence of the particular obligation.",
+    "prior_art": "authored-repeated-reference",
+    "positive_paths": [
+      {
+        "kind": "reference",
+        "transaction_id": "opaque-tx-5-a",
+        "invoice_id": "opaque-doc-5",
+        "source_id": "bank-source-1",
+        "required_semantics": [
+          "affirmative_obligation_connection",
+          "direct_counterparty_or_documented_processor",
+          "reference_association"
+        ],
+        "constraints": [
+          "current_scoped_sources",
+          "eligible_bank_row",
+          "allocation_arithmetic",
+          "resolved_relevant_competitors"
+        ]
+      }
+    ]
+  },
+  "semantic_statuses": {
+    "opaque-tx-5-a": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

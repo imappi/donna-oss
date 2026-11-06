@@ -1,0 +1,25 @@
+{
+  "lane": "document_disposition",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — authored from documentDispositionLlm.js's output contract for the appliance fixture world: the Screwfix till receipt (42.99 GBP, immaterial) parsed with no bank statement in the feed, so the honest verdict is auto_explain — a textbook small receipt the firm does not need the owner to narrate; never a captured provider response",
+  "fixture": "receipt_screwfix",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_dispose_screwfix_receipt",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-4-8",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"disposition\":\"auto_explain\",\"materiality\":\"immaterial\",\"expense_kind\":\"hardware_and_tools\",\"settlement_channel\":\"unknown\",\"confidence\":0.91,\"reasoning\":\"A small retail hardware receipt for consumables the print studio plausibly uses; immaterial and self-explanatory, so it is explained without asking the owner.\"}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+}

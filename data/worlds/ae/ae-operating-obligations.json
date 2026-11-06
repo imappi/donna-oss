@@ -1,0 +1,229 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/operating-obligations/2026-08",
+  "seed": "ae-operating-obligations-v1",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.payroll-operating-obligations.v1",
+    "capabilityId": "model_ae_payroll_operating_obligations",
+    "jurisdiction": "AE",
+    "entityType": "ae-llc",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_operating_obligations",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": ["licence_permit_deposit", "annual_rent_pdc"],
+    "permittedActions": ["project_operating_obligation", "recognize_elapsed_prepayment", "record_cash_settlement"],
+    "maximumAuthority": "observe_and_project_only",
+    "fallback": {
+      "terminalState": "blocked",
+      "responsibleActor": "owner",
+      "nextPermittedAction": "request_missing_contract_fact"
+    },
+    "protectedFailures": [
+      "recoverable_deposit_expensed",
+      "annual_rent_expensed_month_one",
+      "post_dated_cheque_treated_as_cash",
+      "custody_settlement_recognition_conflated",
+      "bank_line_double_posted"
+    ]
+  },
+  "policySources": [
+    {
+      "id": "policy/ifrs-conceptual-framework",
+      "authority": "IFRS Foundation",
+      "title": "Conceptual Framework for Financial Reporting",
+      "url": "https://www.ifrs.org/issued-standards/list-of-standards/conceptual-framework/",
+      "effectiveFrom": "2020-01-01",
+      "asOf": "2026-08-31",
+      "verifiedRules": ["asset and expense definitions remain distinct", "recognition and derecognition follow the underlying rights and obligations"]
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity/ae-operating-llc",
+      "kind": "company",
+      "legalForm": "ae-llc",
+      "activeFrom": "2026-01-01"
+    }
+  ],
+  "events": [
+    {
+      "id": "event/trade-licence-renewal",
+      "type": "trade_licence_renewal",
+      "legalEntityId": "entity/ae-operating-llc",
+      "occurredAt": "2026-08-01",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/trade-licence-renewal"]
+    },
+    {
+      "id": "event/trade-licence-bank-settlement",
+      "type": "bank_settlement",
+      "legalEntityId": "entity/ae-operating-llc",
+      "occurredAt": "2026-08-02",
+      "causalParents": ["event/trade-licence-renewal"],
+      "evidenceRefs": ["artifact/trade-licence-bank-line"]
+    },
+    {
+      "id": "event/work-permit-issued",
+      "type": "work_permit_issued",
+      "legalEntityId": "entity/ae-operating-llc",
+      "occurredAt": "2026-08-10",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/work-permit-and-deposit"]
+    },
+    {
+      "id": "event/work-permit-bank-settlement",
+      "type": "bank_settlement",
+      "legalEntityId": "entity/ae-operating-llc",
+      "occurredAt": "2026-08-11",
+      "causalParents": ["event/work-permit-issued"],
+      "evidenceRefs": ["artifact/work-permit-bank-line"]
+    },
+    {
+      "id": "event/rent-lease-signed",
+      "type": "lease_signed",
+      "legalEntityId": "entity/ae-operating-llc",
+      "occurredAt": "2026-07-25",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/annual-rent-lease"]
+    },
+    {
+      "id": "event/rent-pdc-issued",
+      "type": "post_dated_cheque_issued",
+      "legalEntityId": "entity/ae-operating-llc",
+      "occurredAt": "2026-07-25",
+      "causalParents": ["event/rent-lease-signed"],
+      "evidenceRefs": ["artifact/rent-pdc-custody"]
+    },
+    {
+      "id": "event/rent-bank-settlement",
+      "type": "bank_settlement",
+      "legalEntityId": "entity/ae-operating-llc",
+      "occurredAt": "2026-08-01",
+      "causalParents": ["event/rent-pdc-issued"],
+      "evidenceRefs": ["artifact/rent-bank-line"]
+    },
+    {
+      "id": "event/rent-august-release",
+      "type": "prepayment_release",
+      "legalEntityId": "entity/ae-operating-llc",
+      "occurredAt": "2026-08-31",
+      "causalParents": ["event/rent-lease-signed", "event/rent-bank-settlement"],
+      "evidenceRefs": ["artifact/annual-rent-lease"]
+    }
+  ],
+  "observations": [
+    {"id": "observation/trade-licence-renewal", "eventId": "event/trade-licence-renewal", "artifactId": "artifact/trade-licence-renewal", "observedAt": "2026-08-01"},
+    {"id": "observation/trade-licence-bank", "eventId": "event/trade-licence-bank-settlement", "artifactId": "artifact/trade-licence-bank-line", "observedAt": "2026-08-02"},
+    {"id": "observation/work-permit", "eventId": "event/work-permit-issued", "artifactId": "artifact/work-permit-and-deposit", "observedAt": "2026-08-10"},
+    {"id": "observation/work-permit-bank", "eventId": "event/work-permit-bank-settlement", "artifactId": "artifact/work-permit-bank-line", "observedAt": "2026-08-11"},
+    {"id": "observation/rent-lease", "eventId": "event/rent-lease-signed", "artifactId": "artifact/annual-rent-lease", "observedAt": "2026-07-25"},
+    {"id": "observation/rent-pdc", "eventId": "event/rent-pdc-issued", "artifactId": "artifact/rent-pdc-custody", "observedAt": "2026-07-25"},
+    {"id": "observation/rent-bank", "eventId": "event/rent-bank-settlement", "artifactId": "artifact/rent-bank-line", "observedAt": "2026-08-01"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {"id": "artifact/trade-licence-renewal", "kind": "trade_licence", "format": "json", "trusted": true, "title": "Synthetic annual trade licence renewal", "fields": {"licenceNumber": "SYNTH-DET-2026-01", "startsOn": "2026-08-01", "endsOn": "2027-07-31", "amountAed": "12000.00"}},
+    {"id": "artifact/trade-licence-bank-line", "kind": "bank_statement_line", "format": "json", "trusted": true, "title": "Synthetic trade licence settlement", "fields": {"bankLineId": "bank-line/trade-licence-2026", "amountAed": "12000.00", "settledOn": "2026-08-02"}},
+    {"id": "artifact/work-permit-and-deposit", "kind": "work_permit", "format": "json", "trusted": true, "title": "Synthetic work permit, residence-visa lifecycle, and recoverable deposit notice", "fields": {"permitNumber": "SYNTH-WP-2026-01", "visaLifecycle": "residence_and_work_authorisation", "permitFeeAed": "3000.00", "recoverableDepositAed": "5000.00", "depositRefundable": true}},
+    {"id": "artifact/work-permit-bank-line", "kind": "bank_statement_line", "format": "json", "trusted": true, "title": "Synthetic work permit settlement", "fields": {"bankLineId": "bank-line/work-permit-2026", "amountAed": "8000.00", "settledOn": "2026-08-11"}},
+    {"id": "artifact/annual-rent-lease", "kind": "lease_contract", "format": "json", "trusted": true, "title": "Synthetic annual office lease", "fields": {"leaseNumber": "SYNTH-LEASE-2026-01", "startsOn": "2026-08-01", "endsOn": "2027-07-31", "annualRentAed": "120000.00"}},
+    {"id": "artifact/rent-pdc-custody", "kind": "post_dated_cheque_register", "format": "json", "trusted": true, "title": "Synthetic post-dated cheque custody record", "fields": {"chequeNumber": "SYNTH-PDC-0001", "issuedOn": "2026-07-25", "datedOn": "2026-08-01", "amountAed": "120000.00", "state": "issued_not_cleared"}},
+    {"id": "artifact/rent-bank-line", "kind": "bank_statement_line", "format": "json", "trusted": true, "title": "Synthetic cleared rent cheque bank line", "fields": {"bankLineId": "bank-line/rent-2026", "chequeNumber": "SYNTH-PDC-0001", "amountAed": "120000.00", "settledOn": "2026-08-01"}}
+  ],
+  "aeObligationContract": {
+    "closedThrough": "2026-07-31",
+    "employees": [],
+    "payrollBatches": [],
+    "masterDataActions": [],
+    "operatingItems": [
+      {
+        "id": "operating/trade-licence-2026",
+        "kind": "annual_trade_licence",
+        "sourceArtifactId": "artifact/trade-licence-renewal",
+        "bankSettlementArtifactId": "artifact/trade-licence-bank-line",
+        "amountAed": "12000.00",
+        "startsOn": "2026-08-01",
+        "endsOn": "2027-07-31",
+        "monthOneExpenseAed": "1000.00",
+        "bankSettlement": {"bankLineId": "bank-line/trade-licence-2026", "amountAed": "12000.00", "settledOn": "2026-08-02"}
+      },
+      {
+        "id": "operating/work-permit-2026",
+        "kind": "work_permit_and_deposit",
+        "sourceArtifactId": "artifact/work-permit-and-deposit",
+        "bankSettlementArtifactId": "artifact/work-permit-bank-line",
+        "amountAed": "8000.00",
+        "permitFeeAed": "3000.00",
+        "recoverableDepositAed": "5000.00",
+        "depositRefundable": true,
+        "visaLifecycleIncluded": true,
+        "depositCandidateAccount": "asset.recoverable_deposit",
+        "bankSettlement": {"bankLineId": "bank-line/work-permit-2026", "amountAed": "8000.00", "settledOn": "2026-08-11"}
+      },
+      {
+        "id": "operating/annual-rent-2026",
+        "kind": "annual_rent",
+        "sourceArtifactId": "artifact/annual-rent-lease",
+        "chequeArtifactId": "artifact/rent-pdc-custody",
+        "bankSettlementArtifactId": "artifact/rent-bank-line",
+        "amountAed": "120000.00",
+        "startsOn": "2026-08-01",
+        "endsOn": "2027-07-31",
+        "monthOneExpenseAed": "10000.00",
+        "postDatedCheque": {"chequeNumber": "SYNTH-PDC-0001", "issuedOn": "2026-07-25", "datedOn": "2026-08-01", "cashEffectOnIssueAed": "0.00"},
+        "bankSettlement": {"bankLineId": "bank-line/rent-2026", "chequeNumber": "SYNTH-PDC-0001", "amountAed": "120000.00", "settledOn": "2026-08-01"}
+      }
+    ],
+    "temporalPairs": [
+      {
+        "id": "temporal/trade-licence",
+        "family": "licence_permit_deposit",
+        "documentFirst": [
+          {"kind": "obligation_document", "ref": "operating/trade-licence-2026"},
+          {"kind": "custody_asset", "ref": "prepayment/trade-licence-2026"},
+          {"kind": "bank_settlement", "ref": "operating/trade-licence-2026", "bankLineId": "bank-line/trade-licence-2026"}
+        ],
+        "cashFirst": [
+          {"kind": "bank_settlement", "ref": "operating/trade-licence-2026", "bankLineId": "bank-line/trade-licence-2026"},
+          {"kind": "obligation_document", "ref": "operating/trade-licence-2026"},
+          {"kind": "custody_asset", "ref": "prepayment/trade-licence-2026"}
+        ]
+      },
+      {
+        "id": "temporal/licence-permit-deposit",
+        "family": "licence_permit_deposit",
+        "documentFirst": [
+          {"kind": "obligation_document", "ref": "operating/work-permit-2026"},
+          {"kind": "custody_asset", "ref": "deposit/work-permit-2026"},
+          {"kind": "bank_settlement", "ref": "operating/work-permit-2026", "bankLineId": "bank-line/work-permit-2026"}
+        ],
+        "cashFirst": [
+          {"kind": "bank_settlement", "ref": "operating/work-permit-2026", "bankLineId": "bank-line/work-permit-2026"},
+          {"kind": "obligation_document", "ref": "operating/work-permit-2026"},
+          {"kind": "custody_asset", "ref": "deposit/work-permit-2026"}
+        ]
+      },
+      {
+        "id": "temporal/annual-rent-pdc",
+        "family": "annual_rent_pdc",
+        "documentFirst": [
+          {"kind": "lease_document", "ref": "operating/annual-rent-2026"},
+          {"kind": "cheque_issue", "ref": "SYNTH-PDC-0001"},
+          {"kind": "bank_settlement", "ref": "SYNTH-PDC-0001", "bankLineId": "bank-line/rent-2026"},
+          {"kind": "monthly_release", "ref": "operating/annual-rent-2026/2026-08"}
+        ],
+        "cashFirst": [
+          {"kind": "bank_settlement", "ref": "SYNTH-PDC-0001", "bankLineId": "bank-line/rent-2026"},
+          {"kind": "cheque_issue", "ref": "SYNTH-PDC-0001"},
+          {"kind": "lease_document", "ref": "operating/annual-rent-2026"},
+          {"kind": "monthly_release", "ref": "operating/annual-rent-2026/2026-08"}
+        ]
+      }
+    ],
+    "sensitivityPairs": [
+      {"id": "sensitivity/deposit-refundability", "family": "licence_permit_deposit", "changedFact": "depositRefundable", "left": {"depositRefundable": true}, "right": {"depositRefundable": false}},
+      {"id": "sensitivity/pdc-clearing", "family": "annual_rent_pdc", "changedFact": "bankCleared", "left": {"bankCleared": false}, "right": {"bankCleared": true}}
+    ]
+  }
+}

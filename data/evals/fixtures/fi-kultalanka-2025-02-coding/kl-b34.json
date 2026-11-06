@@ -1,0 +1,80 @@
+{
+  "id": "kl-b34",
+  "title": "Kultalanka 02/2025 28.2. Palkka −1 926,24",
+  "split": "development",
+  "family": "kultalanka-payroll",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "payroll",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-28",
+    "description": "PALKKA KORHONEN SAARA PALKKA 2/2025",
+    "money_in": 0,
+    "money_out": 1926.24,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Payroll",
+          "direction": "debit",
+          "amount": 2400,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 1926.24,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Payroll withholding and employer health-insurance payable",
+          "direction": "credit",
+          "amount": 288,
+          "tax_code": "ALV_OUT_OF_SCOPE"
+        },
+        {
+          "role": "counterparty",
+          "account": "TyEL and payroll contributions payable",
+          "direction": "credit",
+          "amount": 171.6,
+          "tax_code": "ALV_OUT_OF_SCOPE"
+        },
+        {
+          "role": "counterparty",
+          "account": "TyEL and payroll contributions payable",
+          "direction": "credit",
+          "amount": 14.16,
+          "tax_code": "ALV_OUT_OF_SCOPE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "disputed"
+    }
+  },
+  "expressible": {
+    "status": "gap",
+    "gap": "source",
+    "detail": "its source (payslip or loan schedule) is not a seedable FIK-3 document type"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B34"
+  }
+}

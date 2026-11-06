@@ -1,0 +1,35 @@
+{
+  "lane": "payout_statement_extraction",
+  "endpoint_class": "openai",
+  "provenance": "synthetic \u2014 authored from payoutStatement.js PAYOUT_EXTRACTION_SCHEMA for the appliance fixture world (artifact/payout-statement: gross 1,250, processing fees 36.25, net 1,213.75, reference PO-88121); never a captured provider response",
+  "fixture": "payout_statement",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_extract_paylink_payout",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_extract_paylink_payout",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"extraction_status\":\"validated\",\"extraction_confidence\":0.96,\"warnings\":[],\"document_kind\":\"payout_statement\",\"provider_name\":\"PayLink\",\"provider_tax_id\":null,\"merchant_name\":\"Kestrel Print Studio Ltd\",\"merchant_tax_id\":null,\"period_start\":\"2026-08-11\",\"period_end\":\"2026-08-17\",\"payout_date\":\"2026-08-18\",\"currency\":\"GBP\",\"gross_sales\":1250,\"gross_components\":[],\"refunds\":0,\"fees\":[{\"description\":\"Processing fees (2.9%)\",\"amount\":36.25,\"tax_amount\":0}],\"adjustments\":[],\"net_payout\":1213.75,\"transaction_count\":23,\"payout_reference\":\"PO-88121\",\"deposit_reference\":null,\"bank_last4\":\"5678\"}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

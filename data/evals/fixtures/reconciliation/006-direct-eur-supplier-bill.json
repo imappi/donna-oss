@@ -1,0 +1,49 @@
+{
+  "id": "006-direct-eur-supplier-bill",
+  "title": "Happy-path AP — same-currency direct debit to the vendor",
+  "tags": ["same_currency", "supplier_bill", "happy_path", "ap"],
+  "narrative": "The easy AP case: a EUR 320 supplier bill from Helsinki Cloud Oy paid as a single same-currency EUR 320 SEPA debit four days later, with the vendor name and the invoice reference both in the bank description. Both the weighted matcher and the LLM matcher should auto-match this one — the fixture exists to confirm the LLM matcher does not regress on the cases the deterministic scorer already handles.",
+  "document": {
+    "id": "sb-helsinki-006",
+    "document_type": "supplier_bill",
+    "vendor_name": "Helsinki Cloud Oy",
+    "document_date": "2026-04-10",
+    "due_date": "2026-05-10",
+    "total_amount": 320.00,
+    "currency": "EUR",
+    "reference_number": "HC-2026-0451",
+    "extraction_confidence": 0.96,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-helsinki-debit",
+      "money_out": 320.00,
+      "currency": "EUR",
+      "date": "2026-04-14",
+      "description": "SEPA DD HELSINKI CLOUD OY HC-2026-0451",
+      "raw_description": "SEPA DIRECT DEBIT HELSINKI CLOUD OY REF HC-2026-0451",
+      "contact": "Helsinki Cloud Oy"
+    },
+    {
+      "id": "tx-office-rent",
+      "money_out": 1850.00,
+      "currency": "EUR",
+      "date": "2026-04-02",
+      "description": "RENT OUTGOING OFFICE",
+      "raw_description": "MONTHLY OFFICE RENT APR 2026",
+      "contact": "Landlord Oy"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      {
+        "bank_transaction_id": "tx-helsinki-debit",
+        "status": "auto_matched",
+        "required_hops_any_of": ["amount_exact", "reference_match", "vendor_overlap"]
+      }
+    ],
+    "unmatchable_reason": null
+  }
+}

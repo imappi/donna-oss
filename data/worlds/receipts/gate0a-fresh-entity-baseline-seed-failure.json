@@ -1,0 +1,57 @@
+{
+  "version": "eaw.fresh-entity-diagnostic.v1",
+  "incident_id": "fresh-entity/baseline-seed-failure",
+  "observed_at": "2026-08-29T12:00:00.000Z",
+  "entity": {
+    "firm_id": "eaw-fictional-firm",
+    "client_id": "eaw-fictional-client",
+    "creation_path": "desktop_firm_intake"
+  },
+  "status": "failed",
+  "stages": [
+    { "stage": "create_path", "status": "passed", "reason_code": null, "receipt_ids": ["route/create-request"] },
+    { "stage": "build_and_migration", "status": "passed", "reason_code": null, "receipt_ids": ["build/ad0770db", "migration/121"] },
+    { "stage": "canonical_identity", "status": "passed", "reason_code": null, "receipt_ids": ["identity/canonical-gb-ltd"] },
+    { "stage": "config_chart_authority", "status": "failed", "reason_code": "DESKTOP_BASELINE_SEED_FAILED", "receipt_ids": ["seed/failure-1"] },
+    { "stage": "first_upload", "status": "not_reached", "reason_code": "UPSTREAM_STAGE_FAILED", "receipt_ids": [] },
+    { "stage": "worker_stage", "status": "not_reached", "reason_code": "UPSTREAM_STAGE_FAILED", "receipt_ids": [] }
+  ],
+  "first_divergence": {
+    "stage": "config_chart_authority",
+    "status": "failed",
+    "reason_code": "DESKTOP_BASELINE_SEED_FAILED",
+    "receipt_ids": ["seed/failure-1"]
+  },
+  "replay_artifact": {
+    "artifact_id": "artifact/fresh-entity-seed-failure",
+    "sha256": "ef76a934ca9acfee08996fcdcdb7a29e533a36e8602e16db2c20a75ef82b8736",
+    "retention_status": "retained",
+    "source_class": "fictional",
+    "authorization": { "status": "authorized", "purpose": "diagnostic_replay", "authority_id": "eaw-test-authority" }
+  },
+  "fictional_reproducer": {
+    "fictional": true,
+    "incident_id": "fresh-entity/baseline-seed-failure",
+    "world_id": "gate0/fresh-entity-baseline-seed-failure",
+    "expected_divergence_stage": "config_chart_authority",
+    "path": "data/worlds/reproducers/fresh-entity-baseline-seed-failure-v1.json",
+    "sha256": "ac658112be6c2717852826e98c708e748a0fe6b288795918035b9fb6e38c79f3"
+  },
+  "replay_eligibility": { "status": "pending_byte_verification" },
+  "protected_corpus_eligibility": { "status": "pending_byte_verification" },
+  "spend": {
+    "status": "known_zero_model",
+    "modelSpendUsd": 0,
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "solveCalls": 0,
+    "wallTimeMs": 0,
+    "providerResponses": [],
+    "modelIds": [],
+    "pricingSource": { "status": "not_applicable", "reason": "deterministic_zero_model_diagnostic" },
+    "configurationDigest": "17711bc0b250c262991cc130b579e7c2e9e01a259fd4809ff8d091b00c5a0242",
+    "artifactDigests": ["545978d1b7860b52d4d515afa779aba7dbf8ff1ec62bee0506700e991bd67dea"],
+    "basis": "deterministic_zero_model_diagnostic"
+  },
+  "receipt_digest": "cd900fd1b89f028a303494cfbdad70b174dbf95b5be681c2bc7c3cdbee99fc37"
+}

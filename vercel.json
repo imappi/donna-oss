@@ -1,0 +1,918 @@
+{
+  "functions": {
+    "api/donna-router.js": {
+      "maxDuration": 300,
+      "includeFiles": "{packs/**,data/worlds/policy/**,server/donna/world/oracleSuite.js,server/donna/world/oracleAssurance.js,db/migrations/**,data/worlds/admitted-entity-profiles.json}"
+    },
+    "api/inngest.js": {
+      "maxDuration": 300,
+      "includeFiles": "{packs/**,data/worlds/policy/**,server/donna/world/oracleSuite.js,server/donna/world/oracleAssurance.js,db/migrations/**,data/worlds/admitted-entity-profiles.json}"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=outbox",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=stuck",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=drain",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=loops_inbox",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=coding_convergence",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=storage_orphans",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=convergence_snapshot",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=statutory_watches",
+      "schedule": "15 4 * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=statutory_watches_hourly",
+      "schedule": "45 * * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=evidence_topic_reminders",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/donna/firms/documents/parse-cron?task=canonical_role_resolution",
+      "schedule": "30 7 * * *"
+    }
+  ],
+  "headers": [{"source":"/capture", "headers":[{"key":"Referrer-Policy","value":"no-referrer"},{"key":"Cache-Control","value":"no-store"},{"key":"Content-Security-Policy","value":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self' https://*.supabase.co; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"}]}],
+  "rewrites": [
+    {"source":"/api/donna/physical/:path*", "destination":"/api/donna-router?path=physical/:path*"},
+    {
+      "source": "/api/donna/firms/inventory/physical-reconciliation",
+      "destination": "/api/donna-router?path=firms/inventory/physical-reconciliation"
+    },
+    {
+      "source": "/api/donna/firms/inventory/physical-reconciliation/evidence",
+      "destination": "/api/donna-router?path=firms/inventory/physical-reconciliation/evidence"
+    },
+    {
+      "source": "/api/donna/firms/inventory/physical-reconciliation/:sessionId",
+      "destination": "/api/donna-router?path=firms/inventory/physical-reconciliation/:sessionId"
+    },
+    {
+      "source": "/api/donna/firms/inventory/physical-reconciliation/:sessionId/observations",
+      "destination": "/api/donna-router?path=firms/inventory/physical-reconciliation/:sessionId/observations"
+    },
+    {
+      "source": "/api/donna/firms/inventory/physical-reconciliation/:sessionId/resolutions",
+      "destination": "/api/donna-router?path=firms/inventory/physical-reconciliation/:sessionId/resolutions"
+    },
+    {
+      "source": "/api/donna/firms/inventory/physical-reconciliation/:sessionId/acknowledgements",
+      "destination": "/api/donna-router?path=firms/inventory/physical-reconciliation/:sessionId/acknowledgements"
+    },
+    {
+      "source": "/api/donna/firms/clients/:id/readiness/retry",
+      "destination": "/api/donna-router?path=firms/clients/:id/readiness/retry"
+    },
+    {
+      "source": "/api/donna/firms/clients/:id/cloud-pilot/:action",
+      "destination": "/api/donna-router?path=firms/clients/:id/cloud-pilot/:action"
+    },
+    {
+      "source": "/api/donna/firms/health",
+      "destination": "/api/donna-router?path=firms/health"
+    },
+    {
+      "source": "/api/donna/firms/runtime-liveness",
+      "destination": "/api/donna-router?path=firms/runtime-liveness"
+    },
+    {
+      "source": "/api/donna/firms/snapshot",
+      "destination": "/api/donna-router?path=firms/snapshot"
+    },
+    {
+      "source": "/api/donna/firms/case-snapshot",
+      "destination": "/api/donna-router?path=firms/case-snapshot"
+    },
+    {
+      "source": "/api/donna/firms/feed",
+      "destination": "/api/donna-router?path=firms/feed"
+    },
+    {
+      "source": "/api/donna/firms/feed-events",
+      "destination": "/api/donna-router?path=firms/feed-events"
+    },
+    {
+      "source": "/api/donna/firms/self-provision",
+      "destination": "/api/donna-router?path=firms/self-provision"
+    },
+    {
+      "source": "/api/donna/firms/first-run",
+      "destination": "/api/donna-router?path=firms/first-run"
+    },
+    {
+      "source": "/api/donna/firms/clients",
+      "destination": "/api/donna-router?path=firms/clients"
+    },
+    {
+      "source": "/api/donna/firms/imports/inspect",
+      "destination": "/api/donna-router?path=firms/imports/inspect"
+    },
+    {
+      "source": "/api/donna/firms/provision-workspace",
+      "destination": "/api/donna-router?path=firms/provision-workspace"
+    },
+    {
+      "source": "/api/donna/firms/clients/:id",
+      "destination": "/api/donna-router?path=firms/clients/:id"
+    },
+    {
+      "source": "/api/donna/firms/clients/:id/finnish-pilot-setup",
+      "destination": "/api/donna-router?path=firms/clients/:id/finnish-pilot-setup"
+    },
+    {
+      "source": "/api/donna/firms/clients/:id/profile",
+      "destination": "/api/donna-router?path=firms/clients/:id/profile"
+    },
+    {
+      "source": "/api/donna/firms/clients/:id/fiscal-periods",
+      "destination": "/api/donna-router?path=firms/clients/:id/fiscal-periods"
+    },
+    {
+      "source": "/api/donna/firms/clients/:id/vat-return",
+      "destination": "/api/donna-router?path=firms/clients/:id/vat-return"
+    },
+    {
+      "source": "/api/donna/firms/documents/upload-url",
+      "destination": "/api/donna-router?path=firms/documents/upload-url"
+    },
+    {
+      "source": "/api/donna/firms/documents/register",
+      "destination": "/api/donna-router?path=firms/documents/register"
+    },
+    {
+      "source": "/api/donna/firms/documents/parse-status",
+      "destination": "/api/donna-router?path=firms/documents/parse-status"
+    },
+    {
+      "source": "/api/donna/firms/documents/retry-parse",
+      "destination": "/api/donna-router?path=firms/documents/retry-parse"
+    },
+    {
+      "source": "/api/donna/firms/documents/parse-cron",
+      "destination": "/api/donna-router?path=firms/documents/parse-cron"
+    },
+    {
+      "source": "/api/inngest",
+      "destination": "/api/inngest"
+    },
+    {
+      "source": "/api/inngest/:slug*",
+      "destination": "/api/inngest"
+    },
+    {
+      "source": "/api/donna/firms/transaction-intel/refresh",
+      "destination": "/api/donna-router?path=firms/transaction-intel/refresh"
+    },
+    {
+      "source": "/api/donna/firms/transaction-intel/suggest",
+      "destination": "/api/donna-router?path=firms/transaction-intel/suggest"
+    },
+    {
+      "source": "/api/donna/firms/transaction-intel/batch-suggest",
+      "destination": "/api/donna-router?path=firms/transaction-intel/batch-suggest"
+    },
+    {
+      "source": "/api/donna/firms/ask-batches",
+      "destination": "/api/donna-router?path=firms/ask-batches"
+    },
+    {
+      "source": "/api/donna/firms/ask-batches/draft",
+      "destination": "/api/donna-router?path=firms/ask-batches/draft"
+    },
+    {
+      "source": "/api/donna/firms/ask-batches/:id/send",
+      "destination": "/api/donna-router?path=firms/ask-batches/:id/send"
+    },
+    {
+      "source": "/api/donna/firms/settings/auto-send",
+      "destination": "/api/donna-router?path=firms/settings/auto-send"
+    },
+    {
+      "source": "/api/donna/firms/resolved-goals",
+      "destination": "/api/donna-router?path=firms/resolved-goals"
+    },
+    {
+      "source": "/api/donna/firms/jev-preview",
+      "destination": "/api/donna-router?path=firms/jev-preview"
+    },
+    {
+      "source": "/api/donna/firms/reconciliation-matches",
+      "destination": "/api/donna-router?path=firms/reconciliation-matches"
+    },
+    {
+      "source": "/api/donna/firms/transaction-chat/unread-summary",
+      "destination": "/api/donna-router?path=firms/transaction-chat/unread-summary"
+    },
+    {
+      "source": "/api/donna/firms/evidence/requests",
+      "destination": "/api/donna-router?path=firms/evidence/requests"
+    },
+    {
+      "source": "/api/donna/firms/evidence/requests/:id/resolve",
+      "destination": "/api/donna-router?path=firms/evidence/requests/:id/resolve"
+    },
+    {
+      "source": "/api/donna/firms/evidence/requests/:id/accept",
+      "destination": "/api/donna-router?path=firms/evidence/requests/:id/accept"
+    },
+    {
+      "source": "/api/donna/firms/xero/connect",
+      "destination": "/api/donna-router?path=firms/xero/connect"
+    },
+    {
+      "source": "/api/donna/firms/hmrc/connect",
+      "destination": "/api/donna-router?path=firms/hmrc/connect"
+    },
+    {
+      "source": "/api/donna/firms/hmrc/callback",
+      "destination": "/api/donna-router?path=firms/hmrc/callback"
+    },
+    {
+      "source": "/api/donna/firms/xero/callback",
+      "destination": "/api/donna-router?path=firms/xero/callback"
+    },
+    {
+      "source": "/api/donna/firms/qbo/callback",
+      "destination": "/api/donna-router?path=firms/qbo/callback"
+    },
+    {
+      "source": "/api/donna/firms/procountor/callback",
+      "destination": "/api/donna-router?path=firms/procountor/callback"
+    },
+    {
+      "source": "/api/donna/firms/procountor/connect-apikey",
+      "destination": "/api/donna-router?path=firms/procountor/connect-apikey"
+    },
+    {
+      "source": "/api/donna/firms/procountor/sync-reference-data",
+      "destination": "/api/donna-router?path=firms/procountor/sync-reference-data"
+    },
+    {
+      "source": "/api/donna/firms/qbo/disconnect",
+      "destination": "/api/donna-router?path=firms/qbo/disconnect"
+    },
+    {
+      "source": "/api/donna/firms/procountor/disconnect",
+      "destination": "/api/donna-router?path=firms/procountor/disconnect"
+    },
+    {
+      "source": "/api/donna/firms/procountor/mirror-retry",
+      "destination": "/api/donna-router?path=firms/procountor/mirror-retry"
+    },
+    {
+      "source": "/api/donna/firms/procountor/mirror-verify",
+      "destination": "/api/donna-router?path=firms/procountor/mirror-verify"
+    },
+    {
+      "source": "/api/donna/firms/procountor/writeback-transaction",
+      "destination": "/api/donna-router?path=firms/procountor/writeback-transaction"
+    },
+    {
+      "source": "/api/donna/firms/procountor/writeback-transactions",
+      "destination": "/api/donna-router?path=firms/procountor/writeback-transactions"
+    },
+    {
+      "source": "/api/donna/firms/xero/disconnect",
+      "destination": "/api/donna-router?path=firms/xero/disconnect"
+    },
+    {
+      "source": "/api/donna/firms/operator/reverse",
+      "destination": "/api/donna-router?path=firms/operator/reverse"
+    },
+    {
+      "source": "/api/donna/firms/xero/status",
+      "destination": "/api/donna-router?path=firms/xero/status"
+    },
+    {
+      "source": "/api/donna/firms/xero/sync-reference-data",
+      "destination": "/api/donna-router?path=firms/xero/sync-reference-data"
+    },
+    {
+      "source": "/api/donna/firms/xero/provision-coa",
+      "destination": "/api/donna-router?path=firms/xero/provision-coa"
+    },
+    {
+      "source": "/api/donna/firms/xero/writeback-transaction",
+      "destination": "/api/donna-router?path=firms/xero/writeback-transaction"
+    },
+    {
+      "source": "/api/donna/firms/xero/writeback-transactions",
+      "destination": "/api/donna-router?path=firms/xero/writeback-transactions"
+    },
+    {
+      "source": "/api/donna/firms/qbo/writeback-transaction",
+      "destination": "/api/donna-router?path=firms/qbo/writeback-transaction"
+    },
+    {
+      "source": "/api/donna/firms/qbo/writeback-transactions",
+      "destination": "/api/donna-router?path=firms/qbo/writeback-transactions"
+    },
+    {
+      "source": "/api/donna/firms/procountor/export-package",
+      "destination": "/api/donna-router?path=firms/procountor/export-package"
+    },
+    {
+      "source": "/api/donna/firms/ledger/post-transaction",
+      "destination": "/api/donna-router?path=firms/ledger/post-transaction"
+    },
+    {
+      "source": "/api/donna/firms/ledger/post-period",
+      "destination": "/api/donna-router?path=firms/ledger/post-period"
+    },
+    {
+      "source": "/api/donna/firms/ledger/adjustment",
+      "destination": "/api/donna-router?path=firms/ledger/adjustment"
+    },
+    {
+      "source": "/api/donna/firms/ledger/period",
+      "destination": "/api/donna-router?path=firms/ledger/period"
+    },
+    {
+      "source": "/api/donna/firms/reports/financial-statements",
+      "destination": "/api/donna-router?path=firms/reports/financial-statements"
+    },
+    {
+      "source": "/api/donna/firms/reports/singapore-gst-f5-draft",
+      "destination": "/api/donna-router?path=firms/reports/singapore-gst-f5-draft"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-annual-return",
+      "destination": "/api/donna-router?path=firms/reports/finland-annual-return"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-alv-return",
+      "destination": "/api/donna-router?path=firms/reports/finland-alv-return"
+    },
+    {
+      "source": "/api/donna/firms/reports/gb-vat-return",
+      "destination": "/api/donna-router?path=firms/reports/gb-vat-return"
+    },
+    {
+      "source": "/api/donna/firms/reports/gb-statutory",
+      "destination": "/api/donna-router?path=firms/reports/gb-statutory"
+    },
+    {
+      "source": "/api/donna/firms/reports/gb-ltd-close",
+      "destination": "/api/donna-router?path=firms/reports/gb-ltd-close"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-alv-threshold",
+      "destination": "/api/donna-router?path=firms/reports/finland-alv-threshold"
+    },
+    {
+      "source": "/api/donna/firms/finland/alv-returns/start",
+      "destination": "/api/donna-router?path=firms/finland/alv-returns/start"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-suomifi-mandate",
+      "destination": "/api/donna-router?path=firms/reports/finland-suomifi-mandate"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-scope-drift",
+      "destination": "/api/donna-router?path=firms/reports/finland-scope-drift"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-oy-onboarding",
+      "destination": "/api/donna-router?path=firms/reports/finland-oy-onboarding"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-prepayment-register",
+      "destination": "/api/donna-router?path=firms/reports/finland-prepayment-register"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-cutover",
+      "destination": "/api/donna-router?path=firms/reports/finland-cutover"
+    },
+    {
+      "source": "/api/donna/firms/finland/prepayment-register/check",
+      "destination": "/api/donna-router?path=firms/finland/prepayment-register/check"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-ennakkovero",
+      "destination": "/api/donna-router?path=firms/reports/finland-ennakkovero"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-yel",
+      "destination": "/api/donna-router?path=firms/reports/finland-yel"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-issued-invoices",
+      "destination": "/api/donna-router?path=firms/reports/finland-issued-invoices"
+    },
+    {
+      "source": "/api/donna/firms/reports/finland-quotes",
+      "destination": "/api/donna-router?path=firms/reports/finland-quotes"
+    },
+    {
+      "source": "/api/donna/firms/finland/suomifi-mandate",
+      "destination": "/api/donna-router?path=firms/finland/suomifi-mandate"
+    },
+    {
+      "source": "/api/donna/firms/finland/suomifi-mandate/revoke",
+      "destination": "/api/donna-router?path=firms/finland/suomifi-mandate/revoke"
+    },
+    {
+      "source": "/api/donna/firms/ledger/audit-trail",
+      "destination": "/api/donna-router?path=firms/ledger/audit-trail"
+    },
+    {
+      "source": "/api/donna/firms/close/period-preview",
+      "destination": "/api/donna-router?path=firms/close/period-preview"
+    },
+    {
+      "source": "/api/donna/firms/close/diagnostics",
+      "destination": "/api/donna-router?path=firms/close/diagnostics"
+    },
+    {
+      "source": "/api/donna/firms/close/exceptions",
+      "destination": "/api/donna-router?path=firms/close/exceptions"
+    },
+    {
+      "source": "/api/donna/firms/close/archive-preview",
+      "destination": "/api/donna-router?path=firms/close/archive-preview"
+    },
+    {
+      "source": "/api/donna/firms/close/archive-export",
+      "destination": "/api/donna-router?path=firms/close/archive-export"
+    },
+    {
+      "source": "/api/donna/firms/close/archive",
+      "destination": "/api/donna-router?path=firms/close/archive"
+    },
+    {
+      "source": "/api/donna/firms/xero/mirror-diff",
+      "destination": "/api/donna-router?path=firms/xero/mirror-diff"
+    },
+    {
+      "source": "/api/donna/firms/xero/mirror-retry",
+      "destination": "/api/donna-router?path=firms/xero/mirror-retry"
+    },
+    {
+      "source": "/api/donna/firms/xero/mirror-verify",
+      "destination": "/api/donna-router?path=firms/xero/mirror-verify"
+    },
+    {
+      "source": "/api/donna/firms/qbo/mirror-retry",
+      "destination": "/api/donna-router?path=firms/qbo/mirror-retry"
+    },
+    {
+      "source": "/api/donna/firms/qbo/mirror-verify",
+      "destination": "/api/donna-router?path=firms/qbo/mirror-verify"
+    },
+    {
+      "source": "/api/donna/firms/close/checks/run",
+      "destination": "/api/donna-router?path=firms/close/checks/run"
+    },
+    {
+      "source": "/api/donna/firms/close/lock",
+      "destination": "/api/donna-router?path=firms/close/lock"
+    },
+    {
+      "source": "/api/donna/firms/reconciliation-matches/:id",
+      "destination": "/api/donna-router?path=firms/reconciliation-matches/:id"
+    },
+    {
+      "source": "/api/donna/firms/reconciliation-matches/:id/authorization",
+      "destination": "/api/donna-router?path=firms/reconciliation-matches/:id/authorization"
+    },
+    {
+      "source": "/api/donna/firms/client-rules/:id",
+      "destination": "/api/donna-router?path=firms/client-rules/:id"
+    },
+    {
+      "source": "/api/donna/firms/transaction-review/:id",
+      "destination": "/api/donna-router?path=firms/transaction-review/:id"
+    },
+    {
+      "source": "/api/donna/firms/documents/:id/download",
+      "destination": "/api/donna-router?path=firms/documents/:id/download"
+    },
+    {
+      "source": "/api/donna/firms/documents/:id/resolve-duplicate",
+      "destination": "/api/donna-router?path=firms/documents/:id/resolve-duplicate"
+    },
+    {
+      "source": "/api/donna/firms/documents/:id/lines/:lineId",
+      "destination": "/api/donna-router?path=firms/documents/:id/lines/:lineId"
+    },
+    {
+      "source": "/api/donna/firms/documents/:id/lines",
+      "destination": "/api/donna-router?path=firms/documents/:id/lines"
+    },
+    {
+      "source": "/api/donna/firms/documents/:id",
+      "destination": "/api/donna-router?path=firms/documents/:id"
+    },
+    {
+      "source": "/api/donna/firms/firm-facts/:id/dismiss",
+      "destination": "/api/donna-router?path=firms/firm-facts/:id/dismiss"
+    },
+    {
+      "source": "/api/donna/firms/firm-facts",
+      "destination": "/api/donna-router?path=firms/firm-facts"
+    },
+    {
+      "source": "/api/donna/firms/model-lanes",
+      "destination": "/api/donna-router?path=firms/model-lanes"
+    },
+    {
+      "source": "/api/donna/firms/model-lanes/policy",
+      "destination": "/api/donna-router?path=firms/model-lanes/policy"
+    },
+    {
+      "source": "/api/donna/firms/runtime-policy-incidents",
+      "destination": "/api/donna-router?path=firms/runtime-policy-incidents"
+    },
+    {
+      "source": "/api/donna/firms/runtime-policy-incidents/:id/:action",
+      "destination": "/api/donna-router?path=firms/runtime-policy-incidents/:id/:action"
+    },
+    {
+      "source": "/api/donna/firms/desktop-backups",
+      "destination": "/api/donna-router?path=firms/desktop-backups"
+    },
+    {
+      "source": "/api/donna/firms/memory-candidates/:id/promote",
+      "destination": "/api/donna-router?path=firms/memory-candidates/:id/promote"
+    },
+    {
+      "source": "/api/donna/firms/memory-candidates/:id/dismiss",
+      "destination": "/api/donna-router?path=firms/memory-candidates/:id/dismiss"
+    },
+    {
+      "source": "/api/donna/firms/memory-candidates",
+      "destination": "/api/donna-router?path=firms/memory-candidates"
+    },
+    {
+      "source": "/api/donna/firms/close-blockers",
+      "destination": "/api/donna-router?path=firms/close-blockers"
+    },
+    {
+      "source": "/api/donna/firms/delegated-authority-metrics",
+      "destination": "/api/donna-router?path=firms/delegated-authority-metrics"
+    },
+    {
+      "source": "/api/donna/firms/roles/roster",
+      "destination": "/api/donna-router?path=firms/roles/roster"
+    },
+    {
+      "source": "/api/donna/firms/mentions/roster",
+      "destination": "/api/donna-router?path=firms/mentions/roster"
+    },
+    {
+      "source": "/api/donna/firms/chat-comments",
+      "destination": "/api/donna-router?path=firms/chat-comments"
+    },
+    {
+      "source": "/api/donna/firms/chat-comments/redact",
+      "destination": "/api/donna-router?path=firms/chat-comments/redact"
+    },
+    {
+      "source": "/api/donna/firms/roles/hire",
+      "destination": "/api/donna-router?path=firms/roles/hire"
+    },
+    {
+      "source": "/api/donna/firms/roles/end",
+      "destination": "/api/donna-router?path=firms/roles/end"
+    },
+    {
+      "source": "/api/donna/firms/roles/grants/approve",
+      "destination": "/api/donna-router?path=firms/roles/grants/approve"
+    },
+    {
+      "source": "/api/donna/firms/roles/grants/revoke",
+      "destination": "/api/donna-router?path=firms/roles/grants/revoke"
+    },
+    {
+      "source": "/api/donna/firms/mcp-exposure",
+      "destination": "/api/donna-router?path=firms/mcp-exposure"
+    },
+    {
+      "source": "/api/donna/firms/seats",
+      "destination": "/api/donna-router?path=firms/seats"
+    },
+    {
+      "source": "/api/donna/firms/seats/invite",
+      "destination": "/api/donna-router?path=firms/seats/invite"
+    },
+    {
+      "source": "/api/donna/firms/seats/invite-email",
+      "destination": "/api/donna-router?path=firms/seats/invite-email"
+    },
+    {
+      "source": "/api/donna/firms/seats/update",
+      "destination": "/api/donna-router?path=firms/seats/update"
+    },
+    {
+      "source": "/api/donna/firms/seats/entities",
+      "destination": "/api/donna-router?path=firms/seats/entities"
+    },
+    {
+      "source": "/api/donna/firms/mentions/notifications",
+      "destination": "/api/donna-router?path=firms/mentions/notifications"
+    },
+    {
+      "source": "/api/donna/firms/mentions/notifications/read",
+      "destination": "/api/donna-router?path=firms/mentions/notifications/read"
+    },
+    {
+      "source": "/api/donna/firms/outbound/owner-actions",
+      "destination": "/api/donna-router?path=firms/outbound/owner-actions"
+    },
+    {
+      "source": "/api/donna/firms/outbound/owner-actions/decide",
+      "destination": "/api/donna-router?path=firms/outbound/owner-actions/decide"
+    },
+    {
+      "source": "/api/donna/firms/outbound/owner-actions/edit",
+      "destination": "/api/donna-router?path=firms/outbound/owner-actions/edit"
+    },
+    {
+      "source": "/api/donna/firms/outbound/owner-actions/party-language",
+      "destination": "/api/donna-router?path=firms/outbound/owner-actions/party-language"
+    },
+    {
+      "source": "/api/donna/firms/outbound/owner-actions/mark-wrong",
+      "destination": "/api/donna-router?path=firms/outbound/owner-actions/mark-wrong"
+    },
+    {
+      "source": "/api/donna/firms/outbound/owner-actions/reverse-post",
+      "destination": "/api/donna-router?path=firms/outbound/owner-actions/reverse-post"
+    },
+    {
+      "source": "/api/donna/firms/outbound/owner-actions/case",
+      "destination": "/api/donna-router?path=firms/outbound/owner-actions/case"
+    },
+    {
+      "source": "/api/donna/firms/transactions/:id",
+      "destination": "/api/donna-router?path=firms/transactions/:id"
+    },
+    {
+      "source": "/api/donna/firms/document-chat/messages/:messageId/actions/:actionIndex/apply",
+      "destination": "/api/donna-router?path=firms/document-chat/messages/:messageId/actions/:actionIndex/apply"
+    },
+    {
+      "source": "/api/donna/firms/document-chat/messages",
+      "destination": "/api/donna-router?path=firms/document-chat/messages"
+    },
+    {
+      "source": "/api/donna/firms/document-chat",
+      "destination": "/api/donna-router?path=firms/document-chat"
+    },
+    {
+      "source": "/api/donna/firms/transaction-chat/messages/:messageId/actions/:actionIndex/apply",
+      "destination": "/api/donna-router?path=firms/transaction-chat/messages/:messageId/actions/:actionIndex/apply"
+    },
+    {
+      "source": "/api/donna/firms/transaction-chat/ask-client",
+      "destination": "/api/donna-router?path=firms/transaction-chat/ask-client"
+    },
+    {
+      "source": "/api/donna/firms/transaction-chat/messages",
+      "destination": "/api/donna-router?path=firms/transaction-chat/messages"
+    },
+    {
+      "source": "/api/donna/firms/transaction-chat",
+      "destination": "/api/donna-router?path=firms/transaction-chat"
+    },
+    {
+      "source": "/api/donna/firms/feedback",
+      "destination": "/api/donna-router?path=firms/feedback"
+    },
+    {
+      "source": "/api/donna/firms/feed-chat/firm/messages/:messageId/actions/:actionIndex/apply",
+      "destination": "/api/donna-router?path=firms/feed-chat/firm/messages/:messageId/actions/:actionIndex/apply"
+    },
+    {
+      "source": "/api/donna/firms/feed-chat/firm/messages",
+      "destination": "/api/donna-router?path=firms/feed-chat/firm/messages"
+    },
+    {
+      "source": "/api/donna/firms/feed-chat/firm",
+      "destination": "/api/donna-router?path=firms/feed-chat/firm"
+    },
+    {
+      "source": "/api/donna/firms/feed-chat/messages/:messageId/actions/:actionIndex/apply",
+      "destination": "/api/donna-router?path=firms/feed-chat/messages/:messageId/actions/:actionIndex/apply"
+    },
+    {
+      "source": "/api/donna/firms/feed-chat/messages",
+      "destination": "/api/donna-router?path=firms/feed-chat/messages"
+    },
+    {
+      "source": "/api/donna/firms/feed-chat",
+      "destination": "/api/donna-router?path=firms/feed-chat"
+    },
+    {
+      "source": "/api/donna/firms/client-chat/messages/:messageId/actions/:actionIndex/apply",
+      "destination": "/api/donna-router?path=firms/client-chat/messages/:messageId/actions/:actionIndex/apply"
+    },
+    {
+      "source": "/api/donna/firms/client-chat/messages",
+      "destination": "/api/donna-router?path=firms/client-chat/messages"
+    },
+    {
+      "source": "/api/donna/firms/client-chat",
+      "destination": "/api/donna-router?path=firms/client-chat"
+    },
+    {
+      "source": "/api/donna/bizfile/extract",
+      "destination": "/api/donna-router?path=bizfile/extract"
+    },
+    {
+      "source": "/api/donna/bizfile/intake-draft",
+      "destination": "/api/donna-router?path=bizfile/intake-draft"
+    },
+    {
+      "source": "/api/donna/waitlist",
+      "destination": "/api/donna-router?path=waitlist"
+    },
+    {
+      "source": "/api/donna/marketing/unsubscribe",
+      "destination": "/api/donna-router?path=marketing/unsubscribe"
+    },
+    {
+      "source": "/api/donna/marketing/inbound-webhook",
+      "destination": "/api/donna-router?path=marketing/inbound-webhook"
+    },
+    {
+      "source": "/api/donna/outbound/unsubscribe",
+      "destination": "/api/donna-router?path=outbound/unsubscribe"
+    },
+    {
+      "source": "/api/donna/outbound/approval",
+      "destination": "/api/donna-router?path=outbound/approval"
+    },
+    {
+      "source": "/api/donna/outbound/paylink-webhook",
+      "destination": "/api/donna-router?path=outbound/paylink-webhook"
+    },
+    {
+      "source": "/api/donna/outbound/reply-webhook",
+      "destination": "/api/donna-router?path=outbound/reply-webhook"
+    },
+    {
+      "source": "/api/donna/marketing/admin/overview",
+      "destination": "/api/donna-router?path=marketing/admin/overview"
+    },
+    {
+      "source": "/api/donna/marketing/admin/inbound/triage",
+      "destination": "/api/donna-router?path=marketing/admin/inbound/triage"
+    },
+    {
+      "source": "/api/donna/marketing/admin/social/generate",
+      "destination": "/api/donna-router?path=marketing/admin/social/generate"
+    },
+    {
+      "source": "/api/donna/marketing/admin/social/:postId/approve",
+      "destination": "/api/donna-router?path=marketing/admin/social/:postId/approve"
+    },
+    {
+      "source": "/api/donna/marketing/admin/social/:postId/reject",
+      "destination": "/api/donna-router?path=marketing/admin/social/:postId/reject"
+    },
+    {
+      "source": "/api/donna/marketing/admin/social/:postId/mark-published",
+      "destination": "/api/donna-router?path=marketing/admin/social/:postId/mark-published"
+    },
+    {
+      "source": "/api/donna/marketing/admin/drafts/generate",
+      "destination": "/api/donna-router?path=marketing/admin/drafts/generate"
+    },
+    {
+      "source": "/api/donna/marketing/admin/drafts/:draftId/approve-send",
+      "destination": "/api/donna-router?path=marketing/admin/drafts/:draftId/approve-send"
+    },
+    {
+      "source": "/api/donna/marketing/admin/drafts/:draftId/reject",
+      "destination": "/api/donna-router?path=marketing/admin/drafts/:draftId/reject"
+    },
+    {
+      "source": "/api/donna/marketing/admin/prospects/overview",
+      "destination": "/api/donna-router?path=marketing/admin/prospects/overview"
+    },
+    {
+      "source": "/api/donna/marketing/admin/prospects/upload",
+      "destination": "/api/donna-router?path=marketing/admin/prospects/upload"
+    },
+    {
+      "source": "/api/donna/marketing/admin/prospects/investigate",
+      "destination": "/api/donna-router?path=marketing/admin/prospects/investigate"
+    },
+    {
+      "source": "/api/donna/marketing/admin/prospects/scan",
+      "destination": "/api/donna-router?path=marketing/admin/prospects/scan"
+    },
+    {
+      "source": "/api/donna/marketing/admin/prospects/:prospectId/decide",
+      "destination": "/api/donna-router?path=marketing/admin/prospects/:prospectId/decide"
+    },
+    {
+      "source": "/api/donna/firms/whatsapp/connect-token",
+      "destination": "/api/donna-router?path=firms/whatsapp/connect-token"
+    },
+    {
+      "source": "/api/donna/firms/whatsapp/binding-state",
+      "destination": "/api/donna-router?path=firms/whatsapp/binding-state"
+    },
+    {
+      "source": "/api/donna/firms/whatsapp/bindings/revoke",
+      "destination": "/api/donna-router?path=firms/whatsapp/bindings/revoke"
+    },
+    {
+      "source": "/api/donna/firms/telegram/connect-token",
+      "destination": "/api/donna-router?path=firms/telegram/connect-token"
+    },
+    {
+      "source": "/api/donna/firms/telegram/binding-state",
+      "destination": "/api/donna-router?path=firms/telegram/binding-state"
+    },
+    {
+      "source": "/api/donna/firms/telegram/bindings/revoke",
+      "destination": "/api/donna-router?path=firms/telegram/bindings/revoke"
+    },
+    {
+      "source": "/api/donna/whatsapp/webhook",
+      "destination": "/api/donna-router?path=whatsapp/webhook"
+    },
+    {
+      "source": "/api/donna/sms/webhook",
+      "destination": "/api/donna-router?path=sms/webhook"
+    },
+    {
+      "source": "/api/donna/telegram/webhook",
+      "destination": "/api/donna-router?path=telegram/webhook"
+    },
+    {
+      "source": "/api/donna/billing/webhook",
+      "destination": "/api/donna-router?path=billing/webhook"
+    },
+    {
+      "source": "/api/donna/auth-email-hook",
+      "destination": "/api/donna-router?path=auth-email-hook"
+    },
+    {
+      "source": "/api/donna/billing/status",
+      "destination": "/api/donna-router?path=billing/status"
+    },
+    {
+      "source": "/api/donna/billing/checkout",
+      "destination": "/api/donna-router?path=billing/checkout"
+    },
+    {
+      "source": "/api/donna/billing/portal",
+      "destination": "/api/donna-router?path=billing/portal"
+    },
+    {
+      "source": "/api/donna/mcp/remote/:surface",
+      "destination": "/api/donna-router?path=mcp/remote/:surface"
+    },
+    {
+      "source": "/api/donna/mcp/demo",
+      "destination": "/api/donna-router?path=mcp/demo"
+    },
+    {
+      "source": "/api/donna/mcp/demo/:surface",
+      "destination": "/api/donna-router?path=mcp/demo/:surface"
+    },
+    {
+      "source": "/api/donna/mcp/oauth-protected-resource/:path*",
+      "destination": "/api/donna-router?path=mcp/oauth-protected-resource/:path*"
+    },
+    {
+      "source": "/firms",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/onboarding",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

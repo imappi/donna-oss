@@ -1,0 +1,43 @@
+{
+  "id": "011-ar-wrong-currency-coincidence",
+  "title": "Wrong-currency number coincidence — should abstain (AR)",
+  "narrative": "A EUR 500 invoice to Helvetia Pharma (ref INV-2026-0301). The only amount-coincident line is a 500 USD incoming wire with NO FX/processor trail, NO matching name, NO reference — the matching bare number 500 is a coincidence across currencies. GOLD: no_plausible_match (abstain). Auto-matching the USD line would be a cross-currency false positive; a low-confidence 'suggested' would be a softer (still-undesirable) outcome that the split-metrics harness scores as a no-match miss rather than a false-auto-match. FAILURE TO CATCH: any auto_matched here is a hard cross-currency false positive.",
+  "tags": ["negative_case", "wrong_currency", "coincidence", "no_fx_evidence", "sales_invoice", "ar", "abstain"],
+  "document": {
+    "id": "si-helvetia-011",
+    "document_type": "sales_invoice",
+    "customer_name": "Helvetia Pharma GmbH",
+    "document_date": "2026-05-05",
+    "due_date": "2026-06-04",
+    "total_amount": 500.00,
+    "currency": "EUR",
+    "reference_number": "INV-2026-0301",
+    "extraction_confidence": 0.96,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-usd-coincidence",
+      "money_in": 500.00,
+      "currency": "USD",
+      "date": "2026-05-06",
+      "description": "INCOMING WIRE USD 500",
+      "raw_description": "INCOMING WIRE USD 500.00 REF UNKNOWN SENDER",
+      "contact": ""
+    },
+    {
+      "id": "tx-unrelated-rent-011",
+      "money_in": 1800.00,
+      "currency": "EUR",
+      "date": "2026-05-07",
+      "description": "RENT TENANT D",
+      "raw_description": "MONTHLY RENT TENANT D MAY 2026",
+      "contact": "Tenant D"
+    }
+  ],
+  "expected": {
+    "proposals": [],
+    "unmatchable_reason": "no_plausible_match"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "004-no_candidates-typed-as-missing-statement",
+  "title": "A no_candidates verdict becomes a TYPED missing_bank_statement blocker, not a vague 'transient' exclusion (removes the scan-A vs forward-hook divergence)",
+  "input": {
+    "verdict": "no_candidates",
+    "hasStickyMatch": false
+  },
+  "expected": {
+    "goal_status": "unmet",
+    "action": "open_gap",
+    "blocker_type": "missing_bank_statement",
+    "gap_kind": "unmatched_verdict",
+    "owner_type": "firm",
+    "stop_reason": "authority_required"
+  }
+}

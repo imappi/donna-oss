@@ -1,0 +1,73 @@
+{
+  "id": "fik3-hold-001",
+  "title": "Client entertainment meal: printed 13,5 % ALV is non-deductible (sentinel)",
+  "split": "holdout",
+  "family": "fi-oy-client-lunch",
+  "entity": "synthetic-oy-c",
+  "period": "2026-05",
+  "decision_class": "representation_vat",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Synteettinen Gamma Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2026-05-14",
+    "description": "SYNTH RAVINTOLA OY",
+    "money_in": 0,
+    "money_out": 113.5,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "Synth Ravintola Oy",
+    "total_amount": 113.5,
+    "tax_amount": 13.5,
+    "lines": [
+      {
+        "description": "Client lunch (edustus), 2 guests",
+        "amount": 113.5,
+        "tax_rate": 13.5
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Meals and entertainment",
+          "direction": "debit",
+          "amount": 113.5,
+          "tax_code": "ALV_NONDEDUCTIBLE_INPUT"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 113.5,
+          "tax_code": "NONE"
+        }
+      ],
+      "forbidden": {
+        "tax_treatments": [
+          "ALV 13,5 %"
+        ],
+        "tax_codes": [
+          "ALV_13_5_INPUT"
+        ]
+      }
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  }
+}

@@ -1,0 +1,265 @@
+{
+  "id": "dev-008",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-008",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "INVOICE HK-1187\nFrom: Harbour Kitchen Catering Ltd\nVAT registration: GB 998 7766 55\nBill to: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nInvoice date: 03/08/2026    Due date: 02/09/2026    Terms: 30 days\nDescription: Team lunch catering, 31 July\nNet total: £700.00\nVAT @ 20%: £140.00\nTOTAL DUE: £840.00\nPayment: bank transfer to Harbour Kitchen Catering Ltd, quoting HK-1187.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "INVOICE HK-1203\nFrom: Harbour Kitchen Catering Ltd\nVAT registration: GB 998 7766 55\nBill to: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nInvoice date: 17/08/2026    Due date: 16/09/2026    Terms: 30 days\nDescription: Team lunch catering, 14 August\nNet total: £700.00\nVAT @ 20%: £140.00\nTOTAL DUE: £840.00\nPayment: bank transfer to Harbour Kitchen Catering Ltd, quoting HK-1203.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n01/09/2026,BAC,\"HARBOUR KITCHEN PMT 1\",840.00,,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n01/09/2026,BAC,\"HARBOUR KITCHEN PMT 2\",840.00,,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "owner-chat",
+        "version": "1",
+        "current_version": "1",
+        "kind": "owner_message",
+        "content": "Owner (chat, 12/09/2026): \"I paid Harbour Kitchen twice on 1 September from online banking, one for each of their bills. I typed PMT 1 and PMT 2 as the references and did not write down which was which.\"",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-01",
+        "money_in_minor": 0,
+        "money_out_minor": 84000,
+        "currency": "GBP",
+        "contact": "Harbour Kitchen Catering Ltd",
+        "description": "HARBOUR KITCHEN PMT 1",
+        "raw_description": "01/09/2026,BAC,\"HARBOUR KITCHEN PMT 1\",840.00,,GBP",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-01",
+        "money_in_minor": 0,
+        "money_out_minor": 84000,
+        "currency": "GBP",
+        "contact": "Harbour Kitchen Catering Ltd",
+        "description": "HARBOUR KITCHEN PMT 2",
+        "raw_description": "01/09/2026,BAC,\"HARBOUR KITCHEN PMT 2\",840.00,,GBP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-08-17",
+        "reference": "HK-1203"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-03",
+      "due_date": "2026-09-02",
+      "amount_minor": 84000,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "HK-1187",
+      "counterparty": "Harbour Kitchen Catering Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "Which of the two 1 September BACS payments the owner intended for bill HK-1187 (the other being for HK-1203).",
+      "question": "You sent Harbour Kitchen two payments of £840.00 on 1 September (PMT 1 and PMT 2). Which one was for bill HK-1187?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner initiated both transfers; the payment messages carry only sequence numbers and no bill number.",
+      "why_local_cannot_supply": "The complete declared inventory holds both bills, both bank rows and the owner's own message; none records the intended allocation.",
+      "basis_source_ids": [
+        "owner-chat",
+        "bank-t1",
+        "bank-t2"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "invoice-source-r1",
+        "owner-chat",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "invoice-source-r1",
+        "owner-chat",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-gb-two-bacs-same-supplier-two-equal-bills",
+    "family_description": "Owner sends two BACS payments to the same supplier on one day; two open bills of the same amount; payment messages do not name a bill.",
+    "market": "GB",
+    "variant": "b",
+    "error_mode": "allocation intention is owner-only because the owner initiated both payments",
+    "label_reason": "Same evidence; the owner initiated both payments, the messages carry only sequence numbers, and the complete inventory records no allocation — which payment was for which bill is an owner-only fact.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "customer_question"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": {
+      "work_item_id": "work-1",
+      "fact": "Which of the two 1 September BACS payments the owner intended for bill HK-1187 (the other being for HK-1203).",
+      "question": "You sent Harbour Kitchen two payments of £840.00 on 1 September (PMT 1 and PMT 2). Which one was for bill HK-1187?",
+      "customer_id": "business-owner",
+      "why_customer_only": "The owner initiated both transfers; the payment messages carry only sequence numbers and no bill number.",
+      "why_local_cannot_supply": "The complete declared inventory holds both bills, both bank rows and the owner's own message; none records the intended allocation.",
+      "basis_source_ids": [
+        "owner-chat",
+        "bank-t1",
+        "bank-t2"
+      ],
+      "retrieval_scope_id": "fixture-manifest"
+    },
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    },
+    "ask_fact": "supported"
+  },
+  "expected": {
+    "route": "customer_question",
+    "proposals": []
+  }
+}

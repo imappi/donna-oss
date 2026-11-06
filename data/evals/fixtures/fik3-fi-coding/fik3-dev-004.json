@@ -1,0 +1,81 @@
+{
+  "id": "fik3-dev-004",
+  "title": "Mixed-use subscription whose gold is a share-proportional deduction (vocabulary gap)",
+  "split": "development",
+  "family": "fi-oy-mixed-use-phone",
+  "entity": "synthetic-oy-e",
+  "period": "2026-03",
+  "decision_class": "business_use_share",
+  "strong_is_alternative": false,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Synteettinen Epsilon Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2026-03-20",
+    "description": "SYNTH PUHELIN OY",
+    "money_in": 0,
+    "money_out": 62.75,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "supplier_bill",
+    "party": "Synth Puhelin Oy",
+    "total_amount": 62.75,
+    "tax_amount": 12.75,
+    "lines": [
+      {
+        "description": "Mobile subscription, March",
+        "amount": 62.75,
+        "tax_rate": 25.5
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Telecommunications",
+          "direction": "debit",
+          "amount": 30,
+          "tax_code": "ALV_25_5_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 7.65,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Shareholder receivable",
+          "direction": "debit",
+          "amount": 25.1,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 62.75,
+          "tax_code": "NONE"
+        }
+      ]
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "gap",
+    "gap": "vocabulary",
+    "detail": "The gold treatment deducts ALV only on a 60 % business-use share of a single source line; the live menu has no share-proportional deduction for one line."
+  }
+}

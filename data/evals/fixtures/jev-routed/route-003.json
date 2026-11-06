@@ -1,0 +1,40 @@
+{
+  "id": "route-003",
+  "split": "development",
+  "source_family": "authored-003",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-3",
+    "document_type": "sales_invoice",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 730,
+    "currency": "GBP",
+    "reference_number": "BILL-8103",
+    "payment_status": "unpaid",
+    "customer_name": "Cedar Research Ltd"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-3-a",
+      "money_in": 848,
+      "money_out": 0,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "PayStream Europe",
+      "description": "PAYSTREAM PAYOUT QZ31",
+      "raw_description": "PAYSTREAM PAYOUT QZ31 GBP TO EUR LESS FEES",
+      "reconciliation_status": null,
+      "payload": {}
+    }
+  ],
+  "matches": [],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "needs_evidence",
+    "matches": []
+  },
+  "label_basis": "No supplied remittance maps this processor payout to this invoice or explains its conversion and fees."
+}

@@ -1,0 +1,35 @@
+{
+  "lane": "unified_extraction",
+  "endpoint_class": "openai",
+  "provenance": "synthetic — authored from unifiedExtractorSchema.js UNIFIED_EXTRACTION_SCHEMA (RT-12) for the appliance fixture world: the same till receipt read as UNREADABLE — status partial, confidence 0.2, the vendor and total read but the date and lines not (audit F-12: the partial header must survive the failure); OpenAI Responses shape; never a captured provider response",
+  "fixture": "receipt_screwfix",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_unified_screwfix_unreadable",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_unified_screwfix_unreadable",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"document_type\": \"receipt\", \"extraction_status\": \"partial\", \"extraction_confidence\": 0.2, \"warnings\": [\"date and line items unreadable — the thermal print has faded\"], \"header\": {\"counterparty_name\": \"Screwfix\", \"counterparty_role\": \"vendor\", \"counterparty_tax_id\": null, \"own_name\": \"Kestrel Print Studio Ltd\", \"own_tax_id\": null, \"document_date\": null, \"due_date\": null, \"currency\": \"GBP\", \"subtotal_amount\": null, \"tax_amount\": null, \"shipping_amount\": 0, \"discount_amount\": 0, \"rounding_amount\": 0, \"total_amount\": 42.99, \"line_amounts_include_tax\": true, \"payment_status\": \"paid\", \"payment_terms\": null, \"references\": []}, \"lines\": [], \"settlement\": {\"period_start\": null, \"period_end\": null, \"payout_date\": null, \"gross_sales\": null, \"gross_components\": [], \"refunds\": null, \"fees\": [], \"adjustments\": [], \"net_payout\": null, \"transaction_count\": null, \"payout_reference\": null, \"deposit_reference\": null, \"bank_last4\": null, \"rows\": []}, \"contract\": {\"contract_type\": \"not_a_contract\", \"effective_start_date\": null, \"effective_end_date\": null, \"auto_renew\": null, \"notice_period_days\": null, \"recurring_amount\": null, \"recurring_frequency\": \"none\", \"obligations\": []}, \"source_business_use\": {\"classification\": \"not_stated\", \"source_quote\": null, \"business_use_percent\": null}}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

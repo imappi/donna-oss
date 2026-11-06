@@ -1,0 +1,66 @@
+{
+  "id": "kl-b19",
+  "title": "Kultalanka 02/2025 17.2. Tokmanni hyvitys +19,90",
+  "split": "development",
+  "family": "kultalanka-refund_group",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "refund_group",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-17",
+    "description": "KORTIN HYVITYS TOKMANNI TAMPERE KOSKIKESKUS HYVITYS",
+    "money_in": 19.9,
+    "money_out": 0,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "debit",
+          "amount": 19.9,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Operating supplies",
+          "direction": "credit",
+          "amount": 15.86,
+          "tax_code": "ALV_25_5_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "credit",
+          "amount": 4.04,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "gap",
+    "gap": "source",
+    "detail": "refund group G-TOKMANNI: the gold spans B15, B16, B19; the FIK-3 book seeds one line"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B19"
+  }
+}

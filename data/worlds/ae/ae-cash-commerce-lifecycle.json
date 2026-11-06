@@ -1,0 +1,758 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/cash-commerce/full-lifecycle",
+  "seed": "ae-cash-commerce-v1",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.cash-commerce.v1",
+    "capabilityId": "reconcile_ae_operating_cash",
+    "jurisdiction": "AE",
+    "entityType": "ae-llc",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_cash_fx_and_commerce",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": [
+      "processor_gross_to_net",
+      "marketplace_many_to_one",
+      "bnpl_one_to_many",
+      "cash_fx_and_exceptions",
+      "collision_group_convergence"
+    ],
+    "permittedActions": [
+      "reconcile_settlement_group",
+      "record_own_account_transfer",
+      "reverse_bounced_cheque",
+      "request_collision_fact_from_owner"
+    ],
+    "maximumAuthority": "auto_reconcile_exact_or_ask_owner",
+    "fallback": {
+      "terminalState": "blocked",
+      "responsibleActor": "owner",
+      "nextPermittedAction": "request_collision_fact_from_owner"
+    },
+    "protectedFailures": [
+      "net_payout_as_net_sales",
+      "fee_vat_dropped_or_duplicated",
+      "reserve_as_revenue",
+      "refund_chargeback_collapsed",
+      "bounced_cheque_as_settled",
+      "own_transfer_as_income_or_expense",
+      "wrong_fx_date_or_currency",
+      "crossed_collision_links",
+      "opaque_model_ids",
+      "duplicate_posting",
+      "held_evidence_requested_again",
+      "cross_entity_link"
+    ]
+  },
+  "entities": [
+    {
+      "id": "entity/ae-cash-commerce-llc",
+      "kind": "company",
+      "legalForm": "ae-llc",
+      "activeFrom": "2026-01-01",
+      "facts": {
+        "freeZoneStanding": [
+          {
+            "standing": "mainland",
+            "licensingAuthority": "Dubai Department of Economy and Tourism",
+            "emirate": "DXB",
+            "effectiveFrom": "2026-01-01",
+            "effectiveTo": null,
+            "sourceArtifactId": "artifact/ae5-trade-licence"
+          }
+        ],
+        "designatedZone": [
+          {
+            "status": "not_designated",
+            "zoneName": null,
+            "effectiveFrom": "2026-01-01",
+            "effectiveTo": null,
+            "sourceArtifactId": "artifact/ae5-designated-zone-check",
+            "policySourceId": "policy/ae-vat-designated-zones"
+          }
+        ],
+        "vatRegistration": [
+          {
+            "status": "registered",
+            "registrationSubject": "legal_entity",
+            "registrationSubjectId": "entity/ae-cash-commerce-llc",
+            "trn": "100123456789012",
+            "registrationBasis": "mandatory",
+            "returnCadence": "quarter",
+            "effectiveFrom": "2026-01-01",
+            "effectiveTo": null,
+            "sourceArtifactId": "artifact/ae5-vat-registration"
+          }
+        ],
+        "ftaVatPeriods": [
+          {
+            "periodKey": "2026-Q3",
+            "startsOn": "2026-07-01",
+            "endsOn": "2026-09-30",
+            "dueOn": "2026-10-28",
+            "sourceArtifactId": "artifact/ae5-fta-period"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "event/processor-sale-usd",
+      "type": "commerce_sale",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-01",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/processor-report-4471"],
+      "transactionAmount": "100.00",
+      "transactionCurrency": "USD",
+      "settlementAmount": "367.25",
+      "settlementCurrency": "AED",
+      "fxRateId": "fx/usd-aed-2026-08-01"
+    },
+    {
+      "id": "event/processor-fee-4471",
+      "type": "processor_fee",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-01",
+      "causalParents": ["event/processor-sale-usd"],
+      "evidenceRefs": ["artifact/processor-report-4471"],
+      "settlementAmount": "10.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/processor-fee-vat-4471",
+      "type": "processor_fee_vat",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-01",
+      "causalParents": ["event/processor-fee-4471"],
+      "evidenceRefs": ["artifact/processor-report-4471"],
+      "settlementAmount": "0.50",
+      "settlementCurrency": "AED",
+      "feeEventId": "event/processor-fee-4471",
+      "policySourceId": "policy/ae-fee-based-financial-services-vat",
+      "policyEffectiveDate": "2018-01-01"
+    },
+    {
+      "id": "event/processor-refund-before-4471",
+      "type": "customer_refund",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-01",
+      "causalParents": ["event/processor-sale-usd"],
+      "evidenceRefs": ["artifact/processor-report-4471"],
+      "settlementAmount": "30.00",
+      "settlementCurrency": "AED",
+      "timing": "before_payout"
+    },
+    {
+      "id": "event/processor-reserve-hold-4471",
+      "type": "rolling_reserve_hold",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-01",
+      "causalParents": ["event/processor-sale-usd"],
+      "evidenceRefs": ["artifact/processor-report-4471"],
+      "settlementAmount": "20.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/processor-settlement-4471",
+      "type": "processor_settlement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-02",
+      "causalParents": [
+        "event/processor-sale-usd",
+        "event/processor-fee-4471",
+        "event/processor-fee-vat-4471",
+        "event/processor-refund-before-4471",
+        "event/processor-reserve-hold-4471"
+      ],
+      "evidenceRefs": ["artifact/processor-report-4471"],
+      "settlementCurrency": "AED",
+      "monetaryEffects": {
+        "grossReceipts": "367.25",
+        "discounts": "0.00",
+        "fees": "10.00",
+        "feeVat": "0.50",
+        "refunds": "30.00",
+        "reserves": "20.00",
+        "chargebacks": "0.00",
+        "reserveReleases": "0.00",
+        "chargebackReversals": "0.00",
+        "fxGainLoss": "0.00",
+        "settled": "306.75"
+      }
+    },
+    {
+      "id": "event/bank-processor-4471",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-02",
+      "causalParents": ["event/processor-settlement-4471"],
+      "evidenceRefs": ["artifact/account-main-aed"],
+      "amount": "306.75",
+      "currency": "AED",
+      "reference": "PAYMENT-4471"
+    },
+    {
+      "id": "event/marketplace-sale-8120",
+      "type": "commerce_sale",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-05",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/marketplace-report-8120", "artifact/marketplace-orders-8120"],
+      "transactionAmount": "1000.00",
+      "transactionCurrency": "AED",
+      "settlementAmount": "1000.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/marketplace-discount-8120",
+      "type": "commerce_discount",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-05",
+      "causalParents": ["event/marketplace-sale-8120"],
+      "evidenceRefs": ["artifact/marketplace-orders-8120"],
+      "settlementAmount": "50.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/marketplace-fee-8120",
+      "type": "processor_fee",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-05",
+      "causalParents": ["event/marketplace-sale-8120"],
+      "evidenceRefs": ["artifact/marketplace-report-8120"],
+      "settlementAmount": "100.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/marketplace-fee-vat-8120",
+      "type": "processor_fee_vat",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-05",
+      "causalParents": ["event/marketplace-fee-8120"],
+      "evidenceRefs": ["artifact/marketplace-report-8120"],
+      "settlementAmount": "5.00",
+      "settlementCurrency": "AED",
+      "feeEventId": "event/marketplace-fee-8120",
+      "policySourceId": "policy/ae-fee-based-financial-services-vat",
+      "policyEffectiveDate": "2018-01-01"
+    },
+    {
+      "id": "event/marketplace-reserve-hold-8120",
+      "type": "rolling_reserve_hold",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-05",
+      "causalParents": ["event/marketplace-sale-8120"],
+      "evidenceRefs": ["artifact/marketplace-report-8120"],
+      "settlementAmount": "50.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/marketplace-settlement-8120",
+      "type": "processor_settlement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-06",
+      "causalParents": [
+        "event/marketplace-sale-8120",
+        "event/marketplace-discount-8120",
+        "event/marketplace-fee-8120",
+        "event/marketplace-fee-vat-8120",
+        "event/marketplace-reserve-hold-8120"
+      ],
+      "evidenceRefs": ["artifact/marketplace-report-8120", "artifact/marketplace-orders-8120"],
+      "settlementCurrency": "AED",
+      "monetaryEffects": {
+        "grossReceipts": "1000.00",
+        "discounts": "50.00",
+        "fees": "100.00",
+        "feeVat": "5.00",
+        "refunds": "0.00",
+        "reserves": "50.00",
+        "chargebacks": "0.00",
+        "reserveReleases": "0.00",
+        "chargebackReversals": "0.00",
+        "fxGainLoss": "0.00",
+        "settled": "795.00"
+      }
+    },
+    {
+      "id": "event/bank-marketplace-8120",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-06",
+      "causalParents": ["event/marketplace-settlement-8120"],
+      "evidenceRefs": ["artifact/account-main-aed"],
+      "amount": "795.00",
+      "currency": "AED",
+      "reference": "MKT-TRUNC-812"
+    },
+    {
+      "id": "event/bnpl-sale-6300",
+      "type": "commerce_sale",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-10",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/bnpl-report-6300"],
+      "transactionAmount": "600.00",
+      "transactionCurrency": "AED",
+      "settlementAmount": "600.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/bnpl-discount-6300",
+      "type": "commerce_discount",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-10",
+      "causalParents": ["event/bnpl-sale-6300"],
+      "evidenceRefs": ["artifact/bnpl-report-6300"],
+      "settlementAmount": "20.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/bnpl-fee-6300",
+      "type": "processor_fee",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-10",
+      "causalParents": ["event/bnpl-sale-6300"],
+      "evidenceRefs": ["artifact/bnpl-report-6300"],
+      "settlementAmount": "60.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/bnpl-fee-vat-6300",
+      "type": "processor_fee_vat",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-10",
+      "causalParents": ["event/bnpl-fee-6300"],
+      "evidenceRefs": ["artifact/bnpl-report-6300"],
+      "settlementAmount": "3.00",
+      "settlementCurrency": "AED",
+      "feeEventId": "event/bnpl-fee-6300",
+      "policySourceId": "policy/ae-fee-based-financial-services-vat",
+      "policyEffectiveDate": "2018-01-01"
+    },
+    {
+      "id": "event/bnpl-refund-before-6300",
+      "type": "customer_refund",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-10",
+      "causalParents": ["event/bnpl-sale-6300"],
+      "evidenceRefs": ["artifact/bnpl-report-6300"],
+      "settlementAmount": "50.00",
+      "settlementCurrency": "AED",
+      "timing": "before_payout"
+    },
+    {
+      "id": "event/bnpl-settlement-6300",
+      "type": "processor_settlement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-11",
+      "causalParents": [
+        "event/bnpl-sale-6300",
+        "event/bnpl-discount-6300",
+        "event/bnpl-fee-6300",
+        "event/bnpl-fee-vat-6300",
+        "event/bnpl-refund-before-6300"
+      ],
+      "evidenceRefs": ["artifact/bnpl-report-6300"],
+      "settlementCurrency": "AED",
+      "monetaryEffects": {
+        "grossReceipts": "600.00",
+        "discounts": "20.00",
+        "fees": "60.00",
+        "feeVat": "3.00",
+        "refunds": "50.00",
+        "reserves": "0.00",
+        "chargebacks": "0.00",
+        "reserveReleases": "0.00",
+        "chargebackReversals": "0.00",
+        "fxGainLoss": "0.00",
+        "settled": "467.00"
+      }
+    },
+    {
+      "id": "event/bank-bnpl-6300-a",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-11",
+      "causalParents": ["event/bnpl-settlement-6300"],
+      "evidenceRefs": ["artifact/account-main-aed"],
+      "amount": "233.50",
+      "currency": "AED",
+      "reference": "BNPL-SPLIT-A"
+    },
+    {
+      "id": "event/bank-bnpl-6300-b",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-11",
+      "causalParents": ["event/bnpl-settlement-6300"],
+      "evidenceRefs": ["artifact/account-main-aed"],
+      "amount": "233.50",
+      "currency": "AED",
+      "reference": "BNPL-SPLIT-B"
+    },
+    {
+      "id": "event/late-sale-4471",
+      "type": "commerce_sale",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-15",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/processor-report-late-4471"],
+      "transactionAmount": "200.00",
+      "transactionCurrency": "AED",
+      "settlementAmount": "200.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/late-fee-4471",
+      "type": "processor_fee",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-15",
+      "causalParents": ["event/late-sale-4471"],
+      "evidenceRefs": ["artifact/processor-report-late-4471"],
+      "settlementAmount": "10.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/late-fee-vat-4471",
+      "type": "processor_fee_vat",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-15",
+      "causalParents": ["event/late-fee-4471"],
+      "evidenceRefs": ["artifact/processor-report-late-4471"],
+      "settlementAmount": "0.50",
+      "settlementCurrency": "AED",
+      "feeEventId": "event/late-fee-4471",
+      "policySourceId": "policy/ae-fee-based-financial-services-vat",
+      "policyEffectiveDate": "2018-01-01"
+    },
+    {
+      "id": "event/refund-after-4471",
+      "type": "customer_refund",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-15",
+      "causalParents": ["event/processor-settlement-4471"],
+      "evidenceRefs": ["artifact/processor-report-late-4471"],
+      "settlementAmount": "40.00",
+      "settlementCurrency": "AED",
+      "timing": "after_payout",
+      "originalSettlementEventId": "event/processor-settlement-4471"
+    },
+    {
+      "id": "event/chargeback-4471",
+      "type": "chargeback",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-15",
+      "causalParents": ["event/processor-settlement-4471"],
+      "evidenceRefs": ["artifact/processor-report-late-4471"],
+      "settlementAmount": "25.00",
+      "settlementCurrency": "AED"
+    },
+    {
+      "id": "event/chargeback-reversal-4471",
+      "type": "chargeback_reversal",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-16",
+      "causalParents": ["event/chargeback-4471"],
+      "evidenceRefs": ["artifact/processor-report-late-4471"],
+      "settlementAmount": "25.00",
+      "settlementCurrency": "AED",
+      "reversesEventId": "event/chargeback-4471"
+    },
+    {
+      "id": "event/reserve-release-4471",
+      "type": "rolling_reserve_release",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-16",
+      "causalParents": ["event/processor-reserve-hold-4471"],
+      "evidenceRefs": ["artifact/processor-report-late-4471"],
+      "settlementAmount": "20.00",
+      "settlementCurrency": "AED",
+      "releasesEventId": "event/processor-reserve-hold-4471"
+    },
+    {
+      "id": "event/processor-settlement-late-4471",
+      "type": "processor_settlement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-17",
+      "causalParents": [
+        "event/late-sale-4471",
+        "event/late-fee-4471",
+        "event/late-fee-vat-4471",
+        "event/refund-after-4471",
+        "event/chargeback-4471",
+        "event/chargeback-reversal-4471",
+        "event/reserve-release-4471"
+      ],
+      "evidenceRefs": ["artifact/processor-report-late-4471"],
+      "settlementCurrency": "AED",
+      "monetaryEffects": {
+        "grossReceipts": "200.00",
+        "discounts": "0.00",
+        "fees": "10.00",
+        "feeVat": "0.50",
+        "refunds": "40.00",
+        "reserves": "0.00",
+        "chargebacks": "25.00",
+        "reserveReleases": "20.00",
+        "chargebackReversals": "25.00",
+        "fxGainLoss": "0.00",
+        "settled": "169.50"
+      }
+    },
+    {
+      "id": "event/bank-processor-late-4471",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-17",
+      "causalParents": ["event/processor-settlement-late-4471"],
+      "evidenceRefs": ["artifact/account-main-aed"],
+      "amount": "169.50",
+      "currency": "AED",
+      "reference": "PAYMENT-4471"
+    },
+    {
+      "id": "event/own-transfer-9001",
+      "type": "own_account_transfer",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-20",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/account-main-aed", "artifact/account-reserve-aed"],
+      "amount": "2500.00",
+      "currency": "AED"
+    },
+    {
+      "id": "event/own-transfer-out-9001",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-20",
+      "causalParents": ["event/own-transfer-9001"],
+      "evidenceRefs": ["artifact/account-main-aed"],
+      "amount": "-2500.00",
+      "currency": "AED",
+      "accountId": "account/main-aed"
+    },
+    {
+      "id": "event/own-transfer-in-9001",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-20",
+      "causalParents": ["event/own-transfer-9001"],
+      "evidenceRefs": ["artifact/account-reserve-aed"],
+      "amount": "2500.00",
+      "currency": "AED",
+      "accountId": "account/reserve-aed"
+    },
+    {
+      "id": "event/cheque-received-5500",
+      "type": "cheque_received",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-22",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/cheque-5500"],
+      "amount": "1000.00",
+      "currency": "AED"
+    },
+    {
+      "id": "event/cheque-cash-in-5500",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-22",
+      "causalParents": ["event/cheque-received-5500"],
+      "evidenceRefs": ["artifact/account-main-aed", "artifact/cheque-5500"],
+      "amount": "1000.00",
+      "currency": "AED"
+    },
+    {
+      "id": "event/cheque-bounced-5500",
+      "type": "cheque_bounced",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-25",
+      "causalParents": ["event/cheque-received-5500"],
+      "evidenceRefs": ["artifact/cheque-5500", "artifact/account-main-aed"],
+      "amount": "-1000.00",
+      "currency": "AED"
+    },
+    {
+      "id": "event/cheque-cash-out-5500",
+      "type": "cash_movement",
+      "legalEntityId": "entity/ae-cash-commerce-llc",
+      "occurredAt": "2026-08-25",
+      "causalParents": ["event/cheque-bounced-5500"],
+      "evidenceRefs": ["artifact/account-main-aed", "artifact/cheque-5500"],
+      "amount": "-1000.00",
+      "currency": "AED"
+    }
+  ],
+  "observations": [
+    { "id": "observation/ae5-trade-licence", "artifactId": "artifact/ae5-trade-licence", "observedAt": "2026-01-02" },
+    { "id": "observation/ae5-designated-zone-check", "artifactId": "artifact/ae5-designated-zone-check", "observedAt": "2026-01-02" },
+    { "id": "observation/ae5-vat-registration", "artifactId": "artifact/ae5-vat-registration", "observedAt": "2026-01-03" },
+    { "id": "observation/ae5-fta-period", "artifactId": "artifact/ae5-fta-period", "observedAt": "2026-06-15" },
+    { "id": "observation/account-main-aed", "artifactId": "artifact/account-main-aed", "observedAt": "2026-08-31" },
+    { "id": "observation/account-reserve-aed", "artifactId": "artifact/account-reserve-aed", "observedAt": "2026-08-31" },
+    { "id": "observation/account-processor-usd", "artifactId": "artifact/account-processor-usd", "observedAt": "2026-08-31" },
+    { "id": "observation/fx-usd-aed", "artifactId": "artifact/fx-usd-aed-2026-08-01", "observedAt": "2026-08-01" },
+    { "id": "observation/processor-report-4471", "artifactId": "artifact/processor-report-4471", "observedAt": "2026-08-02" },
+    { "id": "observation/marketplace-report-8120", "artifactId": "artifact/marketplace-report-8120", "observedAt": "2026-08-06" },
+    { "id": "observation/marketplace-orders-8120", "artifactId": "artifact/marketplace-orders-8120", "observedAt": "2026-08-05" },
+    { "id": "observation/bnpl-report-6300", "artifactId": "artifact/bnpl-report-6300", "observedAt": "2026-08-11" },
+    { "id": "observation/processor-report-late-4471", "artifactId": "artifact/processor-report-late-4471", "observedAt": "2026-08-28" },
+    { "id": "observation/cheque-5500", "artifactId": "artifact/cheque-5500", "observedAt": "2026-08-22" }
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    { "id": "artifact/ae5-trade-licence", "kind": "trade_licence", "format": "json", "trusted": true, "title": "Synthetic UAE Mainland Trade Licence", "fields": { "legalName": "Desert Lantern Commerce LLC", "licenceNumber": "SYNTH-AE5-000001", "licensingAuthority": "Dubai Department of Economy and Tourism", "legalForm": "Limited Liability Company", "issueDate": "2026-01-01" } },
+    { "id": "artifact/ae5-designated-zone-check", "kind": "designated_zone_register_extract", "format": "json", "trusted": true, "title": "Synthetic FTA Designated-Zone Register Check", "fields": { "establishment": "Dubai mainland", "status": "not_designated", "checkedOn": "2026-01-02" } },
+    { "id": "artifact/ae5-vat-registration", "kind": "vat_registration_certificate", "format": "json", "trusted": true, "title": "Synthetic FTA VAT Registration Certificate", "fields": { "taxablePerson": "Desert Lantern Commerce LLC", "trn": "100123456789012", "effectiveFrom": "2026-01-01" } },
+    { "id": "artifact/ae5-fta-period", "kind": "emara_tax_period_assignment", "format": "json", "trusted": true, "title": "Synthetic EmaraTax VAT Period Assignment", "fields": { "periodKey": "2026-Q3", "startsOn": "2026-07-01", "endsOn": "2026-09-30", "dueOn": "2026-10-28" } },
+    { "id": "artifact/account-main-aed", "kind": "bank_account_confirmation", "format": "json", "trusted": true, "title": "Synthetic AED operating-account confirmation", "fields": { "iban": "AE070331234567890123456", "currency": "AED" } },
+    { "id": "artifact/account-reserve-aed", "kind": "payment_account_confirmation", "format": "json", "trusted": true, "title": "Synthetic AED reserve-account confirmation", "fields": { "iban": "AE140331234567890123457", "currency": "AED" } },
+    { "id": "artifact/account-processor-usd", "kind": "payment_account_confirmation", "format": "json", "trusted": true, "title": "Synthetic USD processor-account confirmation", "fields": { "iban": "AE210331234567890123458", "currency": "USD" } },
+    { "id": "artifact/fx-usd-aed-2026-08-01", "kind": "fx_rate_receipt", "format": "json", "trusted": true, "title": "Synthetic sourced USD/AED settlement-rate receipt", "fields": { "rate": "3.672500", "rateDate": "2026-08-01", "provider": "Synthetic regulated-bank receipt" } },
+    { "id": "artifact/processor-report-4471", "kind": "processor_settlement_report", "format": "json", "trusted": true, "synthetic": true, "title": "Synthetic processor settlement report 4471", "fields": { "reference": "PAYMENT-4471", "commercialReality": "synthetic" } },
+    { "id": "artifact/marketplace-report-8120", "kind": "marketplace_settlement_report", "format": "json", "trusted": true, "synthetic": true, "title": "Synthetic marketplace settlement report 8120", "fields": { "reference": "MKT-TRUNC-8120", "commercialReality": "synthetic" } },
+    { "id": "artifact/marketplace-orders-8120", "kind": "marketplace_order_batch", "format": "json", "trusted": true, "synthetic": true, "title": "Synthetic marketplace order batch 8120", "fields": { "batch": "8120", "commercialReality": "synthetic" } },
+    { "id": "artifact/bnpl-report-6300", "kind": "bnpl_settlement_report", "format": "json", "trusted": true, "synthetic": true, "title": "Synthetic BNPL settlement report 6300", "fields": { "reference": "BNPL-6300", "commercialReality": "synthetic" } },
+    { "id": "artifact/processor-report-late-4471", "kind": "processor_settlement_report", "format": "json", "trusted": true, "synthetic": true, "title": "Synthetic late processor settlement report 4471", "fields": { "reference": "PAYMENT-4471", "commercialReality": "synthetic" } },
+    { "id": "artifact/cheque-5500", "kind": "cheque_and_return_notice", "format": "json", "trusted": true, "title": "Synthetic cheque and return notice 5500", "fields": { "chequeNumber": "5500", "amount": "1000.00", "returnReason": "insufficient_funds" } }
+  ],
+  "policySources": [
+    {
+      "id": "policy/ae-vat-designated-zones",
+      "authority": "Federal Tax Authority",
+      "title": "Designated Zones VAT Guide VATGDZ1",
+      "url": "https://tax.gov.ae/DownloadOpenTextFile?fileUrl=en%2FVAT_VAT_Guides%2FDesignated_Zones_VAT_Guide%2FDesignated_Zones_VAT_Guide_EN.pdf",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-08-31"
+    },
+    {
+      "id": "policy/ae-fee-based-financial-services-vat",
+      "authority": "Federal Tax Authority",
+      "title": "Financial Services VAT Guide VATGFS1 — explicit fees and commissions",
+      "url": "https://tax.gov.ae/DownloadOpenTextFile?fileUrl=en%2FVAT_VAT_Guides%2FFinancial_Services_VAT_Guide%2FFinancial_Services_VAT_Guide_VATGFS1_EN_07_2019_EN.pdf",
+      "effectiveFrom": "2018-01-01",
+      "asOf": "2026-08-31"
+    }
+  ],
+  "cashCommerce": {
+    "version": "ae.cash-commerce.v1",
+    "baseCurrency": "AED",
+    "accounts": [
+      { "id": "account/main-aed", "legalEntityId": "entity/ae-cash-commerce-llc", "kind": "bank", "institutionIdentity": "Synthetic Emirates Bank", "accountReference": "OPERATING-001", "iban": "AE070331234567890123456", "statementCurrency": "AED", "sourceArtifactId": "artifact/account-main-aed" },
+      { "id": "account/reserve-aed", "legalEntityId": "entity/ae-cash-commerce-llc", "kind": "payment", "institutionIdentity": "Synthetic Emirates Bank", "accountReference": "RESERVE-002", "iban": "AE140331234567890123457", "statementCurrency": "AED", "sourceArtifactId": "artifact/account-reserve-aed" },
+      { "id": "account/processor-usd", "legalEntityId": "entity/ae-cash-commerce-llc", "kind": "payment", "institutionIdentity": "Synthetic Global Processor", "accountReference": "PROCESSOR-USD-003", "iban": "AE210331234567890123458", "statementCurrency": "USD", "sourceArtifactId": "artifact/account-processor-usd" }
+    ],
+    "fxRates": [
+      { "id": "fx/usd-aed-2026-08-01", "fromCurrency": "USD", "toCurrency": "AED", "rate": "3.672500", "rateDate": "2026-08-01", "source": "settlement_receipt", "sourceArtifactId": "artifact/fx-usd-aed-2026-08-01" }
+    ],
+    "currencyConsequences": [
+      { "id": "currency-consequence/processor-sale-usd", "eventId": "event/processor-sale-usd", "transactionAccountId": "account/processor-usd", "settlementAccountId": "account/main-aed", "transactionAmount": "100.00", "transactionCurrency": "USD", "settlementAmount": "367.25", "settlementCurrency": "AED", "fxRateId": "fx/usd-aed-2026-08-01", "fxRateDate": "2026-08-01", "baseAmount": "367.25", "baseCurrency": "AED" }
+    ],
+    "settlementGroups": [
+      { "id": "settlement-group/processor-4471", "channel": "processor", "legalEntityId": "entity/ae-cash-commerce-llc", "settlementEventId": "event/processor-settlement-4471", "cashAccountId": "account/main-aed", "componentEventIds": ["event/processor-sale-usd", "event/processor-fee-4471", "event/processor-fee-vat-4471", "event/processor-refund-before-4471", "event/processor-reserve-hold-4471"], "documentArtifactIds": ["artifact/processor-report-4471"], "bankEventIds": ["event/bank-processor-4471"], "topology": "one_to_one" },
+      { "id": "settlement-group/marketplace-8120", "channel": "marketplace", "legalEntityId": "entity/ae-cash-commerce-llc", "settlementEventId": "event/marketplace-settlement-8120", "cashAccountId": "account/main-aed", "componentEventIds": ["event/marketplace-sale-8120", "event/marketplace-discount-8120", "event/marketplace-fee-8120", "event/marketplace-fee-vat-8120", "event/marketplace-reserve-hold-8120"], "documentArtifactIds": ["artifact/marketplace-report-8120", "artifact/marketplace-orders-8120"], "bankEventIds": ["event/bank-marketplace-8120"], "topology": "many_documents_to_one_bank" },
+      { "id": "settlement-group/bnpl-6300", "channel": "bnpl", "legalEntityId": "entity/ae-cash-commerce-llc", "settlementEventId": "event/bnpl-settlement-6300", "cashAccountId": "account/main-aed", "componentEventIds": ["event/bnpl-sale-6300", "event/bnpl-discount-6300", "event/bnpl-fee-6300", "event/bnpl-fee-vat-6300", "event/bnpl-refund-before-6300"], "documentArtifactIds": ["artifact/bnpl-report-6300"], "bankEventIds": ["event/bank-bnpl-6300-a", "event/bank-bnpl-6300-b"], "topology": "one_document_to_many_banks" },
+      { "id": "settlement-group/processor-late-4471", "channel": "processor", "legalEntityId": "entity/ae-cash-commerce-llc", "settlementEventId": "event/processor-settlement-late-4471", "cashAccountId": "account/main-aed", "componentEventIds": ["event/late-sale-4471", "event/late-fee-4471", "event/late-fee-vat-4471", "event/refund-after-4471", "event/chargeback-4471", "event/chargeback-reversal-4471", "event/reserve-release-4471"], "documentArtifactIds": ["artifact/processor-report-late-4471"], "bankEventIds": ["event/bank-processor-late-4471"], "topology": "one_to_one" }
+    ],
+    "collisionGroups": [
+      {
+        "id": "collision/same-reference-4471",
+        "collisionType": "same_reference",
+        "legalEntityId": "entity/ae-cash-commerce-llc",
+        "settlementGroupIds": ["settlement-group/processor-4471", "settlement-group/processor-late-4471"],
+        "candidateHandles": ["candidate_1", "candidate_2"],
+        "documentHandles": ["document_1", "document_2"],
+        "candidates": [
+          { "handle": "candidate_1", "eventId": "event/bank-processor-4471", "legalEntityId": "entity/ae-cash-commerce-llc" },
+          { "handle": "candidate_2", "eventId": "event/bank-processor-late-4471", "legalEntityId": "entity/ae-cash-commerce-llc" }
+        ],
+        "documents": [
+          { "handle": "document_1", "artifactId": "artifact/processor-report-4471", "legalEntityId": "entity/ae-cash-commerce-llc" },
+          { "handle": "document_2", "artifactId": "artifact/processor-report-late-4471", "legalEntityId": "entity/ae-cash-commerce-llc" }
+        ],
+        "hydratedHandles": ["candidate_1", "candidate_2", "document_1", "document_2"],
+        "expectedLinks": [
+          { "documentHandle": "document_1", "candidateHandle": "candidate_1" },
+          { "documentHandle": "document_2", "candidateHandle": "candidate_2" }
+        ]
+      },
+      {
+        "id": "collision/same-amount-bnpl",
+        "collisionType": "same_amount",
+        "legalEntityId": "entity/ae-cash-commerce-llc",
+        "settlementGroupIds": ["settlement-group/bnpl-6300"],
+        "candidateHandles": ["candidate_1", "candidate_2"],
+        "documentHandles": ["document_1"],
+        "candidates": [
+          { "handle": "candidate_1", "eventId": "event/bank-bnpl-6300-a", "legalEntityId": "entity/ae-cash-commerce-llc" },
+          { "handle": "candidate_2", "eventId": "event/bank-bnpl-6300-b", "legalEntityId": "entity/ae-cash-commerce-llc" }
+        ],
+        "documents": [
+          { "handle": "document_1", "artifactId": "artifact/bnpl-report-6300", "legalEntityId": "entity/ae-cash-commerce-llc" }
+        ],
+        "hydratedHandles": ["candidate_1", "candidate_2", "document_1"],
+        "expectedLinks": [
+          { "documentHandle": "document_1", "candidateHandle": "candidate_1" },
+          { "documentHandle": "document_1", "candidateHandle": "candidate_2" }
+        ]
+      },
+      {
+        "id": "collision/truncated-reference",
+        "collisionType": "truncated_reference",
+        "legalEntityId": "entity/ae-cash-commerce-llc",
+        "settlementGroupIds": ["settlement-group/marketplace-8120", "settlement-group/processor-late-4471"],
+        "candidateHandles": ["candidate_1", "candidate_2"],
+        "documentHandles": ["document_1", "document_2", "document_3"],
+        "candidates": [
+          { "handle": "candidate_1", "eventId": "event/bank-marketplace-8120", "legalEntityId": "entity/ae-cash-commerce-llc" },
+          { "handle": "candidate_2", "eventId": "event/bank-processor-late-4471", "legalEntityId": "entity/ae-cash-commerce-llc" }
+        ],
+        "documents": [
+          { "handle": "document_1", "artifactId": "artifact/marketplace-report-8120", "legalEntityId": "entity/ae-cash-commerce-llc" },
+          { "handle": "document_2", "artifactId": "artifact/marketplace-orders-8120", "legalEntityId": "entity/ae-cash-commerce-llc" },
+          { "handle": "document_3", "artifactId": "artifact/processor-report-late-4471", "legalEntityId": "entity/ae-cash-commerce-llc" }
+        ],
+        "hydratedHandles": ["candidate_1", "candidate_2", "document_1", "document_2", "document_3"],
+        "expectedLinks": [],
+        "ownerAskId": "ask/truncated-reference-owner-fact"
+      }
+    ],
+    "arrivalOrderCases": [
+      {
+        "id": "arrival/all-settlement-groups",
+        "targetGroupIds": ["settlement-group/processor-4471", "settlement-group/marketplace-8120", "settlement-group/bnpl-6300", "settlement-group/processor-late-4471"],
+        "orders": [
+          { "name": "document_first", "stages": ["documents_observed", "banks_observed", "postings_observed"] },
+          { "name": "bank_first", "stages": ["banks_observed", "documents_observed", "postings_observed"] },
+          { "name": "posting_first", "stages": ["postings_observed", "banks_observed", "documents_observed"] },
+          { "name": "late_document", "stages": ["banks_observed", "postings_observed", "documents_observed"] }
+        ]
+      }
+    ],
+    "ownAccountTransfers": [
+      { "id": "own-transfer/9001", "legalEntityId": "entity/ae-cash-commerce-llc", "eventId": "event/own-transfer-9001", "fromAccountId": "account/main-aed", "toAccountId": "account/reserve-aed", "amount": "2500.00", "currency": "AED" }
+    ],
+    "bouncedCheques": [
+      { "id": "bounced-cheque/5500", "legalEntityId": "entity/ae-cash-commerce-llc", "receiptEventId": "event/cheque-received-5500", "bounceEventId": "event/cheque-bounced-5500", "accountId": "account/main-aed", "amount": "1000.00", "currency": "AED" }
+    ],
+    "ownerAsks": [
+      { "id": "ask/truncated-reference-owner-fact", "legalEntityId": "entity/ae-cash-commerce-llc", "collisionGroupId": "collision/truncated-reference", "responsibleActor": "owner", "factClass": "settlement_group_identity", "question": "Which held marketplace and processor reports belong to each of the two truncated bank references?", "evidenceAlreadyHeld": ["artifact/marketplace-report-8120", "artifact/marketplace-orders-8120", "artifact/processor-report-late-4471", "artifact/account-main-aed"] }
+    ],
+    "feeVatPolicy": {
+      "rate": "0.050000",
+      "effectiveFrom": "2018-01-01",
+      "policySourceId": "policy/ae-fee-based-financial-services-vat"
+    },
+    "commercialLayouts": [
+      { "artifactId": "artifact/processor-report-4471", "synthetic": true, "calibrationUse": "forbidden" },
+      { "artifactId": "artifact/marketplace-report-8120", "synthetic": true, "calibrationUse": "forbidden" },
+      { "artifactId": "artifact/marketplace-orders-8120", "synthetic": true, "calibrationUse": "forbidden" },
+      { "artifactId": "artifact/bnpl-report-6300", "synthetic": true, "calibrationUse": "forbidden" },
+      { "artifactId": "artifact/processor-report-late-4471", "synthetic": true, "calibrationUse": "forbidden" }
+    ]
+  }
+}

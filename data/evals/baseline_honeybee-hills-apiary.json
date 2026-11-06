@@ -1,0 +1,671 @@
+{
+  "meta": {
+    "client_id": "honeybee-hills-apiary",
+    "firm_id": "donna-demo-firm",
+    "generated_at": "2026-05-25T12:42:03.154Z",
+    "phase": 0
+  },
+  "metrics": {
+    "bills": {
+      "total": 35,
+      "matched": 25,
+      "confirmed": 27,
+      "suggested": 0,
+      "unmatched": 10,
+      "match_rate": 0.7143
+    },
+    "receipts": {
+      "total": 0,
+      "matched": 0,
+      "match_rate": 0
+    },
+    "salesInvoices": {
+      "total": 0,
+      "matched": 0,
+      "match_rate": 0
+    },
+    "transactions": {
+      "total": 67,
+      "categorized": 67,
+      "reconciled": 25,
+      "uncategorized": 0,
+      "categorize_rate": 1
+    },
+    "review": {
+      "total": 97,
+      "open": 67
+    },
+    "false_match_rate": 0,
+    "false_categorize_rate": 0
+  },
+  "expected_outcomes": {
+    "matchOutcomes": [
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--910rb7",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-0",
+        "document_id": "doc-honeybee-hills-apiary-25-06-02-intuit-qbo-12-38-pdf-e1364427",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--ebgp25",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-7",
+        "document_id": "doc-honeybee-hills-apiary-25-06-10-dadant-150-23-pdf-74d36aa1",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--z33ud",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-22",
+        "document_id": "doc-honeybee-hills-apiary-25-06-28-farmers-market-26-37-pdf-d2b371c3",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--rguirg",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-6",
+        "document_id": "doc-honeybee-hills-apiary-25-06-06-mann-lake-67-68-pdf-ed1287f1",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--jrpo55",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-21",
+        "document_id": "doc-honeybee-hills-apiary-25-06-26-shell-oil-32-49-pdf-f950c773",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--1gtloo",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-4",
+        "document_id": "doc-honeybee-hills-apiary-25-06-05-progressive-insurance-285-47-pdf-e0381f72",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--nfe2n",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-18",
+        "document_id": "doc-honeybee-hills-apiary-25-06-21-tractor-supply-24-42-pdf-f95ce821",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--30hz72",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-10",
+        "document_id": "doc-honeybee-hills-apiary-25-06-13-chevron-28-60-pdf-9c19c820",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-06--qa8tct",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-9",
+        "document_id": "doc-honeybee-hills-apiary-25-06-12-verizon-wireless-39-06-pdf-8fbdb66b",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--l115tu",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-18",
+        "document_id": "doc-honeybee-hills-apiary-25-07-29-exxonmobil-51-38-pdf-a20e3409",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--24tda8",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-16",
+        "document_id": "doc-honeybee-hills-apiary-25-07-29-exxonmobil-51-38-pdf-a20e3409",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--g8v8gb",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-10",
+        "document_id": "doc-honeybee-hills-apiary-25-07-10-tractor-supply-16-30-pdf-ed3fc052",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--cvfmcl",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-12",
+        "document_id": "doc-honeybee-hills-apiary-25-07-11-verizon-wireless-55-98-pdf-7640db15",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--ubj8qt",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-0",
+        "document_id": "doc-honeybee-hills-apiary-25-07-01-intuit-qbo-16-83-pdf-d14d7a34",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--grvmzq",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-7",
+        "document_id": "doc-honeybee-hills-apiary-25-07-05-dadant-174-49-pdf-79175693",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--ig0tgb",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-6",
+        "document_id": "doc-honeybee-hills-apiary-25-07-04-progressive-insurance-289-05-pdf-b6bf5c01",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--zfwp40",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-3",
+        "document_id": "doc-honeybee-hills-apiary-25-07-03-mann-lake-159-39-pdf-a0c50a29",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--fznhuz",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-18",
+        "document_id": "doc-honeybee-hills-apiary-25-07-28-exxonmobil-51-38-pdf-2de39e3e",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-07--yvvael",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-16",
+        "document_id": "doc-honeybee-hills-apiary-25-07-28-exxonmobil-51-38-pdf-2de39e3e",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-08--mixj72",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-19",
+        "document_id": "doc-honeybee-hills-apiary-25-08-31-dadant-174-02-pdf-bc6a0f8c",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-08--8unvme",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-18",
+        "document_id": "doc-honeybee-hills-apiary-25-08-29-mann-lake-224-36-pdf-6fbbdddd",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-08--35gsne",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-8",
+        "document_id": "doc-honeybee-hills-apiary-25-08-12-verizon-wireless-37-42-pdf-adc7273c",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-08--f5q2m4",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-13",
+        "document_id": "doc-honeybee-hills-apiary-25-08-19-chevron-26-83-pdf-06fa920a",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-08--gdej22",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-4",
+        "document_id": "doc-honeybee-hills-apiary-25-08-05-progressive-insurance-280-80-pdf-8d2334b2",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-08--mda3q5",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-0",
+        "document_id": "doc-honeybee-hills-apiary-25-08-01-intuit-qbo-11-93-pdf-c8a261cc",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-08--w78mou",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-9",
+        "document_id": "doc-honeybee-hills-apiary-25-08-13-phx-water-19-38-pdf-430bd327",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      },
+      {
+        "match_id": "recon-honeybee-hills-apiary-doc-honeybee-hills-apiary-honeyb-supplier-bill-doc-honeybee-hills-apiary-25-08--m2lv9p",
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-15",
+        "document_id": "doc-honeybee-hills-apiary-25-08-26-tractor-supply-82-01-pdf-d8a0d009",
+        "document_type": "supplier_bill",
+        "status": "auto_matched",
+        "confidence": "0.88"
+      }
+    ],
+    "categoryOutcomes": [
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-0",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "INTUIT *QBO SUBS 543839667389"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-1",
+        "account_code": "6130",
+        "account_name": "Rent",
+        "description": "LAND LEASE PMT ACH 801743248367"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-2",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "Check #3851 - CHECK DEP 3851"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-3",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "CHECKCARD DADANT.COM GDXK"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-4",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "ACH DEBIT PROGRESSIVE 442224208561"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-6",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "POS DEBIT - MANNLAKELTD.COM SBY2XP0"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-5",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "ACH DEBIT SW GAS CORP 842870"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-7",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "DADANT.COM A5B38UG59 AZ"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-9",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "VZW*VZWRLSS*APOCC 74157634575"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-8",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "SHOPIFY INC ACH 889512"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-11",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "APS ELECTRIC ACH 2138070532"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-10",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "POS CHEVRON 61998"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-13",
+        "account_code": "Intercompany transfer",
+        "account_name": "Intercompany transfer",
+        "description": "ONLINE TRANSFER TO CHECKING 6301512..."
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-12",
+        "account_code": "Intercompany transfer",
+        "account_name": "Intercompany transfer",
+        "description": "ONLINE TRANSFER TO CHECKING 1587782..."
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-15",
+        "account_code": "Taxes and bank fees",
+        "account_name": "Taxes and bank fees",
+        "description": "IRS USATAXPYMT 18526800"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-14",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "SQUARE INC 99623697367"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-16",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "AMEX EPAYMENT ACH 37861257"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-17",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "OWNER DISTRIBUTION 905026"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-18",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "POS TRACTOR SUPPLY #99840 0428 SC..."
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-19",
+        "account_code": "Taxes and bank fees",
+        "account_name": "Taxes and bank fees",
+        "description": "FOREIGN TRANSACTION FEE"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-20",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "BRANCH DEPOSIT"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-21",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "PURCHASE SHELL OIL 61998"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-22",
+        "account_code": "Taxes and bank fees",
+        "account_name": "Taxes and bank fees",
+        "description": "VISA DDA PUR FARMERS MKT BOOTH FEE"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-24",
+        "account_code": "Taxes and bank fees",
+        "account_name": "Taxes and bank fees",
+        "description": "MONTHLY MAINTENANCE FEE"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-june-2025-pdf-7bab08c4-tx-23",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "INTEREST EARNED"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-2",
+        "account_code": "Intercompany transfer",
+        "account_name": "Intercompany transfer",
+        "description": "ONLINE TRANSFER TO CHECKING 0760549..."
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-0",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "INTUIT *QBO SUBS 1798298"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-1",
+        "account_code": "6130",
+        "account_name": "Rent",
+        "description": "LAND LEASE PMT ACH 719531"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-3",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "PURCHASE MANNLAKELTD.COM FCKWQ"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-4",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "SHOPIFY INC ACH 50091210589"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-6",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "ACH DEBIT PROGRESSIVE 9761519"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-5",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "Check #3852 - CHECK DEP 3852"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-7",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "DADANT & SONS INC Scottsdale AZ"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-8",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "POS PURCHASE - CITY FARME"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-9",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "ACH DEBIT SW GAS CORP 376115819"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-10",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "POS DEBIT - TSC STORES #99840 AZ"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-11",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "BRANCH DEPOSIT"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-12",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "VZW*VZWRLSS*APOCC 2483871485"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-13",
+        "account_code": "Intercompany transfer",
+        "account_name": "Intercompany transfer",
+        "description": "TRANSFER TO OWNER ACCT"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-14",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "SQ *GOSQ.COM 9445235564"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-15",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "AMEX EPAYMENT ACH 8869258115"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-16",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "EXXONMOBIL 61998 0610"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-17",
+        "account_code": "Intercompany transfer",
+        "account_name": "Intercompany transfer",
+        "description": "ONLINE TRANSFER TO SAV 81761647226"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-18",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "EXXONMOBIL 61998 0610"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-19",
+        "account_code": "Taxes and bank fees",
+        "account_name": "Taxes and bank fees",
+        "description": "FOREIGN TRANSACTION FEE"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-20",
+        "account_code": "Revenue",
+        "account_name": "Other income",
+        "description": "CREDIT ADJUSTMENT 58884235614"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-july-2025-pdf-a52c827e-tx-21",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "SERVICE CHARGE"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-2",
+        "account_code": "Intercompany transfer",
+        "account_name": "Intercompany transfer",
+        "description": "ONLINE TRANSFER TO CHECKING 0284441050"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-0",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "INTUIT *QBO SUBS 795545"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-1",
+        "account_code": "6130",
+        "account_name": "Rent",
+        "description": "LAND LEASE PMT ACH 80680971"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-3",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "SHOPIFY*PAYOUT 94601100497"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-4",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "ACH DEBIT PROGRESSIVE 04648254155"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-5",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "BRANCH DEPOSIT"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-6",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "CITY FARMERS MARKET 0902"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-7",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "ACH DEBIT SW GAS CORP 053784"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-8",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "VZW*VZWRLSS*APOCC 002541895"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-9",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "PHX WATER SVC ACH 79553638"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-10",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "SQUARE INC 0664621979"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-11",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "SHOPIFY INC ACH 628783173182"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-12",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "AMEX EPAYMENT ACH 32212860"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-13",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "POS CHEVRON 61998"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-14",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "OWNER DISTRIBUTION 6881134"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-15",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "POS TSC STORES #99840 0813 AZ"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-16",
+        "account_code": "Revenue",
+        "account_name": "Revenue",
+        "description": "Check #3853 - CHECK DEP 3853"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-17",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "XFER TO SAVINGS ****5747"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-18",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "CHECKCARD MANNLAKELTD.COM 0D0CTBVC"
+      },
+      {
+        "transaction_id": "doc-honeybee-hills-apiary-honeybee-hills-3mo-statement-august-2025-p-2fbda9ff-tx-19",
+        "account_code": "Suspense",
+        "account_name": "Suspense",
+        "description": "POS PURCHASE - DADANT.COM EDPTGSJLS"
+      }
+    ]
+  },
+  "counts": {
+    "documents": 39,
+    "transactions": 67,
+    "matches": 27,
+    "review_items": 97
+  }
+}

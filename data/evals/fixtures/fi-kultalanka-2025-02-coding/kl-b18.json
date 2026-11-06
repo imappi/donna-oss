@@ -1,0 +1,77 @@
+{
+  "id": "kl-b18",
+  "title": "Kultalanka 02/2025 14.2. Hesburger −12,90",
+  "split": "development",
+  "family": "kultalanka-meal_refreshment",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "meal_refreshment",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-14",
+    "description": "KORTTIOSTO HESBURGER TAMPERE KOSKIK. TAMPERE",
+    "money_in": 0,
+    "money_out": 12.9,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "Hesburger Koskikeskus",
+    "total_amount": 12.9,
+    "tax_amount": 1.58,
+    "lines": [
+      {
+        "description": "Hesburger menu",
+        "amount": 12.9,
+        "tax_rate": 14
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Meals and entertainment",
+          "direction": "debit",
+          "amount": 11.32,
+          "tax_code": "ALV_14_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 1.58,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 12.9,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B18"
+  }
+}

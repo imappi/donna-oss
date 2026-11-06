@@ -1,0 +1,273 @@
+{
+  "id": "review-01",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "review-01",
+    "scope": {
+      "firm_id": "review-firm",
+      "client_id": "review-client",
+      "generation": "review-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "rv1-bank-a",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Bank export, business account FI21 1234 5600 0007 85, row 2026-08-12: 12.08.2026 | -1 240,00 EUR | SEPA credit transfer | Payee: Iiris Logistiikka Oy | Payee IBAN FI58 3131 3001 0123 45 | Message: BILL-2041 | Archive id 20260812A0913",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv1-bank-b",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Bank export, business account FI21 1234 5600 0007 85, row 2026-08-12: 12.08.2026 | -1 240,00 EUR | SEPA credit transfer | Payee: Iiris Logistiikka Oy | Payee IBAN FI58 3131 3001 0123 45 | Message: BILL-2042 | Archive id 20260812A0914",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv1-invoice-2041",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "INVOICE BILL-2041 — Iiris Logistiikka Oy, Business ID 2233445-6. Invoice date 04.08.2026, due date 03.09.2026. Freight Helsinki–Tampere, 3 pallets, July 2026 shipments. Total incl. VAT EUR 1 240,00. Please quote BILL-2041 when paying.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv1-invoice-2042",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "INVOICE BILL-2042 — Iiris Logistiikka Oy, Business ID 2233445-6. Invoice date 04.08.2026, due date 03.09.2026. Freight Helsinki–Oulu, 3 pallets, July 2026 shipments. Total incl. VAT EUR 1 240,00. Please quote BILL-2042 when paying.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv1-work",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate allocation across the complete declared collision group (two transfers, two invoices) at this snapshot. Every bank row remains visible; selecting an invoice link does not silently finish other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "rv1-tx-a",
+        "source_id": "rv1-bank-a",
+        "date": "2026-08-12",
+        "money_in_minor": 0,
+        "money_out_minor": 124000,
+        "currency": "EUR",
+        "contact": "Iiris Logistiikka Oy",
+        "description": "SEPA CREDIT TRANSFER Iiris Logistiikka Oy BILL-2041",
+        "raw_description": "SEPA CREDIT TRANSFER Iiris Logistiikka Oy Message: BILL-2041 Archive id 20260812A0913",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "rv1-tx-b",
+        "source_id": "rv1-bank-b",
+        "date": "2026-08-12",
+        "money_in_minor": 0,
+        "money_out_minor": 124000,
+        "currency": "EUR",
+        "contact": "Iiris Logistiikka Oy",
+        "description": "SEPA CREDIT TRANSFER Iiris Logistiikka Oy BILL-2042",
+        "raw_description": "SEPA CREDIT TRANSFER Iiris Logistiikka Oy Message: BILL-2042 Archive id 20260812A0914",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "rv1-link-a",
+        "kind": "reference",
+        "source_id": "rv1-bank-a",
+        "transaction_id": "rv1-tx-a",
+        "invoice_id": "rv1-inv-2041",
+        "invoice_amount_minor": 124000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 124000,
+        "bank_currency": "EUR",
+        "gross_minor": 124000,
+        "fee_minor": 0
+      },
+      {
+        "id": "rv1-link-b-other",
+        "kind": "different_obligation",
+        "source_id": "rv1-bank-b",
+        "transaction_id": "rv1-tx-b",
+        "invoice_id": "rv1-inv-2042"
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "rv1-inv-2042",
+        "source_id": "rv1-invoice-2042",
+        "date": "2026-08-04",
+        "reference": "BILL-2042"
+      }
+    ],
+    "invoice": {
+      "id": "rv1-inv-2041",
+      "source_id": "rv1-invoice-2041",
+      "document_type": "supplier_bill",
+      "date": "2026-08-04",
+      "due_date": "2026-09-03",
+      "amount_minor": 124000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "BILL-2041",
+      "counterparty": "Iiris Logistiikka Oy"
+    },
+    "work_item": {
+      "id": "rv1-work-item",
+      "kind": "allocate_collision_group",
+      "target_id": "rv1-group",
+      "admission": "admitted",
+      "reason": "Explicit offline request to investigate allocation across the complete declared collision group; no bank item is completed by a proposal.",
+      "basis_source_ids": [
+        "rv1-work"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "review-manifest",
+      "description": "Exactly the two bank export rows, two invoices and the work request declared in this packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "rv1-bank-a",
+        "rv1-bank-b",
+        "rv1-invoice-2041",
+        "rv1-invoice-2042",
+        "rv1-work"
+      ],
+      "covered_source_ids": [
+        "rv1-bank-a",
+        "rv1-bank-b",
+        "rv1-invoice-2041",
+        "rv1-invoice-2042",
+        "rv1-work"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "rv1-group",
+      "status": "complete_within_scope",
+      "scope_id": "review-manifest",
+      "transaction_ids": [
+        "rv1-tx-a",
+        "rv1-tx-b"
+      ],
+      "invoice_ids": [
+        "rv1-inv-2041",
+        "rv1-inv-2042"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "agent_reviewed",
+    "reviewer": "workstream-a-agent-review-2026-09-18",
+    "source_family": "review-distinguishable-siblings",
+    "limitations": [
+      "Agent review example authored by an independent agent review, not expert accounting validation; model agreement is not ground truth.",
+      "Authored synthetic evidence in realistic text form; source relationships are authored assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "rv1-work-item",
+      "kind": "allocate_collision_group",
+      "target_id": "rv1-group",
+      "admission": "admitted",
+      "reason": "Explicit offline request to investigate allocation across the complete declared collision group; no bank item is completed by a proposal.",
+      "basis_source_ids": [
+        "rv1-work"
+      ]
+    },
+    "demonstrates": "Distinct example for contract-009 and contract-018: two otherwise identical same-day transfers are distinguished by the payer's own payment message, and the sibling's message is itself the payment-specific source that allocates it to the other invoice. The focal invoice can be proposed while the sibling stays visible as its own work.",
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "The payer-entered message BILL-2041 on rv1-tx-a (rv1-bank-a) names the particular obligation; the sibling rv1-tx-b carries BILL-2042 (rv1-bank-b), which allocates it to the related invoice rv1-inv-2042.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": null,
+    "label_reason": "Agent review reading of the two bank messages and two invoice bodies; each transfer names exactly one invoice, so the group resolves without demanding certainty beyond the sources.",
+    "positive_paths": [
+      {
+        "kind": "reference",
+        "transaction_id": "rv1-tx-a",
+        "invoice_id": "rv1-inv-2041",
+        "source_id": "rv1-bank-a",
+        "required_semantics": [
+          "affirmative_obligation_connection",
+          "direct_counterparty_or_documented_processor",
+          "reference_association"
+        ],
+        "constraints": [
+          "current_scoped_sources",
+          "eligible_bank_row",
+          "allocation_arithmetic",
+          "resolved_relevant_competitors"
+        ]
+      }
+    ]
+  },
+  "semantic_statuses": {
+    "rv1-tx-a": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    },
+    "rv1-tx-b": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "contradicted",
+      "obligation": "contradicted",
+      "exclusion": "supported"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "rv1-tx-a",
+        "invoice_id": "rv1-inv-2041",
+        "amount_minor": 124000
+      }
+    ]
+  }
+}

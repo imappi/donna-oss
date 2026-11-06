@@ -1,0 +1,226 @@
+{
+  "id": "review-02",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "review-02",
+    "scope": {
+      "firm_id": "review-firm",
+      "client_id": "review-client",
+      "generation": "review-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "rv2-bank",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Bank export, business account FI21 1234 5600 0007 85, row 2026-08-10: 10.08.2026 | -278,00 EUR | Card purchase | CARD PURCHASE 10.08.2026 PINEWOOD TOOLS OY HELSINKI Visa *4421 | Archive id 20260810C2201",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv2-receipt",
+        "version": "1",
+        "current_version": "1",
+        "kind": "receipt_payment",
+        "content": "From: noreply@pinewoodtools.example — Subject: Payment receipt for order PW-55012. Thank you for your order. Order PW-55012 · 10 Aug 2026 14:32 · Payment method: Visa •••• 4421 · Authorisation 1F7K2Q · Amount charged: EUR 278.00 · Items: 1 × Cordless drill kit PT-18V. Invoice 2026-1187 for this order is attached to this email.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv2-invoice",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "INVOICE 2026-1187 — Pinewood Tools Oy, Helsinki, Business ID 1122334-5. Order PW-55012. Invoice date 10.08.2026. 1 × Cordless drill kit PT-18V. Total incl. VAT EUR 278,00. Payment status: PAID ONLINE BY CARD (Visa •••• 4421) 10.08.2026 — no further payment due.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      },
+      {
+        "id": "rv2-work",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Offline investigation of the identified invoice at the requested snapshot. The card line was auto-coded by Donna before the invoice arrived; this does not assert that the invoice is settled or that a customer owes evidence.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "review-firm",
+        "client_id": "review-client",
+        "generation": "review-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "rv2-tx-card",
+        "source_id": "rv2-bank",
+        "date": "2026-08-10",
+        "money_in_minor": 0,
+        "money_out_minor": 27800,
+        "currency": "EUR",
+        "contact": "PINEWOOD TOOLS OY",
+        "description": "CARD PURCHASE 10.08.2026 PINEWOOD TOOLS OY HELSINKI Visa *4421",
+        "raw_description": "CARD PURCHASE 10.08.2026 PINEWOOD TOOLS OY HELSINKI Visa *4421",
+        "lifecycle": "posted",
+        "payload": {
+          "ai_suggestion_status": "auto_applied",
+          "reconciliation_match_type": "bank_line"
+        }
+      }
+    ],
+    "links": [
+      {
+        "id": "rv2-link-receipt",
+        "kind": "receipt_payment",
+        "source_id": "rv2-receipt",
+        "transaction_id": "rv2-tx-card",
+        "invoice_id": "rv2-inv-1187",
+        "invoice_amount_minor": 27800,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 27800,
+        "bank_currency": "EUR",
+        "gross_minor": 27800,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "rv2-inv-1187",
+      "source_id": "rv2-invoice",
+      "document_type": "supplier_bill",
+      "date": "2026-08-10",
+      "due_date": "2026-08-24",
+      "amount_minor": 27800,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "2026-1187",
+      "counterparty": "Pinewood Tools Oy"
+    },
+    "work_item": {
+      "id": "rv2-work-item",
+      "kind": "settle_invoice",
+      "target_id": "rv2-inv-1187",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "rv2-work"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "review-manifest",
+      "description": "Exactly the bank export row, the card receipt email, the invoice and the work request declared in this packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "rv2-bank",
+        "rv2-receipt",
+        "rv2-invoice",
+        "rv2-work"
+      ],
+      "covered_source_ids": [
+        "rv2-bank",
+        "rv2-receipt",
+        "rv2-invoice",
+        "rv2-work"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "rv2-group",
+      "status": "complete_within_scope",
+      "scope_id": "review-manifest",
+      "transaction_ids": [
+        "rv2-tx-card"
+      ],
+      "invoice_ids": [
+        "rv2-inv-1187"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "agent_reviewed",
+    "reviewer": "workstream-a-agent-review-2026-09-18",
+    "source_family": "review-card-receipt-chain",
+    "limitations": [
+      "Agent review example authored by an independent agent review, not expert accounting validation; model agreement is not ground truth.",
+      "Authored synthetic evidence in realistic text form; source relationships are authored assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "rv2-work-item",
+      "kind": "settle_invoice",
+      "target_id": "rv2-inv-1187",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "rv2-work"
+      ]
+    },
+    "demonstrates": "Distinct example for contract-016 and contract-025: what affirmative evidence a real book holds for a reference-free card payment. The bank narrative carries only merchant, date and card last-4 (no authorisation code); the supplier's receipt email binds to the bank line by card last-4, date and amount and to the invoice by order number. Party, amount and date alone (contract-016/026) remain insufficient.",
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "rv2-receipt is a payment-specific source: it states the card (Visa 4421), the date, the amount and the order PW-55012, and the invoice rv2-invoice is issued for that order and marks itself paid by that card.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": null,
+    "label_reason": "Agent review reading of the receipt email, the invoice body and the bank export row; the receipt is the payment-to-obligation link, not an inference from party, amount and date.",
+    "positive_paths": [
+      {
+        "kind": "receipt_payment",
+        "transaction_id": "rv2-tx-card",
+        "invoice_id": "rv2-inv-1187",
+        "source_id": "rv2-receipt",
+        "required_semantics": [
+          "affirmative_obligation_connection",
+          "direct_counterparty_or_documented_processor"
+        ],
+        "constraints": [
+          "current_scoped_sources",
+          "eligible_bank_row",
+          "allocation_arithmetic",
+          "resolved_relevant_competitors"
+        ]
+      }
+    ]
+  },
+  "semantic_statuses": {
+    "rv2-tx-card": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "rv2-tx-card",
+        "invoice_id": "rv2-inv-1187",
+        "amount_minor": 27800
+      }
+    ]
+  }
+}

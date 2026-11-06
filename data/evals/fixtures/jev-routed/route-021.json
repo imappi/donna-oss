@@ -1,0 +1,54 @@
+{
+  "id": "route-021",
+  "split": "evaluation",
+  "source_family": "authored-021",
+  "firm_id": "fixture-firm",
+  "client_id": "fixture-client",
+  "document": {
+    "id": "opaque-doc-21",
+    "document_type": "supplier_bill",
+    "document_date": "2026-08-03",
+    "due_date": "2026-09-03",
+    "total_amount": 444,
+    "currency": "EUR",
+    "reference_number": "BILL-8121",
+    "payment_status": "unpaid",
+    "vendor_name": "Umbra Studio Ltd"
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "opaque-tx-21-a",
+      "money_in": 0,
+      "money_out": 444,
+      "currency": "EUR",
+      "date": "2026-08-10",
+      "contact": "Umbra Studio Ltd",
+      "description": "BANK TRANSFER Umbra Studio Ltd BILL-8121",
+      "raw_description": "BANK TRANSFER Umbra Studio Ltd BILL-8121",
+      "reconciliation_status": null,
+      "payload": {}
+    }
+  ],
+  "matches": [
+    {
+      "id": "opaque-match-route-021",
+      "firm_id": "foreign-firm",
+      "client_id": "fixture-client",
+      "bank_transaction_id": "opaque-tx-21-a",
+      "matched_object_id": "opaque-doc-21",
+      "matched_object_type": "supplier_bill",
+      "status": "confirmed",
+      "amount": 444,
+      "currency": "EUR"
+    }
+  ],
+  "inventory_complete": true,
+  "local_artifacts": [],
+  "expected": {
+    "route": "match",
+    "matches": [
+      "candidate_1"
+    ]
+  },
+  "label_basis": "Other-firm match record cannot settle this document or suppress its eligible line."
+}

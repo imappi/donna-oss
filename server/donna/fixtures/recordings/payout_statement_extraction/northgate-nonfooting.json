@@ -1,0 +1,35 @@
+{
+  "lane": "payout_statement_extraction",
+  "endpoint_class": "openai",
+  "provenance": "synthetic \u2014 authored from payoutStatement.js PAYOUT_EXTRACTION_SCHEMA for the appliance fixture world (artifact/payout-statement-nonfooting: gross 2,150, commission 430 + VAT 86 printed, net 1,590 printed \u2014 the world's 44.00 promotional co-funding line is NOT on the document, so the printed figures do not foot); never a captured provider response",
+  "fixture": "payout_statement_nonfooting",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_extract_northgate_payout",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_extract_northgate_payout",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"extraction_status\":\"validated\",\"extraction_confidence\":0.93,\"warnings\":[\"printed deductions do not reconcile gross to net\"],\"document_kind\":\"payout_statement\",\"provider_name\":\"Northgate Marketplace\",\"provider_tax_id\":\"GB 456 7890 12\",\"merchant_name\":\"Kestrel Print Studio Ltd\",\"merchant_tax_id\":\"GB 987 6543 21\",\"period_start\":\"2026-08-18\",\"period_end\":\"2026-08-24\",\"payout_date\":\"2026-08-25\",\"currency\":\"GBP\",\"gross_sales\":2150,\"gross_components\":[],\"refunds\":0,\"fees\":[{\"description\":\"Marketplace commission (20%)\",\"amount\":430,\"tax_amount\":86}],\"adjustments\":[],\"net_payout\":1590,\"transaction_count\":41,\"payout_reference\":\"NM-2026-0825-771\",\"deposit_reference\":null,\"bank_last4\":\"5678\"}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

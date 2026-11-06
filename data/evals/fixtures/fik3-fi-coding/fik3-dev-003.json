@@ -1,0 +1,41 @@
+{
+  "id": "fik3-dev-003",
+  "title": "Supplier payment with no source document",
+  "split": "development",
+  "family": "fi-oy-consulting-no-source",
+  "entity": "synthetic-oy-e",
+  "period": "2026-04",
+  "decision_class": "ask_missing_source",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Synteettinen Epsilon Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2026-04-12",
+    "description": "SYNTH CONSULTING OY",
+    "money_in": 0,
+    "money_out": 620.0,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "ask_owner",
+      "journal": [],
+      "ask": {
+        "evidence_type": "supporting_document",
+        "kind": "ask_source_document"
+      }
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  }
+}

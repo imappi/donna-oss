@@ -1,0 +1,224 @@
+{
+  "id": "contract-012",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "contract-012",
+    "scope": {
+      "firm_id": "fixture-firm",
+      "client_id": "fixture-client",
+      "generation": "fixture-generation-1"
+    },
+    "as_of": "2026-09-17",
+    "sources": [
+      {
+        "id": "bank-source-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "{\"contact\": \"PayStream Europe\", \"currency\": \"EUR\", \"date\": \"2026-08-10\", \"description\": \"PAYSTREAM PAYOUT QZ31\", \"money_in\": 848, \"money_out\": 0, \"raw_description\": \"PAYSTREAM PAYOUT QZ31 GBP TO EUR LESS FEES\", \"reconciliation_status\": null}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "invoice",
+        "content": "{\"currency\": \"GBP\", \"customer_name\": \"Larch Consulting Ltd\", \"document_date\": \"2026-08-03\", \"document_type\": \"sales_invoice\", \"due_date\": \"2026-09-03\", \"payment_status\": \"unpaid\", \"reference_number\": \"BILL-8112\", \"total_amount\": 730}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "remittance-source-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "remittance",
+        "content": "{\"bank_currency\": \"EUR\", \"counterparty\": \"Larch Consulting Ltd\", \"fee_bank_amount\": 12, \"gross_bank_amount\": 860, \"invoice_amount\": 730, \"invoice_currency\": \"GBP\", \"invoice_reference\": \"BILL-8112\", \"net_bank_amount\": 848, \"text\": \"Remittance identifies invoice BILL-8112 and the selected bank transfer.\"}",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Offline investigation of the identified invoice at the requested snapshot. This does not assert that payment has occurred or that a customer owes evidence.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "fixture-firm",
+        "client_id": "fixture-client",
+        "generation": "fixture-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "opaque-tx-12-a",
+        "source_id": "bank-source-1",
+        "date": "2026-08-10",
+        "money_in_minor": 84800,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "PayStream Europe",
+        "description": "PAYSTREAM PAYOUT QZ31",
+        "raw_description": "PAYSTREAM PAYOUT QZ31 GBP TO EUR LESS FEES",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-remittance-1",
+        "kind": "remittance",
+        "source_id": "remittance-source-1",
+        "transaction_id": "opaque-tx-12-a",
+        "invoice_id": "opaque-doc-12",
+        "invoice_amount_minor": 73000,
+        "invoice_currency": "GBP",
+        "bank_amount_minor": 84800,
+        "bank_currency": "EUR",
+        "gross_minor": 86000,
+        "fee_minor": 1200
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "opaque-doc-12",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-03",
+      "due_date": "2026-09-03",
+      "amount_minor": 73000,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "BILL-8112",
+      "counterparty": "Larch Consulting Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "opaque-doc-12",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-source-1",
+        "invoice-source",
+        "remittance-source-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-source-1",
+        "invoice-source",
+        "remittance-source-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "opaque-tx-12-a"
+      ],
+      "invoice_ids": [
+        "opaque-doc-12"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "source_family": "data/evals/fixtures/jev-routed/route-012.json",
+    "limitations": [
+      "Authored synthetic evidence; source relationships are assumptions, not independently verified production facts.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "opaque-doc-12",
+      "admission": "admitted",
+      "reason": "Explicit research request to investigate potential settlement of this invoice; no customer-contact obligation inferred.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and obligation, validated semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "missing_fact": null,
+    "label_reason": "Provisional source reading of the explicit payment relationship; not independent adjudication.",
+    "prior_art": "data/evals/fixtures/jev-routed/route-012.json",
+    "legacy_fixture_sha256": "1f93991c7989075cf7e1f573ceb77f7be8a1e4d4e14b1af7417e667779abfb23",
+    "positive_paths": [
+      {
+        "kind": "remittance",
+        "transaction_id": "opaque-tx-12-a",
+        "invoice_id": "opaque-doc-12",
+        "source_id": "remittance-source-1",
+        "required_semantics": [
+          "affirmative_obligation_connection",
+          "direct_counterparty_or_documented_processor",
+          "reference_association"
+        ],
+        "constraints": [
+          "current_scoped_sources",
+          "eligible_bank_row",
+          "allocation_arithmetic",
+          "resolved_relevant_competitors"
+        ]
+      }
+    ]
+  },
+  "semantic_statuses": {
+    "opaque-tx-12-a": {
+      "counterparty": "contradicted",
+      "processor": "supported",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "opaque-tx-12-a",
+        "invoice_id": "opaque-doc-12",
+        "amount_minor": 73000
+      }
+    ]
+  }
+}

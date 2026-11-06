@@ -1,0 +1,66 @@
+{
+  "id": "kl-b33",
+  "title": "Kultalanka 02/2025 28.2. Lainaerä −412,35",
+  "split": "development",
+  "family": "kultalanka-loan_split",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "loan_split",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-28",
+    "description": "LAINANHOITO OP YRITYSLAINA 6100123456 LYHENNYS+KORKO 2/2025",
+    "money_in": 0,
+    "money_out": 412.35,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Interest expense",
+          "direction": "debit",
+          "amount": 67.98,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Loan payable",
+          "direction": "debit",
+          "amount": 344.37,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 412.35,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "gap",
+    "gap": "source",
+    "detail": "its source (payslip or loan schedule) is not a seedable FIK-3 document type"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B33"
+  }
+}

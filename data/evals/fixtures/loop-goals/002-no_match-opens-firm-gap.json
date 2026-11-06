@@ -1,0 +1,17 @@
+{
+  "id": "002-no_match-opens-firm-gap",
+  "title": "A no_match verdict with no sticky match opens an unclear_match gap owned by the firm (the Failure-B class)",
+  "input": {
+    "verdict": "no_match",
+    "hasStickyMatch": false,
+    "unmatchableReason": "no_plausible_bank_line"
+  },
+  "expected": {
+    "goal_status": "unmet",
+    "action": "open_gap",
+    "blocker_type": "unclear_match",
+    "gap_kind": "unmatched_verdict",
+    "owner_type": "firm",
+    "stop_reason": "authority_required"
+  }
+}

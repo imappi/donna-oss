@@ -1,0 +1,78 @@
+{
+  "id": "kl-b17",
+  "title": "Kultalanka 02/2025 14.2. St1 Hervanta −52,10",
+  "split": "development",
+  "family": "kultalanka-private_spend",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "private_spend",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-14",
+    "description": "KORTTIOSTO ST1 TAMPERE HERVANTA TAMPERE",
+    "money_in": 0,
+    "money_out": 52.1,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "St1 Tampere Hervanta",
+    "total_amount": 52.1,
+    "tax_amount": 10.59,
+    "lines": [
+      {
+        "description": "Bensa 95E10 30,01 l — käsin: YKSITYISAJO 14.2. / M.L.",
+        "amount": 52.1,
+        "tax_rate": 25.5
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Owner drawings",
+          "direction": "debit",
+          "amount": 52.1,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 52.1,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": {
+      "terminal": "ask_owner",
+      "journal": [],
+      "ask": {
+        "evidence_type": "business_purpose"
+      }
+    },
+    "adjudication": {
+      "status": "adjudicated",
+      "reviewer": "Ilkka Halonen (operator; not professional review)",
+      "date": "2026-09-24"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B17"
+  }
+}

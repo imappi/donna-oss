@@ -1,0 +1,22 @@
+export {
+  DEFAULT_HMRC_SCOPES,
+  HMRC_CORRELATION_ID_HEADER,
+  HMRC_VAT_ACCEPT_HEADER,
+  buildHmrcAuthorizeUrl,
+  buildHmrcRequestHeaders,
+  createHmrcState,
+  decryptHmrcToken,
+  encryptHmrcToken,
+  exchangeHmrcCode,
+  getHmrcApiBaseUrl,
+  getHmrcAuthorizeBaseUrl,
+  getHmrcConfig,
+  hmrcCorrelationIdFromHeaders,
+  isHmrcConfigured,
+  isHmrcInvalidGrantError,
+  normalizeHmrcTokenPayload,
+  refreshHmrcToken,
+  requireHmrcConfigured,
+  shouldRefreshHmrcToken,
+  verifyHmrcState
+} from './hmrcClient.js';

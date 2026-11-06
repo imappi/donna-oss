@@ -1,0 +1,45 @@
+{
+  "id": "kl-b30",
+  "title": "Kultalanka 02/2025 26.2. Shell −40,00",
+  "split": "development",
+  "family": "kultalanka-missing_receipt",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "missing_receipt",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-26",
+    "description": "KORTTIOSTO SHELL TAMPERE RATINA TAMPERE",
+    "money_in": 0,
+    "money_out": 40,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "ask_owner",
+      "journal": [],
+      "ask": {
+        "evidence_type": "supporting_document",
+        "kind": "ask_source_document"
+      }
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B30"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "id": "kl-b03",
+  "title": "Kultalanka 02/2025 3.2. Vuokra −1 450,00",
+  "split": "development",
+  "family": "kultalanka-exempt_purchase",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "exempt_purchase",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-03",
+    "description": "TILISIIRTO KIINTEISTÖ OY HÄMEEN SALI VIITE 10045",
+    "money_in": 0,
+    "money_out": 1450,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "supplier_bill",
+    "party": "Kiinteistö Oy Hämeen Sali",
+    "total_amount": 1450,
+    "tax_amount": 0,
+    "lines": [
+      {
+        "description": "Toimitilavuokra 2/2025 — Hämeenkatu 12 (vuokra arvonlisäverotonta, AVL 27 §)",
+        "amount": 1450,
+        "tax_rate": 0
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Rent",
+          "direction": "debit",
+          "amount": 1450,
+          "tax_code": "ALV_EXEMPT"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 1450,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B03"
+  }
+}

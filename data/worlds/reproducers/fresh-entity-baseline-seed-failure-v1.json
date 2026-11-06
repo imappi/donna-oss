@@ -1,0 +1,27 @@
+{
+  "version": "eaw.fictional-reproducer.v1",
+  "fictional": true,
+  "incident_id": "fresh-entity/baseline-seed-failure",
+  "world_id": "gate0/fresh-entity-baseline-seed-failure",
+  "seed": "gate0-fresh-entity-seed-001",
+  "expected_divergence_stage": "config_chart_authority",
+  "creation": {
+    "path": "desktop_firm_intake",
+    "firm_id": "eaw-fictional-firm",
+    "client_id": "eaw-fictional-client",
+    "profile": {
+      "company_name": "Fictional Harbour Books Ltd",
+      "jurisdiction": "GB",
+      "entity_type": "gb-ltd"
+    }
+  },
+  "injected_failure": {
+    "operation": "seedDesktopClientBaselineInDb",
+    "reason_code": "DESKTOP_BASELINE_SEED_FAILED"
+  },
+  "assertions": [
+    "the client-create transaction refuses rather than committing an operationally incomplete client",
+    "no first upload or worker stage is admitted after the seed failure",
+    "an idempotent retry can create exactly one usable client once seeding succeeds"
+  ]
+}

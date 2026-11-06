@@ -1,0 +1,19 @@
+{
+  "id": "005-unevaluated-unpaid-obligation",
+  "title": "An unpaid obligation that never reached the matcher (no verdict, no match) opens an unevaluated_obligation gap (scan B)",
+  "input": {
+    "verdict": null,
+    "hasEvaluation": false,
+    "hasAnyMatch": false,
+    "hasStickyMatch": false,
+    "paymentStatus": "unpaid"
+  },
+  "expected": {
+    "goal_status": "unmet",
+    "action": "open_gap",
+    "blocker_type": "unclear_match",
+    "gap_kind": "unevaluated_obligation",
+    "owner_type": "firm",
+    "stop_reason": "authority_required"
+  }
+}

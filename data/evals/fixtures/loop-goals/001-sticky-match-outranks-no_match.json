@@ -1,0 +1,14 @@
+{
+  "id": "001-sticky-match-outranks-no_match",
+  "title": "INV-4: a sticky match settles the target even with a no_match verdict on record",
+  "input": {
+    "verdict": "no_match",
+    "hasStickyMatch": true,
+    "unmatchableReason": "stale_verdict_before_manual_link"
+  },
+  "expected": {
+    "goal_status": "met",
+    "action": "resolve_gap",
+    "stop_reason": "goal_met"
+  }
+}

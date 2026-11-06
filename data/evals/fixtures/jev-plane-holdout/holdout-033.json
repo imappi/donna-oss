@@ -1,0 +1,171 @@
+{
+  "id": "holdout-033",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-033",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "INVOICE INV-2320\nFrom: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nVAT registration: GB 312 4567 89\nBill to: Mr D. Okafor (22 Elm Grove, Bristol BS6 5PT)\nInvoice date: 07/09/2026    Due date: 07/09/2026    Terms: paid on completion\nDescription: On-site network installation\nNet total: £650.00\nVAT @ 20%: £130.00\nTOTAL DUE: £780.00\nPayment: bank transfer to sort code 20-45-67, account 12345678, quoting INV-2320.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n08/09/2026,FPI,\"SUMUP PAYMENTS LTD PAYOUT 07SEP\",,766.82,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-08",
+        "money_in_minor": 76682,
+        "money_out_minor": 0,
+        "currency": "GBP",
+        "contact": "SumUp Payments Ltd",
+        "description": "SUMUP PAYMENTS LTD PAYOUT 07SEP",
+        "raw_description": "08/09/2026,FPI,\"SUMUP PAYMENTS LTD PAYOUT 07SEP\",,766.82,GBP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-09-07",
+      "due_date": "2026-09-07",
+      "amount_minor": 78000,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "INV-2320",
+      "counterparty": "Mr D. Okafor"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "pending",
+      "scope_id": "fixture-manifest",
+      "description": "The SumUp transaction export for 07/09/2026 is queued for retrieval.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "sumup-receipt-export-2026-09-07",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim.",
+        "One required processor receipt is pending."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-gb-sumup-card-reader-payout",
+    "family_description": "A UK tradesperson-style Ltd takes an invoice payment on a SumUp card reader; SumUp pays out next day net of 1.69%; the SumUp transaction receipt names the invoice.",
+    "market": "GB",
+    "variant": "c",
+    "error_mode": "card-terminal processor; two payouts for two invoices; receipt not yet retrieved",
+    "label_reason": "The SumUp receipt export for 07/09 is listed but not yet retrieved; the payout alone cannot be decided.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "retrieve_local"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": false,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "not_established",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "retrieve_local",
+    "proposals": []
+  }
+}

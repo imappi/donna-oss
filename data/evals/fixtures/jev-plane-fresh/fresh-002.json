@@ -1,0 +1,235 @@
+{
+  "id": "fresh-002",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "fresh-002",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "INVOICE INV-2350\nFrom: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nVAT registration: GB 312 4567 89\nBill to: Bramble Lane Nursery Ltd\nInvoice date: 12/08/2026    Due date: 11/09/2026    Terms: 30 days\nDescription: Online booking system, phase 1\nNet total: £1,450.00\nVAT @ 20%: £290.00\nTOTAL DUE: £1,740.00\nPayment: bank transfer to sort code 20-45-67, account 12345678, quoting INV-2350.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n07/09/2026,CHQ,\"CHEQUE PAID IN 100234\",,1740.00,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n11/09/2026,UCH,\"UNPAID CHEQUE 100234 REFER TO DRAWER\",1740.00,,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "letter-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "remittance_letter",
+        "content": "Bramble Lane Nursery Ltd\nTo: Northgate Web Studio Ltd\nDate: 04/09/2026\n\nPlease find enclosed our cheque no. 100234 for £1,740.00 in settlement of your invoice INV-2350 (booking system, phase 1).\nKind regards, R. Patel, Office Manager",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-07",
+        "money_in_minor": 174000,
+        "money_out_minor": 0,
+        "currency": "GBP",
+        "contact": "CHEQUE PAID IN",
+        "description": "CHEQUE PAID IN 100234",
+        "raw_description": "07/09/2026,CHQ,\"CHEQUE PAID IN 100234\",,1740.00,GBP",
+        "instrument": "cheque:HSBC:100234",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-11",
+        "money_in_minor": 0,
+        "money_out_minor": 174000,
+        "currency": "GBP",
+        "contact": "UNPAID CHEQUE",
+        "description": "UNPAID CHEQUE 100234 REFER TO DRAWER",
+        "raw_description": "11/09/2026,UCH,\"UNPAID CHEQUE 100234 REFER TO DRAWER\",1740.00,,GBP",
+        "instrument": "cheque:HSBC:100234",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "remittance",
+        "source_id": "letter-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 174000,
+        "invoice_currency": "GBP",
+        "bank_amount_minor": 174000,
+        "bank_currency": "GBP",
+        "gross_minor": 174000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-12",
+      "due_date": "2026-09-11",
+      "amount_minor": 174000,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "INV-2350",
+      "counterparty": "Bramble Lane Nursery Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "letter-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "letter-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "fresh",
+    "source_family": "fresh-gb-cheque-deposit-returned-then-cleared",
+    "family_description": "A UK customer pays a sales invoice by cheque with a covering letter; the cheque clears, bounces, or bounces and is re-presented.",
+    "market": "GB",
+    "variant": "b",
+    "error_mode": "reversal/refund: a returned cheque on the declared instrument; a re-presented cheque that clears",
+    "label_reason": "The bank returns the same cheque unpaid four days after deposit (same cheque number, opposite direction, same amount): the deposit settles nothing and the invoice remains open.",
+    "terminal_reason": "The evidence is complete (letter, deposit, return); the reversal is a mechanical fact; nothing to ask the owner and nothing to judge. The deposit/return pair is remaining work.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "unresolved_research"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work",
+      "proposal_for_a_returned_cheque"
+    ],
+    "missing_fact": null,
+    "model_dependent": false,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "not_established",
+      "processor": "supported",
+      "reference": "supported",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "not_established",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "unresolved_research",
+    "proposals": [],
+    "terminal": "RESOLVED"
+  }
+}

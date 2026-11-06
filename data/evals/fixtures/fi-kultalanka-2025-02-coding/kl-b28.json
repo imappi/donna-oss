@@ -1,0 +1,75 @@
+{
+  "id": "kl-b28",
+  "title": "Kultalanka 02/2025 24.2. Lumikki maksu +923,60",
+  "split": "development",
+  "family": "kultalanka-combined_charge",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "combined_charge",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-24",
+    "description": "TILISIIRTO HÄÄ- JA JUHLAPALVELU LUMIKKI OY VIITE 710028",
+    "money_in": 923.6,
+    "money_out": 0,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "debit",
+          "amount": 923.6,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Myyntisaamiset",
+          "direction": "credit",
+          "amount": 903.6,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Interest income",
+          "direction": "credit",
+          "amount": 20,
+          "tax_code": "ALV_OUT_OF_SCOPE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": {
+      "terminal": "ask_owner",
+      "journal": [],
+      "ask": {
+        "evidence_type": "document_discrepancy",
+        "kind": "ask_component_split"
+      }
+    },
+    "adjudication": {
+      "status": "adjudicated",
+      "reviewer": "Ilkka Halonen (operator; not professional review)",
+      "date": "2026-09-24"
+    }
+  },
+  "expressible": {
+    "status": "gap",
+    "gap": "source",
+    "detail": "settled by 2 sources; the FIK-3 book seeds one"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B28"
+  }
+}

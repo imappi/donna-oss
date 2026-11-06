@@ -1,0 +1,58 @@
+{
+  "id": "009-ar-equal-amount-near-date-decoy",
+  "title": "Equal-amount decoy, closer date — target precision under temptation (AR)",
+  "narrative": "A EUR 1250 invoice to Northwind Traders (ref INV-2026-0210). Two incoming lines are exactly EUR 1250: the correct one carries the invoice reference and the customer name; the DECOY is the same amount from a DIFFERENT counterparty (Saastra Consulting) and is even one day CLOSER to the invoice date. A weighted matcher (amount 0.45 + date 0.30 + vendor 0.25) over-scores the closer-dated decoy; the strong matcher should disambiguate on the reference + counterparty name. GOLD: auto_match the reference-matching line only. FAILURE TO CATCH: matching the decoy (false target / false-auto-match) or proposing both.",
+  "tags": ["negative_decoy", "equal_amount", "near_date", "reference_match", "sales_invoice", "ar", "target_precision"],
+  "document": {
+    "id": "si-northwind-009",
+    "document_type": "sales_invoice",
+    "customer_name": "Northwind Traders Oy",
+    "document_date": "2026-05-10",
+    "due_date": "2026-06-09",
+    "total_amount": 1250.00,
+    "currency": "EUR",
+    "reference_number": "INV-2026-0210",
+    "extraction_confidence": 0.95,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-northwind-correct",
+      "money_in": 1250.00,
+      "currency": "EUR",
+      "date": "2026-05-13",
+      "description": "SEPA CT NORTHWIND TRADERS INV-2026-0210",
+      "raw_description": "SEPA CT NORTHWIND TRADERS OY INV-2026-0210",
+      "contact": "Northwind Traders Oy"
+    },
+    {
+      "id": "tx-saastra-decoy",
+      "money_in": 1250.00,
+      "currency": "EUR",
+      "date": "2026-05-11",
+      "description": "SEPA CT SAASTRA CONSULTING",
+      "raw_description": "SEPA CT SAASTRA CONSULTING OY MONTHLY RETAINER",
+      "contact": "Saastra Consulting Oy"
+    },
+    {
+      "id": "tx-unrelated-rent-009",
+      "money_in": 980.00,
+      "currency": "EUR",
+      "date": "2026-05-09",
+      "description": "RENT TENANT C",
+      "raw_description": "MONTHLY RENT TENANT C MAY 2026",
+      "contact": "Tenant C"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      {
+        "bank_transaction_id": "tx-northwind-correct",
+        "status": "auto_matched",
+        "required_hops_any_of": ["reference_match", "vendor_overlap"]
+      }
+    ],
+    "unmatchable_reason": null
+  }
+}

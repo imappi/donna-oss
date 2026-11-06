@@ -1,0 +1,391 @@
+{
+  "id": "holdout-046",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-046",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0490\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Serangoon Pet Clinic Pte. Ltd.  UEN 201512345R\nInvoice date: 31 Aug 2026    Due date: 30 Sep 2026    Terms: 30 days\nDescription: Website hosting, September\nSubtotal: S$900.00\nGST 9%: S$81.00\nTOTAL: S$981.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0490.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0491\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Serangoon Pet Clinic Pte. Ltd.  UEN 201512345R\nInvoice date: 31 Aug 2026    Due date: 30 Sep 2026    Terms: 30 days\nDescription: Email hosting, September\nSubtotal: S$500.00\nGST 9%: S$45.00\nTOTAL: S$545.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0491.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0492\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Serangoon Pet Clinic Pte. Ltd.  UEN 201512345R\nInvoice date: 02 Sep 2026    Due date: 02 Oct 2026    Terms: 30 days\nDescription: Landing page, promo\nSubtotal: S$1,200.00\nGST 9%: S$108.00\nTOTAL: S$1,308.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0492.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r3",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "TAX INVOICE INV-2026-0493\nMerlion Analytics Pte. Ltd.  UEN 202012345K  GST Reg. No. 202012345K\nBill to: Serangoon Pet Clinic Pte. Ltd.  UEN 201512345R\nInvoice date: 05 Sep 2026    Due date: 05 Oct 2026    Terms: 30 days\nDescription: Website hosting, October (advance)\nSubtotal: S$900.00\nGST 9%: S$81.00\nTOTAL: S$981.00\nPayment: PayNow to UEN 202012345K or transfer to DBS business account 012-345678-9, quoting INV-2026-0493.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n08 Sep 2026,ICT,,981.00,PAYNOW TRANSFER,SERANGOON PET CLINIC,INV-2026-0490",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n08 Sep 2026,ICT,,545.00,PAYNOW TRANSFER,SERANGOON PET CLINIC,INV-2026-0491",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t3",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n10 Sep 2026,ICT,,1308.00,PAYNOW TRANSFER,SERANGOON PET CLINIC,INV-2026-0492",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t4",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "DBS business account 012-345678-9 — transaction history export (SGD)\nTransaction Date,Reference,Debit Amount,Credit Amount,Transaction Ref1,Transaction Ref2,Transaction Ref3\n12 Sep 2026,ICT,,981.00,PAYNOW TRANSFER,SERANGOON PET CLINIC,INV-2026-0493",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date. Proposing one link does not finish the other rows.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-08",
+        "money_in_minor": 98100,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "SERANGOON PET CLINIC PTE LTD",
+        "description": "PAYNOW TRANSFER SERANGOON PET CLINIC INV-2026-0490",
+        "raw_description": "08 Sep 2026,ICT,,981.00,PAYNOW TRANSFER,SERANGOON PET CLINIC,INV-2026-0490",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-09-08",
+        "money_in_minor": 54500,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "SERANGOON PET CLINIC PTE LTD",
+        "description": "PAYNOW TRANSFER SERANGOON PET CLINIC INV-2026-0491",
+        "raw_description": "08 Sep 2026,ICT,,545.00,PAYNOW TRANSFER,SERANGOON PET CLINIC,INV-2026-0491",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t3",
+        "source_id": "bank-t3",
+        "date": "2026-09-10",
+        "money_in_minor": 130800,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "SERANGOON PET CLINIC PTE LTD",
+        "description": "PAYNOW TRANSFER SERANGOON PET CLINIC INV-2026-0492",
+        "raw_description": "10 Sep 2026,ICT,,1308.00,PAYNOW TRANSFER,SERANGOON PET CLINIC,INV-2026-0492",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t4",
+        "source_id": "bank-t4",
+        "date": "2026-09-12",
+        "money_in_minor": 98100,
+        "money_out_minor": 0,
+        "currency": "SGD",
+        "contact": "SERANGOON PET CLINIC PTE LTD",
+        "description": "PAYNOW TRANSFER SERANGOON PET CLINIC INV-2026-0493",
+        "raw_description": "12 Sep 2026,ICT,,981.00,PAYNOW TRANSFER,SERANGOON PET CLINIC,INV-2026-0493",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 98100,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 98100,
+        "bank_currency": "SGD",
+        "gross_minor": 98100,
+        "fee_minor": 0
+      },
+      {
+        "id": "link-2-t2",
+        "kind": "reference",
+        "source_id": "bank-t2",
+        "transaction_id": "tx-t2",
+        "invoice_id": "invoice-r1",
+        "invoice_amount_minor": 54500,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 54500,
+        "bank_currency": "SGD",
+        "gross_minor": 54500,
+        "fee_minor": 0
+      },
+      {
+        "id": "link-3-t3",
+        "kind": "reference",
+        "source_id": "bank-t3",
+        "transaction_id": "tx-t3",
+        "invoice_id": "invoice-r2",
+        "invoice_amount_minor": 130800,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 130800,
+        "bank_currency": "SGD",
+        "gross_minor": 130800,
+        "fee_minor": 0
+      },
+      {
+        "id": "link-4-t4",
+        "kind": "reference",
+        "source_id": "bank-t4",
+        "transaction_id": "tx-t4",
+        "invoice_id": "invoice-r3",
+        "invoice_amount_minor": 98100,
+        "invoice_currency": "SGD",
+        "bank_amount_minor": 98100,
+        "bank_currency": "SGD",
+        "gross_minor": 98100,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-08-31",
+        "reference": "INV-2026-0491"
+      },
+      {
+        "id": "invoice-r2",
+        "source_id": "invoice-source-r2",
+        "date": "2026-09-02",
+        "reference": "INV-2026-0492"
+      },
+      {
+        "id": "invoice-r3",
+        "source_id": "invoice-source-r3",
+        "date": "2026-09-05",
+        "reference": "INV-2026-0493"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-31",
+      "due_date": "2026-09-30",
+      "amount_minor": 98100,
+      "minor_unit": 2,
+      "currency": "SGD",
+      "reference": "INV-2026-0490",
+      "counterparty": "Serangoon Pet Clinic Pte. Ltd."
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "allocate_collision_group",
+      "target_id": "group-1",
+      "admission": "admitted",
+      "reason": "Work request: investigate the allocation of every bank line and invoice in the declared collision group as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "bank-t3",
+        "bank-t4",
+        "invoice-source",
+        "invoice-source-r1",
+        "invoice-source-r2",
+        "invoice-source-r3",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "bank-t3",
+        "bank-t4",
+        "invoice-source",
+        "invoice-source-r1",
+        "invoice-source-r2",
+        "invoice-source-r3",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2",
+        "tx-t3",
+        "tx-t4"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1",
+        "invoice-r2",
+        "invoice-r3"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-sg-four-paynow-credits-one-week",
+    "family_description": "One customer sends four PayNow credits in a week against four open invoices; references and a statement email sort them out.",
+    "market": "SG",
+    "variant": "a",
+    "error_mode": "larger candidate group; exclusions by reference and by customer statement; exact split",
+    "label_reason": "Each of the four credits quotes its own invoice; the three siblings are referenced elsewhere and the focal credit matches exactly.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "contradicted",
+      "obligation": "contradicted",
+      "exclusion": "supported"
+    },
+    "tx-t3": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "contradicted",
+      "obligation": "contradicted",
+      "exclusion": "supported"
+    },
+    "tx-t4": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "contradicted",
+      "obligation": "contradicted",
+      "exclusion": "supported"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 98100
+      }
+    ]
+  }
+}

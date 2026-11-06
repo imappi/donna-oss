@@ -1,0 +1,197 @@
+{
+  "id": "holdout-014",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "holdout-014",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "INVOICE INV-2288\nFrom: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nVAT registration: GB 312 4567 89\nBill to: Atelier Verhoeven BV (Utrecht, Netherlands)\nInvoice date: 15/08/2026    Due date: 14/09/2026    Terms: 30 days\nDescription: Brand identity refresh\nNet total: EUR 1,500.00\nVAT @ 20%: EUR 300.00\nTOTAL DUE: EUR 1,800.00\nPayment: bank transfer to sort code 20-45-67, account 12345678, quoting INV-2288.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n09/09/2026,FPI,\"WISE PAYMENTS LTD ATELIER VERHOEVEN INV-2288\",,1521.05,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "wise-receipt",
+        "version": "1",
+        "current_version": "1",
+        "kind": "transfer_receipt",
+        "content": "Wise — Transfer receipt #TR-44810221\nSender: Atelier Verhoeven BV (Utrecht)\nRecipient: Northgate Web Studio Ltd, sort code 20-45-67 account ****5678\nReference: INV-2288\nYou sent: EUR 1,800.00\nWise fee: EUR 7.20 (deducted before conversion)\nConverted EUR 1,792.80 at 0.8484 → GBP 1,521.06 delivered 09/09/2026",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-09",
+        "money_in_minor": 152105,
+        "money_out_minor": 0,
+        "currency": "GBP",
+        "contact": "Wise Payments Ltd",
+        "description": "WISE PAYMENTS LTD ATELIER VERHOEVEN INV-2288",
+        "raw_description": "09/09/2026,FPI,\"WISE PAYMENTS LTD ATELIER VERHOEVEN INV-2288\",,1521.05,GBP",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "remittance",
+        "source_id": "wise-receipt",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 180000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 152106,
+        "bank_currency": "GBP",
+        "gross_minor": 152106,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-08-15",
+      "due_date": "2026-09-14",
+      "amount_minor": 180000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "INV-2288",
+      "counterparty": "Atelier Verhoeven BV"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "wise-receipt",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "wise-receipt",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "holdout",
+    "source_family": "holdout-gb-wise-eur-receipt-into-gbp-account",
+    "family_description": "An EU customer pays a EUR invoice through Wise; the UK bank receives GBP; the Wise transfer receipt names the invoice, the EUR amount, the fee and the GBP delivered.",
+    "market": "GB",
+    "variant": "b",
+    "error_mode": "FX intermediary receipt; one-penny mismatch; receipt naming a sibling invoice",
+    "label_reason": "The receipt states GBP 1,521.06 delivered but the bank shows £1,521.05; the one-penny mismatch is an arithmetic conflict the contract does not round away.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work",
+      "proposal_rounding_away_a_penny_mismatch"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "contradicted",
+      "processor": "supported",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "contradicted"
+    }
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

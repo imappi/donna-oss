@@ -1,0 +1,192 @@
+{
+  "id": "dev-044",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-044",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "sales_invoice",
+        "content": "LASKU\nLaskun numero: 2036    Laskun päivä: 28.07.2026    Eräpäivä: 27.08.2026    Maksuehto: 30 pv netto\nLaskuttaja: Kuusela Design Oy, Y-tunnus 2345678-9\nMaksaja: Vaasan Venevuokraus Oy, Y-tunnus 5566778-9\nErittely: Varausjärjestelmän ylläpito, heinäkuu\nVeroton yhteensä: 1 000,00 €\nALV 25,5 %: 255,00 €\nMaksettava yhteensä: 1 255,00 €\nViitenumero: 2 03603    Tilinumero: FI21 1234 5600 0007 85    BIC: OKOYFIHH\nHyvityslasku 2036-H (255,00 €) annettu 20.08.2026 sovitun palveluvirheen vuoksi.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n26.08.2026;26.08.2026;+1000,00;Tilisiirto;Viitemaksu;Vaasan Venevuokraus Oy;;203603;;202608260001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-26",
+        "money_in_minor": 100000,
+        "money_out_minor": 0,
+        "currency": "EUR",
+        "contact": "Vaasan Venevuokraus Oy",
+        "description": "Tilisiirto Viitemaksu",
+        "raw_description": "26.08.2026;26.08.2026;+1000,00;Tilisiirto;Viitemaksu;Vaasan Venevuokraus Oy;;203603;;202608260001",
+        "structured_reference": "203603",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 100000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 100000,
+        "bank_currency": "EUR",
+        "gross_minor": 100000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "sales_invoice",
+      "date": "2026-07-28",
+      "due_date": "2026-08-27",
+      "amount_minor": 125500,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "203603",
+      "counterparty": "Vaasan Venevuokraus Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "invoice-source",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-fi-no-candidate-and-credit-note-netting",
+    "family_description": "An open invoice with no bank candidate in scope; and a customer who pays an invoice net of an agreed credit note.",
+    "market": "FI",
+    "variant": "b",
+    "error_mode": "zero candidates must not mint an ask; credit-note netting is outside the contract (partial allocation is the honest cash answer)",
+    "label_reason": "The customer pays 1 000,00 € with the invoice viite, netting an agreed 255,00 € credit note; cash allocation of 1 000,00 € is correct, the credit note settles the rest outside this contract (gap recorded).",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "supported_proposal"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence.",
+      "The remaining 255,00 € is settled by a credit note the contract does not represent."
+    ],
+    "contract_gap": "credit_note_netting_not_represented",
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "supported_proposal",
+    "proposals": [
+      {
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "amount_minor": 100000
+      }
+    ]
+  }
+}

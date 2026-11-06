@@ -1,0 +1,38 @@
+{
+  "id": "007-honeybee-cross-currency-gbp-bill",
+  "client": "honeybee",
+  "title": "Cross-currency supplier bill — US apiary billed in GBP, paid via Wise",
+  "tags": [
+    "cross_currency",
+    "processor",
+    "supplier_bill",
+    "gbp",
+    "honeybee",
+    "paid"
+  ],
+  "narrative": "Honeybee Hills Apiary (US / USD) buys hive equipment from a UK supplier billed in GBP and pays via Wise; the bill prints a courtesy USD conversion. The document currency is GBP (the billed/settlement currency on the invoice) — the USD line is explicitly \"courtesy only\". An extractor biased by the US firm context might grab the USD courtesy figure; the correct extraction pins currency=GBP and total=the GBP amount. vendor_name is intentionally NOT pinned (the legal-name form is debatable — raw vs normalized vs canonical is its own follow-up; do not massage).",
+  "upload_time_document_type": "supplier_bill",
+  "client_identity": {
+    "display_name": "Honeybee Hills Apiary LLC",
+    "legal_names": [
+      "Honeybee Hills Apiary LLC"
+    ]
+  },
+  "document_input": {
+    "filename": "007-honeybee-cross-currency-gbp-bill.pdf",
+    "mimeType": "application/pdf",
+    "base64_synthetic_text_pdf": "JVBERi0xLjcKJYGBgYEKCjEgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFsgNSAwIFIgXQovQ291bnQgMQo+PgplbmRvYmoKCjIgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDEgMCBSCj4+CmVuZG9iagoKMyAwIG9iago8PAovUHJvZHVjZXIgPEZFRkYwMDcwMDA2NDAwNjYwMDJEMDA2QzAwNjkwMDYyMDAyMDAwMjgwMDY4MDA3NDAwNzQwMDcwMDA3MzAwM0EwMDJGMDAyRjAwNjcwMDY5MDA3NDAwNjgwMDc1MDA2MjAwMkUwMDYzMDA2RjAwNkQwMDJGMDA0ODAwNkYwMDcwMDA2NDAwNjkwMDZFMDA2NzAwMkYwMDcwMDA2NDAwNjYwMDJEMDA2QzAwNjkwMDYyMDAyOT4KL01vZERhdGUgKEQ6MjAyNjA2MDgwMDAwMDBaKQovQ3JlYXRvciA8RkVGRjAwNzAwMDY0MDA2NjAwMkQwMDZDMDA2OTAwNjIwMDIwMDAyODAwNjgwMDc0MDA3NDAwNzAwMDczMDAzQTAwMkYwMDJGMDA2NzAwNjkwMDc0MDA2ODAwNzUwMDYyMDAyRTAwNjMwMDZGMDA2RDAwMkYwMDQ4MDA2RjAwNzAwMDY0MDA2OTAwNkUwMDY3MDAyRjAwNzAwMDY0MDA2NjAwMkQwMDZDMDA2OTAwNjIwMDI5PgovQ3JlYXRpb25EYXRlIChEOjIwMjYwNjA4MDAwMDAwWikKPj4KZW5kb2JqCgo0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwo+PgplbmRvYmoKCjUgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAxIDAgUgovUmVzb3VyY2VzIDw8Ci9Gb250IDw8Ci9IZWx2ZXRpY2EtNzA5ODQ4MDc4OSA0IDAgUgovSGVsdmV0aWNhLTk3NDI2ODI1NjggNCAwIFIKL0hlbHZldGljYS0yMDAwODA1OTg2IDQgMCBSCi9IZWx2ZXRpY2EtOTc1MDQ2OTIwNyA0IDAgUgovSGVsdmV0aWNhLTc1NzI1MzM2ODYgNCAwIFIKL0hlbHZl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"
+  },
+  "expected": {
+    "document_type": "supplier_bill",
+    "counterparty_name": "E.H. Thorne (Beehives) Ltd",
+    "header": {
+      "counterparty_role": "vendor",
+      "customer_name": null,
+      "currency": "GBP",
+      "total_amount": 414,
+      "payment_status": "paid"
+    },
+    "line_count": 2
+  }
+}

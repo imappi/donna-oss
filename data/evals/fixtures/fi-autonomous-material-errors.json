@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "expectations_sha256": "b5e1040e9f92614ea31b0ec53e0a7dae1ebd1fc5a30a9e5e93c4bd0dc232edd5",
+  "files": 27,
+  "bank_movements": 36,
+  "protocol": "Use the unchanged source bytes and original expectations. Declare corrections separately. No operator repairs, owner answers, source edits or manual worker calls during the scored run. Report scheduled recovery separately. A terminal projection is not an accounting correctness assertion. Unknown or unverified outcomes do not pass.",
+  "findings": [
+    {
+      "id": "cash_settlement",
+      "amount": 22,
+      "required": ["A CASH label alone does not identify whose funds were used.", "Without a settlement journal, retain a genuine funding question or an honest incomplete state.", "An evidenced deductible settlement debits expense 17.53 and input VAT 4.47, credits the evidenced funding account 22, and balances."]
+    },
+    {
+      "id": "bank_service_quality",
+      "amounts": [8, 6],
+      "required": ["Bank service charges use Bank fees, not Accounting fees or payroll.", "The supplied payment-method label is visible to the deciding provider.", "Keep reverse shadows sampled and account for their calls and spend separately; do not turn a disagreement into an unreceipted repair."]
+    },
+    {
+      "id": "payroll_question_admission",
+      "amounts": [33.15, 6, 1926.24],
+      "required": ["Grocery and bank-service packets cannot select a payroll-package question.", "The genuine payroll packet retains its external balanced payroll-package requirement.", "A held payslip alone cannot authorize a net-salary journal."]
+    },
+    {
+      "id": "statutory_ask_lifecycle",
+      "amount": 1245,
+      "required": ["The Q4 VAT filing request remains owned until evidence arrives.", "A statutory descriptor cannot retract the filing request.", "Repeated scheduled disposition/coding passes do not close and recreate the same question.", "The actual filing may resolve the request through the existing evidence lifecycle."]
+    },
+    {
+      "id": "oy_private_spend",
+      "amount": 52.1,
+      "required": ["Owner drawings is absent from an Oy's default and supplied-chart decision menus.", "An explicit sole trader retains Owner drawings.", "Private-use evidence forbids expense/input-VAT deduction but does not itself prove a shareholder relationship or loan.", "Use the evidenced shareholder receivable or taxable-benefit treatment, or ask the precise missing relationship fact."]
+    },
+    {
+      "id": "dated_tax_and_missing_source",
+      "amounts": [43.45, 28.6, 17.5, 40],
+      "required": ["The three dated-rate cases need an evidenced supply/advance date or a precise timing/corrected-document question; a generic purpose question does not pass.", "A missing fuel receipt needs a receipt path in addition to any genuinely missing use fact.", "Do not infer tax entitlement merely because printed arithmetic balances."],
+      "scope": "Known-open plan work; measure honestly in this rerun."
+    },
+    {
+      "id": "message_matches_ledger",
+      "required": ["Posted claims carry actual current journal identities and lines.", "No-journal salary cannot appear as posted to Suspense.", "Already-posted transactions do not enter held-match confirmations or speculative counterpart-statement asks.", "A changed posting receipt invalidates the composed batch after generation and before send.", "For the 923.60 customer payment, the source combines late interest and reminder fees into an unsplit 20.00. All 20.00 as Interest income fails; do not invent an allocation."],
+      "expectation_addendum": "The combined-charge source correction supplements, and does not modify, the original expectations file."
+    },
+    {
+      "id": "current_ui",
+      "required": ["The final rendered item identities, counts and journal/ask states agree with the final persisted snapshot.", "A stale native inspection is unverified, never a UI pass."],
+      "scope": "Known-open observation; verify separately from database accounting."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "id": "002-direct-eur-wire-with-reference",
+  "title": "Direct EUR wire with invoice reference in description",
+  "tags": ["happy_path", "same_currency", "reference_match"],
+  "narrative": "Same-currency, same-month wire transfer that quotes the invoice reference in the bank description. The weighted matcher already handles this cleanly; the LLM matcher should agree.",
+  "document": {
+    "id": "si-direct-eur-002",
+    "document_type": "sales_invoice",
+    "customer_name": "Acme Holdings Oy",
+    "document_date": "2026-05-10",
+    "due_date": "2026-06-09",
+    "total_amount": 1250.00,
+    "currency": "EUR",
+    "reference_number": "INV-2026-0107",
+    "extraction_confidence": 0.97,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-acme-wire",
+      "money_in": 1250.00,
+      "currency": "EUR",
+      "date": "2026-05-15",
+      "description": "WIRE FROM ACME HOLDINGS REF INV-2026-0107",
+      "raw_description": "SEPA CT ACME HOLDINGS OY REF INV-2026-0107 1250.00 EUR",
+      "contact": "Acme Holdings Oy"
+    }
+  ],
+  "expected": {
+    "proposals": [
+      {
+        "bank_transaction_id": "tx-acme-wire",
+        "status": "auto_matched"
+      }
+    ],
+    "unmatchable_reason": null
+  }
+}

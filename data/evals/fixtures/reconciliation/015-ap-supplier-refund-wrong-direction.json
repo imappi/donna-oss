@@ -1,0 +1,45 @@
+{
+  "id": "015-ap-supplier-refund-wrong-direction",
+  "title": "Inbound refund decoy on an unpaid bill — direction guard (AP)",
+  "narrative": "AP direction test, previously inexpressible: the runner used to zero money_in for bill fixtures, so an opposite-direction line could not even be shown to the model. We owe Helsinki Office Supplies EUR 480.00 (this bill, unpaid). Separately the supplier refunded us EUR 480.00 for a prior returned order — an INBOUND (money_in) line, SAME amount, SAME vendor, one day off. An amount+vendor matcher is tempted; but a refund TO us cannot be the payment of a bill we still owe. GOLD: abstain — no line settles this bill. FAILURE TO CATCH: proposing the inbound refund as settlement (a false, wrong-direction match).",
+  "tags": ["refund", "opposite_direction", "wrong_direction", "negative_decoy", "supplier_bill", "ap", "direction_guard"],
+  "document": {
+    "id": "sb-helsinki-015",
+    "document_type": "supplier_bill",
+    "vendor_name": "Helsinki Office Supplies Oy",
+    "document_date": "2026-04-08",
+    "due_date": "2026-05-08",
+    "total_amount": 480.00,
+    "currency": "EUR",
+    "reference_number": "HOS-2026-1190",
+    "extraction_confidence": 0.95,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-hos-refund-inbound",
+      "money_in": 480.00,
+      "money_out": 0,
+      "currency": "EUR",
+      "date": "2026-04-09",
+      "description": "SEPA CT HELSINKI OFFICE SUPPLIES REFUND",
+      "raw_description": "SEPA CT HELSINKI OFFICE SUPPLIES OY REFUND RETURNED ORDER",
+      "contact": "Helsinki Office Supplies Oy"
+    },
+    {
+      "id": "tx-rent-april-out-015",
+      "money_in": 0,
+      "money_out": 1850.00,
+      "currency": "EUR",
+      "date": "2026-04-01",
+      "description": "RENT OUTGOING OFFICE",
+      "raw_description": "MONTHLY OFFICE RENT APR 2026",
+      "contact": "Landlord Oy"
+    }
+  ],
+  "expected": {
+    "proposals": [],
+    "unmatchable_reason": "*"
+  }
+}

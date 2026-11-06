@@ -1,0 +1,16 @@
+{
+  "_note": "TEMPLATE for the keyed FIK-3 A vs P run on fi-kultalanka-2025-02-coding (plan §8.8, 'Keyed A vs P run on Kultalanka'). Copy it to a private path outside the repo, never commit the filled copy, and replace every FILL_IN: rename the two keys under prices.models to the EXACT model ids frozen into the plan (plan.models.jev = TYPESAFE_MODEL, plan.models.strong = OPENAI_MODEL at freeze time) and enter each model's published USD price per million input and output tokens. Never guess a price. prices.typesafe and prices.anthropic are the runner's provider fallback rates, which verifyBudget requires: set prices.typesafe to the Jev model's price and prices.anthropic to the higher of the two model prices (the fi-coding lane sends nothing to Anthropic, so it is never charged). Kari set max_usd at $20 on 2026-09-24. The caps come from the dry freeze: 108 first requests (36 lines x fi_v7, fi_v8, fi_v8p), all TypeSafe Jev, estimated at 818,804 input and 10,368 output tokens. max_calls allows up to two follow-ons per job (a second Jev pass and one strong-coder call). max_input_tokens allows two Jev passes (about 1.64M) plus 108 strong requests of up to 30k tokens each (about 3.24M). max_output_tokens allows 108 strong-coder reservations at the runner's 8,192-token estimate plus both Jev passes. Whichever bound is reached first stops the run before the request, and the run can resume.",
+  "approved": true,
+  "max_usd": 20,
+  "max_calls": 324,
+  "max_input_tokens": 5000000,
+  "max_output_tokens": 1000000,
+  "prices": {
+    "typesafe": { "input_per_million": "FILL_IN", "output_per_million": "FILL_IN" },
+    "anthropic": { "input_per_million": "FILL_IN", "output_per_million": "FILL_IN" },
+    "models": {
+      "FILL_IN_TYPESAFE_MODEL_ID": { "input_per_million": "FILL_IN", "output_per_million": "FILL_IN" },
+      "FILL_IN_OPENAI_MODEL_ID": { "input_per_million": "FILL_IN", "output_per_million": "FILL_IN" }
+    }
+  }
+}

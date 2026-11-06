@@ -1,0 +1,81 @@
+{
+  "note": "UNREVIEWED DRAFT GUIDANCE. Nothing in this file is a legal or tax claim of record. It exists only so the FIK-3 offline harness (scripts/jev_decision_plane.js --lane=fi-coding --provisional=<this file>) can measure a draft against synthetic development books before a professional reviewer exists. It never reaches a production decision: the renderer admits these entries only inside the harness scope, and the reviewed set (server/donna/finland/decisionGuidance.js) is separate. An entry the harness shows to help goes to the reviewer; only a reviewed copy with a named reviewer and a captured source may ever render in production.",
+  "entries": [
+    {
+      "id": "FIK-P-001-PASSENGER-TRANSPORT-2025",
+      "status": "provisional",
+      "author": "Claude (FIK-3 provisional arm illustration)",
+      "drafted_on": "2026-09-24",
+      "rationale": "Illustrative only. FI-POST-16 states the 2025 passenger-transport rate but not what decides it. The draft ties the rate to the time of supply (as FI-ALV-07 does for 2026) and names both neighbouring eras, so a 2025 taxi or train receipt printing 10 % is not read as proof of the old rate and a 2026 supply is not coded at 14 %.",
+      "claim": "Passenger transport (taxi, bus, rail, domestic flights) supplied from 1.1.2025 to 31.12.2025 is 14 %, NOT 10 %; the time of supply decides the rate, not the payment or receipt date, and a supply from 1.1.2026 is 13,5 %.",
+      "covers": ["FI-POST-16"],
+      "sources": [
+        {
+          "url": "https://www.vero.fi/en/businesses-and-corporations/taxes-and-charges/vat/rates-of-vat/",
+          "captured_on": null,
+          "snapshot_owed": true,
+          "effective_from": null,
+          "effective_to": null
+        }
+      ]
+    },
+    {
+      "id": "FIK-P-002-OY-PRIVATE-EXPENDITURE",
+      "status": "provisional",
+      "author": "Claude (FIK-3 provisional draft, Kultalanka kit)",
+      "drafted_on": "2026-09-24",
+      "rationale": "FI-POST-08 names two outcomes (a shareholder receivable or a taxable benefit) and FI-POST-09 guards the relationship inference. Neither says that the company may not deduct the ALV on private expenditure, that the benefit route runs only through payroll, that a hidden dividend (peitelty osinko) is the third outcome (the FIK-1 inventory flags it as missing), or that the deciding fact, who benefited and on what basis, is the owner's to supply. The draft leaves FI-POST-07 in place (the claim continues after its colon), keeps FI-POST-09's guard verbatim, and is scoped to fi-oy because a toiminimi keeps Owner drawings. Detail that could not be supported with confidence was left out on purpose: no shareholder-loan tax rule and no statutory section numbers. Drafted with the Kultalanka 2025-02 adjudications (Ilkka, 2026-09-24) in view, so a better score on that 36-line corpus is weak, contaminated evidence, not an independent measurement; the claim itself rests only on the general Finnish rule.",
+      "claim": "private expenditure the company pays for a shareholder, a director or someone close to them is not an ordinary business expense, and its ALV is not deductible input tax; depending on the agreement it is a receivable from the person who is to repay it, a salary or taxable benefit (only through the payroll package), or a hidden dividend (peitelty osinko). Which one applies is a fact about who benefited and on what basis, so without source evidence or an attributable owner answer establishing both, ask the owner what the payment was for and whom it benefited, and leave it unposted. Do not infer the recipient relationship or a shareholder loan merely from private-use evidence.",
+      "covers": ["FI-POST-08", "FI-POST-09"],
+      "entity_types": ["fi-oy"],
+      "sources": [
+        {
+          "url": "https://www.finlex.fi/fi/laki/ajantasa/1993/19931501",
+          "captured_on": null,
+          "snapshot_owed": true,
+          "effective_from": null,
+          "effective_to": null
+        },
+        {
+          "url": "https://www.finlex.fi/fi/laki/ajantasa/1992/19921535",
+          "captured_on": null,
+          "snapshot_owed": true,
+          "effective_from": null,
+          "effective_to": null
+        },
+        {
+          "url": "https://www.finlex.fi/fi/laki/ajantasa/2006/20060624",
+          "captured_on": null,
+          "snapshot_owed": true,
+          "effective_from": null,
+          "effective_to": null
+        }
+      ]
+    },
+    {
+      "id": "FIK-P-003-REDUCED-RATE-SCOPE-2025",
+      "status": "provisional",
+      "author": "Claude (FIK-3 provisional draft, Kultalanka kit)",
+      "drafted_on": "2026-09-24",
+      "rationale": "FI-ALV-09 says the categories then taxed at 10 % keep that rate for supplies before 2025, but it names only passenger transport. A model therefore cannot tell that books, medicines, accommodation, admission to cultural and entertainment events and sports services also moved from 10 % to 14 % on 1.1.2025; newspapers and periodicals stayed at 10 % (FI-ALV-08, untouched). The draft names those categories as a non-exhaustive list and keeps the time-of-supply rule. It deliberately does not restate the printed-VAT and timing-question guards, which FI-POST-15 to FI-POST-20 already carry, and it does not cover FI-POST-16, which FIK-P-001 owns. Drafted with the Kultalanka 2025-02 adjudications (Ilkka, 2026-09-24) in view, so a better score on that 36-line corpus is weak, contaminated evidence, not an independent measurement; the claim itself rests only on the general Finnish rule.",
+      "claim": "for a supply made, or an advance payment received, before 1.1.2025, the categories then taxed at 10 % retain that historical rate; the categories that moved from 10 % to 14 % on 1.1.2025 include books other than newspapers and periodicals, medicines, passenger transport, accommodation, admission to cultural and entertainment events, and sports services, so a supply of any of them from 1.1.2025 is 14 % (13,5 % from 1.1.2026), and a 10 % rate on such a line is a historical rate that needs its basis",
+      "covers": ["FI-ALV-09"],
+      "sources": [
+        {
+          "url": "https://www.vero.fi/yritykset-ja-yhteisot/verot-ja-maksut/arvonlisaverotus/arvonlisaveroprosentit/",
+          "captured_on": null,
+          "snapshot_owed": true,
+          "effective_from": null,
+          "effective_to": null
+        },
+        {
+          "url": "https://www.finlex.fi/fi/laki/ajantasa/1993/19931501",
+          "captured_on": null,
+          "snapshot_owed": true,
+          "effective_from": null,
+          "effective_to": null
+        }
+      ]
+    }
+  ]
+}

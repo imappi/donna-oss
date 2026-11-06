@@ -1,0 +1,70 @@
+{
+  "id": "kl-b32",
+  "title": "Kultalanka 02/2025 27.2. Vakuutus −198,60",
+  "split": "development",
+  "family": "kultalanka-exempt_purchase",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "exempt_purchase",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-27",
+    "description": "E-LASKU KESK. VAKUUTUSYHTIÖ TURVA-SUOMI VAKUUTUS 1/2025",
+    "money_in": 0,
+    "money_out": 198.6,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "supplier_bill",
+    "party": "Keskinäinen Vakuutusyhtiö Turva-Suomi",
+    "total_amount": 198.6,
+    "tax_amount": 0,
+    "lines": [
+      {
+        "description": "Liiketoimintavakuutus 1.2.-30.4.2025 (AVL 44 §)",
+        "amount": 198.6,
+        "tax_rate": 0
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Insurance",
+          "direction": "debit",
+          "amount": 198.6,
+          "tax_code": "ALV_EXEMPT"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 198.6,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B32"
+  }
+}

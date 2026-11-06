@@ -1,0 +1,124 @@
+{
+  "id": "kl-b04",
+  "title": "Kultalanka 02/2025 4.2. K-Supermarket −18,74",
+  "split": "development",
+  "family": "kultalanka-multi_rate_receipt",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "multi_rate_receipt",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-04",
+    "description": "KORTTIOSTO K-SUPERMARKET TAMPELLA TAMPERE",
+    "money_in": 0,
+    "money_out": 18.74,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "receipt",
+    "party": "K-Supermarket Tampella",
+    "total_amount": 18.74,
+    "tax_amount": 2.23,
+    "lines": [
+      {
+        "description": "Kahvi, maito, keksit ja suklaa",
+        "amount": 18.12,
+        "tax_rate": 14
+      },
+      {
+        "description": "Pantti 2 kpl",
+        "amount": 0.62,
+        "tax_rate": 0
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Meals and entertainment",
+          "direction": "debit",
+          "amount": 15.9,
+          "tax_code": "ALV_14_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 2.22,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Meals and entertainment",
+          "direction": "debit",
+          "amount": 0.62,
+          "tax_code": "ALV_EXEMPT"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 18.74,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Meals and entertainment",
+          "direction": "debit",
+          "amount": 15.89,
+          "tax_code": "ALV_14_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 2.23,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Meals and entertainment",
+          "direction": "debit",
+          "amount": 0.62,
+          "tax_code": "ALV_EXEMPT"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 18.74,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudication": {
+      "status": "adjudicated",
+      "reviewer": "Ilkka Halonen (operator; not professional review)",
+      "date": "2026-09-24"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B04"
+  }
+}

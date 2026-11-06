@@ -1,0 +1,39 @@
+{
+  "lane": "transaction_coding",
+  "endpoint_class": "openai",
+  "provenance": "synthetic — authored from transactionLlm.js buildBatchSuggestionSchema (schema transaction_coding_batch_suggestion) against the appliance fixture world's GB pack palette (packs/gb/manifest.json: Sales, Repairs and maintenance, Operating supplies, Other income) for the two-line Barclays statement; the transaction ids are the __TX_PAYOUT__ / __TX_OCHRE__ placeholders a fixture substitutes with the run's real `<document>-tx-<idx>` ids before scripting the lane; never a captured provider response",
+  "fixture": "bank_statement_two_lines",
+  "placeholders": {
+    "__TX_PAYOUT__": "the 1,213.75 GBP PayLink credit (tx-0)",
+    "__TX_OCHRE__": "the 550 GBP Ochre Lighting debit (tx-1)"
+  },
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_code_kestrel_two_lines",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_code_kestrel_two_lines",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"suggestions\":[{\"transaction_id\":\"__TX_PAYOUT__\",\"proposed_account\":\"Sales\",\"contact\":\"PayLink\",\"tax_treatment\":\"standard\",\"support_note\":\"Card-processor payout for order PO-88121; the payout report reconciles the gross sales, fees and refunds behind it.\",\"ask_client_question\":\"Please send the PayLink payout report for PO-88121 (19 Aug 2026, 1,213.75 GBP) so the sales, fees and any refunds can be split.\",\"evidence_required\":true,\"remember_candidate\":false,\"merchant_pattern\":\"paylink\",\"missing_account_name\":\"\",\"missing_account_type\":\"\",\"missing_account_reason\":\"\",\"auto_explain_limit\":0,\"confidence\":\"high\",\"materiality\":\"high\",\"reasoning\":\"A PayLink payout is settled sales income for a print studio, but a processor payout nets fees and refunds; the payout report is the evidence that splits it.\",\"warnings\":[\"Gross sales, processor fees and refunds are netted in the payout; only the payout report splits them.\"],\"alternatives\":[{\"account\":\"Other income\",\"label\":\"Other income\",\"confidence\":\"low\",\"reasoning\":\"Only if the payout were not customer sales \\u2014 nothing on the line suggests that.\"}]},{\"transaction_id\":\"__TX_OCHRE__\",\"proposed_account\":\"Repairs and maintenance\",\"contact\":\"Ochre Lighting Ltd\",\"tax_treatment\":\"standard\",\"support_note\":\"Supplier payment referencing invoice OL-2026-0812 \\u2014 studio lighting supplied and fitted by Ochre Lighting Ltd.\",\"ask_client_question\":\"\",\"evidence_required\":false,\"remember_candidate\":false,\"merchant_pattern\":\"ochre lighting\",\"missing_account_name\":\"\",\"missing_account_type\":\"\",\"missing_account_reason\":\"\",\"auto_explain_limit\":0,\"confidence\":\"high\",\"materiality\":\"normal\",\"reasoning\":\"A one-off payment to a lighting contractor carrying an invoice reference is studio repairs and maintenance for a print business; the supplier invoice substantiates it.\",\"warnings\":[],\"alternatives\":[{\"account\":\"Operating supplies\",\"label\":\"Operating supplies\",\"confidence\":\"low\",\"reasoning\":\"If the invoice turns out to be consumables rather than fitted lighting.\"}]}],\"group_summary\":[]}"
+          }
+        ]
+      }
+    ],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

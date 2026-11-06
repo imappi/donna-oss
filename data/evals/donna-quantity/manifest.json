@@ -1,0 +1,49 @@
+{
+  "version": "donna-quantity-corpus.v1",
+  "fixtureBasis": "deterministic_contract",
+  "imageryStatus": "not_collected",
+  "fixturesDirectory": "../fixtures",
+  "groundTruthFile": "heldout-ground-truth.json",
+  "cases": [
+    {
+      "id": "sample-01",
+      "split": "development",
+      "condition": "clear_count"
+    },
+    {
+      "id": "sample-02",
+      "split": "holdout",
+      "condition": "occlusion"
+    },
+    {
+      "id": "sample-03",
+      "split": "holdout",
+      "condition": "variant_ambiguity"
+    },
+    {
+      "id": "sample-04",
+      "split": "holdout",
+      "condition": "bundle_ambiguity"
+    },
+    {
+      "id": "sample-05",
+      "split": "holdout",
+      "condition": "duplicate_views"
+    },
+    {
+      "id": "sample-06",
+      "split": "holdout",
+      "condition": "unreadable_label"
+    },
+    {
+      "id": "sample-07",
+      "split": "holdout",
+      "condition": "insufficient_evidence"
+    },
+    {
+      "id": "sample-08",
+      "split": "holdout",
+      "condition": "incomplete_coverage"
+    }
+  ]
+}

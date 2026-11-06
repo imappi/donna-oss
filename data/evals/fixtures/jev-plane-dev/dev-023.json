@@ -1,0 +1,233 @@
+{
+  "id": "dev-023",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "dev-023",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "LASKU\nLaskun numero: 7731    Laskun päivä: 20.08.2026    Eräpäivä: 19.09.2026    Maksuehto: 30 pv netto\nLaskuttaja: Lounais-Suomen Siivous Oy, Y-tunnus 2233445-6\nMaksaja: Kuusela Design Oy\nErittely: Toimistosiivous elokuu 2026\nVeroton yhteensä: 780,88 €\nALV 25,5 %: 199,12 €\nMaksettava yhteensä: 980,00 €\nViitenumero: 7 73104    Tilinumero: FI49 5000 0120 3456 78    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "invoice-source-r1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "LASKU\nLaskun numero: 7702    Laskun päivä: 20.07.2026    Eräpäivä: 19.08.2026    Maksuehto: 30 pv netto\nLaskuttaja: Lounais-Suomen Siivous Oy, Y-tunnus 2233445-6\nMaksaja: Kuusela Design Oy\nErittely: Toimistosiivous heinäkuu 2026\nVeroton yhteensä: 780,88 €\nALV 25,5 %: 199,12 €\nMaksettava yhteensä: 980,00 €\nViitenumero: 7 70204    Tilinumero: FI49 5000 0120 3456 78    BIC: OKOYFIHH",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "OP yritystili — tilitapahtumat, tili FI21 1234 5600 0007 85\nKirjauspäivä;Arvopäivä;Määrä EUROA;Laji;Selitys;Saaja/Maksaja;Saajan tilinumero;Viite;Viesti;Arkistointitunnus\n02.09.2026;02.09.2026;-980,00;Tilisiirto;Maksu;Lounais-Suomen Siivous Oy;FI73 1090 3000 0012 34;773104;;202609020001",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "allocation-source-a1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "allocation_record",
+        "content": "Reconciliation record a1: bank line dated 02.09.2026 for 980,00 € is recorded as AUTO-MATCHED to lasku 7702 (supplier bill) on 03.09.2026. Auto-matched on amount and supplier",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-09-02",
+        "money_in_minor": 0,
+        "money_out_minor": 98000,
+        "currency": "EUR",
+        "contact": "Lounais-Suomen Siivous Oy",
+        "description": "Tilisiirto Maksu",
+        "raw_description": "02.09.2026;02.09.2026;-980,00;Tilisiirto;Maksu;Lounais-Suomen Siivous Oy;FI73 1090 3000 0012 34;773104;;202609020001",
+        "structured_reference": "773104",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "reference",
+        "source_id": "bank-t1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 98000,
+        "invoice_currency": "EUR",
+        "bank_amount_minor": 98000,
+        "bank_currency": "EUR",
+        "gross_minor": 98000,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [
+      {
+        "id": "allocation-a1",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "source_id": "allocation-source-a1",
+        "version": "1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-r1",
+        "status": "auto_matched",
+        "amount_minor": 98000,
+        "currency": "EUR",
+        "object_type": "supplier_bill"
+      }
+    ],
+    "related_invoices": [
+      {
+        "id": "invoice-r1",
+        "source_id": "invoice-source-r1",
+        "date": "2026-07-20",
+        "reference": "770204"
+      }
+    ],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-20",
+      "due_date": "2026-09-19",
+      "amount_minor": 98000,
+      "minor_unit": 2,
+      "currency": "EUR",
+      "reference": "773104",
+      "counterparty": "Lounais-Suomen Siivous Oy"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "allocation-source-a1",
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "allocation-source-a1",
+        "bank-t1",
+        "invoice-source",
+        "invoice-source-r1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1"
+      ],
+      "invoice_ids": [
+        "invoice-focal",
+        "invoice-r1"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "dev-fi-bank-line-already-allocated",
+    "family_description": "A SEPA transfer carrying this bill's viite is already recorded against another bill of the same supplier, or against this bill in full.",
+    "market": "FI",
+    "variant": "a",
+    "error_mode": "prior allocation consumes the bank line; full prior settlement removes admission",
+    "label_reason": "The transfer carries this bill's viite but the book already auto-matched it to the supplier's earlier bill; a consumed bank line with a conflicting reference needs interpretation.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "strong_reasoning"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work",
+      "second_allocation_of_a_consumed_bank_line"
+    ],
+    "missing_fact": null,
+    "model_dependent": true,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "supported",
+      "obligation": "supported",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "strong_reasoning",
+    "proposals": []
+  }
+}

@@ -1,0 +1,235 @@
+{
+  "id": "reversal-007",
+  "packet": {
+    "version": "jev-evidence-action-v1",
+    "id": "reversal-007",
+    "scope": {
+      "firm_id": "plane-firm",
+      "client_id": "plane-client",
+      "generation": "plane-generation-1"
+    },
+    "as_of": "2026-09-15",
+    "sources": [
+      {
+        "id": "invoice-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_bill",
+        "content": "INVOICE OS-77120\nFrom: Orbit Office Supplies Ltd, Unit 4, Trafford Park, Manchester M17 1AB\nVAT registration: GB 998 7766 55\nBill to: Northgate Web Studio Ltd, 14 Fenchurch Street, London EC3M 3BD\nInvoice date: 20/08/2026    Due date: 20/08/2026    Terms: paid on order\nDescription: Standing desk frame, order OS-77120\nNet total: £380.00\nVAT @ 20%: £76.00\nTOTAL DUE: £456.00\nPayment: bank transfer to Orbit Office Supplies Ltd, quoting OS-77120.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n20/08/2026,DEB,\"ORBIT OFFICE SUPPLIES MANCHESTER\",456.00,,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "bank-t2",
+        "version": "1",
+        "current_version": "1",
+        "kind": "bank_transaction",
+        "content": "Barclays business current account export — sort code 20-45-67, account 12345678\nDate,Type,Description,Money out,Money in,Currency\n22/08/2026,CR,\"ORBIT OFFICE SUPPLIES REFUND\",,456.00,GBP",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "receipt-1",
+        "version": "1",
+        "current_version": "1",
+        "kind": "supplier_receipt",
+        "content": "Orbit Office Supplies Ltd — Payment receipt\nOrder OS-77120, 20/08/2026 14:02\nPaid by card **** 4471 (Visa Business), authorisation 8G2K44\nAmount £456.00 inc. VAT\nThis receipt relates to order OS-77120.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      },
+      {
+        "id": "work-source",
+        "version": "1",
+        "current_version": "1",
+        "kind": "work_request",
+        "content": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date. The request itself is not evidence that any payment occurred or that anyone owes a reply.",
+        "provenance": "assumed_synthetic",
+        "firm_id": "plane-firm",
+        "client_id": "plane-client",
+        "generation": "plane-generation-1"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx-t1",
+        "source_id": "bank-t1",
+        "date": "2026-08-20",
+        "money_in_minor": 0,
+        "money_out_minor": 45600,
+        "currency": "GBP",
+        "contact": "ORBIT OFFICE SUPPLIES",
+        "description": "ORBIT OFFICE SUPPLIES MANCHESTER",
+        "raw_description": "20/08/2026,DEB,\"ORBIT OFFICE SUPPLIES MANCHESTER\",456.00,,GBP",
+        "instrument": "card:auth:8G2K44",
+        "lifecycle": null,
+        "payload": {}
+      },
+      {
+        "id": "tx-t2",
+        "source_id": "bank-t2",
+        "date": "2026-08-22",
+        "money_in_minor": 45600,
+        "money_out_minor": 0,
+        "currency": "GBP",
+        "contact": "ORBIT OFFICE SUPPLIES",
+        "description": "ORBIT OFFICE SUPPLIES REFUND",
+        "raw_description": "22/08/2026,CR,\"ORBIT OFFICE SUPPLIES REFUND\",,456.00,GBP",
+        "instrument": "card:auth:8G2K44",
+        "lifecycle": null,
+        "payload": {}
+      }
+    ],
+    "links": [
+      {
+        "id": "link-1-t1",
+        "kind": "receipt_payment",
+        "source_id": "receipt-1",
+        "transaction_id": "tx-t1",
+        "invoice_id": "invoice-focal",
+        "invoice_amount_minor": 45600,
+        "invoice_currency": "GBP",
+        "bank_amount_minor": 45600,
+        "bank_currency": "GBP",
+        "gross_minor": 45600,
+        "fee_minor": 0
+      }
+    ],
+    "allocations": [],
+    "related_invoices": [],
+    "invoice": {
+      "id": "invoice-focal",
+      "source_id": "invoice-source",
+      "document_type": "supplier_bill",
+      "date": "2026-08-20",
+      "due_date": "2026-08-20",
+      "amount_minor": 45600,
+      "minor_unit": 2,
+      "currency": "GBP",
+      "reference": "OS-77120",
+      "counterparty": "Orbit Office Supplies Ltd"
+    },
+    "work_item": {
+      "id": "work-1",
+      "kind": "settle_invoice",
+      "target_id": "invoice-focal",
+      "admission": "admitted",
+      "reason": "Work request: investigate whether the invoice identified in this packet has been settled as of the snapshot date.",
+      "basis_source_ids": [
+        "work-source"
+      ]
+    },
+    "retrieval": {
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "description": "Exactly the source rows and collision members declared in this synthetic packet.",
+      "method": "fixture_manifest",
+      "required_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "receipt-1",
+        "work-source"
+      ],
+      "covered_source_ids": [
+        "bank-t1",
+        "bank-t2",
+        "invoice-source",
+        "receipt-1",
+        "work-source"
+      ],
+      "limitations": [
+        "No production discovery or absence claim."
+      ]
+    },
+    "collision": {
+      "id": "group-1",
+      "status": "complete_within_scope",
+      "scope_id": "fixture-manifest",
+      "transaction_ids": [
+        "tx-t1",
+        "tx-t2"
+      ],
+      "invoice_ids": [
+        "invoice-focal"
+      ]
+    }
+  },
+  "adjudication": {
+    "status": "provisional",
+    "reviewer": null,
+    "split": "development",
+    "source_family": "reversal-gb-card-payment-refunded",
+    "family_description": "A supplier bill paid by company card with an emailed receipt; the supplier later refunds the card, fully or in part, on the same authorisation.",
+    "market": "GB",
+    "variant": "a",
+    "error_mode": "full card refund reverses the charge; a partial refund does not",
+    "label_reason": "The receipt binds the card charge to the bill and the supplier refunds the full amount to the same card authorisation two days later: the charge settles nothing.",
+    "terminal_reason": "A full refund on the same instrument is a mechanical reversal; the evidence is complete.",
+    "positive_evidence": "A current scoped payment-specific source connecting the transaction and the obligation, supported semantics, valid amounts, and resolved competing allocations.",
+    "contradictions": [
+      "Foreign or stale evidence",
+      "Existing allocation of the payment",
+      "Conflicting remittances or repeated ambiguous references",
+      "Another relevant payment with unresolved allocation"
+    ],
+    "acceptable_outcomes": [
+      "unresolved_research"
+    ],
+    "prohibited_outcomes": [
+      "posting",
+      "delivered_ask",
+      "production_completion",
+      "customer_question_inferred_only_from_rejected_candidates",
+      "match_inferred_only_from_party_amount_date",
+      "silently_discard_admitted_bank_work",
+      "proposal_for_a_refunded_card_charge"
+    ],
+    "missing_fact": null,
+    "model_dependent": false,
+    "model_dependence_definition": "ideal composition consumes at least one semantic answer",
+    "limitations": [
+      "Authored synthetic evidence; every source relationship is an assumption, not a verified production fact.",
+      "Provisional label written by the authoring session; not independently adjudicated.",
+      "Complete only inside the declared fixture manifest; not all possible books evidence."
+    ],
+    "corpus_version": "jev-decision-plane-corpus-v1"
+  },
+  "semantic_statuses": {
+    "tx-t1": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    },
+    "tx-t2": {
+      "counterparty": "supported",
+      "processor": "not_established",
+      "reference": "not_established",
+      "obligation": "contradicted",
+      "exclusion": "not_established"
+    }
+  },
+  "expected": {
+    "route": "unresolved_research",
+    "proposals": [],
+    "terminal": "RESOLVED"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "id": "kl-b20",
+  "title": "Kultalanka 02/2025 17.2. Kahvila Aroma maksu +1 631,50",
+  "split": "development",
+  "family": "kultalanka-ar_settlement",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "ar_settlement",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-17",
+    "description": "TILISIIRTO KAHVILA AROMA OY VIITE 710015",
+    "money_in": 1631.5,
+    "money_out": 0,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "debit",
+          "amount": 1631.5,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "counterparty",
+          "account": "Myyntisaamiset",
+          "direction": "credit",
+          "amount": 1631.5,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "gap",
+    "gap": "source",
+    "detail": "settled by 2 sources; the FIK-3 book seeds one"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B20"
+  }
+}

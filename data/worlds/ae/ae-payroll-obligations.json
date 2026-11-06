@@ -1,0 +1,297 @@
+{
+  "specVersion": "donna.world.v2",
+  "worldId": "ae/payroll-obligations/2026-08",
+  "seed": "ae-payroll-obligations-v1",
+  "effectiveDate": "2026-08-31",
+  "manifest": {
+    "manifestVersion": "ae.payroll-operating-obligations.v1",
+    "capabilityId": "model_ae_payroll_operating_obligations",
+    "jurisdiction": "AE",
+    "entityType": "ae-llc",
+    "bookBasis": "management_books",
+    "scenarioLane": "ae_payroll_obligations",
+    "accountingView": "management_books",
+    "requiredWorldFamilies": ["wps_payroll", "employee_benefits", "employee_master_data"],
+    "permittedActions": ["project_payroll", "project_employee_obligation", "request_missing_employee_fact"],
+    "maximumAuthority": "observe_and_project_only",
+    "fallback": {
+      "terminalState": "blocked",
+      "responsibleActor": "owner",
+      "nextPermittedAction": "request_missing_employee_fact"
+    },
+    "protectedFailures": [
+      "wps_batch_untied",
+      "employee_class_ambiguous",
+      "expatriate_eosb_gcc_pension_swapped",
+      "traditional_gratuity_after_alternative_enrollment",
+      "scheme_effective_date_missing",
+      "closed_period_rewritten",
+      "bank_line_double_posted"
+    ]
+  },
+  "policySources": [
+    {
+      "id": "policy/ae-wps-resolution-598",
+      "authority": "UAE Ministry of Human Resources and Emiratisation",
+      "title": "Ministerial Resolution No. 598 of 2022 Concerning the Wages Protection System",
+      "url": "https://www.mohre.gov.ae/assets/download/d0af668c/Ministerial%20Resolution%20No.%20598%20of%202022%20Regarding%20the%20Wages%20Protection%20System%20and%20Its%20Amendment.pdf.aspx",
+      "effectiveFrom": "2022-11-25",
+      "asOf": "2026-08-31",
+      "verifiedRules": ["private-sector wages monthly through WPS in the agreed amount and time", "payment moves through approved banks and financial institutions"]
+    },
+    {
+      "id": "policy/ae-wps-current-guidance",
+      "authority": "UAE Ministry of Human Resources and Emiratisation",
+      "title": "Wages Protection System guidance portal",
+      "url": "https://www.mohre.gov.ae/en/guidance-and-awareness-portal-new/wages-protection-system",
+      "effectiveFrom": "2022-11-25",
+      "asOf": "2026-08-31",
+      "verifiedRules": ["private-sector establishments pay monthly wages through WPS", "approved banks and financial institutions transmit wage-payment data"]
+    },
+    {
+      "id": "policy/ae-labour-eosb",
+      "authority": "UAE Legislation",
+      "title": "Federal Decree by Law No. 33 of 2021, Article 51",
+      "url": "https://www.uaelegislation.gov.ae/en/legislations/1541",
+      "effectiveFrom": "2022-02-02",
+      "asOf": "2026-08-31",
+      "verifiedRules": ["foreign full-time worker eligible after one continuous year", "21 days basic wage for each of first five years", "30 days basic wage for each later year", "unpaid absence excluded", "national worker follows pension and social-security law"]
+    },
+    {
+      "id": "policy/ae-alternative-eosb-cabinet-96",
+      "authority": "UAE Legislation",
+      "title": "Cabinet Resolution No. 96 of 2023 Concerning the Alternative Voluntary End of Service Scheme",
+      "url": "https://www.uaelegislation.gov.ae/en/legislations/2309",
+      "effectiveFrom": "2023-10-14",
+      "asOf": "2026-08-31",
+      "verifiedRules": ["scheme is voluntary for employers", "traditional gratuity stops for enrolled workers", "prior service is preserved at enrollment basic wage", "5.83 percent through five years", "8.33 percent after five years", "transfer within 15 days of the first day of each calendar month"]
+    },
+    {
+      "id": "policy/ae-alternative-eosb-ministerial-668",
+      "authority": "UAE Ministry of Human Resources and Emiratisation",
+      "title": "Ministerial Resolution No. 668 of 2023 Regarding Subscription Under the Alternative End-of-Service Benefits System",
+      "url": "https://mohre.gov.ae/assets/download/f8a59b10/ministerial-resolution-no-668-of-2023-regarding-subscription-under-the-alternarive.aspx",
+      "effectiveFrom": "2023-10-25",
+      "asOf": "2026-08-31",
+      "verifiedRules": ["full-time basic subscription 5.83 or 8.33 percent of monthly basic salary", "subscription percentage follows continuous service with the employer"]
+    },
+    {
+      "id": "policy/ae-gpssa-law-57",
+      "authority": "UAE General Pension and Social Security Authority",
+      "title": "Federal Law No. 57 of 2023 cohort and private-sector contribution guidance",
+      "url": "https://www.gpssa.gov.ae/pages/en/media-center/news/gpssa-insureds-contribution-payment-may-be-extended-15th-day-each-month",
+      "effectiveFrom": "2023-10-31",
+      "asOf": "2026-08-31",
+      "verifiedRules": ["newly insured cohort from 31 October 2023", "employee 11 percent", "employer 15 percent", "government bears 2.5 percent below AED 20000", "private-sector contribution salary AED 3000 to AED 70000", "contributions due by the 15th day"]
+    },
+    {
+      "id": "policy/ae-gpssa-gcc-extension",
+      "authority": "UAE General Pension and Social Security Authority",
+      "title": "GCC Insurance Protection Extension Program",
+      "url": "https://www.gpssa.gov.ae/pages/en/services/gcc-overview",
+      "effectiveFrom": "2007-01-01",
+      "asOf": "2026-08-31",
+      "verifiedRules": ["GCC employee follows home-country scheme", "Saudi private-sector GOSI employer 9 percent", "Saudi private-sector GOSI employee 9 percent", "pre-extension service gratuity retained"]
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity/ae-payroll-llc",
+      "kind": "company",
+      "legalForm": "ae-llc",
+      "activeFrom": "2021-01-01"
+    }
+  ],
+  "events": [
+    {
+      "id": "event/payroll-register-2026-08",
+      "type": "payroll_register_finalised",
+      "legalEntityId": "entity/ae-payroll-llc",
+      "occurredAt": "2026-08-31",
+      "causalParents": [],
+      "evidenceRefs": ["artifact/payroll-register-2026-08"]
+    },
+    {
+      "id": "event/wps-instruction-2026-08",
+      "type": "wps_instruction_generated",
+      "legalEntityId": "entity/ae-payroll-llc",
+      "occurredAt": "2026-08-31",
+      "causalParents": ["event/payroll-register-2026-08"],
+      "evidenceRefs": ["artifact/wps-instruction-2026-08"]
+    },
+    {
+      "id": "event/wps-bank-settlement-2026-08",
+      "type": "bank_settlement",
+      "legalEntityId": "entity/ae-payroll-llc",
+      "occurredAt": "2026-08-31",
+      "causalParents": ["event/wps-instruction-2026-08"],
+      "evidenceRefs": ["artifact/bank-settlement-2026-08"]
+    }
+  ],
+  "observations": [
+    {"id": "observation/employee-1-record", "artifactId": "artifact/employee-1-record", "observedAt": "2024-08-22"},
+    {"id": "observation/employee-2-record", "artifactId": "artifact/employee-2-record", "observedAt": "2021-08-01"},
+    {"id": "observation/employee-2-salary-change", "artifactId": "artifact/employee-2-salary-change", "observedAt": "2026-08-05"},
+    {"id": "observation/employee-2-alternative-enrollment", "artifactId": "artifact/employee-2-alternative-enrollment", "observedAt": "2026-08-01"},
+    {"id": "observation/employee-3-record", "artifactId": "artifact/employee-3-record", "observedAt": "2026-08-15"},
+    {"id": "observation/employee-3-gpssa", "artifactId": "artifact/employee-3-gpssa", "observedAt": "2026-08-16"},
+    {"id": "observation/employee-4-record", "artifactId": "artifact/employee-4-record", "observedAt": "2024-01-01"},
+    {"id": "observation/employee-4-gcc-registration", "artifactId": "artifact/employee-4-gcc-registration", "observedAt": "2024-01-02"},
+    {"id": "observation/payroll-register-2026-08", "eventId": "event/payroll-register-2026-08", "artifactId": "artifact/payroll-register-2026-08", "observedAt": "2026-08-31"},
+    {"id": "observation/wps-instruction-2026-08", "eventId": "event/wps-instruction-2026-08", "artifactId": "artifact/wps-instruction-2026-08", "observedAt": "2026-08-31"},
+    {"id": "observation/wps-bank-settlement-2026-08", "eventId": "event/wps-bank-settlement-2026-08", "artifactId": "artifact/bank-settlement-2026-08", "observedAt": "2026-08-31"}
+  ],
+  "hiddenFacts": [],
+  "artifacts": [
+    {"id": "artifact/employee-1-record", "kind": "employee_master_record", "format": "json", "trusted": true, "title": "Synthetic expatriate leaver record", "fields": {"employeeId": "employee/expat-traditional", "nationality": "IN", "joinedOn": "2024-08-22", "leftOn": "2026-08-31", "effectiveFrom": "2024-08-22", "schemeId": "AE/MOHRE/traditional-eosb", "basicAed": "12000.00", "grossAed": "12000.00", "unpaidLeave": [{"startsOn": "2025-01-01", "endsOn": "2025-01-10"}]}},
+    {"id": "artifact/employee-2-record", "kind": "employee_master_record", "format": "json", "trusted": true, "title": "Synthetic expatriate employee record", "fields": {"employeeId": "employee/expat-alternative", "nationality": "PH", "joinedOn": "2021-08-01", "effectiveFrom": "2021-08-01", "schemeId": "AE/MOHRE/traditional-eosb", "basicAed": "10000.00", "grossAed": "13000.00"}},
+    {"id": "artifact/employee-2-salary-change", "kind": "salary_change_record", "format": "json", "trusted": true, "title": "Synthetic late-recorded salary change", "fields": {"employeeId": "employee/expat-alternative", "effectiveFrom": "2026-07-15", "recordedOn": "2026-08-05", "basicAed": "12000.00", "grossAed": "15000.00"}},
+    {"id": "artifact/employee-2-alternative-enrollment", "kind": "alternative_eosb_enrollment", "format": "json", "trusted": true, "title": "Synthetic alternative EOSB enrollment", "fields": {"employeeId": "employee/expat-alternative", "schemeId": "AE/MOHRE/alternative-eosb/fund/SYNTH-01", "effectiveFrom": "2026-08-01", "priorServiceCutoff": "2026-07-31", "enrollmentBasicWageAed": "12000.00", "employerEnrollmentDecision": true}},
+    {"id": "artifact/employee-3-record", "kind": "employee_master_record", "format": "json", "trusted": true, "title": "Synthetic UAE-national joiner record", "fields": {"employeeId": "employee/uae-national", "nationality": "AE", "joinedOn": "2026-08-15", "basicAed": "25000.00", "grossAed": "25000.00"}},
+    {"id": "artifact/employee-3-gpssa", "kind": "pension_registration", "format": "json", "trusted": true, "title": "Synthetic GPSSA Law 57 registration", "fields": {"employeeId": "employee/uae-national", "schemeId": "AE/GPSSA/Federal-Law-57-2023", "effectiveFrom": "2026-08-15", "firstFederalPensionEmploymentOn": "2026-08-15", "contributionSalaryAed": "25000.00"}},
+    {"id": "artifact/employee-4-record", "kind": "employee_master_record", "format": "json", "trusted": true, "title": "Synthetic Saudi-national employee record", "fields": {"employeeId": "employee/saudi-gcc", "nationality": "SA", "joinedOn": "2024-01-01", "basicAed": "15000.00", "grossAed": "22000.00"}},
+    {"id": "artifact/employee-4-gcc-registration", "kind": "gcc_pension_registration", "format": "json", "trusted": true, "title": "Synthetic GCC extension registration", "fields": {"employeeId": "employee/saudi-gcc", "homeCountry": "SA", "schemeId": "SA/GOSI/private-sector", "effectiveFrom": "2024-01-01", "contributionSalaryAed": "22000.00"}},
+    {"id": "artifact/payroll-register-2026-08", "kind": "payroll_register", "format": "json", "trusted": true, "title": "Synthetic August 2026 payroll register", "fields": {"wpsBatchId": "WPS-SYNTH-2026-08", "grossAed": "74000.00", "deductionsAed": "4730.00", "netAed": "69270.00"}},
+    {"id": "artifact/wps-instruction-2026-08", "kind": "wps_instruction", "format": "json", "trusted": true, "title": "Synthetic WPS salary instruction file", "fields": {"batchId": "WPS-SYNTH-2026-08", "amountAed": "69270.00", "generatedOn": "2026-08-31", "paymentStatus": "instruction_generated"}},
+    {"id": "artifact/bank-settlement-2026-08", "kind": "bank_statement_line", "format": "json", "trusted": true, "title": "Synthetic settled WPS bank movement", "fields": {"bankLineId": "bank-line/wps-2026-08", "batchId": "WPS-SYNTH-2026-08", "amountAed": "69270.00", "settledOn": "2026-08-31"}}
+  ],
+  "aeObligationContract": {
+    "closedThrough": "2026-07-31",
+    "employees": [
+      {
+        "id": "employee/expat-traditional",
+        "employeeClass": "expatriate",
+        "classSourceArtifactId": "artifact/employee-1-record",
+        "evidenceAlreadyChecked": ["artifact/employee-1-record"],
+        "joinedOn": "2024-08-22",
+        "leftOn": "2026-08-31",
+        "salaryHistory": [
+          {"basicAed": "12000.00", "grossAed": "12000.00", "effectiveFrom": "2024-08-22", "effectiveTo": null, "sourceArtifactId": "artifact/employee-1-record"}
+        ],
+        "unpaidLeave": [
+          {"startsOn": "2025-01-01", "endsOn": "2025-01-10", "sourceArtifactId": "artifact/employee-1-record"}
+        ],
+        "benefitHistory": [
+          {"kind": "traditional_gratuity", "schemeId": "AE/MOHRE/traditional-eosb", "effectiveFrom": "2024-08-22", "effectiveTo": null, "sourceArtifactId": "artifact/employee-1-record"}
+        ]
+      },
+      {
+        "id": "employee/expat-alternative",
+        "employeeClass": "expatriate",
+        "classSourceArtifactId": "artifact/employee-2-record",
+        "evidenceAlreadyChecked": ["artifact/employee-2-record", "artifact/employee-2-alternative-enrollment"],
+        "joinedOn": "2021-08-01",
+        "leftOn": null,
+        "salaryHistory": [
+          {"basicAed": "10000.00", "grossAed": "13000.00", "effectiveFrom": "2021-08-01", "effectiveTo": "2026-07-14", "sourceArtifactId": "artifact/employee-2-record"},
+          {"basicAed": "12000.00", "grossAed": "15000.00", "effectiveFrom": "2026-07-15", "effectiveTo": null, "sourceArtifactId": "artifact/employee-2-salary-change"}
+        ],
+        "unpaidLeave": [],
+        "benefitHistory": [
+          {"kind": "traditional_gratuity", "schemeId": "AE/MOHRE/traditional-eosb", "effectiveFrom": "2021-08-01", "effectiveTo": "2026-07-31", "sourceArtifactId": "artifact/employee-2-record"},
+          {"kind": "alternative_savings", "schemeId": "AE/MOHRE/alternative-eosb/fund/SYNTH-01", "effectiveFrom": "2026-08-01", "effectiveTo": null, "sourceArtifactId": "artifact/employee-2-alternative-enrollment", "priorServiceTreatment": "preserved_traditional_gratuity_at_enrolment_basic_wage", "priorServiceCutoff": "2026-07-31", "enrollmentBasicWageAed": "12000.00"}
+        ]
+      },
+      {
+        "id": "employee/uae-national",
+        "employeeClass": "uae_national",
+        "classSourceArtifactId": "artifact/employee-3-record",
+        "evidenceAlreadyChecked": ["artifact/employee-3-record", "artifact/employee-3-gpssa"],
+        "joinedOn": "2026-08-15",
+        "leftOn": null,
+        "salaryHistory": [
+          {"basicAed": "25000.00", "grossAed": "25000.00", "effectiveFrom": "2026-08-15", "effectiveTo": null, "sourceArtifactId": "artifact/employee-3-record"}
+        ],
+        "unpaidLeave": [],
+        "benefitHistory": [
+          {"kind": "uae_pension", "schemeId": "AE/GPSSA/Federal-Law-57-2023", "effectiveFrom": "2026-08-15", "effectiveTo": null, "sourceArtifactId": "artifact/employee-3-gpssa", "firstFederalPensionEmploymentOn": "2026-08-15", "contributionSalaryAed": "25000.00"}
+        ]
+      },
+      {
+        "id": "employee/saudi-gcc",
+        "employeeClass": "gcc_national",
+        "classSourceArtifactId": "artifact/employee-4-record",
+        "evidenceAlreadyChecked": ["artifact/employee-4-record", "artifact/employee-4-gcc-registration"],
+        "joinedOn": "2024-01-01",
+        "leftOn": null,
+        "salaryHistory": [
+          {"basicAed": "15000.00", "grossAed": "22000.00", "effectiveFrom": "2024-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/employee-4-record"}
+        ],
+        "unpaidLeave": [],
+        "benefitHistory": [
+          {"kind": "home_country_pension", "schemeId": "SA/GOSI/private-sector", "homeCountry": "SA", "effectiveFrom": "2024-01-01", "effectiveTo": null, "sourceArtifactId": "artifact/employee-4-gcc-registration", "contributionSalaryAed": "22000.00"}
+        ]
+      }
+    ],
+    "payrollBatches": [
+      {
+        "id": "payroll/2026-08",
+        "wpsBatchId": "WPS-SYNTH-2026-08",
+        "payrollRegisterArtifactId": "artifact/payroll-register-2026-08",
+        "wpsInstructionArtifactId": "artifact/wps-instruction-2026-08",
+        "bankSettlementArtifactId": "artifact/bank-settlement-2026-08",
+        "lines": [
+          {"employeeId": "employee/expat-traditional", "schemeKind": "traditional_gratuity", "grossAed": "12000.00", "employeeDeductionsAed": "0.00", "netAed": "12000.00"},
+          {"employeeId": "employee/expat-alternative", "schemeKind": "alternative_savings", "grossAed": "15000.00", "employeeDeductionsAed": "0.00", "netAed": "15000.00"},
+          {"employeeId": "employee/uae-national", "schemeKind": "uae_pension", "grossAed": "25000.00", "employeeDeductionsAed": "2750.00", "netAed": "22250.00"},
+          {"employeeId": "employee/saudi-gcc", "schemeKind": "home_country_pension", "grossAed": "22000.00", "employeeDeductionsAed": "1980.00", "netAed": "20020.00"}
+        ],
+        "wpsInstruction": {"batchId": "WPS-SYNTH-2026-08", "amountAed": "69270.00", "generatedOn": "2026-08-31"},
+        "bankSettlement": {"batchId": "WPS-SYNTH-2026-08", "bankLineId": "bank-line/wps-2026-08", "amountAed": "69270.00", "settledOn": "2026-08-31"},
+        "wageLedger": {
+          "debits": [{"role": "expense.payroll", "amountAed": "74000.00"}],
+          "credits": [
+            {"role": "liability.employee_social_security", "amountAed": "4730.00"},
+            {"role": "asset.bank", "amountAed": "69270.00"}
+          ]
+        },
+        "benefitLedger": {
+          "debits": [{"role": "expense.employee_benefits", "amountAed": "6729.60"}],
+          "credits": [
+            {"role": "liability.alternative_eosb", "amountAed": "999.60"},
+            {"role": "liability.uae_pension", "amountAed": "3750.00"},
+            {"role": "liability.gcc_home_country_pension", "amountAed": "1980.00"}
+          ]
+        }
+      }
+    ],
+    "masterDataActions": [
+      {"id": "master-action/employee-2-salary", "employeeId": "employee/expat-alternative", "effectiveFrom": "2026-07-15", "recordedOn": "2026-08-05", "action": "post_dated_adjustment", "postingDate": "2026-08-05", "sourceArtifactId": "artifact/employee-2-salary-change"}
+    ],
+    "operatingItems": [],
+    "temporalPairs": [
+      {
+        "id": "temporal/wps-payroll",
+        "family": "wps_payroll",
+        "documentFirst": [
+          {"kind": "payroll_register", "ref": "payroll/2026-08"},
+          {"kind": "wps_instruction", "ref": "WPS-SYNTH-2026-08"},
+          {"kind": "bank_settlement", "ref": "WPS-SYNTH-2026-08", "bankLineId": "bank-line/wps-2026-08"}
+        ],
+        "cashFirst": [
+          {"kind": "bank_settlement", "ref": "WPS-SYNTH-2026-08", "bankLineId": "bank-line/wps-2026-08"},
+          {"kind": "payroll_register", "ref": "payroll/2026-08"},
+          {"kind": "wps_instruction", "ref": "WPS-SYNTH-2026-08"}
+        ]
+      },
+      {
+        "id": "temporal/employee-benefits",
+        "family": "employee_benefits",
+        "documentFirst": [
+          {"kind": "scheme_evidence", "ref": "benefits/2026-08"},
+          {"kind": "payroll_register", "ref": "payroll/2026-08"},
+          {"kind": "contribution_settlement", "ref": "benefits/2026-08", "bankLineId": "bank-line/benefits-2026-08"}
+        ],
+        "cashFirst": [
+          {"kind": "contribution_settlement", "ref": "benefits/2026-08", "bankLineId": "bank-line/benefits-2026-08"},
+          {"kind": "payroll_register", "ref": "payroll/2026-08"},
+          {"kind": "scheme_evidence", "ref": "benefits/2026-08"}
+        ]
+      }
+    ],
+    "sensitivityPairs": [
+      {"id": "sensitivity/wps-clearing", "family": "wps_payroll", "changedFact": "bankCleared", "left": {"bankCleared": false}, "right": {"bankCleared": true}},
+      {"id": "sensitivity/alternative-service", "family": "employee_benefits", "changedFact": "completedServiceYears", "left": {"completedServiceYears": 5}, "right": {"completedServiceYears": 6}}
+    ]
+  }
+}

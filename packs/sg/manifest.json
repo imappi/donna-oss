@@ -1,0 +1,1164 @@
+{
+  "pack": {
+    "id": "sg",
+    "country": "SG",
+    "version": 1,
+    "note": "SG-1 declaration only. Supported legal forms: sg-sole-prop (sole_prop), sg-pte (pte_ltd), sg-llp (llp), from server/donna/singapore/entity.js and src/lib/legalForms.js. sg-llc and general partnerships remain unsupported. The shared pack schema has no legal-form/application predicate leg; these notes do not enforce admission. No signup, provisioning, filing or production flag activation. See docs/donna-country-pack-contract-gaps.md SG-1 addendum."
+  },
+  "currency": {
+    "home": "SGD"
+  },
+  "locale": {
+    "number_locale": "en-SG",
+    "date_format": "dmy"
+  },
+  "languages": {
+    "default": "en",
+    "supported": [
+      "en"
+    ],
+    "note": "English correspondence only; other Singapore languages are not authored."
+  },
+  "reference": {
+    "scheme": "none",
+    "note": "No Singapore structured payment reference scheme is registered."
+  },
+  "einvoice": {
+    "lane": "none",
+    "operator": "none",
+    "note": "InvoiceNow/Peppol is declared_unbuilt in obligations; none describes current transport support, not absence of the duty."
+  },
+  "tax": {
+    "vocabulary": "sg_legacy",
+    "note": "Matches the live SG_CODING_POLICY and TAX_VOCABULARY_REGISTRY.sg marker. The richer sg_gst dated vocabulary remains owned by singapore/gstCodes.js and its separate gates; this declaration does not enable GST split posting. Existing statutory module confirmation flags remain false at the base of SG-1; SG-2 draft PR #2241 needs qualified review. No rates, thresholds or deadlines are duplicated here."
+  },
+  "reconciliation": {
+    "materiality_ceiling": 500,
+    "disposition_ceiling": 500,
+    "note": "Existing Donna policy (RT-11 D2 / RT-11b, Kari 2026-07-06): 500 in home currency for each ceiling. Not a statutory threshold or a new production flag grant."
+  },
+  "payment_rails": [
+    {
+      "kind": "remit_instructions",
+      "note": "Use the owner-provided Singapore bank transfer, PayNow or GIRO instructions verbatim. No typed PayNow/GIRO validation, mandate, QR generation, payment initiation or settlement adapter is declared. Do not substitute IBAN, ACH or sort-code semantics."
+    }
+  ],
+  "correspondence": {
+    "languages": [
+      "en"
+    ],
+    "tone": "professional_friendly",
+    "dunning_cadence": [
+      {
+        "step": 1,
+        "days_after_due": 7,
+        "tone": "friendly",
+        "template": "reminder_step_1"
+      },
+      {
+        "step": 2,
+        "days_after_due": 14,
+        "tone": "firm",
+        "template": "reminder_step_2"
+      },
+      {
+        "step": 3,
+        "days_after_due": 30,
+        "tone": "final",
+        "template": "reminder_step_3"
+      }
+    ],
+    "escalation": {
+      "after_step": 3,
+      "to": "owner"
+    },
+    "quote_follow_up_cadence": [
+      {
+        "step": 1,
+        "days_after_sent": 7,
+        "tone": "friendly",
+        "template": "quote_follow_up_1"
+      }
+    ],
+    "statutory": {
+      "late_interest": null,
+      "constraints": [
+        "No late interest, fees or legal-threat wording: no provenanced Singapore statutory basis is declared. Escalate unpaid invoices to the owner. Cadence offsets are Donna correspondence policy, not statutory deadlines."
+      ]
+    }
+  },
+  "documents": {
+    "mandatory_fields": {
+      "invoice": [
+        "invoice_number",
+        "issue_date",
+        "due_date",
+        "total",
+        "currency",
+        "seller_name",
+        "buyer_name",
+        "line_description",
+        "line_quantity",
+        "line_unit_price",
+        "payment_instructions"
+      ],
+      "invoice_when_tax_registered": [
+        "seller_address",
+        "seller_tax_registration_id",
+        "buyer_address",
+        "line_tax_rate",
+        "total_excluding_tax",
+        "tax_amount"
+      ],
+      "invoice_forbidden_when_not_tax_registered": [
+        "seller_tax_registration_id",
+        "line_tax_rate"
+      ]
+    },
+    "quote_number_prefix": "Q",
+    "invoice_pdf": {
+      "page": "a4"
+    },
+    "quote_pdf": {
+      "page": "a4"
+    },
+    "templates": {
+      "invoice_pdf": {
+        "en": {
+          "subject": "{{document_title}} {{invoice_number}}",
+          "body": "{{owner_business_name}}\n\n{{document_title}} {{invoice_number}}\nBilled to: {{counterparty_name}}\nIssued: {{issue_date}}\nDue: {{due_date}}\n\n{{lines_block}}\n\nTotal due: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}"
+        }
+      },
+      "quote_pdf": {
+        "en": {
+          "subject": "Quote {{quote_number}}",
+          "body": "{{owner_business_name}}\n\nQuote {{quote_number}}\nPrepared for: {{counterparty_name}}\nIssued: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}"
+        }
+      },
+      "invoice_issue": {
+        "en": {
+          "subject": "{{document_title}} {{invoice_number}} from {{owner_business_name}} — {{invoice_total}} {{currency}}",
+          "body": "Hi {{counterparty_name}},\n\nPlease find your invoice from {{owner_business_name}} below.\n\n{{document_title}} {{invoice_number}}\nIssued: {{issue_date}}\nDue: {{due_date}}\n\n{{lines_block}}\n\nTotal due: {{invoice_total}} {{currency}}\n\nPayment details:\n{{payment_instructions}}\n\nIf anything about this invoice looks off, just reply to this email and we'll sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis invoice was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "quote_send": {
+        "en": {
+          "subject": "Quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nThank you for your interest — here is your quote from {{owner_business_name}}.\n\nQuote {{quote_number}}\nIssued: {{issue_date}}\nValid until: {{valid_until}}\n\n{{lines_block}}\n\nTotal: {{quote_total}} {{currency}}\n\nTo accept, just reply to this email. Questions and changes are welcome too.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis quote was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "quote_follow_up_1": {
+        "en": {
+          "subject": "Following up on quote {{quote_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nJust checking in on quote {{quote_number}} for {{quote_total}} {{currency}}, sent on {{issue_date}} and valid until {{valid_until}}.\n\nIf you'd like to go ahead, have questions, or want any changes, just reply to this email.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis follow-up was sent by Donna on behalf of {{owner_business_name}}."
+        }
+      },
+      "payable_notice": {
+        "en": {
+          "subject": "Heads up: {{counterparty_name}}'s bill is due {{due_date}}",
+          "body": "Hi,\n\nA supplier bill for {{owner_business_name}} is coming due:\n\nSupplier: {{counterparty_name}}\nAmount: {{amount_due}} {{currency}}\nDue: {{due_date}} (in {{days_until_due}} days)\n\nWant to schedule the payment? Donna doesn't move money — this note is only so the bill doesn't slip. If it's already paid, looks wrong, or shouldn't be tracked, just reply and Donna will record it.\n\n— Donna, for {{owner_business_name}}"
+        }
+      },
+      "reminder_step_1": {
+        "en": {
+          "subject": "Friendly reminder: invoice {{invoice_number}} from {{owner_business_name}}",
+          "body": "Hi {{counterparty_name}},\n\nThis is a friendly reminder that invoice {{invoice_number}} for {{amount_due}} {{currency}} was due on {{due_date}}. If you've already sent payment, thank you — no action is needed.\n\nPayment details:\n{{payment_instructions}}\n\nIf anything about this invoice looks off, just reply to this email and we'll sort it out.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis reminder was sent by Donna on behalf of {{owner_business_name}}. To stop receiving payment reminders about this invoice: {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_2": {
+        "en": {
+          "subject": "Second reminder: invoice {{invoice_number}} is {{days_overdue}} days past due",
+          "body": "Hi {{counterparty_name}},\n\nInvoice {{invoice_number}} for {{amount_due}} {{currency}} was due on {{due_date}} and is now {{days_overdue}} days past due. We'd appreciate payment at your earliest convenience.\n\nPayment details:\n{{payment_instructions}}\n\nIf payment is already on its way, or if you have a question or concern about this invoice, please reply and let us know.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis reminder was sent by Donna on behalf of {{owner_business_name}}. To stop receiving payment reminders about this invoice: {{unsubscribe_url}}"
+        }
+      },
+      "reminder_step_3": {
+        "en": {
+          "subject": "Final reminder: invoice {{invoice_number}} remains unpaid",
+          "body": "Hi {{counterparty_name}},\n\nDespite earlier reminders, invoice {{invoice_number}} for {{amount_due}} {{currency}} (due {{due_date}}, now {{days_overdue}} days past due) remains unpaid. Please arrange payment promptly.\n\nPayment details:\n{{payment_instructions}}\n\nIf there is a problem with this invoice — a dispute, a delivery issue, anything — please reply now so we can resolve it together before taking this further.\n\nBest regards,\n{{owner_business_name}}\n\n--\nThis reminder was sent by Donna on behalf of {{owner_business_name}}. To stop receiving payment reminders about this invoice: {{unsubscribe_url}}"
+        }
+      }
+    },
+    "statutory_titles": {
+      "invoice_when_tax_registered": "Tax Invoice",
+      "invoice_otherwise": "Invoice"
+    },
+    "note": "Full tax-invoice field declaration from IRAS Invoicing Customers, read 2026-09-24: https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/basics-of-gst/invoicing-price-display-and-record-keeping/invoicing-customers . This pack uses the full invoice floor for registered sellers; simplified/customer-accounting documents are not implemented. Schema-valid templates cannot display addresses, seller GST number or GST totals without the unrelated buyer-registration floor required by invoice_statutory_labels. No buyer GST-number requirement is invented to bypass that validator. Foreign-currency SGD-equivalent totals and supply-type subtotals are also unserved. These are open contract gaps, not compliant SG GST invoice issuance. SG launch remains blocked; see the SG-1 addendum."
+  },
+  "chart_of_accounts": {
+    "note": "Preserves the existing SG_CODING_POLICY fallback menu exactly. Not an SFRS chart seed or a statutory numbering system. The richer form-specific chart and GST control roles remain in server/donna/singapore/sfrsChart.js; their provisioning is SG-3, not SG-1. Tax payable is not re-labelled as a GST output control account.",
+    "fallback_accounts": [
+      {
+        "name": "Sales",
+        "role": "revenue.operating"
+      },
+      {
+        "name": "Bank fees",
+        "role": "expense.bank_fees"
+      },
+      {
+        "name": "Software subscriptions",
+        "role": "expense.software"
+      },
+      {
+        "name": "Travel",
+        "role": "expense.travel"
+      },
+      {
+        "name": "Meals and entertainment",
+        "role": "expense.meals"
+      },
+      {
+        "name": "Marketing",
+        "role": "expense.marketing"
+      },
+      {
+        "name": "Professional fees",
+        "role": "expense.professional_fees"
+      },
+      {
+        "name": "Accounting fees",
+        "role": "expense.accounting_fees"
+      },
+      {
+        "name": "Statutory filing fees",
+        "role": "expense.statutory_fees"
+      },
+      {
+        "name": "Payroll",
+        "role": "expense.payroll"
+      },
+      {
+        "name": "CPF payable",
+        "role": "liability.payroll_payable"
+      },
+      {
+        "name": "Rent",
+        "role": "expense.rent"
+      },
+      {
+        "name": "Telecommunications",
+        "role": "expense.telecom"
+      },
+      {
+        "name": "Insurance",
+        "role": "expense.insurance"
+      },
+      {
+        "name": "Office expenses",
+        "role": "expense.office"
+      },
+      {
+        "name": "Director loan",
+        "role": "liability.director_loan"
+      },
+      {
+        "name": "Owner drawings",
+        "role": "equity.owner_drawings"
+      },
+      {
+        "name": "Share capital",
+        "role": "equity.share_capital"
+      },
+      {
+        "name": "Share premium",
+        "role": "equity.share_premium"
+      },
+      {
+        "name": "Retained earnings",
+        "role": "equity.retained_earnings"
+      },
+      {
+        "name": "Loan payable",
+        "role": "liability.loan"
+      },
+      {
+        "name": "Intercompany transfer",
+        "role": "clearing.intercompany"
+      },
+      {
+        "name": "Interest income",
+        "role": "revenue.interest"
+      },
+      {
+        "name": "Tax payable",
+        "role": "liability.tax_payable"
+      },
+      {
+        "name": "Foreign exchange gain/loss",
+        "role": "expense.fx"
+      },
+      {
+        "name": "Suspense",
+        "role": "control.suspense"
+      }
+    ],
+    "native_chart": {
+      "id": "sg_sfrs_reference",
+      "version": 2,
+      "usage": "reference_only",
+      "provenance": {
+        "kind": "authored_product_data",
+        "source_revision": "86c5d2364a2615ea7ac0e3dd781ea013ba73f8d6",
+        "review_status": "unreviewed"
+      },
+      "reporting_groups": {
+        "intangible_assets": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Intangible assets"
+        },
+        "property_plant_equipment": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Property, plant and equipment"
+        },
+        "investments": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Investments"
+        },
+        "inventory": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Inventories"
+        },
+        "trade_receivables": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Trade receivables"
+        },
+        "other_receivables": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Other receivables"
+        },
+        "accrued_income": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Accrued income / prepayments"
+        },
+        "cash_and_bank": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Cash and cash equivalents"
+        },
+        "share_capital": {
+          "statement": "balance_sheet",
+          "side": "equity",
+          "name_en": "Share capital"
+        },
+        "retained_earnings": {
+          "statement": "balance_sheet",
+          "side": "equity",
+          "name_en": "Retained earnings"
+        },
+        "profit_for_year": {
+          "statement": "balance_sheet",
+          "side": "equity",
+          "name_en": "Profit (loss) for the year"
+        },
+        "director_loan_receivable": {
+          "statement": "balance_sheet",
+          "side": "assets",
+          "name_en": "Amounts due from directors/shareholders"
+        },
+        "director_loan_payable": {
+          "statement": "balance_sheet",
+          "side": "liabilities",
+          "name_en": "Amounts due to directors/shareholders"
+        },
+        "dividends_payable": {
+          "statement": "balance_sheet",
+          "side": "liabilities",
+          "name_en": "Dividends payable"
+        },
+        "long_term_liabilities": {
+          "statement": "balance_sheet",
+          "side": "liabilities",
+          "name_en": "Non-current borrowings"
+        },
+        "trade_payables": {
+          "statement": "balance_sheet",
+          "side": "liabilities",
+          "name_en": "Trade payables"
+        },
+        "gst_liability": {
+          "statement": "balance_sheet",
+          "side": "liabilities",
+          "name_en": "GST payable / (claimable)"
+        },
+        "income_tax_payable": {
+          "statement": "balance_sheet",
+          "side": "liabilities",
+          "name_en": "Current income tax payable"
+        },
+        "other_liabilities": {
+          "statement": "balance_sheet",
+          "side": "liabilities",
+          "name_en": "Other payables"
+        },
+        "accrued_liabilities": {
+          "statement": "balance_sheet",
+          "side": "liabilities",
+          "name_en": "Accruals and deferred income"
+        },
+        "private_equity": {
+          "statement": "balance_sheet",
+          "side": "equity",
+          "name_en": "Owner's equity (capital account)"
+        },
+        "partner_equity": {
+          "statement": "balance_sheet",
+          "side": "equity",
+          "name_en": "Partners' capital and current accounts"
+        },
+        "revenue": {
+          "statement": "income_statement",
+          "name_en": "Revenue"
+        },
+        "other_operating_income": {
+          "statement": "income_statement",
+          "name_en": "Other income"
+        },
+        "cost_of_sales": {
+          "statement": "income_statement",
+          "name_en": "Cost of sales"
+        },
+        "personnel_expenses": {
+          "statement": "income_statement",
+          "name_en": "Employee benefits expense"
+        },
+        "depreciation": {
+          "statement": "income_statement",
+          "name_en": "Depreciation and amortisation"
+        },
+        "other_operating_expenses": {
+          "statement": "income_statement",
+          "name_en": "Other operating expenses"
+        },
+        "financial_income_and_expenses": {
+          "statement": "income_statement",
+          "name_en": "Finance income and costs"
+        },
+        "income_taxes": {
+          "statement": "income_statement",
+          "name_en": "Income tax expense"
+        }
+      },
+      "account_sets": {
+        "base": [
+          {
+            "code": "1000",
+            "name_en": "Development costs",
+            "account_type": "intangible_asset",
+            "normal_balance": "debit",
+            "statutory_group": "intangible_assets",
+            "canonical_role": null
+          },
+          {
+            "code": "1030",
+            "name_en": "Intangible rights and licences",
+            "account_type": "intangible_asset",
+            "normal_balance": "debit",
+            "statutory_group": "intangible_assets",
+            "canonical_role": null
+          },
+          {
+            "code": "1120",
+            "name_en": "Plant and equipment",
+            "account_type": "tangible_asset",
+            "normal_balance": "debit",
+            "statutory_group": "property_plant_equipment",
+            "canonical_role": null
+          },
+          {
+            "code": "1180",
+            "name_en": "Accumulated depreciation, plant and equipment",
+            "account_type": "tangible_asset",
+            "normal_balance": "credit",
+            "statutory_group": "property_plant_equipment",
+            "canonical_role": null
+          },
+          {
+            "code": "1400",
+            "name_en": "Investments in subsidiaries and associates",
+            "account_type": "investment",
+            "normal_balance": "debit",
+            "statutory_group": "investments",
+            "canonical_role": null
+          },
+          {
+            "code": "1500",
+            "name_en": "Inventories",
+            "account_type": "inventory",
+            "normal_balance": "debit",
+            "statutory_group": "inventory",
+            "canonical_role": null
+          },
+          {
+            "code": "1700",
+            "name_en": "Trade receivables",
+            "account_type": "receivable",
+            "normal_balance": "debit",
+            "statutory_group": "trade_receivables",
+            "canonical_role": null
+          },
+          {
+            "code": "1730",
+            "name_en": "Other receivables",
+            "account_type": "receivable",
+            "normal_balance": "debit",
+            "statutory_group": "other_receivables",
+            "canonical_role": null
+          },
+          {
+            "code": "1750",
+            "name_en": "Prepayments and accrued income",
+            "account_type": "receivable",
+            "normal_balance": "debit",
+            "statutory_group": "accrued_income",
+            "canonical_role": null
+          },
+          {
+            "code": "1760",
+            "name_en": "Amounts due from directors/shareholders",
+            "account_type": "receivable",
+            "normal_balance": "debit",
+            "statutory_group": "director_loan_receivable",
+            "canonical_role": null
+          },
+          {
+            "code": "1900",
+            "name_en": "Cash on hand",
+            "account_type": "cash",
+            "normal_balance": "debit",
+            "statutory_group": "cash_and_bank",
+            "canonical_role": null
+          },
+          {
+            "code": "1910",
+            "name_en": "Bank account",
+            "account_type": "bank",
+            "normal_balance": "debit",
+            "statutory_group": "cash_and_bank",
+            "canonical_role": null
+          },
+          {
+            "code": "2000",
+            "name_en": "Share capital",
+            "account_type": "equity",
+            "normal_balance": "credit",
+            "statutory_group": "share_capital",
+            "canonical_role": null
+          },
+          {
+            "code": "2251",
+            "name_en": "Retained earnings",
+            "account_type": "equity",
+            "normal_balance": "credit",
+            "statutory_group": "retained_earnings",
+            "canonical_role": null
+          },
+          {
+            "code": "2371",
+            "name_en": "Profit (loss) for the year",
+            "account_type": "equity",
+            "normal_balance": "credit",
+            "statutory_group": "profit_for_year",
+            "canonical_role": null
+          },
+          {
+            "code": "2620",
+            "name_en": "Bank borrowings",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "long_term_liabilities",
+            "canonical_role": null
+          },
+          {
+            "code": "2762",
+            "name_en": "Amounts due to directors/shareholders",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "director_loan_payable",
+            "canonical_role": null
+          },
+          {
+            "code": "2764",
+            "name_en": "Dividends payable",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "dividends_payable",
+            "canonical_role": null
+          },
+          {
+            "code": "2870",
+            "name_en": "Trade payables",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "trade_payables",
+            "canonical_role": null
+          },
+          {
+            "code": "2950",
+            "name_en": "GST output tax payable",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "gst_liability",
+            "canonical_role": null
+          },
+          {
+            "code": "2951",
+            "name_en": "GST input tax claimable",
+            "account_type": "liability",
+            "normal_balance": "debit",
+            "statutory_group": "gst_liability",
+            "canonical_role": null
+          },
+          {
+            "code": "2955",
+            "name_en": "Current income tax payable",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "income_tax_payable",
+            "canonical_role": null
+          },
+          {
+            "code": "2960",
+            "name_en": "Other payables",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "other_liabilities",
+            "canonical_role": null
+          },
+          {
+            "code": "2970",
+            "name_en": "Accruals and deferred income",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "accrued_liabilities",
+            "canonical_role": null
+          },
+          {
+            "code": "3000",
+            "name_en": "Revenue (standard-rated supplies)",
+            "account_type": "revenue",
+            "normal_balance": "credit",
+            "statutory_group": "revenue",
+            "canonical_role": null
+          },
+          {
+            "code": "3200",
+            "name_en": "Revenue (zero-rated: exports / international services)",
+            "account_type": "revenue",
+            "normal_balance": "credit",
+            "statutory_group": "revenue",
+            "canonical_role": null
+          },
+          {
+            "code": "3400",
+            "name_en": "Revenue (exempt supplies)",
+            "account_type": "revenue",
+            "normal_balance": "credit",
+            "statutory_group": "revenue",
+            "canonical_role": null
+          },
+          {
+            "code": "3900",
+            "name_en": "Other income",
+            "account_type": "revenue",
+            "normal_balance": "credit",
+            "statutory_group": "other_operating_income",
+            "canonical_role": null
+          },
+          {
+            "code": "4000",
+            "name_en": "Purchases and direct costs",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "cost_of_sales",
+            "canonical_role": null
+          },
+          {
+            "code": "4400",
+            "name_en": "Subcontractor and outsourced services",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "cost_of_sales",
+            "canonical_role": null
+          },
+          {
+            "code": "5000",
+            "name_en": "Salaries and wages",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "personnel_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "5300",
+            "name_en": "CPF employer contributions",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "personnel_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "5400",
+            "name_en": "Other staff costs (SDL, FWL, benefits)",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "personnel_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "6800",
+            "name_en": "Depreciation",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "depreciation",
+            "canonical_role": null
+          },
+          {
+            "code": "7000",
+            "name_en": "Rent expense",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "7300",
+            "name_en": "Travel and transport",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "7600",
+            "name_en": "Marketing and advertising",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "7800",
+            "name_en": "Other operating expenses",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "9200",
+            "name_en": "Interest expense",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "financial_income_and_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "9300",
+            "name_en": "Interest income",
+            "account_type": "revenue",
+            "normal_balance": "credit",
+            "statutory_group": "financial_income_and_expenses",
+            "canonical_role": null
+          },
+          {
+            "code": "9800",
+            "name_en": "Income tax expense",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "income_taxes",
+            "canonical_role": null
+          }
+        ],
+        "sole_proprietor_equity": [
+          {
+            "code": "2050",
+            "name_en": "Owner's capital",
+            "account_type": "equity",
+            "normal_balance": "credit",
+            "statutory_group": "private_equity",
+            "canonical_role": null
+          },
+          {
+            "code": "2051",
+            "name_en": "Owner's drawings",
+            "account_type": "equity",
+            "normal_balance": "debit",
+            "statutory_group": "private_equity",
+            "canonical_role": null
+          },
+          {
+            "code": "2052",
+            "name_en": "Owner's contributions",
+            "account_type": "equity",
+            "normal_balance": "credit",
+            "statutory_group": "private_equity",
+            "canonical_role": null
+          }
+        ],
+        "llp_equity": [
+          {
+            "code": "2060",
+            "name_en": "Partners' capital accounts",
+            "account_type": "equity",
+            "normal_balance": "credit",
+            "statutory_group": "partner_equity",
+            "canonical_role": null
+          },
+          {
+            "code": "2061",
+            "name_en": "Partners' current accounts",
+            "account_type": "equity",
+            "normal_balance": "credit",
+            "statutory_group": "partner_equity",
+            "canonical_role": null
+          }
+        ],
+        "pte_launch_extensions": [
+          {
+            "code": "1770",
+            "name_en": "Amounts due from related companies (current)",
+            "account_type": "receivable",
+            "normal_balance": "debit",
+            "statutory_group": "other_receivables",
+            "canonical_role": null
+          },
+          {
+            "code": "2640",
+            "name_en": "Other non-current borrowings",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "long_term_liabilities",
+            "canonical_role": null
+          },
+          {
+            "code": "2770",
+            "name_en": "Amounts due to related companies (current)",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "other_liabilities",
+            "canonical_role": null
+          },
+          {
+            "code": "2840",
+            "name_en": "Current borrowings",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "other_liabilities",
+            "canonical_role": null
+          },
+          {
+            "code": "2940",
+            "name_en": "CPF payable",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "other_liabilities",
+            "canonical_role": "liability.payroll_payable"
+          },
+          {
+            "code": "2941",
+            "name_en": "Wages payable",
+            "account_type": "liability",
+            "normal_balance": "credit",
+            "statutory_group": "other_liabilities",
+            "canonical_role": null
+          },
+          {
+            "code": "3100",
+            "name_en": "Sales",
+            "account_type": "revenue",
+            "normal_balance": "credit",
+            "statutory_group": "revenue",
+            "canonical_role": "revenue.operating"
+          },
+          {
+            "code": "7100",
+            "name_en": "Software subscriptions",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.software"
+          },
+          {
+            "code": "7200",
+            "name_en": "Telecommunications",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.telecom"
+          },
+          {
+            "code": "7310",
+            "name_en": "Meals and entertainment",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.meals"
+          },
+          {
+            "code": "7400",
+            "name_en": "Office expenses",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.office"
+          },
+          {
+            "code": "7410",
+            "name_en": "Professional fees",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.professional_fees"
+          },
+          {
+            "code": "7420",
+            "name_en": "Accounting fees",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.accounting_fees"
+          },
+          {
+            "code": "7430",
+            "name_en": "Statutory filing fees",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.statutory_fees"
+          },
+          {
+            "code": "7500",
+            "name_en": "Insurance",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.insurance"
+          },
+          {
+            "code": "7700",
+            "name_en": "Bank fees",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "other_operating_expenses",
+            "canonical_role": "expense.bank_fees"
+          },
+          {
+            "code": "9280",
+            "name_en": "Foreign exchange gain/loss",
+            "account_type": "expense",
+            "normal_balance": "debit",
+            "statutory_group": "financial_income_and_expenses",
+            "canonical_role": "expense.fx"
+          }
+        ]
+      },
+      "code_sets": {
+        "gst_control": [
+          "2950",
+          "2951"
+        ]
+      },
+      "group_sets": {
+        "pte_ltd_only": [
+          "share_capital",
+          "retained_earnings",
+          "dividends_payable",
+          "director_loan_receivable",
+          "director_loan_payable"
+        ]
+      },
+      "selections": {
+        "sg_pte_provisional": {
+          "version": 1,
+          "status": "provisional",
+          "jurisdiction": "sg",
+          "legal_form": "sg-pte",
+          "account_sets": [
+            "base",
+            "pte_launch_extensions"
+          ],
+          "role_annotations": {
+            "2000": "equity.share_capital",
+            "2251": "equity.retained_earnings",
+            "2762": "liability.director_loan",
+            "2950": "liability.sales_tax_payable",
+            "2955": "liability.tax_payable",
+            "5000": "expense.payroll",
+            "7000": "expense.rent",
+            "7300": "expense.travel",
+            "7600": "expense.marketing",
+            "9200": "expense.interest",
+            "9300": "revenue.interest"
+          },
+          "reserved_uses": {
+            "gst_control": [
+              "2950",
+              "2951"
+            ],
+            "period_close": [
+              "2371"
+            ],
+            "tax_classified_revenue": [
+              "3000",
+              "3200",
+              "3400"
+            ]
+          },
+          "unresolved_choice": {
+            "id": "unresolved",
+            "label": "Suspense — unresolved",
+            "posting": false
+          }
+        }
+      }
+    }
+  },
+  "obligations": {
+    "survey": "surveyed",
+    "as_of": "2026-09-24",
+    "note": "SG-1 inventory of GST, income-tax and ACRA duties for the admitted forms. Applicability is recorded in each note, not enforced by the pack schema. Every item remains declared_unbuilt because no SG binding exists in the shared sweep. Existing pure/domain modules do not imply a mounted lifecycle. This is not a certification of all employment, sector-specific or cross-border duties.",
+    "items": [
+      {
+        "id": "sg_gst_registration",
+        "name": "GST registration assessment and owner application",
+        "authority": "IRAS",
+        "source": "GST Act First Schedule; server/donna/singapore/gstRegistrationThreshold.js (GST_THRESHOLD_PROVENANCE)",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to sg-sole-prop, sg-pte and sg-llp where registration liability must be assessed; distinguish registered businesses from prospective/retrospective registration assessment. The owner/firm registers. A historical warning is not proof of liability. Source is the existing module read on 2026-09-24, not a new primary verification; confirmedAgainstPrimary remains false on the SG-1 base. SG-2 #2241 corrections require qualified Singapore review. No statutory sweep binding, filing or production flag is activated."
+      },
+      {
+        "id": "sg_gst_return",
+        "name": "GST return preparation, review and filing obligation",
+        "authority": "IRAS",
+        "source": "GST Act; server/donna/singapore/gstCodes.js and singapore/iras/submitGstF5.js",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to GST-registered sg-sole-prop, sg-pte and sg-llp for their prescribed accounting periods. Preserve nil-return and period obligations; F5 preparation is not filing. Existing code/box tables and gated transport are not certified coverage. SG-6 owns lifecycle; SG-8 owns split posting; A11 filing belongs to the firm. Source is the existing module read on 2026-09-24, not a new primary verification; confirmedAgainstPrimary remains false on the SG-1 base. SG-2 #2241 corrections require qualified Singapore review. No statutory sweep binding, filing or production flag is activated."
+      },
+      {
+        "id": "sg_eci",
+        "name": "Estimated Chargeable Income assessment",
+        "authority": "IRAS",
+        "source": "Income Tax Act; server/donna/singapore/corporateTax.js (buildEciAssessment)",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to sg-pte; assess the ECI filing waiver from both annual revenue and nil estimated chargeable income, never legal form alone. Does not apply to sg-sole-prop or sg-llp. Financial-year-end/deadline arithmetic remains module-owned. Source is the existing module read on 2026-09-24, not a new primary verification; confirmedAgainstPrimary remains false on the SG-1 base. SG-2 #2241 corrections require qualified Singapore review. No statutory sweep binding, filing or production flag is activated."
+      },
+      {
+        "id": "sg_corporate_income_tax",
+        "name": "Corporate income-tax return and assessment",
+        "authority": "IRAS",
+        "source": "Income Tax Act; server/donna/singapore/corporateTax.js (SG_CORPORATE_TAX_PROVENANCE)",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to sg-pte. Form C-S Lite / C-S / C selection, exemptions and any filing waiver require qualifying facts; size alone is insufficient. Sole proprietors and LLP partners have separate income-tax duties below. No YA-specific rebate is promised. Source is the existing module read on 2026-09-24, not a new primary verification; confirmedAgainstPrimary remains false on the SG-1 base. SG-2 #2241 corrections require qualified Singapore review. No statutory sweep binding, filing or production flag is activated."
+      },
+      {
+        "id": "sg_acra_agm",
+        "name": "Annual general meeting or evidenced exemption",
+        "authority": "ACRA",
+        "source": "Companies Act; server/donna/singapore/acraAnnualReturn.js (ACRA_FILING_PROVENANCE)",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to the supported non-listed sg-pte lane unless a valid exemption/dispensation applies. Requires financial-year-end, meeting and exemption evidence; do not infer an exemption merely from private-company status. Not the sole-proprietor or LLP lane. Source is the existing module read on 2026-09-24, not a new primary verification; confirmedAgainstPrimary remains false on the SG-1 base. SG-2 #2241 corrections require qualified Singapore review. No statutory sweep binding, filing or production flag is activated."
+      },
+      {
+        "id": "sg_acra_annual_return",
+        "name": "Company annual return",
+        "authority": "ACRA",
+        "source": "Companies Act; server/donna/singapore/acraAnnualReturn.js (buildAnnualReturnAssessment)",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to supported non-listed sg-pte, including where AGM is exempt. The annual return remains distinct from the meeting and financial-statement/XBRL requirements. sg-sole-prop and sg-llp do not acquire a company annual-return obligation. Source is the existing module read on 2026-09-24, not a new primary verification; confirmedAgainstPrimary remains false on the SG-1 base. SG-2 #2241 corrections require qualified Singapore review. No statutory sweep binding, filing or production flag is activated."
+      },
+      {
+        "id": "sg_xbrl_financial_statements",
+        "name": "Financial-statement filing and XBRL requirement",
+        "authority": "ACRA",
+        "source": "Companies Act and ACRA financial-statement filing requirements; server/donna/singapore/acraAnnualReturn.js (xbrlRequirementFor)",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to sg-pte where financial statements must be filed. Existing assessment distinguishes solvent exempt private companies from companies requiring full/simplified XBRL, using exemption, solvency, size and public-accountability facts. Exemption from filing is not blanket exemption from preparation or annual return. Unsupported specialised XBRL/financial-statement cases need review, not a guessed tier. Source is the existing module read on 2026-09-24, not a new primary verification; confirmedAgainstPrimary remains false on the SG-1 base. SG-2 #2241 corrections require qualified Singapore review. No statutory sweep binding, filing or production flag is activated."
+      },
+      {
+        "id": "sg_sole_proprietor_income_tax",
+        "name": "Sole-proprietor business income in owner return",
+        "authority": "IRAS",
+        "source": "Income Tax Act; server/donna/singapore/entity.js (assertSingaporeCompanyOnly)",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to sg-sole-prop: business income is assessed on the owner through the applicable personal return (Form B/B1), not ECI/Form C-S. The entity module refuses company-only artifacts; there is no personal-return lifecycle in this pack. This module-derived scope remains unverified."
+      },
+      {
+        "id": "sg_llp_partner_income_tax",
+        "name": "LLP partnership return and partner income assessment",
+        "authority": "IRAS",
+        "source": "Income Tax Act; server/donna/singapore/entity.js (assertSingaporeCompanyOnly)",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to sg-llp: Form P and partner assessment, not company ECI/Form C-S. The entity module refuses company-only artifacts; the partnership/partner-return lifecycle is unbuilt. LLP-specific ACRA declarations are not served by the company annual-return calculator and require a separate surveyed binding. This module-derived scope remains unverified."
+      },
+      {
+        "id": "sg_gst_invoicenow",
+        "name": "GST InvoiceNow data-submission requirement",
+        "authority": "IRAS / IMDA",
+        "source": "https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/gst-invoicenow-requirement",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Primary page read 2026-09-24: phased InvoiceNow participation for GST-registered businesses. Applicability requires registration history and the assigned implementation phase; no universal effective date is inferred. The pack has no InvoiceNow transport, applicability evaluator or submission receipt. einvoice.lane=none records that implementation gap, not exemption from the obligation."
+      },
+      {
+        "id": "sg_gst_tax_invoicing",
+        "name": "GST tax-invoice content and evidence",
+        "authority": "IRAS",
+        "source": "https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/basics-of-gst/invoicing-price-display-and-record-keeping/invoicing-customers",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Primary page read 2026-09-24. Applies to GST-registered suppliers issuing tax invoices; the document declarations preserve the full floor. Shared display tokens, foreign-currency SGD equivalents and supply-type subtotals remain unserved. Simplified/customer-accounting variants are not implemented. Pack discovery and a successful invoice-model build are not compliant SG invoice rendering."
+      },
+      {
+        "id": "sg_llp_acra_annual_declaration",
+        "name": "LLP annual declaration",
+        "authority": "ACRA",
+        "source": "https://www.acra.gov.sg/manage/limited-liability-partnerships/key-requirements-common-offences/filing-annual-declarations/",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to sg-llp, independently of the partnership income-tax return. ACRA, Filing annual declarations for limited liability partnerships (LLPs), retrieved 2026-09-24: \"All limited liability partnerships (LLPs) in Singapore must file annual declarations\". No company annual-return calculator, deadline, filing capability or confirmation of existing module tables is implied."
+      },
+      {
+        "id": "sg_sole_proprietor_business_renewal",
+        "name": "Sole-proprietor business registration renewal",
+        "authority": "ACRA",
+        "source": "https://www.acra.gov.sg/regulations/compliance-requirements/",
+        "as_of": "2026-09-24",
+        "status": "declared_unbuilt",
+        "binding": null,
+        "note": "Applies to sg-sole-prop with a business registration requiring renewal; distinct from company annual returns and LLP declarations. ACRA, Compliance requirements: Businesses and registered professionals, retrieved 2026-09-24, names \"renewal of business registration\" for sole proprietorships. No renewal term, date, fee, automated renewal or exemption is inferred."
+      }
+    ]
+  },
+  "platforms": [
+    "xero",
+    "qbo"
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "version": "eaw.fresh-entity-incident-ledger.v1",
+  "source_digest": "121cdbc17fc05b6414103194e8c083fdef105b81ed22112f14f1a81d58f16a0e",
+  "incidents": [
+    {
+      "incident_id": "fresh-entity/baseline-seed-failure",
+      "stage": "config_chart_authority",
+      "reason_code": "DESKTOP_BASELINE_SEED_FAILED",
+      "status": "resolved",
+      "protected_test_id": "BF1_REAL_PG_SEED_FAILURE",
+      "test_path": "server/donna/desktop/clientCreationSeedPgLifecycle.test.js",
+      "test_name": "real route + PG: a desktop seed failure creates no client and the retry converges once",
+      "diagnostic_receipt_path": "data/worlds/receipts/gate0a-fresh-entity-baseline-seed-failure.json",
+      "reproducer_path": "data/worlds/reproducers/fresh-entity-baseline-seed-failure-v1.json"
+    },
+    {
+      "incident_id": "fresh-entity/noncanonical-legal-form",
+      "stage": "canonical_identity",
+      "reason_code": "CLIENT_LEGAL_FORM_UNSUPPORTED",
+      "status": "resolved",
+      "protected_test_id": "BF2_REAL_PG_LEGAL_FORM",
+      "test_path": "server/donna/clientLegalFormPgLifecycle.test.js",
+      "test_name": "real route + PG: US/GB aliases persist canonically, pack routing resolves, and legacy rows have a correction path"
+    },
+    {
+      "incident_id": "fresh-entity/cross-firm-derived-id",
+      "stage": "canonical_identity",
+      "reason_code": "CLIENT_ID_FIRM_CONFLICT",
+      "status": "resolved",
+      "protected_test_id": "BF3_REAL_PG_FIRM_ISOLATION",
+      "test_path": "server/donna/clientFirmIsolationPgLifecycle.test.js",
+      "test_name": "real route + PG: a second firm cannot reassign a colliding client id or its owner"
+    },
+    {
+      "incident_id": "fresh-entity/creation-actor-lost",
+      "stage": "create_path",
+      "reason_code": "CLIENT_CREATION_PRINCIPAL_REQUIRED",
+      "status": "resolved",
+      "protected_test_id": "BF4_REAL_PG_ACTOR_ATTRIBUTION",
+      "test_path": "server/donna/clientCreationActorPgLifecycle.test.js",
+      "test_name": "real routes + PG: member and owner client creation preserve actor, authority basis, and owning firm"
+    }
+  ]
+}

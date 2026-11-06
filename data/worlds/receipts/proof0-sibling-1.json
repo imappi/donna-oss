@@ -1,0 +1,273 @@
+{
+  "status": "fail",
+  "sourceWorldId": "proof0/processor-settlement",
+  "siblingWorldId": "proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+  "derivation": {
+    "version": "proof0.siblingWorld.v1",
+    "mutationId": "counterfactual/director-purpose-personal",
+    "declaredFactId": "hidden/director-business-purpose",
+    "errors": []
+  },
+  "run": {
+    "status": "fail",
+    "worldId": "proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+    "candidateClose": {
+      "candidateId": "donna-production-path/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+      "entries": [],
+      "ownerFacts": [],
+      "actions": [
+        {
+          "type": "propose_reconciliation_match",
+          "documentArtifactId": "artifact/invoice-a",
+          "bankArtifactId": "artifact/bank-line",
+          "confidence": 0.55,
+          "hops": [
+            "processor:unknown",
+            "settlement_lag_4d",
+            "within_window"
+          ],
+          "reasoning": "The bank line of GBP 100.00 matches the processor settlement batch BATCH-001 net amount (GBP 100.00) and lands 4 days after the invoice date, consistent with a processor payout. However, the payout is a batch aggregating multiple invoices; this single EUR 70 invoice is only one component, so the match is plausible but not decisive on its own.",
+          "authorityArtifactIds": [
+            "artifact/invoice-a",
+            "artifact/bank-line"
+          ]
+        }
+      ]
+    },
+    "oracleVerdict": {
+      "ok": false,
+      "version": "proof0.oracleSuite.v1",
+      "errors": [],
+      "failures": [
+        "entry.event/director-charge.director_loan_account expected 24 got 0",
+        "entry.event/processor-settlement.bank_cash expected 100 got 0",
+        "entry.event/processor-settlement.foreign_exchange_gain_loss expected 0.8 got 0",
+        "entry.event/processor-settlement.processor_fees_expense expected 3.15 got 0",
+        "entry.event/processor-settlement.sales_revenue expected 102.35 got 0",
+        "ownerFact.event/director-charge.business_purpose missing"
+      ],
+      "receipts": [
+        {
+          "id": "oracle-receipt/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+          "oracleVersion": "proof0.oracleSuite.v1",
+          "policyPackVersion": "gb.uk_ltd.management_books.v1",
+          "computedFrom": "candidate_entries_and_actions",
+          "candidateId": "donna-production-path/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal"
+        }
+      ]
+    },
+    "traceReceipts": [
+      {
+        "receiptVersion": "proof0.traceReceipts.v1",
+        "worldId": "proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+        "capabilityId": "reconcile_processor_settlement",
+        "obligationIds": [],
+        "retrievedMemoryRefs": [],
+        "policyRefs": [],
+        "admissibleBranches": [],
+        "oracleFailureIds": [],
+        "externalConsequence": "none",
+        "reversibility": "no_mutation",
+        "runtimeSnapshot": {
+          "extractedDocuments": 3
+        },
+        "decisionId": "decision/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal/extraction",
+        "stage": "extracted_structured_state",
+        "evidenceRefs": [
+          "artifact/invoice-a",
+          "artifact/invoice-b",
+          "artifact/malicious-invoice"
+        ],
+        "selectedAction": "extract_documents_via_production_extractor",
+        "authorityBasis": "offline_eval_read_only",
+        "sourceTrust": "mixed_trusted_and_untrusted_evidence",
+        "nextState": "documents_extracted",
+        "modelId": "claude-opus-4-8",
+        "expectedState": "documents_extracted",
+        "observedState": "documents_extracted",
+        "confidence": "high",
+        "sequence": 1
+      },
+      {
+        "receiptVersion": "proof0.traceReceipts.v1",
+        "worldId": "proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+        "capabilityId": "reconcile_processor_settlement",
+        "obligationIds": [],
+        "retrievedMemoryRefs": [],
+        "policyRefs": [],
+        "admissibleBranches": [],
+        "oracleFailureIds": [],
+        "externalConsequence": "none",
+        "reversibility": "no_mutation",
+        "runtimeSnapshot": {
+          "perInvoiceOutcomes": [
+            {
+              "invoiceArtifactId": "artifact/invoice-a",
+              "expectedToSettle": true,
+              "outcome": "matches_proposed",
+              "proposedBankArtifactIds": [
+                "artifact/bank-line"
+              ],
+              "modelId": "claude-opus-4-8",
+              "evidenceRefs": [
+                "artifact/invoice-a",
+                "artifact/bank-line",
+                "artifact/processor-report"
+              ]
+            },
+            {
+              "invoiceArtifactId": "artifact/invoice-b",
+              "expectedToSettle": true,
+              "outcome": "no_plausible_match",
+              "proposedBankArtifactIds": [],
+              "modelId": "claude-opus-4-8",
+              "evidenceRefs": [
+                "artifact/invoice-b",
+                "artifact/bank-line",
+                "artifact/processor-report"
+              ]
+            }
+          ]
+        },
+        "decisionId": "decision/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal/matching",
+        "stage": "candidate_state_alternatives",
+        "evidenceRefs": [
+          "artifact/invoice-a",
+          "artifact/invoice-b",
+          "artifact/malicious-invoice",
+          "artifact/bank-line",
+          "artifact/processor-report"
+        ],
+        "selectedAction": "propose_reconciliation_matches",
+        "authorityBasis": "offline_eval_read_only",
+        "sourceTrust": "mixed_evidence_with_declared_authority",
+        "nextState": "matching_candidates_proposed",
+        "modelId": "claude-opus-4-8",
+        "expectedState": "all_expected_invoice_matches_proposed",
+        "observedState": "expected_invoice_matches_missing:artifact/invoice-b",
+        "confidence": "high",
+        "sequence": 2
+      },
+      {
+        "receiptVersion": "proof0.traceReceipts.v1",
+        "worldId": "proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+        "capabilityId": "reconcile_processor_settlement",
+        "obligationIds": [],
+        "retrievedMemoryRefs": [],
+        "policyRefs": [],
+        "admissibleBranches": [],
+        "oracleFailureIds": [],
+        "externalConsequence": "none",
+        "reversibility": "no_mutation",
+        "runtimeSnapshot": {},
+        "decisionId": "decision/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal/owner-ask",
+        "stage": "owner_ask_and_response",
+        "evidenceRefs": [],
+        "selectedAction": "no_owner_ask_channel_offline",
+        "authorityBasis": "offline_eval_no_owner_channel",
+        "sourceTrust": "not_applicable",
+        "nextState": "owner_fact_unanswered",
+        "modelId": "claude-opus-4-8",
+        "expectedState": "owner_only_facts_asked_and_answered",
+        "observedState": "owner_ask_path_not_wired_offline",
+        "confidence": "high",
+        "sequence": 3
+      },
+      {
+        "receiptVersion": "proof0.traceReceipts.v1",
+        "worldId": "proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+        "capabilityId": "reconcile_processor_settlement",
+        "obligationIds": [],
+        "retrievedMemoryRefs": [],
+        "policyRefs": [],
+        "admissibleBranches": [],
+        "oracleFailureIds": [],
+        "externalConsequence": "none",
+        "reversibility": "no_mutation",
+        "runtimeSnapshot": {
+          "proposedMatches": 1,
+          "donnaCommit": "local",
+          "firmContext": {
+            "settlement": {
+              "settledCount": 0,
+              "paymentStatus": "unknown; the client settles card/online payments via a payment processor; processor settlement report batch BATCH-001: gross GBP 102.35, fees GBP 3.15, FX GBP 0.80, net GBP 100.00"
+            },
+            "evidenceRefs": [
+              "artifact/processor-report"
+            ]
+          }
+        },
+        "decisionId": "decision/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal/close",
+        "stage": "posting_reconciliation_or_blocked_obligation",
+        "evidenceRefs": [
+          "artifact/invoice-a",
+          "artifact/invoice-b",
+          "artifact/malicious-invoice",
+          "artifact/bank-line",
+          "artifact/processor-report"
+        ],
+        "selectedAction": "propose_reconciliation_matches_then_stop",
+        "authorityBasis": "offline_eval_no_write_authority",
+        "sourceTrust": "evidence_source_only_for_authority",
+        "nextState": "blocked_on_database_runtime",
+        "modelId": "claude-opus-4-8",
+        "expectedState": "production_close_completed",
+        "observedState": "reconciliation_proposed_db_close_not_run",
+        "confidence": "high",
+        "sequence": 4
+      }
+    ],
+    "traceReceiptErrors": [],
+    "failureReceipt": {
+      "receiptVersion": "proof0.traceReceipts.v1",
+      "failureId": "failure/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+      "worldId": "proof0/processor-settlement::sibling::counterfactual/director-purpose-personal",
+      "capabilityId": "reconcile_processor_settlement",
+      "failureClass": "production_close_path_incomplete",
+      "earliestObservableDivergence": {
+        "stage": "candidate_state_alternatives",
+        "expectedState": "all_expected_invoice_matches_proposed",
+        "observedState": "expected_invoice_matches_missing:artifact/invoice-b",
+        "confidence": "high",
+        "decisionId": "decision/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal/matching"
+      },
+      "loadBearingFact": null,
+      "consequence": {
+        "extractedDocuments": 3,
+        "proposedMatches": 1
+      },
+      "protectedGate": "oracle_suite",
+      "reproductionPredicate": "oracle_verdict_failures_recur",
+      "permittedPatchSurfaces": [],
+      "protectedSurfaces": [
+        "causal_world",
+        "oracle",
+        "policy_pack",
+        "accounting_invariants"
+      ],
+      "oracleReceiptIds": [
+        "oracle-receipt/proof0/processor-settlement::sibling::counterfactual/director-purpose-personal"
+      ],
+      "oracleFailures": [
+        "entry.event/director-charge.director_loan_account expected 24 got 0",
+        "entry.event/processor-settlement.bank_cash expected 100 got 0",
+        "entry.event/processor-settlement.foreign_exchange_gain_loss expected 0.8 got 0",
+        "entry.event/processor-settlement.processor_fees_expense expected 3.15 got 0",
+        "entry.event/processor-settlement.sales_revenue expected 102.35 got 0",
+        "ownerFact.event/director-charge.business_purpose missing"
+      ]
+    },
+    "provenance": {
+      "capabilityManifestVersion": "proof0.v1",
+      "worldSchemaVersion": "proof0.world.v1",
+      "worldSeed": "proof0-processor-settlement-001",
+      "policyPackVersion": "gb.uk_ltd.management_books.v1",
+      "resolvedModelId": "claude-opus-4-8",
+      "donnaCommit": "local",
+      "runtimeConfig": {},
+      "schedulerVersion": "proof0.observationSchedule.v1",
+      "rendererVersion": "proof0.worldRenderer.v1",
+      "oracleVersion": "proof0.oracleSuite.v1"
+    }
+  }
+}

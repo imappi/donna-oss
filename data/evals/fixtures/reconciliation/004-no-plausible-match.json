@@ -1,0 +1,43 @@
+{
+  "id": "004-no-plausible-match",
+  "title": "Invoice with no plausible bank line in window",
+  "tags": ["negative_case", "unmatchable"],
+  "narrative": "Sales invoice with no matching bank line: only unrelated rent receipts in the candidate set. The LLM matcher should return empty proposals and an unmatchable_reason — the harness accepts any non-null reason (wildcard '*').",
+  "document": {
+    "id": "si-nomatch-004",
+    "document_type": "sales_invoice",
+    "customer_name": "Cactus Blossom Cafe LLC",
+    "document_date": "2026-03-15",
+    "due_date": "2026-04-14",
+    "total_amount": 480.00,
+    "currency": "USD",
+    "reference_number": "CB-2026-0009",
+    "extraction_confidence": 0.93,
+    "payment_status": "unpaid",
+    "parse_summary": { "warnings": [] }
+  },
+  "candidate_bank_lines": [
+    {
+      "id": "tx-rent-march",
+      "money_in": 2500.00,
+      "currency": "USD",
+      "date": "2026-03-01",
+      "description": "RENT INCOMING TENANT-C",
+      "raw_description": "MONTHLY RENT TENANT C MAR 2026",
+      "contact": "Tenant C"
+    },
+    {
+      "id": "tx-rent-april",
+      "money_in": 2500.00,
+      "currency": "USD",
+      "date": "2026-04-01",
+      "description": "RENT INCOMING TENANT-C",
+      "raw_description": "MONTHLY RENT TENANT C APR 2026",
+      "contact": "Tenant C"
+    }
+  ],
+  "expected": {
+    "proposals": [],
+    "unmatchable_reason": "*"
+  }
+}

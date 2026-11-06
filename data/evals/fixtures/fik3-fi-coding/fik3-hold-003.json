@@ -1,0 +1,41 @@
+{
+  "id": "fik3-hold-003",
+  "title": "Transfer to a private person with no source",
+  "split": "holdout",
+  "family": "fi-oy-transfer-to-person",
+  "entity": "synthetic-oy-d",
+  "period": "2026-07",
+  "decision_class": "ask_recipient",
+  "strong_is_alternative": false,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Synteettinen Delta Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2026-07-09",
+    "description": "TILISIIRTO MATTI MEIKALAINEN",
+    "money_in": 0,
+    "money_out": 1500.0,
+    "currency": "EUR"
+  },
+  "document": null,
+  "labels": {
+    "original": {
+      "terminal": "ask_owner",
+      "journal": [],
+      "ask": {
+        "evidence_type": "business_purpose",
+        "kind": "ask_recipient"
+      }
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  }
+}

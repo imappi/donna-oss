@@ -1,0 +1,31 @@
+{
+  "lane": "document_routing",
+  "endpoint_class": "openai",
+  "provenance": "synthetic — authored from documentRouter.js ROUTER_SCHEMA for the appliance fixture world (server/donna/fixtures/appliance/world.json, artifact/supplier-bill); never a captured provider response",
+  "fixture": "supplier_bill_discount",
+  "status": 200,
+  "body": {
+    "id": "resp_fixture_route_ochre_supplier_bill",
+    "object": "response",
+    "created_at": 1756684800,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "store": false,
+    "output": [
+      {
+        "id": "msg_fixture_route_ochre_supplier_bill",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "text": "{\"document_family\":\"invoice_or_bill\",\"confidence\":0.97,\"direction_hint\":\"ap\",\"candidate_families\":[{\"family\":\"invoice_or_bill\",\"confidence\":0.97},{\"family\":\"receipt\",\"confidence\":0.02}],\"language_hint\":\"en\",\"reason\":\"A tax invoice issued by Ochre Lighting Ltd and addressed to Kestrel Print Studio Ltd, the client; the client is the buyer, so money flows out (accounts payable).\"}"
+          }
+        ]
+      }
+    ],
+    "usage": { "input_tokens": 0, "output_tokens": 0, "total_tokens": 0 }
+  }
+}

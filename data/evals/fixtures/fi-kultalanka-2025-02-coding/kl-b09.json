@@ -1,0 +1,77 @@
+{
+  "id": "kl-b09",
+  "title": "Kultalanka 02/2025 11.2. Puhelinlasku −59,32",
+  "split": "development",
+  "family": "kultalanka-input_vat_rate",
+  "entity": "kampaamo-kultalanka-oy",
+  "period": "2025-02",
+  "decision_class": "input_vat_rate",
+  "strong_is_alternative": true,
+  "book": {
+    "entity_type": "fi-oy",
+    "company_name": "Kampaamo Kultalanka Oy",
+    "accounting_basis": "accrual"
+  },
+  "facts": [],
+  "transaction": {
+    "date": "2025-02-11",
+    "description": "E-LASKU SUOMEN TELEYHTYMÄ OY PUH/NETTI 1/2025",
+    "money_in": 0,
+    "money_out": 59.32,
+    "currency": "EUR"
+  },
+  "document": {
+    "document_type": "supplier_bill",
+    "party": "Suomen Teleyhtymä Oy",
+    "total_amount": 59.32,
+    "tax_amount": 12.05,
+    "lines": [
+      {
+        "description": "Yritysliittymä Pro ja yritysnetti",
+        "amount": 59.32,
+        "tax_rate": 25.5
+      }
+    ],
+    "match_status": "auto_matched"
+  },
+  "labels": {
+    "original": {
+      "terminal": "posted",
+      "journal": [
+        {
+          "role": "counterparty",
+          "account": "Telecommunications",
+          "direction": "debit",
+          "amount": 47.27,
+          "tax_code": "ALV_25_5_INPUT"
+        },
+        {
+          "role": "alv_input_deductible",
+          "account": "2940",
+          "direction": "debit",
+          "amount": 12.05,
+          "tax_code": "NONE"
+        },
+        {
+          "role": "bank",
+          "account": "Business Checking · EUR",
+          "direction": "credit",
+          "amount": 59.32,
+          "tax_code": "NONE"
+        }
+      ],
+      "ask": null
+    },
+    "adjudicated": null,
+    "adjudication": {
+      "status": "agreed"
+    }
+  },
+  "expressible": {
+    "status": "expressible"
+  },
+  "derived_from": {
+    "labels": "fi-kultalanka-2025-02/labels.json",
+    "line": "B09"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "id": "008-wilkes-cross-currency-eur-bill",
+  "client": "wilkes",
+  "title": "Cross-currency supplier bill — UK property co billed in EUR by a Dutch surveyor",
+  "tags": [
+    "cross_currency",
+    "processor",
+    "supplier_bill",
+    "eur",
+    "wilkes",
+    "paid",
+    "synthetic_identity"
+  ],
+  "narrative": "Wilkes Properties (synthetic UK / GBP stand-in — see identity note) pays a Dutch building surveyor billed in EUR, settled from its GBP account via a processor with the FX printed. The document currency is EUR; the GBP debit line is the settlement, not the invoice currency. A GBP-firm-biased extractor might grab the GBP settlement figure; the correct extraction pins currency=EUR and total=the EUR amount. vendor_name NOT pinned (B.V. legal-name normalization is its own follow-up).",
+  "upload_time_document_type": "supplier_bill",
+  "client_identity": {
+    "display_name": "Wilkes Properties Ltd",
+    "legal_names": [
+      "Wilkes Properties Ltd"
+    ]
+  },
+  "document_input": {
+    "filename": "008-wilkes-cross-currency-eur-bill.pdf",
+    "mimeType": "application/pdf",
+    "base64_synthetic_text_pdf": "JVBERi0xLjcKJYGBgYEKCjEgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFsgNSAwIFIgXQovQ291bnQgMQo+PgplbmRvYmoKCjIgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDEgMCBSCj4+CmVuZG9iagoKMyAwIG9iago8PAovUHJvZHVjZXIgPEZFRkYwMDcwMDA2NDAwNjYwMDJEMDA2QzAwNjkwMDYyMDAyMDAwMjgwMDY4MDA3NDAwNzQwMDcwMDA3MzAwM0EwMDJGMDAyRjAwNjcwMDY5MDA3NDAwNjgwMDc1MDA2MjAwMkUwMDYzMDA2RjAwNkQwMDJGMDA0ODAwNkYwMDcwMDA2NDAwNjkwMDZFMDA2NzAwMkYwMDcwMDA2NDAwNjYwMDJEMDA2QzAwNjkwMDYyMDAyOT4KL01vZERhdGUgKEQ6MjAyNjA2MDgwMDAwMDBaKQovQ3JlYXRvciA8RkVGRjAwNzAwMDY0MDA2NjAwMkQwMDZDMDA2OTAwNjIwMDIwMDAyODAwNjgwMDc0MDA3NDAwNzAwMDczMDAzQTAwMkYwMDJGMDA2NzAwNjkwMDc0MDA2ODAwNzUwMDYyMDAyRTAwNjMwMDZGMDA2RDAwMkYwMDQ4MDA2RjAwNzAwMDY0MDA2OTAwNkUwMDY3MDAyRjAwNzAwMDY0MDA2NjAwMkQwMDZDMDA2OTAwNjIwMDI5PgovQ3JlYXRpb25EYXRlIChEOjIwMjYwNjA4MDAwMDAwWikKPj4KZW5kb2JqCgo0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwo+PgplbmRvYmoKCjUgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAxIDAgUgovUmVzb3VyY2VzIDw8Ci9Gb250IDw8Ci9IZWx2ZXRpY2EtNzA5ODQ4MDc4OSA0IDAgUgovSGVsdmV0aWNhLTk3NDI2ODI1NjggNCAwIFIKL0hlbHZldGljYS0yMDAwODA1OTg2IDQgMCBSCi9IZWx2ZXRpY2EtOTc1MDQ2OTIwNyA0IDAgUgovSGVsdmV0aWNhLTc1NzI1MzM2ODYgNCAwIFIKL0hlbHZldGljYS04NDUwMTgwMTA3IDQgMCBSCi9IZWx2ZXRpY2EtODY1OTg3MTg3OCA0IDAgUgovSGVsdmV0aWNhLTU4MjQ2NjIzMzggNCAwIFIKL0hlbHZldGljYS0xODQ4NTI0MTc1IDQgMCBSCi9IZWx2ZXRpY2EtNzg4ODkxMTA2MyA0IDAgUgovSGVsdmV0aWNhLTk3OTM0NDkyOSA0IDAgUgovSGVsdmV0aWNhLTI3MDgxOTk5NTYgNCAwIFIKL0hlbHZldGljYS02NzAzNjgyNjY0IDQgMCBSCi9IZWx2ZXRpY2EtNzM1NTY5NDg3IDQgMCBSCi9IZWx2ZXRpY2EtODc4NDAxNTcxMSA0IDAgUgovSGVsdmV0aWNhLTk2NjgzMzM0OTMgNCAwIFIKL0hlbHZldGljYS0yNTA4MTIwNDQgNCAwIFIKL0hlbHZldGljYS0xMjc1MzIyODMyIDQgMCBSCi9IZWx2ZXRpY2EtNzcyMDk2NjI5NSA0IDAgUgo+PgovWE9iamVjdCA8PAo+PgovRXh0R1N0YXRlIDw8Cj4+Cj4+Ci9NZWRpYUJveCBbIDAgMCA1OTUgODQyIF0KL0Fubm90cyBbIF0KL0NvbnRlbnRzIFsgNiAwIFIgXQo+PgplbmRvYmoKCjYgMCBvYmoKPDwKL0ZpbHRlciAvRmxhdGVEZWNvZGUKL0xlbmd0aCA2NTgKPj4Kc3RyZWFtCnicrVZdi9RAEHzPr8izIPb05wyI4O4m+OCLsH9A5BRFH07E3291klPuuDkSvB02mZmdzVRXV/XkdjhdBxqz/fwyvHp38/33za+vnz6+DGpVK0VtYynj9fPAOl7fD2VZWkajsRKN1x/Da3MtOjGpqhnjznnXWHqzmYU2nUyM1FRMMbL8jSdznt6M12/D9cUwXYcPw20PTQtlr2xee2ii6oJGi19CQt2CXR0jPmO3CWP1usyeMTu5huzbm4mokrXq3b0BK/feGwuY8MYU3ecZr7Eks2DM8gNmeUYkyaXrjLuo7dsxELWJ+BMRiB+IoKpRqVSeiIBXbSBrDXwjA2B/lrdMFsvMCZkQjAj5mIMyL1jR1lk9o687sTgyE6VGXxm0KgP8PWh6WZQgiy42zaRazDDbcuyKVSfgmjygptkv+1BZZXVnkS4qr0c0U+BFeKqEdZ8Xm2aANRxIG+KCzzAyvzhnbAv/Dp8yX4SF8HX0SEyKxE4t1VpbKeTSRWKrlhTuSw5z18fafQS4FuG9DmqCMsLd0uRKB8jloFpaa9a1h/MqIYNIIFTzvGcpKYu0Jfsg3aKlfBBIykYWcS0r1v+BGBQhhD49aKSbwaXweaEFa/K6D78HQcLsrl38dERsITBA09p1tzW+owMlPJ0dWWnPvUwfbf9HB0qBUrEA+B7+2BTKqK2x1tU8xSyTU7EbfJPpWlLKsfooq0TBbGDUno70Dv9fpR/C39yriGjrOsx8O3mfnfnn4J8NdsrXgS581SOlD34TRlq4+zxe1W0EKlqWbCSueWLAGAmMpAjNoiKRs0+PFp+drwMBwSBF3Lql2MpWimF2o41GQkp5pREY8mjhf0cMV3TqJpQqvqxq9/D8AbdGFLkKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDcKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE2IDAwMDAwIG4gCjAwMDAwMDAwNzYgMDAwMDAgbiAKMDAwMDAwMDEyNiAwMDAwMCBuIAowMDAwMDAwNTk2IDAwMDAwIG4gCjAwMDAwMDA2OTQgMDAwMDAgbiAKMDAwMDAwMTM5MCAwMDAwMCBuIAoKdHJhaWxlcgo8PAovU2l6ZSA3Ci9Sb290IDIgMCBSCi9JbmZvIDMgMCBSCj4+CgpzdGFydHhyZWYKMjEyMQolJUVPRg=="
+  },
+  "expected": {
+    "document_type": "supplier_bill",
+    "counterparty_name": "Van der Berg Bouwinspectie B.V.",
+    "header": {
+      "counterparty_role": "vendor",
+      "customer_name": null,
+      "currency": "EUR",
+      "total_amount": 1200,
+      "payment_status": "paid"
+    },
+    "line_count": 1
+  }
+}
