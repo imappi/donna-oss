@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, unlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, unlinkSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -141,11 +141,19 @@ test('capability inventory filesystem failure is a visible operational failure',
   assert.equal(discovery.unloadable[0].code, 'country_capability_unavailable');
 });
 
-test('both sides of the coding/pack composition import cycle initialize before any operation resolves', () => {
-  for (const entry of ['codingPolicyRegistry.js', 'countryCapabilities.js', 'outbound/packs.js']) {
+test('every module on the coding/pack composition import cycle can be imported first', () => {
+  // Market coding policies come from the registry's own imports, so a new
+  // market joins this proof without editing it.
+  const registrySource = readFileSync(new URL('codingPolicyRegistry.js', import.meta.url), 'utf8');
+  const policies = [...registrySource.matchAll(/^import .* from '\.\/(.+\/codingPolicy\.js)';$/gm)].map((match) => match[1]);
+  assert.deepEqual(policies.length, 6);
+  for (const entry of ['codingPolicyRegistry.js', 'countryCapabilities.js', 'outbound/packs.js', ...policies]) {
     const source = `await import(${JSON.stringify(new URL(entry, import.meta.url).href)});
-      const { resolveCodingPolicy } = await import(${JSON.stringify(new URL('codingPolicy.js', import.meta.url).href)});
-      for (const jurisdiction of ['sg','fi','gb','ae','us','au']) resolveCodingPolicy({ jurisdiction });`;
-    execFileSync(process.execPath, ['--input-type=module', '-e', source]);
+      const { resolveCodingPolicy, CODING_POLICY_REGISTRY } = await import(${JSON.stringify(new URL('codingPolicy.js', import.meta.url).href)});
+      const keys = Object.keys({ ...CODING_POLICY_REGISTRY });
+      if (keys.join() !== 'sg,fi,gb,ae,us,au' || !Object.isFrozen(CODING_POLICY_REGISTRY)
+        || Object.values(CODING_POLICY_REGISTRY).some((value) => !value)) throw new Error('registry shape changed: ' + keys);
+      for (const jurisdiction of keys) resolveCodingPolicy({ jurisdiction });`;
+    execFileSync(process.execPath, ['--input-type=module', '-e', source], { stdio: 'pipe' });
   }
 });
