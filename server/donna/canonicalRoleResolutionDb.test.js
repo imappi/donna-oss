@@ -484,3 +484,20 @@ await test('buildDefaultCanonicalRoleCompose: dark without a key; with one, the 
   assert.equal(body.messages[0].content, 'PROMPT');
   assert.equal(requests[0].init.headers['x-api-key'], 'key-under-test');
 });
+
+await test('owner language: a Finnish client gets the role question in Finnish from the client row already read', async () => {
+  const db = fakeDbClient([
+    [/from clients/, { rows: [{ id: CLIENT, company_name: 'Esimerkki Oy', jurisdiction: 'FI', entity_type: 'oy', status: 'active', profile: {} }] }],
+    flagActsResponder,
+    [/from ledger_accounts/, { rows: GB_LEDGER_CHART_ROWS }]
+  ]);
+  const impls = fakeImpls();
+  const compose = fakeCompose([
+    { account_id: 'la-2220', role: 'liability.sales_tax_payable', confidence: 0.91, rationale: 'VAT liability' },
+    { account_id: 'la-2230', role: 'liability.sales_tax_payable', confidence: 0.89, rationale: 'Tax liability' }
+  ]);
+  await __runCanonicalRoleResolutionWithClient({ client: db, firmId: FIRM, clientId: CLIENT, compose, impls, env: {} });
+  assert.equal(impls.minted.length, 1);
+  assert.match(impls.minted[0].question, /^Kirjanpidossasi on useampi tili, joka voisi olla ALV-velkatili: 2220 VAT control tai 2230 Corporation tax payable\./);
+  assert.equal(impls.minted[0].requestContext.canonical_role, 'liability.sales_tax_payable');
+});

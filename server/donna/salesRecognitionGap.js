@@ -323,12 +323,12 @@ export const readRecognitionGapWithClient = async ({ client, firmId, clientId, p
     transactionJournals: ofType('transaction'), documentJournals: ofType('document_settlement'), issuedJournals: ofType('sales_invoice') });
 };
 
-const amountText = (value, currency, language = 'en') => {
+export const amountText = (value, currency, language = 'en') => {
   const fixed = Number(value).toFixed(2);
   return `${language === 'fi' ? fixed.replace('.', ',') : fixed}${currency ? ` ${currency}` : ''}`;
 };
 // Finnish owners read 12.2.2025, not 2025-02-12.
-const dayText = (iso, language = 'en') => {
+export const dayText = (iso, language = 'en') => {
   if (!iso || language !== 'fi') return iso;
   const [y, m, d] = iso.split('-');
   return `${Number(d)}.${Number(m)}.${y}`;
