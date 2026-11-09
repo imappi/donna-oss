@@ -19,7 +19,7 @@ import mounted from './fi/mounted.js';
 // translated locale. Machine-authored and not yet reviewed by a professional
 // translator: the registry marks it alpha and its label says "early version".
 // Bump the date and suffix in the same change as any message edit.
-export const FI_CATALOG_VERSION = '2026-11-09.fi-alpha.1';
+export const FI_CATALOG_VERSION = '2026-11-09.fi-alpha.2';
 
 export const FI_CATALOG_METADATA = Object.freeze({
   locale: 'fi',
@@ -30,7 +30,7 @@ export const FI_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-28.sg-native-intake.1',
   catalogVersion: FI_CATALOG_VERSION,
-  expectedMessageCount: 2612,
+  expectedMessageCount: 2617,
   register: 'informal second person singular (sinä); never teitittely',
   outOfScope: Object.freeze([
     'server-built text: emails, SMS, chat-channel messages, questions written by code or a model',
