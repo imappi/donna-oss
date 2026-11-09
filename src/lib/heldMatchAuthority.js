@@ -44,3 +44,6 @@ export const grantActionsFor = (grant, { delegatedAuthorityActs = false } = {}) 
     default: return [];
   }
 };
+
+// A machine slug (supplier_bill, supplier-bill, match_rejected) read as words.
+export const humanizeSlug = (value) => String(value || '').replace(/[_-]+/g, ' ').trim();

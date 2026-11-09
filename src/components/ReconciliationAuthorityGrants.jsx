@@ -8,7 +8,7 @@ import { useIntl } from 'react-intl';
 
 import { D } from './shared/design-tokens.js';
 import { btnPrimary, btnChip, btnDisabled } from './shared/buttons.js';
-import { defaultReviewDate, describeGrantScope, grantActionsFor } from '../lib/heldMatchAuthority.js';
+import { defaultReviewDate, describeGrantScope, grantActionsFor, humanizeSlug } from '../lib/heldMatchAuthority.js';
 import {
   approveReconciliationAuthorityGrant,
   fetchReconciliationAuthorityGrants,
@@ -59,16 +59,16 @@ const GrantRow = ({ grant, clientId, delegatedAuthorityActs, api, onChanged }) =
     <li data-testid={`grant-${grant.id}`} style={{ listStyle: 'none', padding: '12px 0', borderTop: `1px solid ${D.ruleSoft}`, fontSize: 12.5, color: D.ink }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
         <strong data-testid="grant-status">{message(`firm.reconAuthority.grants.status.${grant.status}`)}</strong>
-        <span>{message('firm.reconAuthority.preview.scopeValue', { vendor: grant.example?.vendor_name || scope.merchant || '—', label: scope.document_type || '—', account: scope.account || '—' })}</span>
+        <span>{message('firm.reconAuthority.preview.scopeValue', { vendor: grant.example?.vendor_name || scope.merchant || '—', label: humanizeSlug(scope.document_type) || '—', account: scope.account || '—' })}</span>
       </div>
       <div style={{ marginTop: 4, color: D.inkSoft, display: 'grid', gap: 2 }}>
         <span>{message(`firm.reconAuthority.archetype.${grant.archetype}`)} · {message('firm.reconAuthority.grants.ceilingValue', { amount: grant.amount_ceiling, currency: grant.currency })}</span>
-        <span>{message('firm.reconAuthority.grants.grantedBy', { actor: grant.authorized_by_actor_id || grant.authorized_by_actor_type || '—', date: day(grant.created_at) })}</span>
+        {grant.status !== 'proposed' && <span>{message('firm.reconAuthority.grants.grantedBy', { actor: grant.authorized_by_actor_id || grant.authorized_by_actor_type || '—', date: day(grant.created_at) })}</span>}
         <span data-testid="grant-usage">{message('firm.reconAuthority.grants.usage', { count: grant.use_count, date: day(grant.last_used_at) })} · {message('firm.reconAuthority.grants.corrections', { count: grant.correction_count })}</span>
         {grant.review_after && <span>{message('firm.reconAuthority.grants.reviewBy', { date: day(grant.review_after) })}</span>}
         {inert && <span>{inert}</span>}
         {grant.status === 'suspended' && grant.last_auto_suspension && (
-          <span data-testid="grant-auto-suspension">{message('firm.reconAuthority.grants.autoSuspended', { date: day(grant.last_auto_suspension.at), reason: grant.last_auto_suspension.reason || '—' })}</span>
+          <span data-testid="grant-auto-suspension">{message('firm.reconAuthority.grants.autoSuspended', { date: day(grant.last_auto_suspension.at), reason: humanizeSlug(grant.last_auto_suspension.reason) || '—' })}</span>
         )}
         {grant.status === 'revoked' && grant.revoked_reason && (
           <span>{message('firm.reconAuthority.grants.revokedBecause', { actor: grant.revoked_by_actor_id || '—', reason: grant.revoked_reason })}</span>

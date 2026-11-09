@@ -174,9 +174,10 @@ test('grants view: proposed grants wait for approve or decline; suspension cause
   assert.match(card.textContent, /Proposed — waiting for approval/);
   const proposedRow = $('grant-g-proposed');
   assert.ok(proposedRow.querySelector('[data-testid="grant-action-approve"]') && proposedRow.querySelector('[data-testid="grant-action-decline"]'));
-  assert.match($('grant-g-suspended').textContent, /Suspended automatically on 2025-08-01.*match_rejected/);
+  assert.match($('grant-g-suspended').textContent, /Suspended automatically on 2025-08-01.*match rejected/);
   assert.match($('grant-g-suspended').textContent, /1 correction/);
   assert.match($('grant-g-active').textContent, /Granted by partner@ledgerlight\.example on 2025-04-20/);
+  assert.doesNotMatch(proposedRow.textContent, /Granted by/, 'a proposed grant has not been granted by anyone yet');
   assert.match($('grant-g-active').textContent, /Used 2 times, last 2025-07-27/);
   assert.match($('grant-g-active').textContent, /Up to 1500 GBP/);
   assert.equal($('grants-flag-off'), null);

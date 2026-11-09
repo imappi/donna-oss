@@ -13,7 +13,7 @@ import { useIntl } from 'react-intl';
 
 import { D } from '../shared/design-tokens.js';
 import { btnPrimary, btnChip, btnDisabled } from '../shared/buttons.js';
-import { isMatchHeldForAuthority, defaultReviewDate } from '../../lib/heldMatchAuthority.js';
+import { isMatchHeldForAuthority, defaultReviewDate, humanizeSlug } from '../../lib/heldMatchAuthority.js';
 import { mintReconciliationAuthorityGrant, previewReconciliationAuthorityGrant } from '../../lib/firmApi.js';
 
 const row = { display: 'grid', gridTemplateColumns: 'minmax(96px, 0.42fr) minmax(0, 1fr)', columnGap: 12, rowGap: 6, fontSize: 12.5 };
@@ -60,7 +60,7 @@ export const GrantPreviewForm = ({ clientId, preview, onMinted, onCancel, mint =
       <div style={row}>
         <span style={label}>{message('firm.reconAuthority.preview.scope')}</span>
         <span style={value} data-testid="grant-scope">{message('firm.reconAuthority.preview.scopeValue', {
-          vendor: example.vendor_name || scope.merchant || '—', label: example.document_type || scope.document_type || '—', account: scope.account || '—'
+          vendor: example.vendor_name || scope.merchant || '—', label: humanizeSlug(example.document_type || scope.document_type) || '—', account: scope.account || '—'
         })}</span>
         <span style={label}>{message('firm.reconAuthority.preview.archetype')}</span>
         <span style={value}>{message(`firm.reconAuthority.archetype.${preview.archetype}`)}</span>
