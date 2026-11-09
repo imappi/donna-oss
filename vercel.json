@@ -887,6 +887,10 @@
       "destination": "/api/donna-router?path=billing/portal"
     },
     {
+      "source": "/api/donna/mobile/v1/:path*",
+      "destination": "/api/donna-router?path=mobile/v1/:path*"
+    },
+    {
       "source": "/api/donna/mcp/remote/:surface",
       "destination": "/api/donna-router?path=mcp/remote/:surface"
     },

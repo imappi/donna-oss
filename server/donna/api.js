@@ -242,6 +242,7 @@ import { putLocalEvidenceForToken } from './localEvidencePut.js';
 import { handleMarketingAdminApi, handleMarketingInboundWebhook, handleMarketingUnsubscribe } from './marketing/marketingRoutes.js';
 import { handleMcpApiRequest } from './mcp/mcpApi.js';
 import { handleMcpRemoteRequest, isMcpRemotePath } from './mcp/mcpRemoteAdapter.js';
+import { handleMobileApiRequest, isMobileApiPath } from './mobile/mobileApi.js';
 import { listEntityExposure, setEntityExposure } from './mcp/mcpConsent.js';
 import {
   listFirmSeats,
@@ -14100,6 +14101,22 @@ export const handleDonnaApiRequest = async (req, res) => {
   if (isMcpRemotePath(requestUrl.pathname)) {
     void handleMcpRemoteRequest(req, res, requestUrl, {
       resolveAuth: (request) => resolveSubmittedDonnaAuth(request, { pathname: requestUrl.pathname }),
+      publicOrigin: resolvePublicOrigin
+    });
+    return;
+  }
+
+  // Mobile app API (server/donna/mobile/): the owner-scoped adapter behind the
+  // phone app's contract. Dispatched BEFORE requireDonnaAccess like the MCP
+  // adapter: it has its own token flow, must never accept the shared access
+  // token, and must not fall open when no access token is configured. Every
+  // read and write it performs is a firm route below, run in-process with the
+  // caller's verified identity.
+  if (isMobileApiPath(requestUrl.pathname)) {
+    void handleMobileApiRequest(req, res, requestUrl, {
+      resolveAuth: (request) => resolveSubmittedDonnaAuth(request, { pathname: requestUrl.pathname }),
+      identityProvider: getSupabaseAuthConfig,
+      dispatchFirmRoute: donnaFirmsApiHandler,
       publicOrigin: resolvePublicOrigin
     });
     return;
