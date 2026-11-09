@@ -12,6 +12,7 @@ import { bootApplianceForTest, applianceHarnessSkipReason } from './testSupport/
 import { claimNextLocalJob } from './desktop/localJobQueue.js';
 import { enqueueParseDocumentJob, PARSE_DOCUMENT_FUNCTION_ID } from './desktop/parseDocumentJob.js';
 import { claimParseRunInDb } from './parseDocumentsDb.js';
+import { FI_OY_BIRTH_CHART } from './finland/provisioningPolicy.js';
 import { FI_PROFILE, FI_SOURCES, fiSource, fiDocumentBytes, fiBankCsv, fiRoutingFixture, fiExtractionFixture,
   fiMatchingResponder, fiCodingResponder, fiDocumentDispositionFixture, fiBankDispositionResponder, fiAskDraftResponder } from './testSupport/fiReliabilitySources.js';
 
@@ -19,6 +20,11 @@ const CODING = 'parse-cron:coding_convergence';
 const LOOPS = 'parse-cron:loops_inbox';
 const STUCK = 'parse-cron:stuck';
 const PARSE = 'parse-document';
+
+// An Oy is born with the coded tilikartta (FI-21). The coder answers in pack
+// palette names; posting lands on the coded row the birth chart binds to that
+// name.
+const bornAccount = (paletteName) => FI_OY_BIRTH_CHART.accounts.find((account) => account.palette_name === paletteName);
 
 const bootFi = (runToken) => bootApplianceForTest({ runToken, firm: { jurisdiction: 'FI', currency: 'EUR' }, env: { DATABASE_POOL_MAX: '3' } });
 
@@ -114,13 +120,13 @@ test('FI appliance: statement-first and documents-first converge on the same per
           const tx = observation.transactions.find((row) => row.description.toUpperCase().includes(source.counterparty.toUpperCase()) || Math.abs(row.out + row.in - source.total) < 0.005);
           assert.ok(tx, `bank line for ${source.key}`);
           assert.equal(tx.coding_state, 'posted', JSON.stringify({ source: source.key, tx, jobs: observation.jobs.filter((j) => j.status !== 'succeeded') }));
-          assert.equal(tx.account, source.account);
+          assert.equal(tx.account, bornAccount(source.account).code);
           assert.equal(tx.tax_treatment, source.treatment);
           assert.equal(tx.convergence, 'auto_reconciled', JSON.stringify(tx));
         }
         assert.equal(observation.journals.length, footing.length, JSON.stringify(observation.journals));
         const supplies = observation.journals.find((j) => j.description.includes('TARVIKETUKKU'));
-        assert.deepEqual(supplies.lines.map((l) => l.slice(0, 3)), [['Operating supplies', 200, 0], ['Vähennettävä arvonlisävero', 51, 0], ['Business Checking · EUR', 0, 251]].map((l) => l), JSON.stringify(supplies));
+        assert.deepEqual(supplies.lines.map((l) => l.slice(0, 3)), [[bornAccount('Operating supplies').name, 200, 0], ['Vähennettävä arvonlisävero', 51, 0], ['Business Checking · EUR', 0, 251]].map((l) => l), JSON.stringify(supplies));
         assert.equal(observation.asks.filter((a) => ['draft', 'open'].includes(a.status)).length, 0, JSON.stringify(observation.asks));
         assert.deepEqual(observation.jobs.filter((j) => j.status === 'dead'), [], 'no dead-lettered job');
         assert.deepEqual(observation.review.filter((r) => r.status === 'open'), [], JSON.stringify(observation.review));
