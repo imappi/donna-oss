@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { nativeCodingPromptProjection } from './codingAccountChoices.js';
 import { createHash } from 'node:crypto';
 import { resolvePostingPolicy, executePostingPolicyOperation } from './postingPolicy.js';
+import { taxEvidenceRequirement } from './taxSourceEvidence.js';
 // Jev decides coding before a reasoning model is eligible to run. Choices are
 // the actual routed account/tax vocabulary, never a merchant-derived shortlist.
 import { sourceBusinessUseFact, codingSourceBusinessUseConflict } from './sourceBusinessUse.js';
@@ -132,18 +133,19 @@ function sourceIdentityExecutionConstraint(input) {
 function missingTaxEvidenceConstraint(input, taxOptions) {
   const tx=input?.transaction || {};
   const refusal=(tx.posting_recovery?.review || tx.posting_recovery)?.previous_refusal;
-  if(refusal?.code!=='TRANSACTION_ALV_EVIDENCE_REQUIRED'
-    || (tx.matched_document && ['confirmed','auto_matched'].includes(tx.matched_document.match_status))) return null;
+  if(tx.matched_document && ['confirmed','auto_matched'].includes(tx.matched_document.match_status)) return null;
   const received=Number(tx.money_in)>0 && !(Number(tx.money_out)>0);
   let policy;
   try { policy=resolvePostingPolicy({jurisdiction:input?.client?.jurisdiction}); } catch { return null; }
-  if(!policy.capabilities.sourceTaxPosting || !(received || Number(tx.money_out)>0))return null;
+  // The jurisdiction's own source-evidence rule (taxSourceEvidence.js) both
+  // refused the post and names the choices it would refuse again.
+  const rule=policy.taxEvidence;
+  if(!rule || refusal?.code!==rule.refusalCode || !(received || Number(tx.money_out)>0))return null;
   // With no settled source, money in can carry neither rated output tax nor a
   // rated purchase reversal: both writer rules need the source.
   const excluded_tax_treatments=taxOptions.filter(taxTreatment=>{
-    const posting=executePostingPolicyOperation(policy,'sourceTaxPosting',{
-      taxTreatment,direction:received?'out':'in',gross:Number(received?tx.money_in:tx.money_out)});
-    return received?posting.outputTaxed:posting.inputDeductible;
+    const required=taxEvidenceRequirement(rule,rule.resolveEntry({taxTreatment,direction:received?'out':'in'}));
+    return received?required.salesSource:required.inputSource;
   });
   if(!excluded_tax_treatments.length)return null;
   return received ? {version:1,scope:'missing_output_tax_evidence',reason:refusal.code,excluded_tax_treatments,

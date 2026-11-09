@@ -7,7 +7,7 @@ import {
 import { SALES_INVOICE_RECEIVABLE_ACCOUNT, SUPPLIER_BILL_PAYABLES_ACCOUNT, ledgerAccountTypeFor } from '../ledger.js';
 import { documentSourceComponents } from '../documentAllocationComponents.js';
 import { planArSettlement } from './issuedInvoiceSettlement.js';
-import { settledSalesEvidence } from '../codingRevenueEvidence.js';
+import { assertTaxSourceEvidence } from '../taxSourceEvidence.js';
 
 const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const refuse = (code, message) => { throw Object.assign(new Error(message), { code, statusCode: 409 }); };
@@ -15,6 +15,14 @@ const refuse = (code, message) => { throw Object.assign(new Error(message), { co
 // their statutory rate is not VAT charged by the supplier.
 const supplierTaxRate = entry => entry?.direction === 'in' && entry.return_boxes?.tax ? 0 : entry?.rate;
 const taxPosting = Object.freeze({ outputCodeForRate: alvOutputCodeForRate, control: ALV_SPLIT_CONTROL.out });
+// Finnish evidence rule: every rated purchase code needs its settled source,
+// whoever decided it; a machine's rated sale on money in needs a sales source.
+const FI_TAX_EVIDENCE = Object.freeze({
+  refusalCode: 'TRANSACTION_ALV_EVIDENCE_REQUIRED', inputRuleCoversAcceptedCoding: true,
+  resolveEntry: ({ taxType = '', taxTreatment = '', direction = '' } = {}) => resolveAlvEntry(resolveAlvCode({ taxType, taxTreatment, direction })),
+  deductibleInput: entry => entry.direction === 'in' && entry.rate > 0,
+  taxedOutput: entry => entry.direction === 'out' && entry.rate > 0
+});
 
 export const FI_POSTING_POLICY = Object.freeze({
   jurisdiction: 'fi', policyId: 'fi_posting', policyVersion: 1,
@@ -22,6 +30,7 @@ export const FI_POSTING_POLICY = Object.freeze({
   supplierBillAdmissionFlagKey: 'FINLAND_EINVOICE_RECEIVE', supplierBillNeedsChart: false,
   nativeTaxCodePrefixes: Object.freeze(['ALV_']), nativeTaxCodes: Object.freeze([...KNOWN_ALV_CODES]),
   salesInvoiceChannels: Object.freeze(['finland']), salesTaxControlRole: null,
+  taxEvidence: FI_TAX_EVIDENCE,
   capabilities: Object.freeze({ prepareLedgerAccounts: true, enrichCoding: true, transactionSplit: true,
     salesInvoiceTaxPosting: true, supplierBillTaxPosting: true,
     planArSettlement: true, arSettlementReceivableCoding: true, assertPostableTaxCoding: true, sourceTaxPosting: true }),
@@ -68,17 +77,7 @@ export const FI_POSTING_POLICY = Object.freeze({
     const selectedCode = stamped === 'NONE' ? 'NONE' : resolveAlvCode({ taxType: coding.xero_tax_type || coding.tax_type || '',
       taxTreatment: transaction.tax_treatment || suggestion.tax_treatment || '', direction: alvDirectionForTransaction(transaction, coding) });
     const selectedEntry = resolveAlvEntry(selectedCode);
-    // A bank descriptor is not purchase-tax evidence, even on an immaterial line.
-    if (selectedEntry?.direction === 'in' && selectedEntry.rate > 0 && (!document || !['confirmed', 'auto_matched'].includes(document.match_status))) {
-      refuse('TRANSACTION_ALV_EVIDENCE_REQUIRED', 'A deductible VAT posting needs the usable source document and its current settled relationship.');
-    }
-    // The output twin: a receipt is not a sale. Money in from a supplier is
-    // normally a purchase refund, so the machine's output VAT on a bank line
-    // needs the settled sales source; a person's accepted decision carries its own.
-    if (autonomousCoding && selectedEntry?.direction === 'out' && selectedEntry.rate > 0
-      && Number(transaction.money_in || 0) > 0 && !settledSalesEvidence(document)) {
-      refuse('TRANSACTION_ALV_EVIDENCE_REQUIRED', 'An output VAT posting on money received needs the settled sales source. The bank movement alone does not establish a sale; a supplier refund reverses its purchase instead.');
-    }
+    assertTaxSourceEvidence({ rule: FI_TAX_EVIDENCE, entry: selectedEntry, transaction, document, autonomousCoding });
     if (document && !document.matched_line_id && suggestion.posting_requirement !== 'document_allocation'
       && Math.round(Number(document.total_amount) * 100) === Math.round(gross * 100)) {
       const source = documentSourceComponents(document);

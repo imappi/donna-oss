@@ -140,12 +140,16 @@ const donnaBankAccountSummary = (bankAccount = {}) => ({
 export const buildDonnaLedgerWriteback = ({ transaction = {}, ledgerAccounts = [], jurisdiction = null } = {}) => {
   // The matcher machinery is shape-agnostic ({ code, name, type, status }), so
   // the Donna chart slots in as the universe: a chart match resolves the coded
-  // account to its real code + chart name, exactly as the Xero mirror would.
+  // account to its real code + chart name (by code, name or palette alias).
+  // This chart IS the coder's vocabulary, so nothing is substituted: a coded
+  // account with no row mints by name below, never lands on a neighbour
+  // ("Other income" on Sales).
   const coding = enrichCodingWithXeroAccount({
     coding: codingInputFromTransaction(transaction),
     transaction,
     xeroAccounts: ledgerAccounts,
-    jurisdiction
+    jurisdiction,
+    substitute: false
   });
   const rawCode = trim(coding.xero_account_code || coding.account_code);
   const lineName = trim(coding.xero_account_name || coding.account_name || coding.proposed_account);

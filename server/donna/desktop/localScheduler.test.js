@@ -468,6 +468,31 @@ test('retireUndeclaredFunctions (RT-14): only the assembly that declares the who
   assert.equal(retired.length, 1);
 });
 
+test('a storage_orphans run whose deletes were refused rests dead naming the bucket, and the next tick (a clean sweep) still runs', async () => {
+  const mq = makeMemoryQueue();
+  const summaries = [
+    { storage_orphans: { buckets: [{ bucket: 'evidence', scanned: 1, deleted: 0, refused: 0, audit_failures: 0, delete_errors: 1, delete_failures: [{ key: 'f/c/a.pdf', error: 'status 500 store unavailable' }] }], scanned_total: 1, deleted_total: 0, refused_total: 0 } },
+    { storage_orphans: { buckets: [{ bucket: 'evidence', scanned: 1, deleted: 1, refused: 0, audit_failures: 0, delete_errors: 0 }], scanned_total: 1, deleted_total: 1, refused_total: 0 } }
+  ];
+  const expectedClean = summaries[1];
+  const parseCron = buildDesktopHandlerManifest({ deps: { runParseCronTask: async () => summaries.shift() } })
+    .find((e) => e.functionId === 'parse-cron:storage_orphans');
+  const s = makeScheduler(mq, [{ ...parseCron, cron: '0 * * * *' }]);
+  await s.start();
+  mq.clock.now = new Date('2026-08-02T13:00:10Z');
+  await s.tickOnce();
+  await s.stop();
+  assert.equal(mq.jobs[0].status, 'dead');
+  assert.match(mq.jobs[0].last_error, /PARSE_CRON_TASK_FAILED.*"bucket":"evidence".*orphan delete\(s\) failed: status 500 store unavailable/);
+  await s.start();
+  mq.clock.now = new Date('2026-08-02T14:00:10Z');
+  await s.tickOnce();
+  await s.stop();
+  assert.equal(mq.jobs.length, 2, 'the next tick enqueued a fresh job');
+  assert.equal(mq.jobs[1].status, 'succeeded');
+  assert.deepEqual(mq.jobs[1].result, expectedClean);
+});
+
 test('a parse-cron run whose summary carries a failure rests dead with the failure as last_error, and the next tick still runs', async () => {
   const mq = makeMemoryQueue();
   const summaries = [
