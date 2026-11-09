@@ -681,7 +681,7 @@ export const runCodingConvergence = async ({
       summary.swept.push({ client_id: clientId, ...stats });
     } catch (error) {
       summary.errors += 1;
-      summary.swept.push({ client_id: clientId, error: error?.message || String(error) });
+      summary.swept.push({ client_id: clientId, error: error?.message || String(error), code: error?.code || null });
     }
   }
 
@@ -721,7 +721,7 @@ export const runCodingConvergence = async ({
       });
     } catch (error) {
       summary.errors += 1;
-      summary.ledger_posted.push({ client_id: clientId, error: error?.message || String(error) });
+      summary.ledger_posted.push({ client_id: clientId, error: error?.message || String(error), code: error?.code || null });
     }
   }
 
