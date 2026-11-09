@@ -210,3 +210,25 @@ test('runEvidenceTopicReminderSweep sends and stamps when the config-plane flag 
   assert.equal(stamped[0].topicState.status, 'open');
   assert.equal(stamped[0].topicState.last_reminder_message_id, 'msg-reminder');
 });
+
+test('one owner for channel reminders: where the re-ask cadence acts, this sweep defers to it', async () => {
+  let sent = 0;
+  const result = await runEvidenceTopicReminderSweep({
+    firmId: 'firm-1',
+    now: '2026-07-14T10:00:00.000Z',
+    deps: {
+      listOpenEvidenceTopics: async () => [openTopicRequest()],
+      sendReminder: async () => { sent += 1; return { message_id: 'm1' }; },
+      stampReminder: async () => { throw new Error('must not stamp a deferred reminder'); },
+      withFirmDbClient: async (fn) => fn({
+        query: async () => ({ rows: [
+          { flag_key: EVIDENCE_TOPIC_REMINDERS_FLAG_KEY, stage: 'canary', source: 'test', client_id: 'client-1' },
+          { flag_key: 'ASK_REASK_CADENCE', stage: 'canary', source: 'test', client_id: 'client-1' }
+        ] })
+      })
+    }
+  });
+  assert.equal(sent, 0, 'no second reminder');
+  assert.equal(result.deferred, 1);
+  assert.equal(result.sent, 0);
+});

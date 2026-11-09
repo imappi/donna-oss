@@ -8,6 +8,7 @@ import {
   stampEvidenceTopicReminderInDb,
   withFirmDbClient
 } from '../firmDb.js';
+import { REASK_CADENCE_FLAG_KEY } from '../askReaskCadence.js';
 import { prepareOwnerAskQuestion } from './askSafety.js';
 import { sendSmsText } from './sms.js';
 import { sendTelegramText, telegramEnvAllowsClient } from './telegram.js';
@@ -152,7 +153,7 @@ export const runEvidenceTopicReminderSweep = async ({
 
   const requests = await listOpenEvidenceTopics({ firmId, clientId, limit });
   const candidates = selectDueEvidenceTopicReminders({ requests, now, limit });
-  const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, failed: 0 };
+  const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, deferred: 0, failed: 0 };
   const snapshots = new Map();
 
   for (const candidate of candidates) {
@@ -173,6 +174,15 @@ export const runEvidenceTopicReminderSweep = async ({
     });
     if (!acts) {
       stats.held += 1;
+      continue;
+    }
+    // One owner for owner-channel reminders: where the re-ask cadence ACTS
+    // for this client, its sweep (askReaskCadence.js) reminds every overdue
+    // open ask through the first-send fan-out and escalates the unanswered
+    // ones. Reminding here as well would message the owner twice about the
+    // same question, so this sweep defers to it.
+    if (clientFlagActs({ flagKey: REASK_CADENCE_FLAG_KEY, snapshot: snapshots.get(key), envFallback: () => false, env })) {
+      stats.deferred += 1;
       continue;
     }
 
