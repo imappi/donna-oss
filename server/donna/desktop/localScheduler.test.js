@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { createLocalScheduler, retryBackoffMs } from './localScheduler.js';
 import { makeDurableStep } from './durableStep.js';
 import { LocalJobDeferred } from './localJobQueue.js';
+import { buildDesktopHandlerManifest } from './handlerManifest.js';
 
 // In-memory queue implementing the scheduler's deps seam.
 const makeMemoryQueue = () => {
@@ -465,4 +466,29 @@ test('retireUndeclaredFunctions (RT-14): only the assembly that declares the who
   // Idempotent per process: a second initialize is a no-op.
   await scheduler.initialize();
   assert.equal(retired.length, 1);
+});
+
+test('a parse-cron run whose summary carries a failure rests dead with the failure as last_error, and the next tick still runs', async () => {
+  const mq = makeMemoryQueue();
+  const summaries = [
+    { coding_convergence: { error: 'connect ECONNREFUSED 127.0.0.1:5432' } },
+    { coding_convergence: { firms: [] } }
+  ];
+  const parseCron = buildDesktopHandlerManifest({ deps: { runParseCronTask: async () => summaries.shift() } })
+    .find((e) => e.functionId === 'parse-cron:coding_convergence');
+  const s = makeScheduler(mq, [{ ...parseCron, cron: '0 * * * *' }]);
+  await s.start();
+  mq.clock.now = new Date('2026-08-02T13:00:10Z');
+  await s.tickOnce();
+  await s.stop(); // awaits the in-flight settlement
+  assert.equal(mq.jobs[0].status, 'dead', 'maxAttempts 1: a failed sweep rests dead, not succeeded');
+  assert.match(mq.jobs[0].last_error, /PARSE_CRON_TASK_FAILED.*ECONNREFUSED/);
+
+  await s.start(); // the scheduler is not wedged: it resumes from its cursor
+  mq.clock.now = new Date('2026-08-02T14:00:10Z');
+  await s.tickOnce();
+  await s.stop();
+  assert.equal(mq.jobs.length, 2, 'the next tick enqueued a fresh job');
+  assert.equal(mq.jobs[1].status, 'succeeded');
+  assert.deepEqual(mq.jobs[1].result, { coding_convergence: { firms: [] } });
 });
