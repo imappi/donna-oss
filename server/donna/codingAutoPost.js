@@ -327,7 +327,10 @@ const evaluateCodingAutoPostCore = ({ suggestion = {}, reconciliationStatus = nu
 
   // 1. Doc-matched line — the receipt is the evidence; auto-post the coding so
   //    a settled bank line stops resting on a SUGGESTED coding chip.
-  if (evidenceSatisfiedByMatch && coded && !red && pnlSafe) {
+  // The coder's own 'explained' stamp is not a document: when its current
+  // decision asks the owner and no document is matched, that ask stands (rule 2).
+  const coderAskStands = hasDocMatch !== true && s.jev_decision?.terminal === 'ask_owner';
+  if (evidenceSatisfiedByMatch && coded && !red && pnlSafe && !coderAskStands) {
     return { action: 'auto_post', reason: 'matched_document_evidence', blockers: [] };
   }
 
