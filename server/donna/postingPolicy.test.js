@@ -260,3 +260,24 @@ test('source component and processor fee tax planning belongs to the explicitly 
     assert.throws(()=>executePostingPolicyOperation(policy,'sourceTaxPosting',{taxTreatment:'ALV 25,5 %',direction:'in',gross:125.5}),hasCode('posting_operation_unsupported'));
   }
 });
+
+test('FI: output ALV on money received needs the settled sales source; evidenced and untaxed income still post', () => {
+  const fi = resolvePostingPolicy({ jurisdiction: 'fi' }).adapter;
+  const received = { money_in: 49.9, money_out: 0 };
+  const sales = { document_type: 'sales_invoice', match_status: 'auto_matched', total_amount: 49.9, tax_amount: 10.14, matched_line_id: null };
+  const post = (coding, extra = {}) => fi.assertPostableTaxCoding({ coding, transaction: received, taxCodingEnabled: true, autonomousCoding: true, ...extra });
+  const refusal = { code: 'TRANSACTION_ALV_EVIDENCE_REQUIRED' };
+  // The replay: a bank-only refund on Other income at ALV 25,5 %, typed or not yet in the chart.
+  assert.throws(() => post({ proposed_account: 'Other income', account_type: 'revenue', tax_type: 'ALV_25_5_OUTPUT' }), refusal);
+  assert.throws(() => post({ proposed_account: 'Synthetic custom account', tax_type: 'ALV_25_5_OUTPUT' }), refusal);
+  // A held but unsettled sales invoice, or a purchase receipt, is not a sale.
+  assert.throws(() => post({ proposed_account: 'Sales', account_type: 'revenue', tax_type: 'ALV_25_5_OUTPUT' }, { matchedDocument: { ...sales, match_status: 'suggested' } }), refusal);
+  assert.throws(() => post({ proposed_account: 'Sales', account_type: 'revenue', tax_type: 'ALV_25_5_OUTPUT' }, { matchedDocument: { ...sales, document_type: 'receipt' } }), refusal);
+  // Unchanged: operating revenue with its sales source, untaxed other income,
+  // and a person's accepted decision (codingEvidence.js owns that boundary).
+  const sale = { proposed_account: 'Sales', account_type: 'revenue', tax_type: 'ALV_25_5_OUTPUT' };
+  assert.deepEqual(post(sale, { matchedDocument: sales }), sale);
+  const interest = { proposed_account: 'Other income', account_type: 'revenue', tax_type: 'ALV_OUT_OF_SCOPE' };
+  assert.deepEqual(post(interest), interest);
+  assert.deepEqual(post(sale, { autonomousCoding: false }), sale);
+});

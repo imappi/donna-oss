@@ -463,7 +463,7 @@ export const assertCurrentCodingEvidence = async ({ client, firmId, clientId, tr
 
 export { CODING_CONFLICT_MAX_RECONSIDERATIONS };
 const pendingCorrection = payload => payload?.coding_correction_required?.status === 'pending';
-const autonomousCoding = payload => payload?.ai_suggestion_status === 'auto_applied'
+export const autonomousCoding = payload => payload?.ai_suggestion_status === 'auto_applied'
   && !payload.accepted_coding_evidence
   && ['', 'coding_auto_post'].includes(payload.reviewed_by || '')
   && ['', 'coding_auto_post'].includes(payload.approved_by || '')

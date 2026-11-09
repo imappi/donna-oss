@@ -6,7 +6,7 @@
 
 import { planRefundGroup } from '../jevRefundGroup.js';
 import { resolveDocumentAllocation } from './documentAllocation.js';
-import { assertCurrentCodingEvidence } from './codingEvidence.js';
+import { assertCurrentCodingEvidence, autonomousCoding } from './codingEvidence.js';
 
 import { loadTaxPostingContext, readTaxPostingEvidence, taxFactsDigest } from './taxPostingFacts.js';
 import { readPostingAdmissionWithClient, requirePostingAdmission } from '../postingAdmissionRegistry.js';
@@ -769,7 +769,8 @@ export const authoritativeTaxCoding = (transaction) => ({ ...codingInputFromTran
   tax_type: transaction.tax_type || transaction.ai_suggestion?.tax_type || '' });
 export const assertPostableTaxCoding = (policy, input) => {
   if (!policy?.capabilities?.assertPostableTaxCoding) return;
-  executePostingPolicyOperation(policy, 'assertPostableTaxCoding', { ...input, sourceCoding: authoritativeTaxCoding(input.transaction || {}) });
+  executePostingPolicyOperation(policy, 'assertPostableTaxCoding', { ...input, sourceCoding: authoritativeTaxCoding(input.transaction || {}),
+    autonomousCoding: autonomousCoding(input.transaction || {}) });
 };
 
 const settlementAlvSplit = (policy, { coding, transaction, settlementSplit }) =>

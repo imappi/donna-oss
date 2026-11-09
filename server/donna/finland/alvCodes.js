@@ -40,6 +40,7 @@
 
 import { ALV_ACCOUNT_CODES } from './tilikartta.js';
 import { ledgerAccountTypeFor } from '../ledger.js';
+import { roleForSeedName, roleMeta } from '../accountRoles.js';
 
 export const FI_STANDARD_RATE = 25.5;
 
@@ -340,8 +341,13 @@ export const resolveAlvCode = ({ taxType = '', taxTreatment = '', direction = ''
 // still determines the journal's debit/credit orientation, not whether a coded
 // expense becomes a sale. Callers without a resolved P&L account retain the
 // historical cash-side fallback; explicit native codes remain authoritative.
+// An account not yet in the client's chart has no stored type; a known
+// account name carries its canonical class, so a purchase refund coded to
+// its expense account stays on the input side.
 export const alvDirectionForTransaction = (transaction = {}, coding = {}) => {
-  const type = ledgerAccountTypeFor(coding);
+  const stored = ledgerAccountTypeFor(coding);
+  const type = stored !== 'unknown' ? stored : roleMeta(roleForSeedName(
+    coding.xero_account_name || coding.account_name || coding.proposed_account))?.class;
   if (type === 'expense') return 'in';
   if (type === 'revenue') return 'out';
   if (Number(transaction?.money_in || 0) > 0) return 'out';
