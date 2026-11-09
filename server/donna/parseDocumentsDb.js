@@ -241,6 +241,91 @@ export const inferDocumentTypeFromFilename = (filename) => {
 const isRecoverableDocumentType = (current) =>
   !current || current === 'unknown' || current === 'generic_document';
 
+// ── the canonical-upload fence (migration 164) ─────────────────────────
+//
+// One canonical document per (firm, client, bytes). These are the pieces
+// every writer that can make a row canonical shares: the read of the live
+// canonical (the unique index's own predicate), the recognition of a lost
+// race on that index, the byte-match collapse's summary and receipt, and the
+// supersede of a failed upload of the same bytes. /documents/register,
+// /documents/retry-parse and /resolve-duplicate all settle a lost race the
+// same way: the row that lost becomes a harmless receipt pointing at the
+// canonical that won.
+
+const readLiveCanonicalWithClient = async (client, { firmId, clientId, checksum, excludeId }) => {
+  if (!checksum) return null;
+  const result = await client.query(
+    `select ${DOC_THIN_COLUMNS}, uploaded_at from documents
+     where firm_id=$1 and client_id=$2 and checksum_sha256=$3
+       and id <> $4
+       and duplicate_of is null
+       and parse_status not in ('duplicate_pending', 'failed')
+     order by created_at asc
+     limit 1`,
+    [firmId, clientId, checksum, excludeId]
+  );
+  return result.rows[0] || null;
+};
+
+const isCanonicalChecksumViolation = (error) =>
+  error?.code === '23505' && error?.constraint === 'documents_firm_client_checksum_idx';
+
+const buildByteMatchCollapseSummary = ({ existing, documentType, collapsedAt }) => ({
+  reason: 'duplicate_auto_collapsed',
+  duplicate_reason: 'byte_match',
+  document_type: documentType,
+  existing_document_id: existing.id,
+  existing_filename: existing.filename || null,
+  existing_parse_status: existing.parse_status || null,
+  existing_uploaded_at: toIso(existing.uploaded_at),
+  collapsed_at: collapsedAt
+});
+
+const auditByteMatchCollapse = (client, { firmId, clientId, documentId, existing, batchId, via = null }) =>
+  audit(client, {
+    firmId,
+    clientId,
+    documentId,
+    action: 'document.duplicate.auto_collapsed',
+    metadata: {
+      parse_run_id: null,
+      duplicate_of: existing.id,
+      reason: 'byte_match',
+      canonical_parse_status: existing.parse_status || null,
+      batch_id: batchId,
+      ...(via ? { via } : {})
+    }
+  });
+
+// RT-10: an unsuperseded FAILED upload of these bytes is retained as a
+// receipt pointing at the canonical that now carries its retry. Receipted per
+// row. Callers hold the canonical; the failed rows are locked by the update.
+const supersedeFailedUploadsWithClient = async (client, { firmId, clientId, checksum, canonicalId, parseRunId = null }) => {
+  if (!checksum || !canonicalId) return [];
+  const superseded = await client.query(
+    `update documents
+        set duplicate_of=$4, updated_at=now()
+      where firm_id=$1 and client_id=$2 and checksum_sha256=$3
+        and id <> $4 and duplicate_of is null and parse_status='failed'
+      returning id`,
+    [firmId, clientId, checksum, canonicalId]
+  );
+  for (const row of superseded.rows) {
+    await audit(client, {
+      firmId,
+      clientId,
+      documentId: row.id,
+      action: 'document.duplicate.failed_upload_superseded',
+      metadata: {
+        superseded_by: canonicalId,
+        parse_run_id: parseRunId,
+        reason: 'byte_match'
+      }
+    });
+  }
+  return superseded.rows.map((row) => row.id);
+};
+
 // ── /documents/register ────────────────────────────────────────────────
 
 // Idempotent insert with two layers (see plan §"/documents/register"):
@@ -412,39 +497,14 @@ export const registerDocumentInDb = async ({
       // `documents_firm_client_checksum_idx` unique over exactly this notion of
       // a canonical row; the fresh insert below turns a lost race on it into
       // this same collapse (collapseOnto).
-      const readCanonical = async () => {
-        if (!document.checksum_sha256) return null;
-        const byHash = await client.query(
-          `select ${DOC_THIN_COLUMNS}, uploaded_at from documents
-           where firm_id=$1 and client_id=$2 and checksum_sha256=$3
-             and id <> $4
-             and duplicate_of is null
-             and parse_status not in ('duplicate_pending', 'failed')
-           order by created_at asc
-           limit 1`,
-          [
-            firmId,
-            document.client_id,
-            document.checksum_sha256,
-            document.id
-          ]
-        );
-        return byHash.rows[0] || null;
-      };
+      const readCanonical = () => readLiveCanonicalWithClient(client, {
+        firmId, clientId: document.client_id, checksum: document.checksum_sha256, excludeId: document.id
+      });
       const collapseOnto = async (existing) => {
         const documentType = document.document_type || 'unknown';
         const filename = document.filename || document.document_label || document.id;
         const collapsedAt = new Date().toISOString();
-        const duplicateSummary = {
-          reason: 'duplicate_auto_collapsed',
-          duplicate_reason: 'byte_match',
-          document_type: documentType,
-          existing_document_id: existing.id,
-          existing_filename: existing.filename || null,
-          existing_parse_status: existing.parse_status || null,
-          existing_uploaded_at: toIso(existing.uploaded_at),
-          collapsed_at: collapsedAt
-        };
+        const duplicateSummary = buildByteMatchCollapseSummary({ existing, documentType, collapsedAt });
         const payload = { ...document, parse_run_id: null };
         const collapsed = await client.query(
           `insert into documents (
@@ -511,18 +571,8 @@ export const registerDocumentInDb = async ({
           };
         }
         await releaseCloudPilotRegistration({client,firmId,document,intake});
-        await audit(client, {
-          firmId,
-          clientId: document.client_id,
-          documentId: document.id,
-          action: 'document.duplicate.auto_collapsed',
-          metadata: {
-            parse_run_id: null,
-            duplicate_of: existing.id,
-            reason: 'byte_match',
-            canonical_parse_status: existing.parse_status || null,
-            batch_id: batchId
-          }
+        await auditByteMatchCollapse(client, {
+          firmId, clientId: document.client_id, documentId: document.id, existing, batchId
         });
         await client.query('commit');
         return {
@@ -564,10 +614,28 @@ export const registerDocumentInDb = async ({
         parse_run_id: parseRunId
       };
 
-      // A concurrent first upload of the same bytes may have committed its
-      // canonical since the Layer 2 read: the unique index refuses this insert,
-      // and the loser becomes the ordinary byte-match collapse onto the winner.
-      // Any other error is rethrown unchanged.
+      // Lock the failed same-bytes rows this insert will supersede BEFORE the
+      // insert claims the unique index. A manual retry
+      // (__retryParseRunsWithClient) locks the failed row first and then
+      // claims the index, so taking these locks in the same order is what
+      // keeps the two from deadlocking: whichever locks the failed row first
+      // wins, and the other settles into the collapse / supersede below.
+      if (document.checksum_sha256) {
+        await client.query(
+          `select id from documents
+            where firm_id=$1 and client_id=$2 and checksum_sha256=$3
+              and id <> $4 and duplicate_of is null and parse_status='failed'
+            order by id
+            for update`,
+          [firmId, document.client_id, document.checksum_sha256, document.id]
+        );
+      }
+
+      // A concurrent first upload of the same bytes (or a manual retry of a
+      // failed upload of them) may have committed its canonical since the
+      // Layer 2 read: the unique index refuses this insert, and the loser
+      // becomes the ordinary byte-match collapse onto the winner. Any other
+      // error is rethrown unchanged.
       await client.query('savepoint register_canonical_insert');
       let inserted;
       try {
@@ -619,7 +687,7 @@ export const registerDocumentInDb = async ({
           ]
         );
       } catch (error) {
-        if (error?.code !== '23505' || error?.constraint !== 'documents_firm_client_checksum_idx') throw error;
+        if (!isCanonicalChecksumViolation(error)) throw error;
         await client.query('rollback to savepoint register_canonical_insert');
         const winner = await readCanonical();
         if (!winner) throw error;
@@ -669,27 +737,13 @@ export const registerDocumentInDb = async ({
       // stops reading as a live, retryable row of its own — the parse
       // that just queued is its retry. Receipted per row.
       if (document.checksum_sha256) {
-        const superseded = await client.query(
-          `update documents
-              set duplicate_of=$4, updated_at=now()
-            where firm_id=$1 and client_id=$2 and checksum_sha256=$3
-              and id <> $4 and duplicate_of is null and parse_status='failed'
-            returning id`,
-          [firmId, document.client_id, document.checksum_sha256, document.id]
-        );
-        for (const row of superseded.rows) {
-          await audit(client, {
-            firmId,
-            clientId: document.client_id,
-            documentId: row.id,
-            action: 'document.duplicate.failed_upload_superseded',
-            metadata: {
-              superseded_by: document.id,
-              parse_run_id: parseRunId,
-              reason: 'byte_match'
-            }
-          });
-        }
+        await supersedeFailedUploadsWithClient(client, {
+          firmId,
+          clientId: document.client_id,
+          checksum: document.checksum_sha256,
+          canonicalId: document.id,
+          parseRunId
+        });
       }
 
       await client.query('commit');
@@ -808,11 +862,17 @@ const LEGACY_STATEMENT_VALIDATION_RETRY = `parse_status = 'skipped'
 export const __retryParseRunsWithClient = async ({ client, firmId, documentIds = [] }) => {
   await client.query('begin');
   try {
+    // Lock the rows before reading their state. A fresh upload of the same
+    // bytes locks the failed rows it supersedes before it claims the
+    // canonical index (registerDocumentInDb), so this lock is what orders a
+    // retry against that upload instead of letting the two deadlock.
     const result = await client.query(
-      `select id, client_id, parse_status, parse_run_id,
+      `select id, client_id, parse_status, parse_run_id, duplicate_of, checksum_sha256,
               (${LEGACY_STATEMENT_VALIDATION_RETRY}) as legacy_validation_retry
        from documents
-       where firm_id=$1 and id = any($2::text[])`,
+       where firm_id=$1 and id = any($2::text[])
+       order by id
+       for update`,
       [firmId, documentIds]
     );
     const rows = [];
@@ -831,6 +891,19 @@ export const __retryParseRunsWithClient = async ({ client, firmId, documentIds =
         });
         continue;
       }
+      // A failed upload that a later upload of the same bytes superseded is a
+      // retained receipt: the canonical it points at already carries its
+      // retry. Re-queuing it would parse the same bytes twice.
+      if (row.parse_status === 'failed' && row.duplicate_of) {
+        skipped.push({
+          id: row.id,
+          client_id: row.client_id,
+          parse_status: row.parse_status,
+          reason: 'superseded_by_canonical',
+          duplicate_of: row.duplicate_of
+        });
+        continue;
+      }
       const parseRunId = crypto.randomUUID();
       const previousRunId = row.parse_run_id || null;
       // RT-08: a manual retry mints a NEW run, and each run owns its attempt
@@ -838,26 +911,60 @@ export const __retryParseRunsWithClient = async ({ client, firmId, documentIds =
       // attempts, decision D7) and `parse_attempts` is its row-side mirror.
       // Left un-reset, a re-tried exhausted row read as already spent to the
       // drain backstop and got exactly one attempt (RT-02 handoff §4.2).
-      const update = await client.query(
-        `update documents
-         set parse_status='pending',
-             parse_run_id=$3::uuid,
-             parse_attempts=0,
-             parse_stage=null,
-             parse_progress_current=null,
-             parse_progress_total=null,
-             parse_error=null,
-             parse_enqueued_at=now(),
-             parse_event_sent_at=null,
-             parse_started_at=null,
-             parse_heartbeat_at=null,
-             parse_completed_at=null,
-             updated_at=now()
-         where firm_id=$1 and id=$2
-           and (parse_status = any($4::text[]) or (${LEGACY_STATEMENT_VALIDATION_RETRY}))
-         returning ${DOC_THIN_COLUMNS}`,
-        [firmId, row.id, parseRunId, Array.from(RETRYABLE_PARSE_STATUSES)]
-      );
+      // Re-queuing an unsuperseded failed row makes it a canonical again
+      // (migration 164). If another canonical of these bytes already holds
+      // the index, the retry loses the race and the row is superseded by
+      // that canonical, exactly as a fresh upload would have superseded it.
+      await client.query('savepoint retry_parse_row');
+      let update;
+      try {
+        update = await client.query(
+          `update documents
+           set parse_status='pending',
+               parse_run_id=$3::uuid,
+               parse_attempts=0,
+               parse_stage=null,
+               parse_progress_current=null,
+               parse_progress_total=null,
+               parse_error=null,
+               parse_enqueued_at=now(),
+               parse_event_sent_at=null,
+               parse_started_at=null,
+               parse_heartbeat_at=null,
+               parse_completed_at=null,
+               updated_at=now()
+           where firm_id=$1 and id=$2
+             and (parse_status = any($4::text[]) or (${LEGACY_STATEMENT_VALIDATION_RETRY}))
+             and not (parse_status = 'failed' and duplicate_of is not null)
+           returning ${DOC_THIN_COLUMNS}`,
+          [firmId, row.id, parseRunId, Array.from(RETRYABLE_PARSE_STATUSES)]
+        );
+        await client.query('release savepoint retry_parse_row');
+      } catch (error) {
+        if (!isCanonicalChecksumViolation(error)) throw error;
+        await client.query('rollback to savepoint retry_parse_row');
+        const canonical = await readLiveCanonicalWithClient(client, {
+          firmId, clientId: row.client_id, checksum: row.checksum_sha256, excludeId: row.id
+        });
+        const superseded = canonical
+          ? await supersedeFailedUploadsWithClient(client, {
+            firmId,
+            clientId: row.client_id,
+            checksum: row.checksum_sha256,
+            canonicalId: canonical.id,
+            parseRunId: canonical.parse_run_id || null
+          })
+          : [];
+        if (!superseded.includes(row.id)) throw error;
+        skipped.push({
+          id: row.id,
+          client_id: row.client_id,
+          parse_status: row.parse_status,
+          reason: 'superseded_by_canonical',
+          duplicate_of: canonical.id
+        });
+        continue;
+      }
       if (update.rows.length) {
         await audit(client, {
           firmId,
@@ -5434,6 +5541,17 @@ export const markParseDuplicatePendingInDb = async ({
 
 const SUPPORTED_RESOLVE_ACTIONS = new Set(['create', 'replace', 'cancel']);
 
+// The resolution receipt names a collapse (see requeueAsCanonicalOrCollapse)
+// and the collapsed rows that followed the placeholder to the canonical.
+const collapseReceipt = (requeued) => (requeued.collapsedOnto
+  ? {
+    outcome: 'collapsed_onto_canonical',
+    collapsed_onto: requeued.collapsedOnto,
+    collapse_repointed_duplicates: requeued.heirs?.repointed || {},
+    collapse_cleared_duplicates: requeued.heirs?.cleared || []
+  }
+  : {});
+
 // Inner transactional logic. Exported so unit tests can drive it
 // against a fake `client` shim instead of a live Postgres pool. The
 // public `resolveDuplicateInDb` below wraps this in `withFirmDbClient`.
@@ -5485,29 +5603,86 @@ export const __resolveDuplicateWithClient = async ({
       firmId, clientId: row.client_id, documentId, action
     });
 
-    if (action === 'create') {
+    // Create and replace both make this placeholder a canonical again
+    // (duplicate_of cleared, parse queued). Migration 164 allows one canonical
+    // per (client, bytes): when the owner re-uploaded the same file while this
+    // placeholder waited, that upload IS the canonical of these bytes, and
+    // the placeholder settles the way /documents/register settles a lost race
+    // — the byte-match collapse onto it, with the same summary and receipt.
+    // Rows that were collapsed onto this placeholder follow it to the live
+    // canonical through the one heir rule (__promoteDuplicateHeirsWithClient).
+    const requeueAsCanonicalOrCollapse = async () => {
       const parseRunId = crypto.randomUUID();
-      const updated = await client.query(
-        `update documents
-         set parse_status='pending',
-             duplicate_of=null,
-             parse_run_id=$3::uuid,
-             parse_attempts=0,
-             parse_stage=null,
-             parse_progress_current=null,
-             parse_progress_total=null,
-             parse_error=null,
-             parse_summary=null,
-             parse_started_at=null,
-             parse_heartbeat_at=null,
-             parse_completed_at=null,
-             parse_enqueued_at=now(),
-             parse_event_sent_at=null,
-             updated_at=now()
-         where firm_id=$1 and id=$2
-         returning ${DOC_THIN_COLUMNS}`,
-        [firmId, documentId, parseRunId]
-      );
+      await client.query('savepoint resolve_duplicate_canonical');
+      try {
+        const updated = await client.query(
+          `update documents
+           set parse_status='pending',
+               duplicate_of=null,
+               parse_run_id=$3::uuid,
+               parse_attempts=0,
+               parse_stage=null,
+               parse_progress_current=null,
+               parse_progress_total=null,
+               parse_error=null,
+               parse_summary=null,
+               parse_started_at=null,
+               parse_heartbeat_at=null,
+               parse_completed_at=null,
+               parse_enqueued_at=now(),
+               parse_event_sent_at=null,
+               updated_at=now()
+           where firm_id=$1 and id=$2
+           returning ${DOC_THIN_COLUMNS}`,
+          [firmId, documentId, parseRunId]
+        );
+        await client.query('release savepoint resolve_duplicate_canonical');
+        return { document: updated.rows[0], parseRunId, collapsedOnto: null, heirs: null };
+      } catch (error) {
+        if (!isCanonicalChecksumViolation(error)) throw error;
+        await client.query('rollback to savepoint resolve_duplicate_canonical');
+        const existing = await readLiveCanonicalWithClient(client, {
+          firmId, clientId: row.client_id, checksum: row.checksum_sha256, excludeId: documentId
+        });
+        if (!existing) throw error;
+        const documentType = row.document_type || 'unknown';
+        const collapsed = await client.query(
+          `update documents
+           set parse_status='skipped',
+               duplicate_of=$3,
+               parse_run_id=null,
+               parse_attempts=0,
+               parse_stage=null,
+               parse_progress_current=null,
+               parse_progress_total=null,
+               parse_error=null,
+               parse_summary=$4::jsonb,
+               parse_started_at=null,
+               parse_heartbeat_at=null,
+               parse_completed_at=now(),
+               parse_enqueued_at=null,
+               parse_event_sent_at=null,
+               updated_at=now()
+           where firm_id=$1 and id=$2
+           returning ${DOC_THIN_COLUMNS}`,
+          [firmId, documentId, existing.id, JSON.stringify(
+            buildByteMatchCollapseSummary({ existing, documentType, collapsedAt: new Date().toISOString() })
+          )]
+        );
+        await auditByteMatchCollapse(client, {
+          firmId, clientId: row.client_id, documentId, existing, batchId: row.batch_id || null, via: 'resolve_duplicate'
+        });
+        const heirs = await __promoteDuplicateHeirsWithClient(client, {
+          firmId, deletedIds: [documentId], excludeIds: [documentId]
+        });
+        return { document: collapsed.rows[0], parseRunId: null, collapsedOnto: existing.id, heirs };
+      }
+    };
+
+    if (action === 'create') {
+      const requeued = await requeueAsCanonicalOrCollapse();
+      const parseRunId = requeued.parseRunId;
+      const updated = { rows: [requeued.document] };
       await audit(client, {
         firmId,
         clientId: row.client_id,
@@ -5517,6 +5692,7 @@ export const __resolveDuplicateWithClient = async ({
           action: 'create',
           parse_run_id: parseRunId,
           previous_duplicate_of: row.duplicate_of || null,
+          ...collapseReceipt(requeued),
           owner_asks_resolved: overlapAsks.resolved
         }
       });
@@ -5525,7 +5701,8 @@ export const __resolveDuplicateWithClient = async ({
         document: rowToThinParseStatus(updated.rows[0]),
         action,
         applied: true,
-        parse_run_id: parseRunId
+        parse_run_id: parseRunId,
+        ...(requeued.collapsedOnto ? { collapsed_onto: requeued.collapsedOnto } : {})
       };
     }
 
@@ -5607,28 +5784,9 @@ export const __resolveDuplicateWithClient = async ({
         `delete from documents where firm_id=$1 and id=$2`,
         [firmId, oldId]
       );
-      const parseRunId = crypto.randomUUID();
-      const updated = await client.query(
-        `update documents
-         set parse_status='pending',
-             duplicate_of=null,
-             parse_run_id=$3::uuid,
-             parse_attempts=0,
-             parse_stage=null,
-             parse_progress_current=null,
-             parse_progress_total=null,
-             parse_error=null,
-             parse_summary=null,
-             parse_started_at=null,
-             parse_heartbeat_at=null,
-             parse_completed_at=null,
-             parse_enqueued_at=now(),
-             parse_event_sent_at=null,
-             updated_at=now()
-         where firm_id=$1 and id=$2
-         returning ${DOC_THIN_COLUMNS}`,
-        [firmId, documentId, parseRunId]
-      );
+      const requeued = await requeueAsCanonicalOrCollapse();
+      const parseRunId = requeued.parseRunId;
+      const updated = { rows: [requeued.document] };
       // Repoint the OTHER rows in the chain that pointed at the deleted
       // canonical (multi-version uploads where ad287f23 ← dcbff74c,
       // c075768f): without it they keep dangling duplicate_of pointers.
@@ -5649,6 +5807,7 @@ export const __resolveDuplicateWithClient = async ({
           transactions_deleted: deletedTx.rows.length,
           transaction_matches_unwound: unwound.unwound,
           match_rows_deleted: clearedMatches.deleted,
+          ...collapseReceipt(requeued),
           owner_asks_resolved: overlapAsks.resolved
         }
       });
@@ -5658,7 +5817,8 @@ export const __resolveDuplicateWithClient = async ({
         action,
         applied: true,
         parse_run_id: parseRunId,
-        deleted_document_id: oldId
+        deleted_document_id: oldId,
+        ...(requeued.collapsedOnto ? { collapsed_onto: requeued.collapsedOnto } : {})
       };
     }
 
