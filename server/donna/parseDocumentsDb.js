@@ -5257,8 +5257,8 @@ export const __promoteDuplicateHeirsWithClient = async (
   const repointed = Object.entries(result.repointed);
   if (repointed.length) {
     await client.query(
-      `update documents d set duplicate_of = h.heir, updated_at = now()
-         from unnest($2::text[], $3::text[]) as h(id, heir)
+      `update documents d set duplicate_of = h.duplicate_of, updated_at = now()
+         from unnest($2::text[], $3::text[]) as h(id, duplicate_of)
         where d.firm_id = $1 and d.id = h.id`,
       [firmId, repointed.map(([id]) => id), repointed.map(([, heir]) => heir)]
     );
