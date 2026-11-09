@@ -5,17 +5,20 @@
 // contract field, the projection returns the contract's own absent value
 // (null, an omitted optional key, `unchecked`) and the gap is listed in
 // GAPS.md — it never infers. No model call, no classifier, no I/O here.
+import { toIsoDay, toUtcIsoDay } from '../dates.js';
 
 const iso = (value) => {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
+// A business date. pg parses a `date` column to LOCAL midnight, so a Date goes
+// through dates.js toIsoDay (local getters), never toISOString().
 const plainDate = (value) => {
   if (!value) return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
-  const text = String(value);
-  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
+  if (!(value instanceof Date) && !/^\d{4}-\d{2}-\d{2}/.test(String(value))) return null;
+  const day = toIsoDay(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
 };
 const num = (value) => {
   if (value === null || value === undefined || value === '') return null;
@@ -263,7 +266,7 @@ const LIFECYCLES = new Set(['open', 'reviewing', 'closed', 'locked']);
 const monthBounds = (date) => {
   const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
   const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
-  return { period_start: start.toISOString().slice(0, 10), period_end: end.toISOString().slice(0, 10) };
+  return { period_start: toUtcIsoDay(start), period_end: toUtcIsoDay(end) };
 };
 const periodLabel = (periodStart, periodEnd, locale) => {
   const start = new Date(`${periodStart}T00:00:00Z`);

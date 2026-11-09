@@ -108,7 +108,7 @@ test('the queue doctrine: the badge is the open ask+approval cards of the same l
 
 test('documents: the persisted parse_status in owner words, needs_info only from an anchored open ask', () => {
   const row = { id: 'd1', filename: 'receipt.jpg', parse_status: 'completed', uploaded_at: new Date('2026-11-09T10:00:00Z'),
-    document_type: 'receipt', document_date: new Date('2026-11-08T00:00:00Z'), total_amount: '12.50', currency: 'EUR', vendor_name: 'Cafe' };
+    document_type: 'receipt', document_date: new Date(2026, 10, 8), total_amount: '12.50', currency: 'EUR', vendor_name: 'Cafe' };
   const expectations = [
     [{ parse_status: 'pending' }, 'received'], [{ parse_status: 'processing' }, 'processing'], [{}, 'attached'],
     [{ parse_status: null }, 'attached'], [{ parse_status: 'failed', parse_error: { safe_user_message: 'Could not read.' } }, 'failed'],
