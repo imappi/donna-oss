@@ -17,6 +17,7 @@ import { FormattedMessage, useIntl } from 'react-intl';
 
 import { T, V, D } from '../shared/design-tokens.js';
 import { btnPrimary, btnChip } from '../shared/buttons.js';
+import HeldMatchAuthority from './HeldMatchAuthority.jsx';
 import {
   applyFirmTransactionChatAction,
   askFirmTransactionClient,
@@ -846,6 +847,10 @@ const TransactionArtifact = ({
                 formatDate={formatDate}
               />
             )}
+            {/* A match held only by the materiality ceiling: confirm it once, or
+                separately authorise future matches like it. Renders nothing
+                for any other match. */}
+            <HeldMatchAuthority match={match} clientId={data.clientId || tx.client_id || null} onConfirmMatch={data.onConfirmMatch || null} />
             {!isMeaningfulMatch(match) && (
               <div style={{ paddingBottom: 16 }}>
                 <MetaBar tx={tx} match={match} formatAmount={formatAmount} formatDate={formatDate} />
