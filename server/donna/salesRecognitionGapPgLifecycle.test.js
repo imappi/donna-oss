@@ -29,6 +29,7 @@ import pg from 'pg';
 import { __jevReconciliation } from './jevReconciliation.js';
 import { readJevCase } from './jevPreview.js';
 import { runSalesInvoiceReconciliationLlmForDocument } from './salesInvoiceReconciliationLlm.js';
+import { runSupplierBillReconciliationLlmForDocument } from './supplierBillReconciliationLlm.js';
 import { withFirmDbClient, __endFirmDbPoolForTests, getFinancialReportFromDb } from './firmDb.js';
 import { getFinlandAlvReturnFromDb, startFinlandAlvReturnFilingInDb } from './finland/statutoryDb.js';
 import { computeConvergenceForDocuments } from './reconcileConvergenceState.js';
@@ -117,7 +118,8 @@ test('real PG (FI-09): an uploaded unpaid sales invoice is asked of the owner an
       assert.equal(asks.length, 1);
       assert.deepEqual([asks[0].status, asks[0].evidence_type, asks[0].audience, asks[0].request_payload.lane],
         ['draft', 'payment_method', 'client', 'sales_invoice_recognition']);
-      assert.match(asks[0].question, /Sales invoice 1002 to Lumikki Oy \(903\.60 EUR, dated 2025-02-12\)/);
+      // A Finnish book: the owner is asked in Finnish.
+      assert.match(asks[0].question, /^Myyntilasku 1002 \(Lumikki Oy, 903,60 EUR, päivätty 12\.2\.2025\)/);
       const [converged] = await withFirmDbClient((client) => computeConvergenceForDocuments(client, { firmId: FIRM, documentIds: ['doc-lumikki'] }));
       assert.equal(converged.derived.state, 'on_owner', JSON.stringify(converged));
       const second = await runJev(ACCRUAL, 'doc-lumikki');
@@ -183,6 +185,61 @@ test('real PG (FI-09): an uploaded unpaid sales invoice is asked of the owner an
       assert.deepEqual(await asksFor(seed, 'doc-dark'), []);
       const darkAlv = await getFinlandAlvReturnFromDb({ firmId: FIRM, clientId: ACCRUAL, period: '2025-02' });
       assert.equal(darkAlv.review.unrecognizedSales.items.find((i) => i.document_id === 'doc-dark').on_nobody, true);
+    } finally {
+      __jevReconciliation.decide = priorDecide;
+      await __endFirmDbPoolForTests().catch(() => {});
+      for (const [k, v] of Object.entries(prior)) { if (v == null) delete process.env[k]; else process.env[k] = v; }
+      await stop();
+    }
+  });
+
+const insertBill = (seed, { id, clientId = ACCRUAL, total, tax, date, number, vendor = 'Tukku Oy', paymentStatus = 'unpaid' }) => seed.query(
+  `insert into documents (id, firm_id, client_id, filename, document_type, status, parse_status, vendor_name, total_amount, tax_amount, currency,
+                          document_date, reference_number, payment_status, parse_summary, payload)
+   values ($1, $2, $3, $4, 'supplier_bill', 'received', 'completed', $5, $6, $7, 'EUR', $8, $9, $10, $11::jsonb, '{}'::jsonb)`,
+  [id, FIRM, clientId, `${id}.pdf`, vendor, total, tax, date, number, paymentStatus,
+    JSON.stringify({ references: [{ type: 'invoice_number', value: number }] })]);
+const runBill = (clientId, documentId) => withFirmDbClient((client) => runSupplierBillReconciliationLlmForDocument({
+  client, firmId: FIRM, clientId, documentId, fetchImpl: async () => { throw new Error('legacy provider must not be called'); } }));
+
+test('real PG: an uploaded unpaid supplier bill on an accrual book is asked of the owner once and then waits on them; cash books and credit notes are unchanged',
+  { skip: !PG_URL && 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async () => {
+    const { seed, url, stop } = await boot();
+    const prior = { DATABASE_URL: process.env.DATABASE_URL, DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX };
+    const priorDecide = __jevReconciliation.decide;
+    process.env.DATABASE_URL = url; process.env.DATABASE_POOL_MAX = '3';
+    __jevReconciliation.decide = noSettlement;
+    try {
+      // Before the fix this verdict projected hanging / no_settlement_in_scope with nobody asked.
+      await insertBill(seed, { id: 'bill-tukku', total: 248, tax: 48, date: '2025-02-05', number: '4711' });
+      const first = await runBill(ACCRUAL, 'bill-tukku');
+      assert.equal(first.jev_reason, 'jev_no_settlement', JSON.stringify(first));
+      assert.equal(first.supplier_bill_settlement_ask.minted, true, JSON.stringify(first.supplier_bill_settlement_ask));
+      assert.equal(first.sales_recognition_ask, undefined);
+      const asks = await asksFor(seed, 'bill-tukku');
+      assert.equal(asks.length, 1);
+      assert.deepEqual([asks[0].status, asks[0].evidence_type, asks[0].audience, asks[0].request_payload.lane],
+        ['draft', 'payment_method', 'client', 'supplier_bill_settlement']);
+      assert.match(asks[0].question, /^Ostolasku 4711 \(Tukku Oy, 248,00 EUR, päivätty 5\.2\.2025\): .*Onko lasku maksettu\?/);
+      const [converged] = await withFirmDbClient((client) => computeConvergenceForDocuments(client, { firmId: FIRM, documentIds: ['bill-tukku'] }));
+      assert.equal(converged.derived.state, 'on_owner', JSON.stringify(converged));
+
+      const second = await runBill(ACCRUAL, 'bill-tukku');
+      assert.ok(!second.supplier_bill_settlement_ask?.minted, JSON.stringify(second));
+      assert.equal((await asksFor(seed, 'bill-tukku')).length, 1, 'the same bill is never asked twice');
+
+      // A supplier credit note is not an unpaid bill: no ask.
+      await insertBill(seed, { id: 'bill-credit', total: -62, tax: -12, date: '2025-02-09', number: 'HL-12', paymentStatus: 'credit_note' });
+      const credit = await runBill(ACCRUAL, 'bill-credit');
+      assert.equal(credit.supplier_bill_settlement_ask?.minted ?? false, false, JSON.stringify(credit));
+      assert.deepEqual(await asksFor(seed, 'bill-credit'), []);
+
+      // Cash basis: unchanged, the bill is recorded when it is paid.
+      await insertBill(seed, { id: 'bill-cash', clientId: CASH, total: 248, tax: 48, date: '2025-02-05', number: '4711' });
+      const cashRun = await runBill(CASH, 'bill-cash');
+      assert.equal(cashRun.jev_reason, 'jev_no_settlement');
+      assert.equal(cashRun.supplier_bill_settlement_ask.reason, 'not_accrual');
+      assert.deepEqual(await asksFor(seed, 'bill-cash'), []);
     } finally {
       __jevReconciliation.decide = priorDecide;
       await __endFirmDbPoolForTests().catch(() => {});
