@@ -229,6 +229,15 @@ const formattedCases = {
     refusal: 'Could not save: Only a firm member or a partner seat can change standing authority for this client.',
     mintRefusal: 'Could not grant: Set a ceiling that covers this match’s amount.',
     ineligible: /already exists \(Active\)/
+  },
+  fi: {
+    status: 'Voimassa', suspendedStatus: 'Keskeytetty', documentType: 'Ostolasku', ceiling: 'Enintään 1 500 £',
+    grantedOn: '20\\.4\\.2025', lastUsed: '27\\.7\\.2025', reviewBy: 'Tarkistettava viimeistään 1.1.2026', expires: 'Voimassa 31.3.2026 asti',
+    suspension: /Keskeytetty automaattisesti 1\.8\.2025: .*\(Vastine hylätty\)/,
+    example: 'Harbour Lane Properties Ltd · 1 200 £ · 16.4.2025', archetype: 'Toistuva vuokra tai leasing',
+    refusal: 'Tallennus epäonnistui: Vain tilitoimiston jäsen tai osakas voi muuttaa tämän asiakkaan pysyviä valtuuksia.',
+    mintRefusal: 'Valtuutusta ei voitu myöntää: Aseta yläraja, joka kattaa tämän yhdistämisen summan.',
+    ineligible: /on jo valtuutus \(Voimassa\)/
   }
 };
 
