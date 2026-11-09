@@ -25,11 +25,16 @@
 // ledger. A GB or US accrual book has the same hole and reads the same census.
 // Cash-basis books are unchanged: there income is recognised at settlement.
 //
-// The purchase side has the same hole: an uploaded supplier bill on an accrual
-// book with no settling payment is journaled nowhere either. The same hook puts
-// it on the owner through its own lane (supplier_bill_settlement), sharing the
-// ask primitive and the never-twice check. There is no purchase-side census yet,
-// so the drafts do not yet list such bills as excluded.
+// The purchase side has the same hole: an uploaded supplier bill or supplier
+// credit note on an accrual book is recognised only through the bank line that
+// settles it, or through the owner-funds settlement journal when the owner paid
+// it in cash or on a personal card (documentSettlementEntry.js, source_type
+// document_settlement). The same census covers it (side 'purchase'): the same
+// resting states, the same holders, its own blocker
+// (unrecognized_purchase_documents), so a draft names the expense and input
+// VAT it leaves out next to, never mixed with, the sales it leaves out. The
+// same hook puts an unpaid bill on the owner through its own lane
+// (supplier_bill_settlement), sharing the ask primitive and the never-twice check.
 //
 // Both questions are written in the owner's language (preferredOwnerTemplateLanguage).
 //
@@ -51,6 +56,7 @@ export const SUPPLIER_BILL_SETTLEMENT_ASK_LANE = 'supplier_bill_settlement';
 // answered through the existing doc-ask reply consumer.
 export const SALES_RECOGNITION_ASK_EVIDENCE_TYPE = 'payment_method';
 export const SALES_RECOGNITION_BLOCKER = 'unrecognized_sales_documents';
+export const PURCHASE_RECOGNITION_BLOCKER = 'unrecognized_purchase_documents';
 export const SALES_RECOGNITION_RESTS = Object.freeze([
   'no_settlement', 'settlement_proposed', 'settlement_unposted', 'settled_outside_period'
 ]);
@@ -73,45 +79,79 @@ const basisOf = (clientRow) => {
   }
 };
 
-// classifySalesRecognitionGap — pure. Every in-scope uploaded sales invoice or
-// credit note either is represented in the requested period's posted ledger or
-// is an item here, with the state it rests in and who (if anyone) holds it.
-export const classifySalesRecognitionGap = ({
+// The two sides of the census. Everything else (the resting states, the
+// holders, the reconciliation) is the same code for both.
+//   - documentType: the uploaded document the side reads;
+//   - counterparty: the column naming the other party, and the item key it rides;
+//   - issuedJournalType: a journal Donna writes for a document she issued herself
+//     (only sales; a supplier bill is never issued by the book);
+//   - noun / amounts: the draft sentence.
+const RECOGNITION_SIDES = Object.freeze({
+  sales: { documentType: 'sales_invoice', counterparty: 'customer_name', itemKey: 'customer', blocker: SALES_RECOGNITION_BLOCKER,
+    issuedJournalType: 'sales_invoice', noun: 'sales document', amounts: (net, tax, ccy) => `${net} ${ccy} net + ${tax} tax` },
+  purchase: { documentType: 'supplier_bill', counterparty: 'vendor_name', itemKey: 'vendor', blocker: PURCHASE_RECOGNITION_BLOCKER,
+    issuedJournalType: null, noun: 'supplier document', amounts: (net, tax, ccy) => `${net} ${ccy} expense + ${tax} input tax` }
+});
+const sideOf = (side) => {
+  const known = RECOGNITION_SIDES[side];
+  if (!known) throw Object.assign(new Error(`Unknown recognition census side: ${side}`), { code: 'RECOGNITION_SIDE_INVALID' });
+  return known;
+};
+
+// classifyRecognitionGap — pure. Every in-scope uploaded document of the side
+// (sales: sales invoices and credit notes; purchase: supplier bills and supplier
+// credit notes) either is represented in the requested period's posted ledger
+// (listed in `represented` with what represents it) or is an item here, with the
+// state it rests in and who (if anyone) holds it. Nothing is in both lists, and
+// a document is one entry however many lines settle it.
+export const classifyRecognitionGap = ({
+  side = 'sales',
   basis,
   period,
   documents = [],
   matches = [],
   transactionJournals = [],
+  documentJournals = [],
   issuedJournals = [],
   applications = [],
   asks = []
 } = {}) => {
+  const spec = sideOf(side);
   const applies = basis === 'accrual' || basis === 'unresolved';
-  const base = { applies, basis, period: period ? { starts_on: period.starts_on, ends_on: period.ends_on } : null };
-  if (!applies) return { ...base, status: 'not_applicable', items: [], totals: [] };
+  const base = { side, blocker: spec.blocker, applies, basis, period: period ? { starts_on: period.starts_on, ends_on: period.ends_on } : null };
+  if (!applies) return { ...base, status: 'not_applicable', items: [], totals: [], represented: [] };
 
   const inPeriod = (d) => Boolean(d) && d >= period.starts_on && d <= period.ends_on;
-  const journalsByTx = new Map();
-  for (const j of transactionJournals) {
-    const list = journalsByTx.get(j.source_id) || [];
-    list.push(day(j.journal_date));
-    journalsByTx.set(j.source_id, list);
-  }
-  const issuedNumbers = new Set(issuedJournals.map((j) => strip(j.source_id)).filter(Boolean));
+  const datesBySource = (journals) => {
+    const map = new Map();
+    for (const j of journals) map.set(j.source_id, [...(map.get(j.source_id) || []), day(j.journal_date)]);
+    return map;
+  };
+  const journalsByTx = datesBySource(transactionJournals);
+  const journalsByDoc = datesBySource(documentJournals);
+  const issuedNumbers = new Set(spec.issuedJournalType ? issuedJournals.map((j) => strip(j.source_id)).filter(Boolean) : []);
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const items = [];
+  const represented = [];
 
   for (const doc of documents) {
+    if (doc.document_type && doc.document_type !== spec.documentType) continue;
+    const date = day(doc.document_date);
+    if (date && !inPeriod(date)) continue;
     const payload = obj(doc.payload);
     const reminder = obj(payload.reminder_obligation);
     // A reminder's principal is its original invoice; it is not a second sale.
-    if (reminder.status === 'applied' && reminder.reminder_document_id === doc.id) continue;
-    const date = day(doc.document_date);
-    if (date && !inPeriod(date)) continue;
+    if (reminder.status === 'applied' && reminder.reminder_document_id === doc.id) {
+      represented.push({ document_id: doc.id, by: 'reminder_of_invoice' });
+      continue;
+    }
     const kind = String(doc.payment_status || '').trim().toLowerCase() === 'credit_note' ? 'credit_note' : 'invoice';
     const numbers = invoiceNumbersOf(doc);
     // The issued-invoice twin carries the revenue under its own journal.
-    if (kind === 'invoice' && numbers.some((n) => issuedNumbers.has(n))) continue;
+    if (kind === 'invoice' && numbers.some((n) => issuedNumbers.has(n))) {
+      represented.push({ document_id: doc.id, by: 'issued_invoice_journal' });
+      continue;
+    }
 
     const settling = matches.filter((m) => m.matched_object_id === doc.id
       || (kind === 'invoice' && obj(obj(m.payload).reminder_obligation).status === 'applied'
@@ -123,14 +163,22 @@ export const classifySalesRecognitionGap = ({
     }
     const decided = settling.filter((m) => DECIDED.has(m.status));
     const txIds = [...new Set(decided.map((m) => m.bank_transaction_id))];
-    const journalDates = txIds.flatMap((id) => journalsByTx.get(id) || []).filter(Boolean).sort();
-    if (date && journalDates.some(inPeriod)) continue;
+    // A bill paid in instalments is one document: every settling line's journal
+    // counts toward the same entry, never one entry per instalment.
+    const journalDates = [...txIds.flatMap((id) => journalsByTx.get(id) || []), ...(journalsByDoc.get(doc.id) || [])].filter(Boolean).sort();
+    if (date && journalDates.some(inPeriod)) {
+      represented.push({ document_id: doc.id, by: 'settlement_journal' });
+      continue;
+    }
 
     // An invoice and the credit notes that cancel it in full, all inside the
     // period, net to nothing there: no settlement line exists to carry them.
     const credits = applications.filter((a) => (kind === 'invoice' ? a.invoice_document_id === doc.id : a.credit_document_id === doc.id));
     if (date && !txIds.length && credits.length && credits.every((a) => !a.settlement_match_id && inPeriod(day(a.counterpart_date)))
-      && (kind === 'credit_note' || round2(credits.reduce((s, a) => s + Number(a.amount), 0)) === round2(Math.abs(Number(doc.total_amount))))) continue;
+      && (kind === 'credit_note' || round2(credits.reduce((s, a) => s + Number(a.amount), 0)) === round2(Math.abs(Number(doc.total_amount))))) {
+      represented.push({ document_id: doc.id, by: 'credit_netted_in_period' });
+      continue;
+    }
 
     let rests = 'no_settlement';
     if (journalDates.length) rests = 'settled_outside_period';
@@ -145,16 +193,20 @@ export const classifySalesRecognitionGap = ({
     const gross = round2(sign * Math.abs(Number(doc.total_amount)));
     const taxKnown = doc.tax_amount != null && Number.isFinite(Number(doc.tax_amount));
     const tax = taxKnown ? round2(sign * Math.abs(Number(doc.tax_amount))) : null;
+    const counterparty = doc[spec.counterparty] || null;
     items.push({
       document_id: doc.id,
       filename: doc.filename || null,
+      side,
       kind,
       document_date: date,
       period_scope: date ? 'in_period' : 'period_unknown',
-      customer: doc.customer_name || null,
+      [spec.itemKey]: counterparty,
+      counterparty,
       invoice_numbers: numbers,
       currency: String(doc.currency || '').trim().toUpperCase() || null,
       gross,
+      // Sales: revenue net of output tax. Purchase: expense net of input tax.
       net: taxKnown ? round2(gross - tax) : null,
       tax,
       rests,
@@ -174,44 +226,52 @@ export const classifySalesRecognitionGap = ({
     else { t.net = round2(t.net + item.net); t.tax = round2(t.tax + item.tax); }
     byCurrency.set(key, t);
   }
-  return { ...base, status: items.length ? 'excluded' : 'none', items, totals: [...byCurrency.values()] };
+  return { ...base, status: items.length ? 'excluded' : 'none', items, totals: [...byCurrency.values()], represented };
 };
 
-const moneyText = (t) => `${t.net.toFixed(2)} ${t.currency || ''} net + ${t.tax.toFixed(2)} tax`.replace(/\s+/g, ' ');
-
-// The one honest sentence a draft carries when the census is non-empty.
-export const salesRecognitionStatement = (gap) => {
+// The one honest sentence a draft carries when a side of the census is non-empty.
+export const recognitionStatement = (gap) => {
   if (!gap?.items?.length) return null;
+  const spec = sideOf(gap.side || 'sales');
   const n = gap.items.length;
-  const amounts = gap.totals.map((t) => `${moneyText(t)}${t.tax_unknown_count ? ` (${t.tax_unknown_count} without a stated tax amount)` : ''}`).join('; ');
-  return `${n} uploaded sales document${n === 1 ? ' is' : 's are'} not recognised in this period's posted ledger and ${n === 1 ? 'is' : 'are'} excluded from these figures: ${amounts}.`;
+  const amounts = gap.totals.map((t) => `${spec.amounts(t.net.toFixed(2), t.tax.toFixed(2), t.currency || '').replace(/\s+/g, ' ')}`
+    + `${t.tax_unknown_count ? ` (${t.tax_unknown_count} without a stated tax amount)` : ''}`).join('; ');
+  return `${n} uploaded ${spec.noun}${n === 1 ? ' is' : 's are'} not recognised in this period's posted ledger and ${n === 1 ? 'is' : 'are'} excluded from these figures: ${amounts}.`;
 };
 
-// The financial-statement draft reason (ledgerReadModel.buildReportDraftState).
-export const salesRecognitionDraftReason = (gap) => {
+// The financial-statement draft reason (ledgerReadModel.buildReportDraftState),
+// one per side, each under its own code.
+export const recognitionDraftReason = (gap) => {
   if (!gap?.items?.length) return null;
   return {
-    code: SALES_RECOGNITION_BLOCKER,
-    detail: salesRecognitionStatement(gap),
+    code: sideOf(gap.side || 'sales').blocker,
+    detail: recognitionStatement(gap),
     count: gap.items.length,
     totals: gap.totals,
     document_ids: gap.items.map((i) => i.document_id)
   };
 };
 
-export const readSalesRecognitionGapWithClient = async ({ client, firmId, clientId, period } = {}) => {
+// The census loader: one read for both sides. Returns { sales, purchase }, each
+// the classification of its side. A cash book reads nothing and both sides are
+// not_applicable.
+export const readRecognitionGapWithClient = async ({ client, firmId, clientId, period } = {}) => {
   if (!period?.starts_on || !period?.ends_on) {
-    throw Object.assign(new Error('A period is required for the sales recognition census.'), { code: 'SALES_RECOGNITION_PERIOD_REQUIRED', statusCode: 400 });
+    throw Object.assign(new Error('A period is required for the recognition census.'), { code: 'SALES_RECOGNITION_PERIOD_REQUIRED', statusCode: 400 });
   }
   const clientRow = (await client.query('select profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
   const basis = clientRow ? basisOf(clientRow) : 'unresolved';
-  if (basis === 'cash') return classifySalesRecognitionGap({ basis, period });
+  const both = (inputs = {}) => ({
+    sales: classifyRecognitionGap({ side: 'sales', basis, period, ...inputs }),
+    purchase: classifyRecognitionGap({ side: 'purchase', basis, period, ...inputs })
+  });
+  if (basis === 'cash') return both();
   const documents = (await client.query(
-    `select id, filename, document_type, document_date, total_amount, tax_amount, currency, customer_name,
+    `select id, filename, document_type, document_date, total_amount, tax_amount, currency, customer_name, vendor_name,
             payment_status, reference_number, structured_reference, parse_summary, payload
        from documents
       where firm_id = $1 and client_id = $2
-        and document_type = 'sales_invoice'
+        and document_type in ('sales_invoice', 'supplier_bill')
         and parse_status = 'completed'
         and duplicate_of is null
         and total_amount is not null
@@ -219,8 +279,10 @@ export const readSalesRecognitionGapWithClient = async ({ client, firmId, client
       order by document_date nulls last, id`,
     [firmId, clientId, period.starts_on, period.ends_on]
   )).rows;
-  if (!documents.length) return classifySalesRecognitionGap({ basis, period });
+  if (!documents.length) return both();
   const docIds = documents.map((d) => d.id);
+  // Credit applications are a sales-side writer (creditNoteApplications.js);
+  // they never name a supplier bill, so the purchase side reads none.
   const applications = (await client.query(
     `select a.credit_document_id, a.invoice_document_id, a.amount, a.settlement_match_id,
             case when a.credit_document_id = any($3::text[]) then inv.document_date else cr.document_date end as counterpart_date
@@ -241,17 +303,13 @@ export const readSalesRecognitionGapWithClient = async ({ client, firmId, client
     [firmId, clientId, docIds, applications.map((a) => a.settlement_match_id).filter(Boolean)]
   )).rows;
   const txIds = [...new Set(matches.map((m) => m.bank_transaction_id).filter(Boolean))];
-  const transactionJournals = txIds.length ? (await client.query(
-    `select source_id, journal_date from ledger_journals
-      where firm_id = $1 and client_id = $2 and source_type = 'transaction' and source_id = any($3::text[])
-        and status in ('posted', 'closed') and reversed_at is null`,
-    [firmId, clientId, txIds]
-  )).rows : [];
-  const issuedJournals = (await client.query(
-    `select source_id from ledger_journals
-      where firm_id = $1 and client_id = $2 and source_type = 'sales_invoice'
-        and status in ('posted', 'closed') and reversed_at is null`,
-    [firmId, clientId]
+  const settlementJournals = (await client.query(
+    `select source_type, source_id, journal_date from ledger_journals
+      where firm_id = $1 and client_id = $2 and status in ('posted', 'closed') and reversed_at is null
+        and ((source_type = 'transaction' and source_id = any($3::text[]))
+          or (source_type = 'document_settlement' and source_id = any($4::text[]))
+          or source_type = 'sales_invoice')`,
+    [firmId, clientId, txIds, docIds]
   )).rows;
   const asks = (await client.query(
     `select id, status, evidence_type, audience, transaction_id, request_payload
@@ -260,7 +318,9 @@ export const readSalesRecognitionGapWithClient = async ({ client, firmId, client
         and (request_payload->>'document_id' = any($3::text[]) or transaction_id = any($4::text[]))`,
     [firmId, clientId, docIds, txIds]
   )).rows;
-  return classifySalesRecognitionGap({ basis, period, documents, matches, transactionJournals, issuedJournals, applications, asks });
+  const ofType = (type) => settlementJournals.filter((j) => j.source_type === type);
+  return both({ documents, matches, applications, asks,
+    transactionJournals: ofType('transaction'), documentJournals: ofType('document_settlement'), issuedJournals: ofType('sales_invoice') });
 };
 
 const amountText = (value, currency, language = 'en') => {
@@ -332,7 +392,7 @@ export const buildSupplierBillSettlementQuestion = ({ document = {}, language = 
 
 // One lane per obligation type that the scoped no-settlement negative leaves
 // unrecorded on an accrual book (NO_SETTLEMENT_OBLIGATION_TYPES). The census
-// above covers the sales lane only; the purchase-side census is not built yet.
+// above covers both lanes (side sales and side purchase).
 const NO_SETTLEMENT_ASK_LANES = Object.freeze({
   sales_invoice: { lane: SALES_RECOGNITION_ASK_LANE, statsKey: 'sales_recognition_ask', buildQuestion: buildSalesRecognitionQuestion,
     recognition: 'unrecognised_uploaded_sales_invoice', refusal: 'not_an_uploaded_sales_invoice' },
