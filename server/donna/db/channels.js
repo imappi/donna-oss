@@ -17,6 +17,7 @@ import { askAffordances, renderAskAffordanceTail } from '../askIdentity.js';
 import { OWNER_PORTAL_LINK_FLAG_KEY, recordOwnerPortalLinkShare, resolveOwnerPortalLink, SENSITIVE_ASK_NOTICE_TEMPLATE, SENSITIVE_ASK_NOTICE_VERSION, SENSITIVE_ASK_WA_ITEM_PARAM, SENSITIVE_ASK_WA_TEMPLATE, sensitiveAskPortalNoticeText } from '../selfKnowledge.js';
 import { smsEnvAllowsClient } from '../channels/sms.js';
 import { buildTelegramAskDigestText, TELEGRAM_ASK_DIGEST_TEMPLATE, telegramEnvAllowsClient } from '../channels/telegram.js';
+import { OWNER_TEMPLATE_FALLBACK_LANGUAGE, preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
 
 import { withFirmDbClient } from './pool.js';
 import { DEFAULT_FIRM_ID } from './clients.js';
@@ -648,14 +649,9 @@ export const recordMessageDeliveryLedgerInDb = async ({ client = null, entry = {
 // 'en' until the 'fi' version goes live, then switch automatically with no
 // code change. The language actually sent is recorded in the delivery ledger
 // (the send language is part of the receipt).
-export const OWNER_TEMPLATE_FALLBACK_LANGUAGE = 'en';
-
-export const preferredOwnerTemplateLanguage = (profile) => {
-  const jurisdiction = String(profile?.jurisdiction || '').trim().toUpperCase();
-  const locale = String(profile?.locale || profile?.language || profile?.preferredLanguage || '').trim().toLowerCase();
-  if (locale.startsWith('fi') || jurisdiction === 'FI') return 'fi';
-  return OWNER_TEMPLATE_FALLBACK_LANGUAGE;
-};
+// The resolver itself lives in the leaf module ../ownerLanguage.js (shared with
+// the ask drafter); re-exported here under the same names.
+export { OWNER_TEMPLATE_FALLBACK_LANGUAGE, preferredOwnerTemplateLanguage };
 
 // Meta Cloud API returns error code 132001 when the template exists but has no
 // approved translation in the requested language. Treat that (and a defensive
