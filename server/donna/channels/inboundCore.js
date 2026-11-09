@@ -348,7 +348,14 @@ export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language 
   const recode = resolved && typeof resolved === 'object' ? resolved.recode : null;
   const clarification = resolved?.evidence_request?.response_payload?.reply_processing?.clarification;
   if (resolved?.evidence_request?.status === 'open' && recode?.needsClarification === true
-    && typeof clarification === 'string' && clarification.trim()) return clarification.trim();
+    && typeof clarification === 'string' && clarification.trim()) {
+    // The follow-up question already reached the owner through the gated ask
+    // fan-out (ownerReplyRecovery.js): acknowledge, do not send it twice.
+    if (Array.isArray(recode.follow_up_delivery?.delivered) && recode.follow_up_delivery.delivered.length) {
+      return 'Thanks. I sent you a follow-up question.';
+    }
+    return clarification.trim();
+  }
   if (!recode || recode.applied !== true) {
     if (resolved?.evidence_request?.status === 'replied' || recode?.error || recode?.skipped) {
       return recode?.exhausted ? copy.savedCodingExhausted : copy.savedCodingPending;

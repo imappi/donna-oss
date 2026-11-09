@@ -24,7 +24,7 @@ test('the mounted root applies locale before paint and wraps every app surface i
 test('Arabic is ready with an installed catalog and the production option set excludes pseudo-RTL', () => {
   assert.match(registrySource, /'ar-AE':[\s\S]*status: 'ready'/);
   assert.match(catalogSource, /'ar-AE':\s*arAE/);
-  assert.deepEqual(PRODUCTION_INTERFACE_LOCALES.map((entry) => entry.tag), ['en', 'ar-AE']);
+  assert.deepEqual(PRODUCTION_INTERFACE_LOCALES.map((entry) => entry.tag), ['en', 'ar-AE', 'fi']);
   assert.ok(PRODUCTION_INTERFACE_LOCALES.every((entry) => entry.status === 'ready'));
   assert.equal(PRODUCTION_INTERFACE_LOCALES.some((entry) => entry.tag === 'ar-XB'), false);
   assert.match(panelSource, /PRODUCTION_INTERFACE_LOCALES\.map/);

@@ -437,6 +437,18 @@ export const __getOpenWhatsAppEvidenceRequestByRefWithClient = async ({ client, 
   return rows.find((row) => row.id === survivorId) || null;
 };
 
+// A deliverer loads each ask by id right before it sends, and sends only an ask
+// still waiting on the owner (a never-sent draft or an open question; the
+// same AWAITING_OWNER_STATUSES ownerAskDelivery.js names). An answer that
+// landed between a sweep's select and this send — replied, resolved,
+// cancelled, merged — is skipped, and the skip is reported
+// (`skipped_not_awaiting`), never reminded once more.
+const AWAITING_OWNER_ASK_SQL = `select * from client_evidence_requests
+  where firm_id = $1 and client_id = $2 and id = $3 and audience = 'client'
+    and status in ('draft', 'open')
+  limit 1`;
+const skippedNotAwaiting = (ids) => (ids.length ? { skipped_not_awaiting: ids } : {});
+
 // 108 — the ONLY place send_count moves. Minting is a bookkeeping act the owner
 // never sees; a prompt is what he actually receives, and the re-ask cadence
 // (askReaskCadence.js) escalates off this count, so it must mean prompts. Called
@@ -796,10 +808,11 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
     .then((res) => preferredOwnerTemplateLanguage(res.rows[0]?.profile))
     .catch(() => OWNER_TEMPLATE_FALLBACK_LANGUAGE);
   const ids = evidenceRequestIds.filter(Boolean);
+  const notAwaiting = [];
   for (const askId of ids) {
-    const requestResult = await client.query("select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3 and audience = 'client' limit 1", [firmId, clientId, askId]);
+    const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
-    if (!request) continue;
+    if (!request) { notAwaiting.push(askId); continue; }
     const period = askPeriodFor(request, preferredLanguage);
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
@@ -846,7 +859,7 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
       await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: [request.id], channel: 'whatsapp', result });
     }
   }
-  return { sent: ids.length };
+  return { sent: ids.length, ...skippedNotAwaiting(notAwaiting) };
 };
 
 export const deliverSmsEvidenceAsksAfterSend = async ({ client, firmId, clientId, evidenceRequestIds = [], env = process.env, deps = {} } = {}) => {
@@ -857,13 +870,14 @@ export const deliverSmsEvidenceAsksAfterSend = async ({ client, firmId, clientId
   const deliverOwnerMessage = deps.deliverOwnerMessage || channelModule.deliverOwnerMessage;
   const OWNER_CHANNELS = deps.OWNER_CHANNELS || channelModule.OWNER_CHANNELS;
   const ids = evidenceRequestIds.filter(Boolean);
+  const notAwaiting = [];
   // D-PA-3: SMS bodies render code-side, so the owner's chosen assistant
   // name and the owner's language apply here. One profile read per batch.
   const { assistantName, language } = await readOwnerVoice(client, { firmId, clientId });
   for (const askId of ids) {
-    const requestResult = await client.query("select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3 and audience = 'client' limit 1", [firmId, clientId, askId]);
+    const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
-    if (!request) continue;
+    if (!request) { notAwaiting.push(askId); continue; }
     const period = askPeriodFor(request, language);
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
@@ -891,7 +905,7 @@ export const deliverSmsEvidenceAsksAfterSend = async ({ client, firmId, clientId
       await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: [request.id], channel: 'sms', result });
     }
   }
-  return { sent: ids.length };
+  return { sent: ids.length, ...skippedNotAwaiting(notAwaiting) };
 };
 
 // Telegram twin of deliverSmsEvidenceAsksAfterSend. Free-form send (no Meta
@@ -906,6 +920,7 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
   const deliverOwnerMessage = deps.deliverOwnerMessage || channelModule.deliverOwnerMessage;
   const OWNER_CHANNELS = deps.OWNER_CHANNELS || channelModule.OWNER_CHANNELS;
   const ids = evidenceRequestIds.filter(Boolean);
+  const notAwaiting = [];
   // Telegram bodies render code-side, so the owner's chosen assistant name and
   // the owner's language apply here. One profile read per batch.
   const { assistantName, language } = await readOwnerVoice(client, { firmId, clientId });
@@ -915,9 +930,9 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
   // as before; everything else becomes a digest candidate.
   const sendable = [];
   for (const askId of ids) {
-    const requestResult = await client.query("select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3 and audience = 'client' limit 1", [firmId, clientId, askId]);
+    const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
-    if (!request) continue;
+    if (!request) { notAwaiting.push(askId); continue; }
     const period = askPeriodFor(request, language);
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
@@ -940,7 +955,7 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
     );
     sendable.push({ request, period, question: safeQuestion.text, affordanceTail });
   }
-  if (!sendable.length) return { sent: 0 };
+  if (!sendable.length) return { sent: 0, ...skippedNotAwaiting(notAwaiting) };
 
   // ONE ask stays byte-identical to the pre-digest path: same template, same
   // bodyParameters, same bare-message_id receipt, so a tapped reply still
@@ -961,7 +976,7 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
       await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `telegram_fallback_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', failed_at: new Date().toISOString(), failure_reason: failureReasonFor(result, 'TELEGRAM_SEND_FAILED'), fallback_triggered_at: new Date().toISOString(), provider_payload: { language } } });
       await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: [request.id], channel: 'telegram', result });
     }
-    return { sent: 1 };
+    return { sent: 1, ...skippedNotAwaiting(notAwaiting) };
   }
 
   // Two or more: ONE message. The pre-digest path looped here and sent a
@@ -1009,7 +1024,7 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
         : { message_id: `telegram_fallback_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', failed_at: at, failure_reason: failureReasonFor(one, 'TELEGRAM_SEND_FAILED'), fallback_triggered_at: at, provider_payload: { language } } });
       await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: [request.id], channel: 'telegram', result: one, at });
     }
-    return { sent: sendable.length, digest: false, reason: 'digest_empty' };
+    return { sent: sendable.length, digest: false, reason: 'digest_empty', ...skippedNotAwaiting(notAwaiting) };
   }
 
   const result = await attemptDelivery(() => deliverOwnerMessage({
@@ -1040,8 +1055,8 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
     await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: sendable.map(({ request }) => request.id), channel: 'telegram', result, at });
   }
   return result?.ok
-    ? { sent: sendable.length, digest: true, portal_link: Boolean(portalLink) }
-    : { sent: 0, digest: true, failed: sendable.length };
+    ? { sent: sendable.length, digest: true, portal_link: Boolean(portalLink), ...skippedNotAwaiting(notAwaiting) }
+    : { sent: 0, digest: true, failed: sendable.length, ...skippedNotAwaiting(notAwaiting) };
 };
 
 // G14 (outbound-actions M1) — the owner-ask EMAIL deliverer. Email is the
@@ -1116,6 +1131,7 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
     return { skipped: true, reason: 'flag_off' };
   }
   const ids = evidenceRequestIds.filter(Boolean);
+  const notAwaiting = [];
   if (!ids.length) return { sent: 0 };
   const clientRow = await client.query('select company_name, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
     .then((res) => res.rows[0] || null).catch(() => null);
@@ -1125,10 +1141,11 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
 
   const requests = [];
   for (const askId of ids) {
-    const requestResult = await client.query("select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3 and audience = 'client' limit 1", [firmId, clientId, askId]);
+    const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     if (requestResult.rows[0]) requests.push(requestResult.rows[0]);
+    else notAwaiting.push(askId);
   }
-  if (!requests.length) return { sent: 0 };
+  if (!requests.length) return { sent: 0, ...skippedNotAwaiting(notAwaiting) };
 
   const clientName = String(clientRow?.company_name || '').trim();
   // The owner is the FIRM's client and knows the firm, not the software: the
@@ -1179,5 +1196,7 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   } else {
     await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: requests.map((r) => r.id), channel: 'email', result, at });
   }
-  return result?.ok ? { sent: requests.length } : { sent: 0, failed: requests.length, ...(result?.unknown ? { delivery_unknown: true } : {}) };
+  return result?.ok
+    ? { sent: requests.length, ...skippedNotAwaiting(notAwaiting) }
+    : { sent: 0, failed: requests.length, ...(result?.unknown ? { delivery_unknown: true } : {}), ...skippedNotAwaiting(notAwaiting) };
 };
