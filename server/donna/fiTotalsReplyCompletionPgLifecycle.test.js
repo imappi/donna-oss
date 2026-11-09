@@ -25,12 +25,12 @@ import test from 'node:test';
 import { bootApplianceForTest, applianceHarnessSkipReason } from './testSupport/applianceHarness.js';
 import { loadRecording } from './testSupport/recordedProviders.js';
 import { FI_PROFILE, FI_SOURCES, fiSource, fiDocumentBytes, fiBankCsv, fiRoutingFixture, fiExtractionFixture,
-  fiMatchingResponder, fiCodingResponder, fiDocumentDispositionFixture, fiBankDispositionResponder, fiAskDraftResponder } from './testSupport/fiReliabilitySources.js';
+  fiMatchingResponder, fiCodingResponder, fiDocumentDispositionFixture, fiBankDispositionResponder, fiAskDraftResponder, fiBornAccount } from './testSupport/fiReliabilitySources.js';
 
 const CODING = 'parse-cron:coding_convergence';
 const LOOPS = 'parse-cron:loops_inbox';
 const PARSE = 'parse-document';
-const RECEIPT_JOURNAL = [['Meals and entertainment', 29.34, 0, 'ALV_13_5_INPUT'], ['Vähennettävä arvonlisävero', 3.96, 0, 'NONE'], ['Business Checking · EUR', 0, 33.30, 'NONE']];
+const RECEIPT_JOURNAL = [[fiBornAccount('Meals and entertainment').name, 29.34, 0, 'ALV_13_5_INPUT'], ['Vähennettävä arvonlisävero', 3.96, 0, 'NONE'], ['Business Checking · EUR', 0, 33.30, 'NONE']];
 
 const bootFi = (runToken) => bootApplianceForTest({ runToken, firm: { jurisdiction: 'FI', currency: 'EUR' }, env: { DATABASE_POOL_MAX: '3' } });
 const scriptSteadyLanes = (app) => {

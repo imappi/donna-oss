@@ -711,9 +711,12 @@ export const createClientInDb = async ({
           // The chart follows the menu: with JURISDICTION_ACCOUNT_PALETTE just
           // seeded above (same transaction, same connection — the snapshot
           // read sees it), the client's pack palette lands in ledger_accounts
-          // now, so no first posting has to mint a half-typed account.
+          // now, so no first posting has to mint a half-typed account. A row
+          // born in this transaction is a new book: a market/form that declares
+          // a coded birth chart (FI Oy, FI-21) is born with it, exactly as the
+          // hosted birth does. A re-save keeps its chart untouched.
           initializationStage = 'pack_palette_chart_seed';
-          await seedPackPaletteChartWithClient(client, { firmId, clientId: profile.id });
+          await seedPackPaletteChartWithClient(client, { firmId, clientId: profile.id, newBook: isNewClient });
           if (isNewClient) {
             initializationStage = 'entity_readiness_new_client_enrollment';
             await seedNewClientReadinessEnrollmentWithClient(client, {
