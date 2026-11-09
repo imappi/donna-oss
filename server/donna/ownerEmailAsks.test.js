@@ -19,7 +19,7 @@ const askRow = (id, question) => ({
   id, question, request_payload: { period: 'June 2026' }
 });
 
-const makeMockClient = ({ stage = 'canary', profile = { email: 'kari@books.example' }, asks = [] } = {}) => {
+const makeMockClient = ({ stage = 'canary', profile = { email: 'kari@books.example' }, asks = [], firmName = null } = {}) => {
   const calls = [];
   return {
     calls,
@@ -32,6 +32,9 @@ const makeMockClient = ({ stage = 'canary', profile = { email: 'kari@books.examp
       if (text.includes('from cohort_capability_config')) return { rows: [] };
       if (text.includes('select company_name, profile from clients')) {
         return { rows: [{ company_name: 'Roofline Co', profile }] };
+      }
+      if (text.includes('select name from firms')) {
+        return { rows: firmName ? [{ name: firmName }] : [] };
       }
       if (text.includes('from client_evidence_requests')) {
         const found = asks.find((a) => a.id === params[2]);
@@ -110,4 +113,53 @@ test('a failed send records the visible fallback entry per ask', async () => {
   assert.equal(result.failed, 1);
   const ledger = client.calls.find((c) => c.sql.includes('insert into message_delivery_ledger'));
   assert.ok(ledger.params.some((p) => String(p).includes('email_fallback_ask-1')));
+});
+
+const ledgerPayloads = (client) => client.calls
+  .filter((c) => c.sql.includes('insert into message_delivery_ledger'))
+  .map((c) => JSON.parse(c.params[c.params.length - 1]));
+
+test('a Finnish owner gets Finnish copy from the firm, with singular and plural counts', async () => {
+  const profile = { email: 'owner@books.example', jurisdiction: 'FI', assistant_name: 'Aino' };
+  const one = okDeliver();
+  const single = makeMockClient({ profile, firmName: 'Tilitoimisto Esimerkki Oy', asks: [askRow('ask-1', 'Mikä oli 42 euron veloitus?')] });
+  await deliverEmailEvidenceAsksAfterSend({ client: single, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1'], deps: one });
+  const sent = one.sent[0].email;
+  assert.equal(sent.subject, 'Tilitoimisto Esimerkki Oy: 1 kysymys kirjanpidostasi — Roofline Co');
+  assert.ok(sent.text.startsWith('Hei! Täällä Aino, Tilitoimisto Esimerkki Oy. Jotta kirjanpitosi pysyy ajan tasalla, tarvitsen sinulta vastauksen yhteen kysymykseen:'), sent.text);
+  assert.ok(sent.text.includes('Mikä oli 42 euron veloitus?'), 'the question passes through unchanged');
+  assert.ok(sent.text.endsWith('Vastaa vain tähän sähköpostiin (kuvat ja kuitit voit liittää mukaan), niin hoidan loput.'));
+  assert.doesNotMatch(`${sent.subject}\n${sent.text}`, /Donna|question|this period/);
+  assert.deepEqual(ledgerPayloads(single).map((p) => p.language), ['fi']);
+
+  const many = okDeliver();
+  const batch = makeMockClient({
+    profile, firmName: 'Tilitoimisto Esimerkki Oy',
+    asks: [askRow('ask-1', 'a'), askRow('ask-2', 'b'), { id: 'ask-3', question: 'c', request_payload: {} }]
+  });
+  await deliverEmailEvidenceAsksAfterSend({ client: batch, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1', 'ask-2', 'ask-3'], deps: many });
+  assert.ok(many.sent[0].email.subject.startsWith('Tilitoimisto Esimerkki Oy: 3 kysymystä kirjanpidostasi'));
+  assert.ok(many.sent[0].email.text.includes('vastauksia muutamaan kysymykseen'));
+  assert.ok(many.sent[0].email.text.includes('3. [tämä kausi] c (ref ASK3)'), 'Finnish period fallback, ref kept for reply anchoring');
+  assert.deepEqual(ledgerPayloads(batch).map((p) => p.language), ['fi', 'fi', 'fi']);
+});
+
+test('a non-Finnish owner gets the English copy, named by the resolver and the firm', async () => {
+  const deps = okDeliver();
+  const client = makeMockClient({ firmName: 'Ledger & Co', asks: [askRow('ask-1', 'What was this?')] });
+  await deliverEmailEvidenceAsksAfterSend({ client, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1'], deps });
+  const sent = deps.sent[0].email;
+  assert.equal(sent.subject, 'Ledger & Co: 1 question about your books — Roofline Co');
+  assert.ok(sent.text.startsWith('Hi — Donna here from Ledger & Co. To keep your books current I need one answer only you can give:'), sent.text);
+  assert.ok(sent.text.endsWith('Just reply to this email with the answers (or photos/receipts attached) and I will take it from there.'));
+  assert.deepEqual(ledgerPayloads(client).map((p) => p.language), ['en']);
+
+  // With no firm name on file the sender falls back to the resolver's name
+  // (here a renamed assistant, so nothing is hardcoded).
+  const renamed = okDeliver();
+  const bare = makeMockClient({ profile: { email: 'owner@books.example', assistant_name: 'Tessa' }, asks: [askRow('ask-1', 'q')] });
+  await deliverEmailEvidenceAsksAfterSend({ client: bare, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1'], deps: renamed });
+  assert.ok(renamed.sent[0].email.subject.startsWith('Tessa: 1 question'));
+  assert.ok(renamed.sent[0].email.text.startsWith('Hi — Tessa here. To keep'));
+  assert.doesNotMatch(renamed.sent[0].email.text, /Donna/);
 });
