@@ -1,0 +1,1905 @@
+openapi: 3.1.0
+info:
+  title: Donna Mobile API
+  version: 0.1.0
+  description: |
+    The contract between the mobile terminal and any Donna-style bookkeeping
+    backend. This file is the single source of truth: the TypeScript client
+    is generated from it (`npm run generate:api`), the mock server implements
+    it, and any backend that implements it gets the app for free.
+
+    Design law (README.md):
+    - MOBILE IS A TERMINAL. Every field here is a persisted backend verdict.
+      The app never computes a class, a count, or a state.
+    - THE QUEUE DOCTRINE. Cards come in exactly three classes — ask,
+      approval, fyi — decided by the BACKEND. `needs_you_count` is
+      backend-computed and equals the open cards in classes ask+approval.
+      An fyi never counts toward it and never accepts approve/reject.
+    - DECISIONS ARE TYPED. One decision endpoint, a closed enum of four
+      decision types, and every mutation returns a receipt.
+    - DATES: business dates are plain ISO dates (YYYY-MM-DD, `format: date`);
+      instants are RFC 3339 timestamps with explicit offset
+      (`format: date-time`). Never a bare Date round-trip.
+    - AMOUNTS are JSON numbers in major units with an ISO-4217 `currency`
+      alongside (mirrors the reference backend's own wire shapes).
+
+    Mapping provenance: every schema here is designed against the Donna
+    runtime's real shapes (evidence requests, outbound owner actions, the
+    close/period read-model, the document parse lifecycle). Where this
+    contract wants something the reference backend does not express today,
+    the field is marked "CONTRACT-DESIGN SMELL" in its description and
+    recorded in contract/DESIGN-NOTES.md — reported, not invented around.
+
+servers:
+  - url: http://localhost:4141
+    description: Mock server (`npm run mock`) — also the demo mode.
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+  - name: entities
+  - name: queue
+  - name: documents
+  - name: status
+  - name: chat
+  - name: artifacts
+  - name: activity
+  - name: notifications
+  - name: onboarding
+
+paths:
+  /auth/sessions:
+    post:
+      tags: [auth]
+      operationId: createSession
+      security: []
+      summary: Sign in and mint a token pair.
+      description: |
+        Auth is contract-level token auth with refresh; the identity
+        provider behind it is pluggable (the reference backend uses
+        Supabase-issued JWTs; a market fork brings its own IdP; the mock
+        accepts the demo login). Biometric unlock wraps the STORED session
+        on-device and is invisible to this contract.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Session minted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/sessions/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshSession
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: New token pair.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/sessions/current:
+    delete:
+      tags: [auth]
+      operationId: deleteSession
+      summary: Sign out (revokes the refresh token).
+      responses:
+        '204': { description: Signed out. }
+
+  /me:
+    get:
+      tags: [entities]
+      operationId: getMe
+      summary: The principal and their entities.
+      description: |
+        Single-entity is the default experience; multi-entity users get an
+        entity switcher fed by this list. The app scopes every other call
+        by the chosen `entity_id`.
+      responses:
+        '200':
+          description: Principal + entities.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [principal, entities, default_entity_id]
+                properties:
+                  principal: { $ref: '#/components/schemas/Principal' }
+                  entities:
+                    type: array
+                    items: { $ref: '#/components/schemas/Entity' }
+                  default_entity_id: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me/deletion-request:
+    post:
+      tags: [auth]
+      operationId: requestAccountDeletion
+      summary: Ask for this account and its data to be deleted.
+      description: |
+        The App Store 5.1.1(v) seam — account deletion must be reachable
+        in-app. Deletion is a REQUEST rather than an instant wipe
+        because books carry statutory retention duties (jurisdiction-
+        specific); the backend records the request, says in plain
+        language what happens and when, and carries it out without any
+        further human gatekeeping. Idempotent: repeating the request
+        returns the original request's state. The settings entry that
+        surfaces this is still to be designed (no settings IA exists
+        yet) — recorded in the README's Apple checklist.
+      responses:
+        '200':
+          description: The recorded request.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requested_at, message]
+                properties:
+                  requested_at: { type: string, format: date-time }
+                  message:
+                    type: string
+                    description: Plain-language statement of what happens next, backend-written.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /entities/{entityId}/onboarding/voice-draft:
+    post:
+      tags: [onboarding]
+      operationId: createVoiceOnboardingDraft
+      summary: Transcribe one completed onboarding recording and extract an editable draft.
+      description: |
+        Accepts completed audio bytes after the owner stops recording. The
+        backend owns the OpenAI credential, enforces the byte and duration
+        bounds, calls `gpt-transcribe`, then performs a separate structured
+        cleanup and extraction with `store: false`. It does not write any
+        Principal, Entity, or BusinessProfile field and does not retain the
+        raw audio. Both the untouched speech-to-text evidence and the cleaned
+        interpretation are attached to this response only.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - name: X-Audio-Filename
+          in: header
+          required: true
+          schema: { type: string, maxLength: 120 }
+        - name: X-Audio-Duration-Seconds
+          in: header
+          required: true
+          schema: { type: number, minimum: 0.1, maximum: 300 }
+      requestBody:
+        required: true
+        content:
+          audio/mp4:
+            schema: { type: string, format: binary, maxLength: 8388608 }
+          audio/m4a:
+            schema: { type: string, format: binary, maxLength: 8388608 }
+          audio/mpeg:
+            schema: { type: string, format: binary, maxLength: 8388608 }
+          audio/wav:
+            schema: { type: string, format: binary, maxLength: 8388608 }
+          audio/webm:
+            schema: { type: string, format: binary, maxLength: 8388608 }
+          application/octet-stream:
+            schema: { type: string, format: binary, maxLength: 8388608 }
+            description: |
+              Native Blob fallback. Accepted only when X-Audio-Filename has a
+              supported M4A, MP4, MP3, WAV, or WebM extension; the backend
+              normalizes the MIME type before transcription.
+      responses:
+        '200':
+          description: Transcript evidence and an unpersisted, editable profile draft.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VoiceOnboardingDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: The completed recording exceeds the onboarding audio bound.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '422':
+          description: Transcription or structured extraction could not produce a reviewable draft.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+        '503':
+          description: A required speech or cleanup service is unavailable; no draft is returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/onboarding/text-draft:
+    post:
+      tags: [onboarding]
+      operationId: createTextOnboardingDraft
+      summary: Prepare an editable profile from a typed introduction.
+      description: Uses the same server-owned language cleanup as voice; saves no profile fields.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              additionalProperties: false
+              properties:
+                text: { type: string, minLength: 1, maxLength: 12000 }
+      responses:
+        '200':
+          description: Original text, cleaned introduction and an unpersisted profile draft.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VoiceOnboardingDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: The introduction could not be prepared.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/onboarding/profile:
+    put:
+      tags: [onboarding]
+      operationId: confirmOnboardingProfile
+      summary: Confirm and persist the owner-edited onboarding profile.
+      description: |
+        The only onboarding profile writer. The terminal submits the values
+        visible on the review screen plus explicit confirmation of exact
+        identity fields. A voice draft never calls this endpoint by itself.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OnboardingProfileConfirmation' }
+      responses:
+        '200':
+          description: The backend-owned principal and entity after confirmation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OnboardingProfileConfirmationResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /entities/{entityId}/settings:
+    get:
+      operationId: getSettings
+      summary: Read owner-scoped mobile settings.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      responses:
+        '200':
+          description: Authoritative settings; absence is not an inferred default.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MobileSettings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: updateSettings
+      summary: Save a declared VAT period or notification preferences, without granting authority.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MobileSettingsAction' }
+      responses:
+        '200':
+          description: Persisted settings and mutation receipt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MobileSettingsResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /entities/{entityId}/business-setup:
+    get:
+      tags: [onboarding]
+      operationId: getBusinessSetup
+      summary: Optional business setup and backend-selected next useful action.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      responses:
+        '200':
+          description: Setup state. Suggestions never count as required queue approvals.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessSetup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [onboarding]
+      operationId: updateBusinessSetup
+      summary: Explicitly confirm business details or defer an optional suggestion.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BusinessSetupAction' }
+      responses:
+        '200':
+          description: Persisted setup and mutation receipt. Never grants authority.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessSetupResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Expired candidate or attempted replacement of an associated Business ID.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/business-setup/lookup:
+    post:
+      tags: [onboarding]
+      operationId: lookupBusiness
+      summary: Read-only exact Business ID lookup in PRH public data.
+      description: No profile mutation. No toiminimi coverage in the public API; manual entry is available. Candidates expire after 15 minutes and are entity-scoped. Registry data proves neither ownership nor authority.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business_id]
+              properties:
+                business_id: { type: string, maxLength: 9 }
+      responses:
+        '200':
+          description: Candidate or no public match. Never substitutes a sample.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidate]
+                properties:
+                  candidate:
+                    anyOf:
+                      - $ref: '#/components/schemas/RegistryCandidate'
+                      - type: 'null'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503':
+          description: Public register unavailable; optional setup remains skippable.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/queue:
+    get:
+      tags: [queue]
+      operationId: getQueue
+      summary: The owner's queue — three card classes, backend-classified.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      responses:
+        '200':
+          description: |
+            All open ask/approval cards plus the recent fyi window. The app
+            partitions by `class` and renders; it never reclassifies.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /entities/{entityId}/queue/cards/{cardId}:
+    get:
+      tags: [queue]
+      operationId: getQueueCard
+      summary: One card, fresh — the detail surface's read.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - $ref: '#/components/parameters/cardId'
+      responses:
+        '200':
+          description: The card in its current persisted state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueCard' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /entities/{entityId}/queue/cards/{cardId}/decision:
+    post:
+      tags: [queue]
+      operationId: decideQueueCard
+      summary: The ONE mutation — a typed decision on a card.
+      description: |
+        The closed decision grammar (no free-form mutation, ever):
+        - `answer`   → ask cards. Free text and/or attached documents
+                       (registered first via the documents flow).
+        - `approve`  → approval cards.
+        - `reject`   → approval cards, optional note.
+        - `veto_flag`→ fyi cards ("this was wrong"). Changes no ledger
+                       state by itself — it records the owner's correction
+                       and the backend takes it from there.
+        The backend performs the actual mutation through its own audited
+        writers with full actor attribution (owner principal, mobile
+        terminal) and returns a receipt plus the card's resulting state.
+        The app renders the returned state — it never assumes success.
+
+        Idempotency: repeat decisions on an already-decided card return
+        `applied: false` with `already` set to the card's current state
+        (HTTP 200, mirroring the reference backend's already-decided
+        report), so a retried request is safe.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - $ref: '#/components/parameters/cardId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Decision' }
+      responses:
+        '200':
+          description: Decision outcome + receipt + resulting card state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DecisionResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Decision type not valid for this card class (e.g. `approve` on
+            an fyi — the doctrine violation the contract exists to make
+            impossible; the app should never be able to send this).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/status:
+    get:
+      tags: [status]
+      operationId: getBooksStatus
+      summary: Where do my books stand — the STATUS screen read.
+      description: |
+        A compressed, plain-language projection of the close/period
+        read-model. Blocker labels arrive human-readable from the backend
+        (raw check codes ride along for provenance); the app renders, it
+        never rephrases accounting state.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      responses:
+        '200':
+          description: Current + recent periods with blockers.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BooksStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /entities/{entityId}/documents:
+    get:
+      tags: [documents]
+      operationId: listDocuments
+      summary: Recent captures with their per-document state.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Newest-first documents.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [documents]
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: '#/components/schemas/Document' }
+                  next_cursor: { type: [string, 'null'] }
+
+  /entities/{entityId}/documents/{documentId}:
+    get:
+      tags: [documents]
+      operationId: getDocument
+      summary: One persisted document, fresh — the artifact detail read.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - $ref: '#/components/parameters/documentId'
+      responses:
+        '200':
+          description: The document in its current backend-projected state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /entities/{entityId}/documents/upload-intent:
+    post:
+      tags: [documents]
+      operationId: createUploadIntent
+      summary: 'Step 1 of 3: mint a signed upload URL.'
+      description: |
+        Mirrors the reference backend's storage flow — intent, then a raw
+        PUT of the bytes to `upload_url` (step 2, outside this API), then
+        register. Keeps large binaries off the API tier and works offline:
+        the capture queue replays all three steps when connectivity is back.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, mime_type, size, checksum_sha256]
+              properties:
+                filename: { type: string }
+                mime_type:
+                  type: string
+                  enum: [image/jpeg, image/png, image/webp, image/heic, image/heif, application/pdf, text/csv]
+                size:
+                  type: integer
+                  minimum: 1
+                  maximum: 10485760
+                checksum_sha256: { type: string }
+      responses:
+        '200':
+          description: Signed upload target.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadIntent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '413':
+          description: File too large.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/documents/register:
+    post:
+      tags: [documents]
+      operationId: registerDocuments
+      summary: 'Step 3 of 3: register uploaded bytes as documents.'
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [documents]
+              properties:
+                documents:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [id, filename, storage_bucket, storage_object_key, checksum_sha256]
+                    properties:
+                      id:
+                        type: string
+                        description: Client-minted id — makes offline replay idempotent.
+                      filename: { type: string }
+                      storage_bucket: { type: string }
+                      storage_object_key: { type: string }
+                      checksum_sha256: { type: string }
+                      captured_at: { type: string, format: date-time }
+                      source:
+                        type: string
+                        enum: [camera, photo_library, file]
+                      answers_card_id:
+                        type: [string, 'null']
+                        description: When the capture answers an ask card, its id.
+                      purpose:
+                        type: string
+                        enum: [prior_records]
+                        description: Context handover only. Store separately from the transaction posting pipeline; receipt of a file never makes tax preparation ready.
+      responses:
+        '200':
+          description: Registered documents (idempotent on replay).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [documents]
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: '#/components/schemas/Document' }
+        '429':
+          description: Intake rate limit.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/documents/parse-status:
+    get:
+      tags: [documents]
+      operationId: getParseStatus
+      summary: Live processing state for in-flight documents.
+      description: |
+        Deliberately a SEPARATE read from the document list, mirroring the
+        reference backend: stage/progress/error live only here, and only
+        while relevant. The app polls this for documents it just captured.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - name: ids
+          in: query
+          required: true
+          description: Comma-separated document ids, max 100.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Thin per-document parse rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [documents]
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: '#/components/schemas/ParseStatus' }
+
+  /entities/{entityId}/documents/{documentId}/retry:
+    post:
+      tags: [documents]
+      operationId: retryDocument
+      summary: Re-run processing for a failed or duplicate-pending document.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - $ref: '#/components/parameters/documentId'
+      responses:
+        '200':
+          description: The document back in `pending`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '409':
+          description: Not in a retryable state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/documents/{documentId}/resolve-duplicate:
+    post:
+      tags: [documents]
+      operationId: resolveDuplicate
+      summary: Owner's call on a suspected duplicate capture.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - $ref: '#/components/parameters/documentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [create, replace, cancel]
+      responses:
+        '200':
+          description: Resulting document state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+
+  /entities/{entityId}/reviews/{reviewKind}:
+    get:
+      tags: [status]
+      operationId: getFinancialReview
+      summary: Read-only forward-design tax or month review; no financial writes.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - name: reviewKind
+          in: path
+          required: true
+          schema: { type: string, enum: [taxes, month] }
+        - name: period
+          in: query
+          schema: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
+      responses:
+        '200':
+          description: Persisted sample projection or an explicit not-configured state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinancialReview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /entities/{entityId}/chat:
+    get:
+      tags: [chat]
+      operationId: listChatMessages
+      summary: The Donna conversation — newest last.
+      description: |
+        The mobile face of the owner chat (the reference backend's client
+        portal chat seam). Messages are words; a Donna message may also
+        carry typed APPLIABLE ACTIONS (the 2026-08-26 grammar revision —
+        see AppliableChatAction and the apply endpoint below). Chat
+        surface added 2026-08-26 by Kari's call, superseding the earlier
+        "no chat surface in v1" non-goal.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Recent messages, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatMessage' }
+
+  /entities/{entityId}/chat/messages:
+    post:
+      tags: [chat]
+      operationId: sendChatMessage
+      summary: Say something to Donna.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 4000 }
+      responses:
+        '200':
+          description: |
+            The stored message, plus Donna's reply when one is ready
+            synchronously (the mock always replies; a real backend may
+            deliver the reply later via the list/push instead).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { $ref: '#/components/schemas/ChatMessage' }
+                  reply:
+                    oneOf:
+                      - $ref: '#/components/schemas/ChatMessage'
+                      - type: 'null'
+
+  /entities/{entityId}/chat/actions/{actionId}/apply:
+    post:
+      tags: [chat]
+      operationId: applyChatAction
+      summary: Apply a typed action Donna proposed in chat.
+      description: |
+        The chat-apply seam. The BACKEND holds the action's payload and
+        executes it through the same typed verbs the rest of the
+        contract uses (record_mileage → the mileage writer; answer_card
+        → that card's answer decision), then returns the receipt — the
+        app never interprets a payload and there is no free-form
+        mutation. One entry point, closed enum inside: the reference
+        backend's compile → authorize → audit → execute spine.
+        Idempotent like card decisions: re-applying returns
+        applied=false with already='applied'; a superseded action
+        returns applied=false with already='superseded' (a stale Apply
+        button disarms, it never errors).
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - name: actionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The outcome, with the action's persisted state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applied, already, action]
+                properties:
+                  applied: { type: boolean }
+                  already:
+                    type: [string, 'null']
+                    description: Set when applied=false — the state that made this a no-op.
+                  action: { $ref: '#/components/schemas/AppliableChatAction' }
+                  receipt:
+                    oneOf:
+                      - $ref: '#/components/schemas/Receipt'
+                      - type: 'null'
+                  card:
+                    description: The card the apply created or changed, when there is one.
+                    oneOf:
+                      - $ref: '#/components/schemas/QueueCard'
+                      - type: 'null'
+        '404':
+          description: No such action.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /entities/{entityId}/artifacts/{artifactKind}/{artifactId}/messages:
+    get:
+      tags: [artifacts]
+      operationId: listArtifactMessages
+      summary: The persisted conversation bound to one work artifact.
+      description: |
+        This is the mobile projection of the same item-bound conversation
+        rendered by the desktop transaction/document artifact. The backend
+        resolves the supplied queue-card or document reference to its
+        canonical case-file identity; the terminal never joins conversations
+        or copies entity chat locally. Messages are newest last.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - $ref: '#/components/parameters/artifactKind'
+        - $ref: '#/components/parameters/artifactId'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: The current persisted item conversation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactConversation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [artifacts]
+      operationId: sendArtifactMessage
+      summary: Add a non-terminal owner turn to one work artifact.
+      description: |
+        A comment or question about this item. This endpoint never answers,
+        approves, rejects, or vetoes the item: terminal owner decisions stay
+        on the closed queue decision endpoint and continue to return receipts.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - $ref: '#/components/parameters/artifactKind'
+        - $ref: '#/components/parameters/artifactId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+      responses:
+        '200':
+          description: The persisted owner turn and an optional Donna reply.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { $ref: '#/components/schemas/ChatMessage' }
+                  reply:
+                    oneOf:
+                      - $ref: '#/components/schemas/ChatMessage'
+                      - type: 'null'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /entities/{entityId}/mileage:
+    post:
+      tags: [queue]
+      operationId: recordMileage
+      summary: Log a business journey.
+      description: |
+        Maps to the reference backend's `record_mileage` verb (its portal
+        chat grammar: miles, date, purpose). The contract carries an
+        explicit unit; the backend converts — recorded in
+        contract/DESIGN-NOTES.md.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, distance, unit, purpose]
+              properties:
+                date: { type: string, format: date }
+                distance: { type: number, exclusiveMinimum: 0 }
+                unit: { type: string, enum: [km, mi] }
+                purpose: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Recorded — the receipt plus the FYI card it minted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [receipt]
+                properties:
+                  receipt: { $ref: '#/components/schemas/Receipt' }
+                  card:
+                    oneOf:
+                      - $ref: '#/components/schemas/QueueCard'
+                      - type: 'null'
+
+  /entities/{entityId}/activity:
+    get:
+      tags: [activity]
+      operationId: listActivity
+      summary: The activity feed behind notifications.
+      parameters:
+        - $ref: '#/components/parameters/entityId'
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Newest-first events; nudges deep-link into QUEUE.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/ActivityEvent' }
+                  next_cursor: { type: [string, 'null'] }
+
+  /notifications/registrations:
+    post:
+      tags: [notifications]
+      operationId: registerForPush
+      summary: Register this device for push.
+      description: |
+        CONTRACT-DESIGN NOTE: the reference backend has no push
+        infrastructure today (its nudges are email). This endpoint is the
+        mobile-native seam it will need; the mock implements it fully.
+        Recorded in contract/DESIGN-NOTES.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, expo_push_token]
+              properties:
+                platform: { type: string, enum: [ios, android] }
+                expo_push_token: { type: string }
+                locale: { type: string, enum: [en, fi] }
+      responses:
+        '201':
+          description: Registered.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string }
+
+  /notifications/registrations/{registrationId}:
+    delete:
+      tags: [notifications]
+      operationId: unregisterFromPush
+      parameters:
+        - name: registrationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Unregistered. }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    entityId:
+      name: entityId
+      in: path
+      required: true
+      schema: { type: string }
+    cardId:
+      name: cardId
+      in: path
+      required: true
+      schema: { type: string }
+    documentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string }
+    artifactKind:
+      name: artifactKind
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ArtifactKind' }
+    artifactId:
+      name: artifactId
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing/expired token — refresh and retry once.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    BadRequest:
+      description: Malformed request.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotFound:
+      description: No such resource in this entity's scope.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+
+  schemas:
+    ApiError:
+      type: object
+      description: The reference backend's error envelope, verbatim.
+      required: [error, code]
+      properties:
+        error: { type: string, description: Human-readable message. }
+        code: { type: string, description: 'Stable machine code, e.g. AUTH_REQUIRED.' }
+
+    Session:
+      type: object
+      required: [access_token, refresh_token, expires_in, principal, entities, default_entity_id]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in: { type: integer, description: Seconds until access token expiry. }
+        principal: { $ref: '#/components/schemas/Principal' }
+        entities:
+          type: array
+          items: { $ref: '#/components/schemas/Entity' }
+        default_entity_id: { type: string }
+
+    SettingsPreferences:
+      type: object
+      additionalProperties: false
+      required: [needs_you, due_dates, monthly_summary, every_receipt]
+      properties:
+        needs_you: { type: boolean }
+        due_dates: { type: boolean }
+        monthly_summary: { type: boolean }
+        every_receipt: { type: boolean }
+    MobileSettings:
+      type: object
+      description: Settings facts, not authority or tax readiness. Sample source is explicitly disclosed. Missing dates are unknown, never inferred from legal form.
+      required: [source, vat_period, notifications, notification_delivery, phone_number, financial_year]
+      properties:
+        source: { type: string, enum: [sample, backend] }
+        vat_period: { type: [string, 'null'], enum: [month, quarter, year, null] }
+        notifications: { $ref: '#/components/schemas/SettingsPreferences' }
+        notification_delivery: { type: string, enum: [not_configured, available] }
+        phone_number: { type: [string, 'null'] }
+        financial_year:
+          type: object
+          required: [current, first, statements]
+          properties:
+            current: { type: [string, 'null'] }
+            first: { type: [string, 'null'] }
+            statements: { type: [string, 'null'] }
+    MobileSettingsAction:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [type, vat_period]
+          properties:
+            type: { type: string, enum: [set_vat_period] }
+            vat_period: { type: string, enum: [month, quarter, year] }
+        - type: object
+          additionalProperties: false
+          required: [type, notifications]
+          properties:
+            type: { type: string, enum: [set_notifications] }
+            notifications: { $ref: '#/components/schemas/SettingsPreferences' }
+    MobileSettingsResult:
+      type: object
+      required: [settings, receipt]
+      properties:
+        settings: { $ref: '#/components/schemas/MobileSettings' }
+        receipt: { $ref: '#/components/schemas/Receipt' }
+
+    Principal:
+      type: object
+      required: [id, display_name]
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        email: { type: [string, 'null'], format: email }
+
+    Entity:
+      type: object
+      description: One set of books the principal can act on.
+      required: [id, display_name, currency, country]
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        currency: { type: string, description: ISO 4217 presentation currency. }
+        country: { type: string, description: ISO 3166-1 alpha-2. }
+        entity_type:
+          type: [string, 'null']
+          description: e.g. sole_trader, limited_company — display only.
+        business_profile:
+          anyOf:
+            - $ref: '#/components/schemas/BusinessProfile'
+            - type: 'null'
+
+    BusinessProfile:
+      type: object
+      description: Backend-owned structured onboarding context. The card and its editor use these same facts; no narrative summary is authoritative. Empty optional facts are not inferred.
+      required: [description, operating_area, people_involved, payment_methods, spending_categories]
+      properties:
+        description: { type: string, maxLength: 600 }
+        operating_area: { type: string, maxLength: 240 }
+        profession: { type: string, maxLength: 240, description: Explicitly stated occupation; not an inferred qualification. }
+        billing_basis: { type: string, maxLength: 240, description: 'What is charged and on what basis, preserving rates and units. Not a payment method.' }
+        experience: { type: string, maxLength: 240, description: Work experience with its stated scope; never inferred company age. }
+        business_address: { type: string, maxLength: 240, description: 'Explicit business address, separate from service area.' }
+        people_involved: { type: array, maxItems: 20, items: { type: string, maxLength: 120 } }
+        payment_methods: { type: array, maxItems: 20, items: { type: string, maxLength: 120 } }
+        spending_categories: { type: array, maxItems: 20, items: { type: string, maxLength: 120 } }
+
+    OnboardingDraftField:
+      type: object
+      required: [value, state, requires_exact_confirmation]
+      properties:
+        value: { type: string }
+        state:
+          type: string
+          enum: [confident, uncertain, missing]
+          description: Recognition confidence, independent of exact-name confirmation. Safe capitalization or legal-suffix spacing alone does not imply uncertainty; ambiguous spellings do.
+        requires_exact_confirmation:
+          type: boolean
+          description: True for identifiers that must be visibly checked or corrected.
+
+    VoiceOnboardingDraft:
+      type: object
+      description: Structured business facts plus transient raw evidence. Fields remain unpersisted until explicit confirmation. Card additions are optional on the wire for older backends; absent fields mean missing, never inferred from the legacy transcript.
+      required: [processing_mode, cleanup_mode, raw_transcript, transcript, owner_name, business_name, description, operating_area, people_involved, payment_methods, spending_categories]
+      properties:
+        processing_mode:
+          type: string
+          enum: [live_transcription, local_transcription, typed_introduction, sample_preview]
+          description: Distinguishes cloud speech, local speech, typed input and explicit sample fixtures. A missing engine is an error, never a sample fallback.
+        cleanup_mode:
+          type: string
+          enum: [model_cleanup, rules_cleanup, sample_preview]
+          description: The onboarding app requires model_cleanup. Rules and sample modes are reserved for explicit diagnostics and fixtures, never successful user introductions.
+        raw_transcript:
+          type: string
+          maxLength: 12000
+          description: Untouched speech-to-text output or typed introduction retained transiently as review evidence.
+        transcript:
+          type: string
+          maxLength: 12000
+          deprecated: true
+          description: Compatibility alias of description.value. Not a separate summary and not displayed by the card review.
+        owner_name: { $ref: '#/components/schemas/OnboardingDraftField' }
+        business_name: { $ref: '#/components/schemas/OnboardingDraftField' }
+        description: { $ref: '#/components/schemas/OnboardingDraftField' }
+        operating_area: { $ref: '#/components/schemas/OnboardingDraftField' }
+        profession: { $ref: '#/components/schemas/OnboardingDraftField' }
+        billing_basis: { $ref: '#/components/schemas/OnboardingDraftField' }
+        experience: { $ref: '#/components/schemas/OnboardingDraftField' }
+        business_address: { $ref: '#/components/schemas/OnboardingDraftField' }
+        people_involved: { $ref: '#/components/schemas/OnboardingDraftField' }
+        payment_methods: { $ref: '#/components/schemas/OnboardingDraftField' }
+        spending_categories: { $ref: '#/components/schemas/OnboardingDraftField' }
+
+    OnboardingProfileConfirmation:
+      type: object
+      required: [owner_name, business_name, description, operating_area, people_involved, payment_methods, spending_categories, confirmed_exact_fields]
+      properties:
+        owner_name: { type: string, minLength: 1, maxLength: 120 }
+        business_name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 600 }
+        operating_area: { type: string, maxLength: 240 }
+        profession: { type: string, maxLength: 240 }
+        billing_basis: { type: string, maxLength: 240 }
+        experience: { type: string, maxLength: 240 }
+        business_address: { type: string, maxLength: 240 }
+        people_involved: { type: array, maxItems: 20, items: { type: string, maxLength: 120 } }
+        payment_methods: { type: array, maxItems: 20, items: { type: string, maxLength: 120 } }
+        spending_categories: { type: array, maxItems: 20, items: { type: string, maxLength: 120 } }
+        confirmed_exact_fields:
+          type: array
+          uniqueItems: true
+          items: { type: string, enum: [owner_name, business_name] }
+
+    OnboardingProfileConfirmationResult:
+      type: object
+      required: [principal, entity, receipt]
+      properties:
+        principal: { $ref: '#/components/schemas/Principal' }
+        entity: { $ref: '#/components/schemas/Entity' }
+        receipt: { $ref: '#/components/schemas/Receipt' }
+
+    BusinessIdentity:
+      type: object
+      required: [business_id, legal_name, legal_form, legal_form_code, registered_address, source, fetched_at, authority_verified]
+      properties:
+        business_id: { type: string }
+        legal_name: { type: string, maxLength: 1000 }
+        legal_form: { type: string, enum: [sole_trader, limited_company, other] }
+        legal_form_code: { type: [string, 'null'] }
+        registered_address: { type: string, description: 'Registered street/postal address; not the operating area or domicile.' }
+        source: { type: string, enum: [prh_ytj, owner] }
+        fetched_at: { type: [string, 'null'], format: date-time }
+        authority_verified: { type: boolean, const: false }
+    RegistryCandidate:
+      allOf:
+        - $ref: '#/components/schemas/BusinessIdentity'
+        - type: object
+          required: [candidate_id]
+          properties:
+            candidate_id: { type: string }
+    BusinessSetup:
+      type: object
+      required: [identity, business_stage, suggestion_dismissed, suggestion_available, prior_record_ids, next_step, capabilities]
+      properties:
+        identity:
+          anyOf:
+            - $ref: '#/components/schemas/BusinessIdentity'
+            - type: 'null'
+        business_stage: { type: [string, 'null'], enum: [new, existing, null] }
+        suggestion_dismissed: { type: boolean }
+        suggestion_available:
+          type: boolean
+          description: Backend-owned timing. The reference implementation offers setup in Books only after the first document is received; Account always exposes it.
+        prior_record_ids: { type: array, items: { type: string } }
+        next_step: { type: string, enum: [identify_business, business_stage, prior_records, first_receipt, done] }
+        capabilities:
+          type: object
+          required: [receipt_capture, tax_preparation, external_actions]
+          properties:
+            receipt_capture: { type: string, enum: [available] }
+            tax_preparation: { type: string, enum: [not_configured] }
+            external_actions: { type: string, enum: [not_authorized] }
+    BusinessSetupAction:
+      oneOf:
+        - type: object
+          required: [type, candidate_id]
+          properties:
+            type: { type: string, enum: [confirm_registry] }
+            candidate_id: { type: string }
+        - type: object
+          required: [type, business_id, legal_name, legal_form]
+          properties:
+            type: { type: string, enum: [confirm_manual] }
+            business_id: { type: string }
+            legal_name: { type: string, minLength: 1, maxLength: 1000 }
+            legal_form: { type: string, enum: [sole_trader, limited_company, other] }
+        - type: object
+          required: [type, business_stage]
+          properties:
+            type: { type: string, enum: [set_stage] }
+            business_stage: { type: string, enum: [new, existing] }
+        - type: object
+          required: [type]
+          properties:
+            type: { type: string, enum: [defer] }
+    BusinessSetupResult:
+      type: object
+      required: [setup, receipt]
+      properties:
+        setup: { $ref: '#/components/schemas/BusinessSetup' }
+        receipt: { $ref: '#/components/schemas/Receipt' }
+
+    QueueResponse:
+      type: object
+      required: [generated_at, needs_you_count, cards]
+      properties:
+        generated_at: { type: string, format: date-time }
+        needs_you_count:
+          type: integer
+          description: |
+            THE badge number. Backend-computed; equals the open cards in
+            classes ask+approval, by law. The app renders this number
+            everywhere a count appears and never derives its own.
+        cards:
+          type: array
+          description: Open ask/approval cards plus the recent fyi window, newest-relevant first.
+          items: { $ref: '#/components/schemas/QueueCard' }
+
+    QueueCard:
+      type: object
+      description: |
+        One item on the owner. `class` is the backend's classification —
+        the queue doctrine's three classes, closed. Class-specific payload
+        lives under the matching optional key (`ask`/`approval`/`fyi`);
+        exactly the key matching `class` is present.
+      required: [id, entity_id, class, state, title, created_at, source, blocks_close]
+      properties:
+        id:
+          type: string
+          description: 'Canonical identity: `<source.kind>:<source.id>` — stable across reads.'
+        entity_id: { type: string }
+        class:
+          type: string
+          enum: [ask, approval, fyi]
+        state:
+          type: string
+          description: |
+            Lifecycle, closed: `open` (awaiting the owner — ask/approval
+            only), `answered` (ask answered, backend processing),
+            `approved`/`rejected` (approval decided), `done` (fyi resting
+            state), `flagged` (fyi the owner marked wrong), `resolved`
+            (terminal — leaves the queue), `cancelled`.
+          enum: [open, answered, approved, rejected, done, flagged, resolved, cancelled]
+        title:
+          type: string
+          description: Plain language, owner's words. Never an enum, never jargon.
+        detail:
+          type: [string, 'null']
+          description: Secondary line (e.g. the transaction descriptor).
+        occurred_on:
+          type: [string, 'null']
+          format: date
+          description: The business date the card is about (plain ISO date).
+        created_at: { type: string, format: date-time }
+        amount: { type: [number, 'null'], description: Signed, major units. }
+        currency: { type: [string, 'null'] }
+        counterparty: { type: [string, 'null'] }
+        blocks_close:
+          type: boolean
+          description: Persisted close-engine verdict — drives sort priority, never color.
+        source:
+          type: object
+          description: |
+            Backend provenance (render-irrelevant, receipt-relevant).
+            Reference-backend kinds include client_evidence_request,
+            outbound_action, receivable_case, reconciliation_match,
+            review_item, failed_parse, document.
+          required: [kind, id]
+          properties:
+            kind: { type: string }
+            id: { type: string }
+        transaction_id: { type: [string, 'null'] }
+        document_id: { type: [string, 'null'] }
+        context_label:
+          type: string
+          description: Backend-supplied concise context; never a client-inferred identity.
+        presentation: { $ref: '#/components/schemas/ArtifactPresentation' }
+        ask: { $ref: '#/components/schemas/AskPayload' }
+        approval: { $ref: '#/components/schemas/ApprovalPayload' }
+        fyi: { $ref: '#/components/schemas/FyiPayload' }
+
+    AskPayload:
+      type: object
+      description: A business fact only the owner knows.
+      required: [question, allows_text, allows_documents]
+      properties:
+        question: { type: string }
+        evidence_type:
+          type: [string, 'null']
+          description: |
+            Reference-backend vocabulary: business_purpose,
+            supporting_document, bank_statement, payment_method.
+        allows_text: { type: boolean }
+        allows_documents:
+          type: boolean
+          description: Whether attaching a capture answers this ask.
+        choices:
+          type: [array, 'null']
+          description: |
+            Optional one-tap answers ("Business"/"Personal").
+            CONTRACT-DESIGN SMELL: the reference backend's ask pipeline
+            has no choice shape today — its asks are free text + upload.
+            Recorded in contract/DESIGN-NOTES.md; a backend may omit.
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { type: string }
+              label: { type: string }
+        answered_text: { type: [string, 'null'] }
+        answered_at: { type: [string, 'null'], format: date-time }
+
+    ApprovalPayload:
+      type: object
+      description: |
+        A genuinely owner-authority decision (Donna's move is prepared and
+        held). If a backend sends a confident routine decision as an
+        approval, that is a backend bug — the doctrine, not this schema,
+        is the law.
+      required: [action_type, description]
+      properties:
+        action_type:
+          type: string
+          description: Backend action grammar (e.g. issue_invoice, payment_reminder).
+        description: { type: string, description: Plain-language what-and-why. }
+        hold_reason:
+          type: [string, 'null']
+          description: Why this is held for the owner (plain language).
+        party_name: { type: [string, 'null'] }
+        batch_key:
+          type: [string, 'null']
+          description: Identical proposals share a key — the only batch-approve grain.
+        decided_at: { type: [string, 'null'], format: date-time }
+
+    FyiPayload:
+      type: object
+      description: |
+        A receipt for something Donna already DID under authority.
+        Done-not-pending grammar; corrective verbs only. NEVER an approve
+        button, NEVER counted in needs_you_count.
+      required: [description, done_at, corrective_verbs]
+      properties:
+        description: { type: string }
+        done_at: { type: string, format: date-time }
+        corrective_verbs:
+          type: array
+          description: Which quiet corrections this fyi accepts.
+          items:
+            type: string
+            enum: [veto_flag]
+        marked_wrong_at: { type: [string, 'null'], format: date-time }
+
+    Decision:
+      type: object
+      description: The closed decision grammar. No free-form mutation, ever.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [approve, reject, answer, veto_flag]
+        note:
+          type: [string, 'null']
+          maxLength: 2000
+          description: Optional owner note (reject reason, veto context).
+        answer:
+          type: [object, 'null']
+          description: answer-type only.
+          properties:
+            text: { type: [string, 'null'], maxLength: 4000 }
+            choice_id:
+              type: [string, 'null']
+              description: One of the ask's `choices` ids, when offered.
+            document_ids:
+              type: [array, 'null']
+              description: Captures registered via the documents flow.
+              items: { type: string }
+        idempotency_key:
+          type: [string, 'null']
+          description: Client-minted; lets the offline queue replay safely.
+
+    DecisionResult:
+      type: object
+      required: [applied, card]
+      properties:
+        applied: { type: boolean }
+        already:
+          type: [string, 'null']
+          description: |
+            When `applied` is false — the card's pre-existing state
+            (mirrors the reference backend's already-decided report).
+        card:
+          $ref: '#/components/schemas/QueueCard'
+          description: The resulting state. The app renders THIS, not its optimistic guess.
+        receipt: { $ref: '#/components/schemas/Receipt' }
+
+    Receipt:
+      type: object
+      description: |
+        The consequence of the mutation, owner-readable. Mirrors the
+        reference backend's ApplyReceipt spirit (per-target outcomes,
+        audit ids, check report) without its operator internals.
+        CONTRACT-DESIGN SMELL: the reference backend's owner-answer verb
+        emits no receipt today — recorded in contract/DESIGN-NOTES.md.
+      required: [summary, changes, audit_event_ids, actor]
+      properties:
+        at: { type: string, format: date-time }
+        summary:
+          type: string
+          description: Plain language — what changed and why.
+        changes:
+          type: array
+          description: Per-target outcome (a list of ids, never a count).
+          items:
+            type: object
+            required: [target, applied]
+            properties:
+              target: { type: string }
+              applied: { type: boolean }
+              error: { type: [string, 'null'] }
+        checks:
+          type: [array, 'null']
+          description: Deterministic invariant results, when the writer ran any.
+          items:
+            type: object
+            required: [name, status]
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [pass, warning, requires_review, fail] }
+              detail: { type: [string, 'null'] }
+        audit_event_ids:
+          type: array
+          items: { type: string }
+        actor:
+          type: object
+          required: [type, terminal]
+          properties:
+            type: { type: string, enum: [owner, donna] }
+            terminal: { type: string, enum: [mobile, backend] }
+
+    BooksStatus:
+      type: object
+      required: [as_of, needs_you_count, donna_working_count, periods]
+      properties:
+        review_navigation:
+          type: boolean
+          description: Enables supported read-only tax/month review destinations; absent means unsupported.
+        as_of: { type: string, format: date-time }
+        needs_you_count:
+          type: integer
+          description: Same number as the queue badge — one law, one source.
+        donna_working_count:
+          type: integer
+          description: Donna's own open workload — informational, never a task list.
+        headline:
+          type: [string, 'null']
+          description: One plain-language sentence for the top of the screen.
+        periods:
+          type: array
+          description: Current month first, then recent history.
+          items: { $ref: '#/components/schemas/PeriodStatus' }
+
+    PeriodStatus:
+      type: object
+      description: |
+        One accounting period, projected from the close read-model. `state`
+        is the computed close verdict vocabulary (ready/review/blocked —
+        plus unchecked for months with no verdict yet), and `lifecycle` is
+        the period row's own open/reviewing/closed/locked column — the
+        reference backend keeps these as two distinct vocabularies and so
+        does this contract.
+      required: [period_start, period_end, label, state, lifecycle, blockers]
+      properties:
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        label: { type: string, description: 'Localized display label, e.g. "August 2026".' }
+        state:
+          type: string
+          enum: [ready, review, blocked, unchecked]
+        lifecycle:
+          type: string
+          enum: [open, reviewing, closed, locked]
+        completion:
+          type: [object, 'null']
+          description: Settled vs total lines — the quiet progress figure.
+          properties:
+            settled: { type: integer }
+            total: { type: integer }
+        blockers:
+          type: array
+          description: |
+            Plain-language blockers with whose-move attribution. `on: you`
+            blockers deep-link into the queue; `on: donna` render as
+            in-Donna's-hands. There is no third owner (two-terminal-states).
+          items:
+            type: object
+            required: [code, label, 'on']
+            properties:
+              code: { type: string, description: Backend check code (provenance). }
+              label: { type: string, description: Plain language. }
+              'on': { type: string, enum: [you, donna] }
+              count: { type: [integer, 'null'] }
+              card_ids:
+                type: [array, 'null']
+                description: Queue cards that clear this blocker, when on=you.
+                items: { type: string }
+
+    UploadIntent:
+      type: object
+      description: |
+        Signed upload target (mirrors the reference backend's
+        evidence_upload_url response). The client PUTs the bytes to
+        `upload_url` with the given headers, then registers.
+      required: [upload_url, storage_bucket, storage_object_key, expires_in]
+      properties:
+        upload_url: { type: string }
+        headers:
+          type: object
+          description: Headers to send verbatim on the PUT (content type, no-upsert).
+          additionalProperties: { type: string }
+        storage_bucket: { type: string }
+        storage_object_key: { type: string }
+        expires_in: { type: integer, description: Seconds of validity. }
+
+    Document:
+      type: object
+      description: One captured document and where it stands.
+      required: [id, entity_id, filename, capture_state, uploaded_at]
+      properties:
+        id: { type: string }
+        entity_id: { type: string }
+        context_label:
+          type: string
+          description: Backend-supplied concise context; never a client-inferred identity.
+        presentation: { $ref: '#/components/schemas/ArtifactPresentation' }
+        filename: { type: string }
+        purpose: { type: string, enum: [prior_records] }
+        capture_state:
+          type: string
+          description: |
+            The BACKEND's projection of parse + evidence state into the
+            owner vocabulary: received (registered, not yet processing),
+            processing, attached (in the books), needs_info (an ask card
+            exists for it), failed, duplicate (owner call needed), stored
+            (background context received; not processed or posted).
+            CONTRACT-DESIGN NOTE: the reference backend computes this from
+            parse_status + open asks; recorded in contract/DESIGN-NOTES.md.
+          enum: [received, processing, attached, needs_info, failed, duplicate, stored]
+        uploaded_at: { type: string, format: date-time }
+        captured_at: { type: [string, 'null'], format: date-time }
+        document_type: { type: [string, 'null'], description: Backend classification, display only. }
+        document_date: { type: [string, 'null'], format: date }
+        total_amount: { type: [number, 'null'] }
+        currency: { type: [string, 'null'] }
+        counterparty: { type: [string, 'null'] }
+        needs_info_card_id:
+          type: [string, 'null']
+          description: The ask card to answer when capture_state=needs_info.
+        failure_message:
+          type: [string, 'null']
+          description: The backend's safe user message when capture_state=failed.
+        duplicate_of: { type: [string, 'null'] }
+
+    ParseStatus:
+      type: object
+      description: |
+        Thin live-processing row, mirroring the reference backend's
+        parse-status read verbatim (stage/progress/error live ONLY here).
+      required: [id, parse_status]
+      properties:
+        id: { type: string }
+        parse_status:
+          type: string
+          enum: [pending, processing, completed, failed, skipped, duplicate_pending]
+        parse_stage:
+          type: [string, 'null']
+          enum: [fetching, extracting, writing, enriching, finalizing, null]
+        parse_progress_current: { type: [integer, 'null'] }
+        parse_progress_total: { type: [integer, 'null'] }
+        parse_error:
+          type: [object, 'null']
+          properties:
+            code: { type: string }
+            safe_user_message: { type: string }
+            retryable: { type: boolean }
+        duplicate_of: { type: [string, 'null'] }
+        parse_completed_at: { type: [string, 'null'], format: date-time }
+
+    ChatMessage:
+      type: object
+      required: [id, author, text, at]
+      properties:
+        id: { type: string }
+        author: { type: string, enum: [donna, owner] }
+        text: { type: string }
+        at: { type: string, format: date-time }
+        figures:
+          type: array
+          items: { $ref: '#/components/schemas/DisplayFigure' }
+        attachment: { $ref: '#/components/schemas/DocumentEvidence' }
+        actions:
+          description: Typed proposals riding this Donna message (absent on owner messages and plain replies).
+          type: [array, 'null']
+          items: { $ref: '#/components/schemas/AppliableChatAction' }
+
+    DisplayFigure:
+      type: object
+      required: [label, value]
+      properties:
+        label: { type: string }
+        value: { type: string, description: Backend formatted factual value; never calculated on-device. }
+        emphasized: { type: boolean }
+
+    DocumentEvidence:
+      type: object
+      required: [label, document_id]
+      properties:
+        label: { type: string }
+        document_id: { type: string }
+
+    ArtifactPresentation:
+      type: object
+      description: Optional persisted supporting context; never inferred by the terminal.
+      properties:
+        title: { type: string }
+        description: { type: string }
+        evidence: { $ref: '#/components/schemas/DocumentEvidence' }
+        invoice:
+          type: object
+          required: [number, currency, total, lines]
+          properties:
+            number: { type: string }
+            due_on: { type: string, format: date }
+            currency: { type: string }
+            total: { type: number }
+            lines:
+              type: array
+              items:
+                type: object
+                required: [label, amount]
+                properties:
+                  label: { type: string }
+                  amount: { type: number }
+
+    ReviewNavigation:
+      type: object
+      description: Navigation only; never executes a financial mutation.
+      required: [kind, label]
+      properties:
+        kind: { type: string, enum: [chat, queue_card] }
+        label: { type: string }
+        card_id: { type: string }
+
+    FinancialReview:
+      type: object
+      description: |
+        Forward-design read model. Sample figures must be labelled by the
+        backend and displayed as such. No client calculations or filing/payment
+        verbs. Unconfigured accounts return no figures.
+      required: [kind, source, title, headline, footnote, blocks, as_of]
+      properties:
+        kind: { type: string, enum: [taxes, month] }
+        source: { type: string, enum: [sample, not_configured] }
+        title: { type: string }
+        headline: { type: string }
+        footnote: { type: string }
+        as_of: { type: string, format: date-time }
+        blocks:
+          type: array
+          items:
+            type: object
+            required: [id, title, rows]
+            properties:
+              id: { type: string }
+              title: { type: string }
+              subtitle: { type: string }
+              pill: { type: string }
+              tone: { type: string, enum: [quiet, accent, machine] }
+              figure: { type: string }
+              figure_label: { type: string }
+              text: { type: string }
+              rows:
+                type: array
+                items:
+                  type: object
+                  required: [label, value]
+                  properties:
+                    label: { type: string }
+                    value: { type: string }
+                    owner: { type: string, enum: [you, donna] }
+                    card_id: { type: string }
+              action: { $ref: '#/components/schemas/ReviewNavigation' }
+
+    ArtifactKind:
+      type: string
+      enum: [queue_card, document]
+      description: |
+        The mobile stream item's persisted kind. The backend resolves this
+        reference to the canonical desktop case file; it is not a second
+        conversation namespace.
+
+    ArtifactConversation:
+      type: object
+      required: [artifact_kind, artifact_id, messages, receipts]
+      properties:
+        artifact_kind: { $ref: '#/components/schemas/ArtifactKind' }
+        artifact_id: { type: string }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/ChatMessage' }
+        receipts:
+          type: array
+          description: Persisted mutation receipts already attached to this artifact.
+          items: { $ref: '#/components/schemas/Receipt' }
+
+    AppliableChatAction:
+      type: object
+      description: |
+        A typed, server-held proposal in the chat (the 2026-08-26
+        grammar revision). The terminal renders label + summary and
+        POSTs apply — the payload and the verb it compiles to stay
+        server-side, so the closed action-type enum lives in ONE place
+        (the backend), never re-implemented in an app. State is
+        persisted and rendered, never inferred; a newer Donna message
+        carrying actions SUPERSEDES every prior available action (the
+        reference backend's proposal-supersede rule — stale Apply
+        buttons disarm).
+      required: [id, kind, label, state]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [record_mileage, answer_card, approve_card]
+          description: Closed. A new kind is a contract revision, not a payload variant.
+        label:
+          type: string
+          description: The button copy, backend-written ("Log 120 km — site visit").
+        summary:
+          type: [string, 'null']
+          description: One plain-language line of what applying will do.
+        result_label: { type: string, description: Past-tense result label shown only after the backend reports applied. }
+        state: { type: string, enum: [available, applied, superseded] }
+        applied_at: { type: [string, 'null'], format: date-time }
+
+    ActivityEvent:
+      type: object
+      required: [id, at, kind, title]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        kind:
+          type: string
+          enum: [card_created, card_resolved, document_attached, period_update, digest]
+        title: { type: string }
+        body: { type: [string, 'null'] }
+        deep_link:
+          type: [object, 'null']
+          description: Where tapping lands. Nudges land in QUEUE.
+          properties:
+            screen: { type: string, enum: [queue, capture, status] }
+            card_id: { type: [string, 'null'] }
+            document_id: { type: [string, 'null'] }

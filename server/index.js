@@ -60,7 +60,8 @@ const applyCors = (res) => {
 const server = http.createServer((req, res) => {
   applyCors(res);
 
-  if (req.method === 'OPTIONS') {
+  // The mobile adapter answers its own preflight (it also allows PUT/DELETE).
+  if (req.method === 'OPTIONS' && !(req.url || '').startsWith('/api/donna/mobile/')) {
     res.statusCode = 204;
     res.end();
     return;
