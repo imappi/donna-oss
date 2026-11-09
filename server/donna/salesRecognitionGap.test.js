@@ -2,7 +2,8 @@
 // posted ledger does not recognise in the period, and why.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifySalesRecognitionGap, salesRecognitionStatement, salesRecognitionDraftReason, buildSalesRecognitionQuestion, buildSupplierBillSettlementQuestion } from './salesRecognitionGap.js';
+import { classifySalesRecognitionGap, salesRecognitionStatement, salesRecognitionDraftReason, buildSalesRecognitionQuestion, buildSupplierBillSettlementQuestion,
+  noSettlementAskStillOpen, NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS, SALES_RECOGNITION_ASK_LANE, SUPPLIER_BILL_SETTLEMENT_ASK_LANE } from './salesRecognitionGap.js';
 
 const FEB = { starts_on: '2025-02-01', ends_on: '2025-02-28' };
 const doc = (id, extra = {}) => ({ id, filename: `${id}.pdf`, document_type: 'sales_invoice', document_date: '2025-02-12', total_amount: 903.6, tax_amount: 183.6,
@@ -83,26 +84,45 @@ test('the sales question in Finnish: the same payment fact, plain everyday words
   const q = buildSalesRecognitionQuestion({ document: doc('lumikki'), language: 'fi' });
   assert.equal(q, 'Myyntilasku 1002 (Lumikki Oy, 903,60 EUR, päivätty 12.2.2025): Donnalla olevissa tiliotteissa ei näy tälle laskulle maksua. '
     + 'Donna ei vielä kirjaa maksamatonta myyntilaskua kirjanpitoon, joten se jää pois sen kauden myynnistä ja arvonlisäverosta, '
-    + 'ja luonnoksissa se näkyy pois jätettynä. Onko asiakas maksanut laskun? Jos on, milloin ja mille tilille? '
-    + 'Jos lasku on vielä maksamatta, vastaa "vielä maksamatta".');
+    + 'ja luonnoksissa se näkyy pois jätettynä. Onko asiakas maksanut laskun? Jos se on maksettu, kerro milloin ja mille tilille. '
+    + 'Jos se on vielä maksamatta, vastaa "vielä maksamatta".');
 });
 
 // The supplier-bill question invites only answers the doc-ask reply path
-// consumes: an account and a date, or the owner's own cash or personal card.
-// An unpaid bill needs no reply; its later bank line resolves the question.
+// consumes: an account and a date, the owner's own cash or personal card, or
+// "still unpaid" (the lane's stillOpen answer). Its later bank line resolves it.
 const bill = doc('tukku', { document_type: 'supplier_bill', customer_name: null, vendor_name: 'Tukku Oy', total_amount: 248, tax_amount: 48,
   document_date: '2025-02-05', parse_summary: { references: [{ type: 'invoice_number', value: '4711' }] } });
 test('the supplier-bill question in English names the bill and asks whether, when and how it was paid', () => {
   assert.equal(buildSupplierBillSettlementQuestion({ document: bill }),
     'Supplier bill 4711 from Tukku Oy (248.00 EUR, dated 2025-02-05) has no payment on the bank statements Donna holds. '
     + 'Donna does not yet record an unpaid supplier bill in the books, so it is missing from that period\'s expenses and VAT. '
-    + 'Has it been paid? If so, when, and from which account? If you paid it with your own money, in cash or on a personal card, say which. '
-    + 'If it is still unpaid, you don\'t need to reply now: this question closes on its own once the payment shows on a bank statement you send.');
+    + 'Has it been paid? If it has been paid, reply when and from which account, or, if you paid it with your own money in cash or on a personal card, say which. '
+    + 'If it is still unpaid, reply "still unpaid".');
 });
 test('the supplier-bill question in Finnish', () => {
   assert.equal(buildSupplierBillSettlementQuestion({ document: bill, language: 'fi' }),
     'Ostolasku 4711 (Tukku Oy, 248,00 EUR, päivätty 5.2.2025): Donnalla olevissa tiliotteissa ei näy tälle laskulle maksua. '
     + 'Donna ei vielä kirjaa maksamatonta ostolaskua kirjanpitoon, joten se puuttuu sen kauden kuluista ja arvonlisäverosta. '
-    + 'Onko lasku maksettu? Jos on, milloin ja miltä tililtä? Jos maksoit sen omilla rahoillasi käteisellä tai omalla kortillasi, kerro kumpi. '
-    + 'Jos lasku on vielä maksamatta, sinun ei tarvitse vastata nyt: kysymys sulkeutuu itsestään, kun maksu näkyy tiliotteella, jonka lähetät.');
+    + 'Onko lasku maksettu? Jos se on maksettu, kerro milloin ja miltä tililtä, tai jos maksoit sen omilla rahoillasi käteisellä tai omalla kortillasi, kerro kumpi. '
+    + 'Jos se on vielä maksamatta, vastaa "vielä maksamatta".');
+});
+
+test('both no-settlement questions end the same way in each language, and both lanes accept "still unpaid"', () => {
+  const sales = doc('lumikki');
+  for (const [language, ending] of [['en', 'If it is still unpaid, reply "still unpaid".'], ['fi', 'Jos se on vielä maksamatta, vastaa "vielä maksamatta".']]) {
+    assert.ok(buildSalesRecognitionQuestion({ document: sales, language }).endsWith(ending), language);
+    assert.ok(buildSupplierBillSettlementQuestion({ document: bill, language }).endsWith(ending), language);
+  }
+  assert.equal(buildSalesRecognitionQuestion({ document: sales }),
+    'Sales invoice 1002 to Lumikki Oy (903.60 EUR, dated 2025-02-12) has no payment on the bank statements Donna holds. '
+    + 'Donna does not yet record an unpaid sales invoice in the books, so it is left out of that period\'s sales and VAT figures, and the drafts list it as excluded. '
+    + 'Has the customer paid it? If it has been paid, reply when and into which account. If it is still unpaid, reply "still unpaid".');
+  for (const lane of [SALES_RECOGNITION_ASK_LANE, SUPPLIER_BILL_SETTLEMENT_ASK_LANE]) {
+    const stillOpen = noSettlementAskStillOpen(lane);
+    assert.match(stillOpen.meaning, /not paid .* yet/);
+    assert.equal(stillOpen.recheckDays, NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS);
+  }
+  assert.equal(noSettlementAskStillOpen('owner_reply_clarification'), null);
+  assert.equal(noSettlementAskStillOpen(undefined), null);
 });

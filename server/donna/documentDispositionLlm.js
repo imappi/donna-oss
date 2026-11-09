@@ -94,6 +94,7 @@ import {
 } from './dispositionMateriality.js';
 import { resolveOpenAiCompatibleEndpoint } from './providerEndpoints.js';
 import { toIsoDay } from './dates.js';
+import { ownerReplyIdentity } from './ownerReplyIdentity.js';
 
 const LOG_TAG = 'documentDispositionLlm';
 
@@ -129,6 +130,9 @@ export const RECONCILABLE_DOC_TYPES = Object.freeze([
 ]);
 
 const DISPOSITIONS = new Set(['auto_explain', 'chase_evidence', 'needs_human']);
+// The owner-reply-only answer "it is still unpaid": never a verdict, never
+// stamped. Valid only on a lane that accepts it (ownerReply.stillOpen).
+export const OBLIGATION_OPEN = 'obligation_open';
 const MATERIALITIES = new Set(['immaterial', 'material']);
 const SETTLEMENT_CHANNELS = new Set(['cash', 'personal_card', 'uncovered_account', 'unknown']);
 
@@ -398,6 +402,10 @@ export const parseDocumentDispositionResponse = (text, {
   //     back to the owner (ping-pong guard).
   //   - the confidence floor still binds (an unclear reply is needs_human,
   //     not a guessed settle).
+  //   - "obligation_open" (the owner says it is still unpaid) is a valid
+  //     answer ONLY where the asking lane accepts it (`ownerReply.stillOpen`,
+  //     salesRecognitionGap's no-settlement lanes); anywhere else it is not a
+  //     disposition and falls to needs_human like any unknown value.
   ownerReply = null
 } = {}) => {
   let parsed;
@@ -410,7 +418,8 @@ export const parseDocumentDispositionResponse = (text, {
     return safeDisposition('invalid_llm_response');
   }
 
-  const disposition = DISPOSITIONS.has(parsed.disposition) ? parsed.disposition : 'needs_human';
+  const disposition = DISPOSITIONS.has(parsed.disposition)
+    || (parsed.disposition === OBLIGATION_OPEN && ownerReply?.stillOpen) ? parsed.disposition : 'needs_human';
   const materiality = MATERIALITIES.has(parsed.materiality) ? parsed.materiality : 'material';
   const expense_kind = typeof parsed.expense_kind === 'string'
     ? parsed.expense_kind.replace(/[^a-z0-9_]/gi, '').slice(0, 40) || 'unknown'
@@ -446,6 +455,10 @@ export const parseDocumentDispositionResponse = (text, {
     } else if (disposition === 'auto_explain' && confidence < confidenceFloor) {
       safe = 'needs_human';
       downgraded_from = 'auto_explain';
+      coercedReason = 'owner_reply_unclear';
+    } else if (disposition === OBLIGATION_OPEN && confidence < confidenceFloor) {
+      safe = 'needs_human';
+      downgraded_from = OBLIGATION_OPEN;
       coercedReason = 'owner_reply_unclear';
     } else if (disposition === 'chase_evidence') {
       const laneChange = ownerReply.answeredEvidenceType === 'payment_method'
@@ -584,7 +597,14 @@ export const buildDocumentDispositionUserPrompt = ({ document, firmContext = nul
 // reads the answer and disposes. Same output shape as the sweep prompt so
 // the parser is shared; the guard differences live in the parser's
 // owner-reply mode, not in trusting the model less.
-const OWNER_REPLY_SYSTEM_PROMPT = `You triage a single parsed evidence DOCUMENT (a receipt, supplier bill, sales invoice, issued receipt, or payment confirmation) for a bookkeeping firm's client.
+// The asking lane may accept "it is still unpaid" as an answer
+// (salesRecognitionGap's stillOpen); the model is told so, and what it means
+// on that lane. Without it the prompt is the historical one, byte for byte.
+export const buildOwnerReplySystemPrompt = ({ stillOpen = null } = {}) => {
+  const stillOpenLine = stillOpen
+    ? `- "obligation_open": the owner says it is STILL UNPAID, i.e. ${stillOpen.meaning}. The question invited exactly this answer, so it is a clear, valid answer in any wording or language ("still unpaid", "not paid yet", "vielä maksamatta", "ei oo vielä maksettu"); it is not unclear and it settles nothing. Use "settlement_channel": "unknown". A partial payment, a dispute, or a payment the owner cannot place is not this; it is "needs_human".\n`
+    : '';
+  return `You triage a single parsed evidence DOCUMENT (a receipt, supplier bill, sales invoice, issued receipt, or payment confirmation) for a bookkeeping firm's client.
 
 The reconciliation matchers found NO bank line for this document, the firm asked the business OWNER how it settled, and the owner has now ANSWERED. Your job is to read the owner's answer and dispose of the document.
 
@@ -594,10 +614,10 @@ Choose exactly one disposition:
 - "auto_explain": the owner's answer clearly confirms the document settled OUTSIDE the visible bank feed — paid in cash ("settlement_channel": "cash") or on a personal card / with personal funds ("personal_card"). Take a clear statement at its word; do not second-guess it.
 - "chase_evidence": ONLY when the owner's answer names a business account or card whose statement the firm does not have — "settlement_channel" MUST be "uncovered_account" (this becomes a statement request). NEVER use this to re-ask how the document was paid.
 - "needs_human": the answer is unclear, contradictory, off-topic, or raises something a bookkeeper must read (e.g. "that was personal", "I think you have that twice", a dispute).
-
+${stillOpenLine}
 Output a single JSON object with this exact shape, nothing else:
 {
-  "disposition": "auto_explain" | "chase_evidence" | "needs_human",
+  "disposition": "auto_explain" | "chase_evidence" | "needs_human"${stillOpen ? ' | "obligation_open"' : ''},
   "materiality": "immaterial" | "material",
   "expense_kind": "<short snake_case kind, e.g. fuel, software_subscription, or unknown>",
   "settlement_channel": "cash" | "personal_card" | "uncovered_account" | "unknown",
@@ -611,6 +631,8 @@ Rules:
 - "materiality" still reports your honest read of the amount — do not shade it to fit the disposition.
 - confidence is 0..1: how clearly the owner's answer resolves the question.
 - Return ONLY valid JSON. No markdown, no commentary.`;
+};
+const OWNER_REPLY_SYSTEM_PROMPT = buildOwnerReplySystemPrompt();
 
 // The reply is OWNER-authored content headed to the model — pass it verbatim
 // (it is the evidence being read) but bounded, and never echo it back into
@@ -1449,8 +1471,13 @@ export const runOwnerReplyRedisposition = async ({
   decidingPolicy = null,
   // RT-10 — the clarification ask's writer; null ⇒ the real one.
   laneDeps = null,
-  jevEnabled: jevEnabledOverride
+  jevEnabled: jevEnabledOverride,
+  // The asking lane's "still unpaid" answer ({ meaning, recheckDays },
+  // salesRecognitionGap.noSettlementAskStillOpen), or null where the lane has
+  // none. The reader is told it is a valid answer; its consequence is below.
+  stillOpen = null
 } = {}) => {
+  const ownerReplyMode = { answeredEvidenceType, ...(stillOpen ? { stillOpen } : {}) };
   const result = {
     stamped: false,
     settled: false,
@@ -1615,13 +1642,13 @@ export const runOwnerReplyRedisposition = async ({
         replyDocumentCount: Array.isArray(replyDocumentIds) ? replyDocumentIds.filter(Boolean).length : 0
       });
       const strongOwnerReply = () => proposeMatchesViaAnthropic({
-        systemPrompt: OWNER_REPLY_SYSTEM_PROMPT,
+        systemPrompt: stillOpen ? buildOwnerReplySystemPrompt({ stillOpen }) : OWNER_REPLY_SYSTEM_PROMPT,
         userPrompt: userPrompt + (jevEnabled ? `\nExtracted focal document: ${JSON.stringify(document.parse_summary || {})}\nLocal evidence inventory: ${JSON.stringify(localEvidence)}` : ''),
         candidateBankLines: [],
         model,
         apiKey,
         fetchImpl,
-        parse: (text) => parseDocumentDispositionResponse(text, { documentType:document.document_type, ownerReply: { answeredEvidenceType } }),
+        parse: (text) => parseDocumentDispositionResponse(text, { documentType:document.document_type, ownerReply: ownerReplyMode }),
         logTag: LOG_TAG,
         transport: transport
           ? { ...transport, execution: transport.execution || { root: { type: 'reconciliation_reasoning', id: documentId } } }
@@ -1629,12 +1656,12 @@ export const runOwnerReplyRedisposition = async ({
       });
       if (jevEnabled) {
         const materialityPolicy = getDispositionMaterialityPolicy({ jurisdiction: clientIdentity?.jurisdiction ?? null });
-        const chosen = await decideJevDisposition({ provider:await makeJevTrialProvider({client,firmId,clientId,resourceType:'document',resourceId:documentId,decisionKind:'document_disposition'}), kind: 'document', direction:MONEY_IN_TYPES.has(document.document_type) ? 'money_in' : 'money_out', observation: { summary: userPrompt, extracted_summary: document.parse_summary || null }, localEvidence, amount: Number(document.total_amount), materialityCeiling: materialityPolicy.ceiling, ownerReply: { answeredEvidenceType }, fetchImpl });
+        const chosen = await decideJevDisposition({ provider:await makeJevTrialProvider({client,firmId,clientId,resourceType:'document',resourceId:documentId,decisionKind:'document_disposition'}), kind: 'document', direction:MONEY_IN_TYPES.has(document.document_type) ? 'money_in' : 'money_out', observation: { summary: userPrompt, extracted_summary: document.parse_summary || null }, localEvidence, amount: Number(document.total_amount), materialityCeiling: materialityPolicy.ceiling, ownerReply: ownerReplyMode, fetchImpl });
         semantic = chosen.needsReasoning
           ? withJevHandoff(await strongOwnerReply(), chosen.receipt)
-          : { ...parseDocumentDispositionResponse(JSON.stringify(chosen.semantic), { confidenceFloor: 0, documentType:document.document_type, ownerReply: { answeredEvidenceType } }), model: chosen.semantic.model, model_source: 'response', decision_engine: 'jev', jev_first: chosen.receipt };
+          : { ...parseDocumentDispositionResponse(JSON.stringify(chosen.semantic), { confidenceFloor: 0, documentType:document.document_type, ownerReply: ownerReplyMode }), model: chosen.semantic.model, model_source: 'response', decision_engine: 'jev', jev_first: chosen.receipt };
       } else semantic = await strongOwnerReply();
-      if (!semantic || !DISPOSITIONS.has(semantic.disposition)) {
+      if (!semantic || !(DISPOSITIONS.has(semantic.disposition) || (stillOpen && semantic.disposition === OBLIGATION_OPEN))) {
         semantic = safeDisposition(semantic?.unmatchable_reason || 'invalid_llm_response');
       }
     } catch (error) {
@@ -1665,6 +1692,70 @@ export const runOwnerReplyRedisposition = async ({
     semantic.policy_model = policyModel;
   }
   result.disposition = semantic.disposition;
+
+  // "Still unpaid" on a lane that accepts it: the obligation is open and the
+  // owner said so. Nothing is stamped or posted and no clarification is sent;
+  // the ask goes back to the owner ('open', still projecting on_owner) with
+  // the answer and its date on its topic record, and its due date moves out
+  // by the lane's recheckDays so the existing re-ask clock asks again later.
+  // obligation_open_acknowledged is the marker that clock reads: the owner
+  // answered, so sends before it are not "ignored" sends. A payment posted
+  // against the document still closes the ask
+  // (resolveOpenSettlementRequestsForDocument).
+  if (semantic.disposition === OBLIGATION_OPEN) {
+    const at = new Date();
+    const recheckAt = new Date(at.getTime() + Number(stillOpen.recheckDays) * 86400000).toISOString();
+    await client.query('begin');
+    try {
+      const current = (await client.query(
+        `select * from client_evidence_requests
+          where firm_id = $1 and client_id = $2 and id = $3 and status = 'replied'
+          for update`,
+        [firmId, clientId, evidenceRequestId]
+      )).rows[0];
+      if (current) {
+        const prior = current.request_payload?.evidence_topic || {};
+        const replyKey = ownerReplyIdentity(current);
+        const turn = { at: at.toISOString(), channel: prior.channel || 'owner_reply',
+          actor_id: current.response_payload?.reply_processing?.actor_id || null, reply_key: replyKey,
+          outcome: OBLIGATION_OPEN, terminal: false,
+          reply_excerpt: String(current.response_payload?.reply || '').slice(0, 240), question: current.question };
+        // 'answered', not 'open': the owner did answer, so the topic reminder
+        // sweep (which reminds open topics a day after the owner's last
+        // message) leaves it alone; the re-ask clock owns when to ask again.
+        const topic = { ...prior, version: 1, status: 'answered', last_owner_message_at: at.toISOString(),
+          original_question: prior.original_question || current.question, current_need: current.question,
+          last_assessment: { outcome: OBLIGATION_OPEN, can_resolve: false, reason: 'owner_reports_still_unpaid', recheck_at: recheckAt },
+          turns: [...(prior.turns || []), turn].slice(-10) };
+        const acknowledged = { at: at.toISOString(), reply_key: replyKey, send_count: Number(current.send_count || 0), recheck_at: recheckAt };
+        await client.query(
+          `update client_evidence_requests
+              set status = 'open', resolved_at = null, resolved_by = null, due_at = $4::timestamptz,
+                  request_payload = request_payload || jsonb_build_object(
+                    'evidence_topic', $5::jsonb,
+                    'obligation_open_acknowledged', $6::jsonb,
+                    'evidence_request', coalesce(request_payload->'evidence_request', '{}'::jsonb) || jsonb_build_object('status', 'open')),
+                  updated_at = now()
+            where firm_id = $1 and client_id = $2 and id = $3`,
+          [firmId, clientId, evidenceRequestId, recheckAt, JSON.stringify(topic), JSON.stringify(acknowledged)]
+        );
+        await client.query(
+          `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+           values ($1, $2, 'system', $3, 'evidence_request.owner_reported_still_open', 'client_evidence_request', $4, $5::jsonb)`,
+          [firmId, clientId, actorId, evidenceRequestId, JSON.stringify({ document_id: documentId, ...acknowledged })]
+        );
+        result.obligation_open = true;
+        result.lane = { kind: OBLIGATION_OPEN, recheck_at: recheckAt };
+      }
+      await client.query('commit');
+    } catch (error) {
+      await client.query('rollback');
+      console.warn(`[${LOG_TAG}] owner-reply still-open acknowledgement failed (request left replied)`, {
+        document_id: documentId, evidence_request_id: evidenceRequestId, error: error?.message || String(error)
+      });
+    }
+    return result;
+  }
 
   // Stamp + flip, atomically: the verdict replaces the chase_evidence row
   // (upsert, one row per doc/family) and the request leaves the open set in

@@ -1185,3 +1185,60 @@ test('parser — a credit note\'s owner question is a payment_method fact, recei
   const stated = parseDocumentDispositionResponse(JSON.stringify({ ...question, owner_question_evidence_type: 'payment_method' }), { documentType: 'credit_note' });
   assert.equal(stated.owner_question_evidence_type_coerced_from, undefined);
 });
+
+// "Still unpaid" — the no-settlement lanes' stillOpen answer. Valid only where
+// the asking lane offers it; the prompt says so only there.
+test('parser (owner-reply) — obligation_open is an answer only on a lane that accepts it', async () => {
+  const { buildOwnerReplySystemPrompt, OBLIGATION_OPEN } = await import('./documentDispositionLlm.js');
+  const stillOpen = { meaning: 'the customer has not paid this sales invoice yet', recheckDays: 30 };
+  const open = JSON.stringify({ disposition: OBLIGATION_OPEN, materiality: 'material', expense_kind: 'unknown', settlement_channel: 'unknown', confidence: 0.9, reasoning: 'Still unpaid.' });
+  const accepted = parseDocumentDispositionResponse(open, { ownerReply: { answeredEvidenceType: 'payment_method', stillOpen } });
+  assert.equal(accepted.disposition, OBLIGATION_OPEN);
+  assert.equal(accepted.unmatchable_reason, null);
+  const otherLane = parseDocumentDispositionResponse(open, OWNER_REPLY_MODE);
+  assert.equal(otherLane.disposition, 'needs_human', 'a lane without the answer reads it as unclear, as before');
+  assert.equal(parseDocumentDispositionResponse(open).disposition, 'needs_human', 'never a sweep disposition');
+  const hesitant = parseDocumentDispositionResponse(JSON.stringify({ ...JSON.parse(open), confidence: 0.3 }), { ownerReply: { answeredEvidenceType: 'payment_method', stillOpen } });
+  assert.equal(hesitant.disposition, 'needs_human');
+  assert.equal(hesitant.unmatchable_reason, 'owner_reply_unclear');
+  assert.equal(buildOwnerReplySystemPrompt().includes(OBLIGATION_OPEN), false, 'other lanes keep the historical prompt');
+  const offered = buildOwnerReplySystemPrompt({ stillOpen });
+  assert.match(offered, /"obligation_open": the owner says it is STILL UNPAID, i\.e\. the customer has not paid this sales invoice yet\./);
+  assert.match(offered, /"disposition": "auto_explain" \| "chase_evidence" \| "needs_human" \| "obligation_open"/);
+});
+
+test('runOwnerReplyRedisposition — "still unpaid" puts the ask back on the owner: nothing stamped, no clarification, due later', async () => {
+  const { OBLIGATION_OPEN } = await import('./documentDispositionLlm.js');
+  const calls = [];
+  const request = { id: 'ask-1', status: 'replied', send_count: 2, question: 'Has the customer paid it?', request_payload: { document_id: 'doc-1', lane: 'sales_invoice_recognition' },
+    response_payload: { reply: 'still unpaid', reply_processing: { actor_id: 'owner-1' } } };
+  const client = { query: async (sql, params = []) => {
+    calls.push({ sql, params });
+    if (/from documents d/.test(sql)) return { rows: [{ id: 'doc-1', document_type: 'sales_invoice', customer_name: 'Example Customer Oy', total_amount: 100, currency: 'EUR', document_date: '2025-02-12' }] };
+    if (/from reconciliation_matches/.test(sql)) return { rows: [] };
+    if (/from transactions/.test(sql)) return { rows: [{ line_count: 0 }] };
+    if (/from client_evidence_requests/.test(sql) && /for update/.test(sql)) return { rows: [request] };
+    return { rows: [] };
+  } };
+  const mintOwnerAsk = async () => { throw new Error('no clarification may be minted'); };
+  const before = Date.now();
+  const result = await runOwnerReplyRedisposition({ client, firmId: 'firm', clientId: 'client', documentId: 'doc-1', evidenceRequestId: 'ask-1',
+    askedQuestion: request.question, ownerReply: 'still unpaid', jevEnabled: false, apiKeyOverride: 'k', laneDeps: { mintOwnerAsk },
+    stillOpen: { meaning: 'the customer has not paid this sales invoice yet', recheckDays: 30 },
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify({ disposition: OBLIGATION_OPEN, materiality: 'material', expense_kind: 'unknown', settlement_channel: 'unknown', confidence: 0.9, reasoning: 'Still unpaid.' }) }] }) }) });
+  assert.equal(result.obligation_open, true);
+  assert.equal(result.request_resolved, false);
+  assert.equal(result.stamped, false);
+  assert.equal(result.lane.kind, OBLIGATION_OPEN);
+  const days = (new Date(result.lane.recheck_at).getTime() - before) / 86400000;
+  assert.ok(days >= 30 && days < 30.01, String(days));
+  assert.equal(calls.some((c) => /reconciliation_evaluations/.test(c.sql)), false, 'no verdict stamped');
+  const reopen = calls.find((c) => /set status = 'open'/.test(c.sql));
+  assert.ok(reopen, 'the ask goes back to the owner');
+  const topic = JSON.parse(reopen.params[4]);
+  assert.equal(topic.turns.at(-1).outcome, OBLIGATION_OPEN);
+  assert.equal(topic.turns.at(-1).reply_excerpt, 'still unpaid');
+  assert.equal(JSON.parse(reopen.params[5]).send_count, 2);
+  assert.ok(calls.some((c) => c.params.includes('ask-1') && /owner_reported_still_open/.test(c.sql)), 'receipted');
+  assert.ok(calls.some((c) => c.sql === 'commit'));
+});

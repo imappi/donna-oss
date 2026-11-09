@@ -31,7 +31,11 @@
 // ask primitive and the never-twice check. There is no purchase-side census yet,
 // so the drafts do not yet list such bills as excluded.
 //
-// Both questions are written in the owner's language (preferredOwnerTemplateLanguage).
+// Both questions are written in the owner's language (preferredOwnerTemplateLanguage)
+// and invite the same two kinds of answer: how it was paid, or that it is
+// still unpaid. "Still unpaid" is a real answer on both lanes: the owner-reply
+// reader is told so (stillOpen below) and keeps the ask on the owner, re-asked
+// after stillOpen.recheckDays instead of sending a clarification.
 //
 // Keep-layer posture: read-only SQL plus pure classification; no model call.
 
@@ -294,7 +298,7 @@ export const buildSalesRecognitionQuestion = ({ document = {}, language = 'en' }
     return `${finnishHeader({ label: 'Myyntilasku', document, counterparty: document.customer_name })}: `
       + 'Donnalla olevissa tiliotteissa ei näy tälle laskulle maksua. Donna ei vielä kirjaa maksamatonta myyntilaskua kirjanpitoon, '
       + 'joten se jää pois sen kauden myynnistä ja arvonlisäverosta, ja luonnoksissa se näkyy pois jätettynä. '
-      + 'Onko asiakas maksanut laskun? Jos on, milloin ja mille tilille? Jos lasku on vielä maksamatta, vastaa "vielä maksamatta".';
+      + 'Onko asiakas maksanut laskun? Jos se on maksettu, kerro milloin ja mille tilille. Jos se on vielä maksamatta, vastaa "vielä maksamatta".';
   }
   const number = printedInvoiceNumber(document) ? ` ${printedInvoiceNumber(document)}` : '';
   const customer = document.customer_name ? ` to ${document.customer_name}` : '';
@@ -302,23 +306,23 @@ export const buildSalesRecognitionQuestion = ({ document = {}, language = 'en' }
   return `Sales invoice${number}${customer} (${amountText(document.total_amount, document.currency)}${date ? `, dated ${date}` : ''}) `
     + 'has no payment on the bank statements Donna holds. Donna does not yet record an unpaid sales invoice in the books, '
     + 'so it is left out of that period\'s sales and VAT figures, and the drafts list it as excluded. '
-    + 'Has the customer paid it? If so, when, and into which account? If it is still unpaid, reply "still unpaid".';
+    + 'Has the customer paid it? If it has been paid, reply when and into which account. If it is still unpaid, reply "still unpaid".';
 };
 
 // The purchase-side question. It invites only answers the doc-ask reply path
 // consumes (runOwnerReplyRedisposition): an account and a date (matched once
 // that statement arrives, or a statement request for an account Donna lacks),
-// or the owner's own cash or personal card (the documentSettlementEntry
-// owner-funds journal). A "still unpaid" reply has no consumer there, so it is
-// not invited: an unpaid bill keeps this question open, and the ledger post
-// against the bill's bank line resolves it (resolveOpenSettlementRequestsForDocument).
+// the owner's own cash or personal card (the documentSettlementEntry
+// owner-funds journal), or "still unpaid" (the lane's stillOpen answer: the
+// question stays open and is asked again later). The ledger post against the
+// bill's bank line resolves it (resolveOpenSettlementRequestsForDocument).
 export const buildSupplierBillSettlementQuestion = ({ document = {}, language = 'en' } = {}) => {
   if (language === 'fi') {
     return `${finnishHeader({ label: 'Ostolasku', document, counterparty: document.vendor_name })}: `
       + 'Donnalla olevissa tiliotteissa ei näy tälle laskulle maksua. Donna ei vielä kirjaa maksamatonta ostolaskua kirjanpitoon, '
       + 'joten se puuttuu sen kauden kuluista ja arvonlisäverosta. '
-      + 'Onko lasku maksettu? Jos on, milloin ja miltä tililtä? Jos maksoit sen omilla rahoillasi käteisellä tai omalla kortillasi, kerro kumpi. '
-      + 'Jos lasku on vielä maksamatta, sinun ei tarvitse vastata nyt: kysymys sulkeutuu itsestään, kun maksu näkyy tiliotteella, jonka lähetät.';
+      + 'Onko lasku maksettu? Jos se on maksettu, kerro milloin ja miltä tililtä, tai jos maksoit sen omilla rahoillasi käteisellä tai omalla kortillasi, kerro kumpi. '
+      + 'Jos se on vielä maksamatta, vastaa "vielä maksamatta".';
   }
   const number = printedInvoiceNumber(document) ? ` ${printedInvoiceNumber(document)}` : '';
   const vendor = document.vendor_name ? ` from ${document.vendor_name}` : '';
@@ -326,20 +330,37 @@ export const buildSupplierBillSettlementQuestion = ({ document = {}, language = 
   return `Supplier bill${number}${vendor} (${amountText(document.total_amount, document.currency)}${date ? `, dated ${date}` : ''}) `
     + 'has no payment on the bank statements Donna holds. Donna does not yet record an unpaid supplier bill in the books, '
     + 'so it is missing from that period\'s expenses and VAT. '
-    + 'Has it been paid? If so, when, and from which account? If you paid it with your own money, in cash or on a personal card, say which. '
-    + 'If it is still unpaid, you don\'t need to reply now: this question closes on its own once the payment shows on a bank statement you send.';
+    + 'Has it been paid? If it has been paid, reply when and from which account, or, if you paid it with your own money in cash or on a personal card, say which. '
+    + 'If it is still unpaid, reply "still unpaid".';
 };
+
+// How long an ask the owner answered "still unpaid" rests before the re-ask
+// clock asks again (its due_at). A month: the next monthly statement normally
+// arrives in that time, and a payment posted against the document closes the
+// ask before then. Not the 7-day nudge: the owner did answer.
+export const NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS = 30;
 
 // One lane per obligation type that the scoped no-settlement negative leaves
 // unrecorded on an accrual book (NO_SETTLEMENT_OBLIGATION_TYPES). The census
 // above covers the sales lane only; the purchase-side census is not built yet.
+// stillOpen is the lane's "still unpaid" answer, told to the owner-reply
+// reader (documentDispositionLlm.runOwnerReplyRedisposition): what it means
+// on this lane, and when to ask again.
 const NO_SETTLEMENT_ASK_LANES = Object.freeze({
   sales_invoice: { lane: SALES_RECOGNITION_ASK_LANE, statsKey: 'sales_recognition_ask', buildQuestion: buildSalesRecognitionQuestion,
-    recognition: 'unrecognised_uploaded_sales_invoice', refusal: 'not_an_uploaded_sales_invoice' },
+    recognition: 'unrecognised_uploaded_sales_invoice', refusal: 'not_an_uploaded_sales_invoice',
+    stillOpen: Object.freeze({ meaning: 'the customer has not paid this sales invoice yet; the receivable is still open',
+      recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }) },
   supplier_bill: { lane: SUPPLIER_BILL_SETTLEMENT_ASK_LANE, statsKey: 'supplier_bill_settlement_ask', buildQuestion: buildSupplierBillSettlementQuestion,
-    recognition: 'unrecorded_uploaded_supplier_bill', refusal: 'not_an_uploaded_supplier_bill' }
+    recognition: 'unrecorded_uploaded_supplier_bill', refusal: 'not_an_uploaded_supplier_bill',
+    stillOpen: Object.freeze({ meaning: 'the business has not paid this supplier bill yet; the payable is still open',
+      recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }) }
 });
 export const noSettlementAskStatsKey = (documentType) => NO_SETTLEMENT_ASK_LANES[documentType]?.statsKey || null;
+// The "still unpaid" answer an ask's lane (request_payload.lane) accepts, or
+// null for every other lane.
+export const noSettlementAskStillOpen = (askLane) => Object.values(NO_SETTLEMENT_ASK_LANES)
+  .find((l) => l.lane === askLane)?.stillOpen || null;
 
 // The ask hook. Called where the runtime concludes that no supplied payment
 // settles an uploaded sales invoice or supplier bill (jevReconciliation's
