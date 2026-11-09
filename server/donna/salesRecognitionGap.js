@@ -263,12 +263,12 @@ export const readSalesRecognitionGapWithClient = async ({ client, firmId, client
   return classifySalesRecognitionGap({ basis, period, documents, matches, transactionJournals, issuedJournals, applications, asks });
 };
 
-const amountText = (value, currency, language = 'en') => {
+export const amountText = (value, currency, language = 'en') => {
   const fixed = Number(value).toFixed(2);
   return `${language === 'fi' ? fixed.replace('.', ',') : fixed}${currency ? ` ${currency}` : ''}`;
 };
 // Finnish owners read 12.2.2025, not 2025-02-12.
-const dayText = (iso, language = 'en') => {
+export const dayText = (iso, language = 'en') => {
   if (!iso || language !== 'fi') return iso;
   const [y, m, d] = iso.split('-');
   return `${Number(d)}.${Number(m)}.${y}`;

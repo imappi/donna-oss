@@ -75,7 +75,7 @@ import { makeJevTrialProvider } from './jevTrialProvider.js';
 // the resolved mode. NEVER throws; per-doc failures fall toward a human.
 
 import { extractJson } from './extractJson.js';
-import { jevDispositionEnabled, loadJevDispositionEvidence, decideJevDisposition, withJevHandoff } from './jevDisposition.js';
+import { CASH_FUNDING_OWNER_QUESTION, jevDispositionEnabled, loadJevDispositionEvidence, decideJevDisposition, withJevHandoff } from './jevDisposition.js';
 import {
   DEFAULT_MODEL,
   getApiKey,
@@ -94,6 +94,8 @@ import {
 } from './dispositionMateriality.js';
 import { resolveOpenAiCompatibleEndpoint } from './providerEndpoints.js';
 import { toIsoDay } from './dates.js';
+import { amountText, dayText } from './salesRecognitionGap.js';
+import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 
 const LOG_TAG = 'documentDispositionLlm';
 
@@ -240,23 +242,66 @@ const moneyLabel = (amount, currency) => {
   return `${currency ? `${currency} ` : ''}${n.toFixed(2)}`;
 };
 
+// Finnish names for the document kinds the disposition lane asks about, in the
+// words an owner uses for their own papers. Anything else is "tosite".
+const FINNISH_DOCUMENT_KIND = Object.freeze({
+  receipt: 'Kuitti',
+  supplier_bill: 'Ostolasku',
+  sales_invoice: 'Myyntilasku',
+  issued_receipt: 'Myyntikuitti',
+  payment_confirmation: 'Maksuvahvistus',
+  credit_note: 'Hyvityslasku'
+});
+
+// The Finnish header names the counterparty, amount, date and file inside the
+// brackets so nothing from the evidence has to be inflected:
+// "Kuitti (Lumikki Oy, 41,20 EUR, päivätty 14.5.2025, kuitti.pdf)".
+const finnishDocumentHeader = (document = {}, { money = true } = {}) => {
+  const who = document.vendor_name || document.customer_name || '';
+  const amount = money && Number.isFinite(Number(document.total_amount)) && document.total_amount !== null && document.total_amount !== ''
+    ? amountText(document.total_amount, document.currency, 'fi') : '';
+  const date = money && document.document_date ? `päivätty ${dayText(toIsoDay(document.document_date), 'fi')}` : '';
+  const parts = [who, amount, date, document.filename || ''].filter(Boolean);
+  const kind = FINNISH_DOCUMENT_KIND[document.document_type] || 'Tosite';
+  return parts.length ? `${kind} (${parts.join(', ')})` : kind;
+};
+
+// The cash-funding guard's question, as the owner reads it. The stored fact
+// stays the English CASH_FUNDING_OWNER_QUESTION (a receipt staff read).
+const FINNISH_CASH_FUNDING_QUESTION = 'Kuitin mukaan se maksettiin käteisellä. Maksettiinko se yrityksen kassasta vai omista rahoistasi?';
+
 // Preserve the model's actual missing fact and its lifecycle type. Internal
 // reasoning is an audit receipt, not owner-facing prose. Legacy verdicts have
 // only a business-purpose question; never invent an expense or payment premise.
-export const buildNeedsHumanOwnerQuestion = ({ document = {}, semantic = {} } = {}) => {
+// `language` is the owner's (preferredOwnerTemplateLanguage); the caller that
+// holds the client profile passes it.
+export const buildNeedsHumanOwnerQuestion = ({ document = {}, semantic = {}, language = 'en' } = {}) => {
+  const modelQuestion = semantic.owner_question && OWNER_QUESTION_FACTS.has(semantic.owner_question_evidence_type)
+    ? semantic.owner_question : null;
+  if (language === 'fi') {
+    const question = modelQuestion === CASH_FUNDING_OWNER_QUESTION ? FINNISH_CASH_FUNDING_QUESTION
+      : modelQuestion || 'Mitä tämä tosite koskee, ja miten se liittyy yrityksesi toimintaan?';
+    return `${finnishDocumentHeader(document)}: ${question}`;
+  }
   const kind = String(document.document_type || 'document').replace(/_/g, ' ');
   const who = document.vendor_name || document.customer_name || '';
   const money = moneyLabel(document.total_amount, document.currency);
   const when = document.document_date ? ` dated ${toIsoDay(document.document_date)}` : '';
   const file = document.filename ? ` (${document.filename})` : '';
-  const question = semantic.owner_question && OWNER_QUESTION_FACTS.has(semantic.owner_question_evidence_type)
-    ? semantic.owner_question : 'What is this document for, and how does it relate to your business?';
+  const question = modelQuestion || 'What is this document for, and how does it relate to your business?';
   return `About the ${kind}${who ? ` from ${who}` : ''}${money ? ` for ${money}` : ''}${when}${file}: ${question}`;
 };
 
 // The bounded clarification after an UNCLEAR owner reply (the answer leg):
 // one more ask, phrased for the lane that was answered, never a third.
-export const buildOwnerReplyClarificationQuestion = ({ document = {}, answeredEvidenceType = 'payment_method' } = {}) => {
+export const buildOwnerReplyClarificationQuestion = ({ document = {}, answeredEvidenceType = 'payment_method', language = 'en' } = {}) => {
+  if (language === 'fi') {
+    const header = finnishDocumentHeader(document, { money: false });
+    if (answeredEvidenceType === 'bank_statement') {
+      return `${header}: Kiitos vastauksestasi! Emme vieläkään pystyneet päättelemään, miltä tililtä se maksettiin. Mikä pankki- tai korttitili se oli? Voisitko lähettää sen tilin tiliotteen kyseiseltä kaudelta?`;
+    }
+    return `${header}: Kiitos vastauksestasi! Emme pystyneet päättelemään vastauksestasi, miten se maksettiin. Maksettiinko se käteisellä, omalla kortillasi vai yrityksen tililtä, jonka tiliotteita meillä ei vielä ole?`;
+  }
   const kind = String(document.document_type || 'document').replace(/_/g, ' ');
   const who = document.vendor_name || document.customer_name ? ` from ${document.vendor_name || document.customer_name}` : '';
   const file = document.filename ? ` (${document.filename})` : '';
@@ -265,6 +310,11 @@ export const buildOwnerReplyClarificationQuestion = ({ document = {}, answeredEv
   }
   return `Thanks — we could not tell from your answer how the ${kind}${who}${file} was paid. Was it cash, a personal card, or a business account we don't yet have statements for?`;
 };
+
+// The owner's language for a question this lane mints: one profile read, at the
+// mint, through the one resolver (the pure builders above take the result).
+const readOwnerLanguage = async ({ client, firmId, clientId }) => preferredOwnerTemplateLanguage(
+  (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows?.[0]?.profile);
 
 const countOwnerAsksForDocument = async ({ client, firmId, clientId, documentId, evidenceType }) => {
   const result = await client.query(
@@ -470,7 +520,7 @@ export const parseDocumentDispositionResponse = (text, {
     : ['owner','company_cash'].includes(parsed.funding_source) ? parsed.funding_source : 'unknown';
   if (safe === 'auto_explain' && settlement_channel === 'cash' && funding_source === 'unknown' && !MONEY_IN_TYPES.has(documentType)) {
     safe = 'needs_human';
-    parsed.owner_question = 'The receipt shows a cash payment. Was it paid from company cash or from your personal funds?';
+    parsed.owner_question = CASH_FUNDING_OWNER_QUESTION;
     parsed.owner_question_evidence_type = 'payment_method';
   }
   return {
@@ -848,7 +898,7 @@ const resolveNeedsHumanLane = async ({
     firmId,
     clientId,
     documentId: document.id,
-    question: buildNeedsHumanOwnerQuestion({ document, semantic }),
+    question: buildNeedsHumanOwnerQuestion({ document, semantic, language: await readOwnerLanguage({ client, firmId, clientId }) }),
     evidenceType,
     actorId: 'system',
     requestContext: {
@@ -1722,7 +1772,7 @@ export const runOwnerReplyRedisposition = async ({
           firmId,
           clientId,
           documentId,
-          question: buildOwnerReplyClarificationQuestion({ document, answeredEvidenceType: evidenceType }),
+          question: buildOwnerReplyClarificationQuestion({ document, answeredEvidenceType: evidenceType, language: await readOwnerLanguage({ client, firmId, clientId }) }),
           evidenceType,
           actorId,
           requestContext: {

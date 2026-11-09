@@ -57,6 +57,8 @@ import { linkReplyEvidenceMatchesInDb, loadMatchedDocumentsForTransactions } fro
 import { postLedgerTransactionInDb } from './ledger.js';
 import { getXeroAccountsForClient } from './xero.js';
 import { deliverEmailEvidenceAsksAfterSend, deliverSmsEvidenceAsksAfterSend, deliverTelegramEvidenceAsksAfterSend, deliverWhatsAppEvidenceAsksAfterSend } from './channels.js';
+import { preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
+import { amountText, dayText } from '../salesRecognitionGap.js';
 import { getFirmSnapshotFromDb } from './snapshot.js';
 
 export const rowToClientEvidenceRequestPayload = (row = {}) => ({
@@ -267,7 +269,11 @@ const createClientEvidenceRequestWithClient = async ({
   // G2 PR-14 — optional collector the caller passes to learn whether this call
   // MINTED the ask or collapsed onto a live one. Filled in beside the upsert below;
   // deliberately not a field on the returned request payload (see the note there).
-  mintOutcome = null
+  mintOutcome = null,
+  // The owner's language for the fallback question below, when the caller
+  // holds the client profile; absent ⇒ read once, only when that fallback
+  // is used (a caller-written question is stored as given).
+  language = null
 } = {}) => {
   const cleanClientId = String(clientId || '').trim();
   const cleanTransactionId = String(transactionId || '').trim();
@@ -399,13 +405,19 @@ const createClientEvidenceRequestWithClient = async ({
   }
 
   const now = new Date().toISOString();
-  const documentLabel = document
-    ? [document.vendor_name || document.customer_name || '', document.filename || ''].filter(Boolean).join(' — ')
-    : '';
-  const finalQuestion = cleanQuestion ||
-    (document
+  const fallbackLanguage = cleanQuestion ? null : (language || preferredOwnerTemplateLanguage(
+    (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, cleanClientId])).rows?.[0]?.profile));
+  const documentParts = document ? [document.vendor_name || document.customer_name || '', document.filename || ''].filter(Boolean) : [];
+  const documentLabel = documentParts.join(' — ');
+  // Finnish names the document and the bank text after a colon or in
+  // brackets, so nothing from the evidence is inflected.
+  const finalQuestion = cleanQuestion || (fallbackLanguage === 'fi'
+    ? (document
+      ? `Miten tämä tosite maksettiin${documentParts.length ? ` (${documentParts.join(', ')})` : ''}? Käteisellä, omalla kortillasi vai tililtä, jonka tiliote meidän pitäisi saada?`
+      : `${transaction?.description ? `Tapahtuma: ${transaction.description}. Kerro, mihin yrityksesi tarpeeseen se liittyi` : 'Kerro, mihin yrityksesi tarpeeseen tämä tapahtuma liittyi'}, ja lähetä siitä kuitti tai muu tosite.`)
+    : (document
       ? `How was ${documentLabel || 'this document'} paid — cash, a personal card, or an account we should have a statement for?`
-      : `Please confirm the business purpose and upload supporting evidence for ${transaction?.description || 'this transaction'}.`);
+      : `Please confirm the business purpose and upload supporting evidence for ${transaction?.description || 'this transaction'}.`));
   // ── Ask identity (108) — collapse duplicate UPLOADS onto one canonical case ──
   //
   // Every upload stays its own immutable document row. What changes is what the
@@ -954,8 +966,14 @@ export const __createHeldMatchPortalAsksWithClient = async ({client, firmId, cli
         .sort((a,b) => a.document_id.localeCompare(b.document_id));
       if (!files.length) throw Object.assign(new Error('Held match has no identifiable document.'), {code:'HELD_MATCH_EVIDENCE_NOT_READY'});
       const amount = Math.abs(Number(tx.money_out) || Number(tx.money_in)).toFixed(2);
+      const language = preferredOwnerTemplateLanguage((await client.query(
+        'select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows[0]?.profile);
       // One held document is a confirmation, not a choice between documents.
-      const confirmation = files.length === 1
+      const confirmation = language === 'fi'
+        ? (files.length === 1
+          ? 'Vahvistathan, että tämä maksu koskee tätä tositetta, ja kerro, jos olette sopineet muista muutoksista. Tiedostoa ei tarvitse lähettää uudelleen.'
+          : 'Kerro, mitä näistä tositteista tämä maksu koskee, ja kerro, jos olette sopineet muista muutoksista. Tiedostoja ei tarvitse lähettää uudelleen.')
+        : files.length === 1
         ? 'Please confirm that this payment settles that document, and tell us about any other agreed adjustments. You do not need to upload it again.'
         : 'Please confirm which of these documents this payment settles, and tell us about any other agreed adjustments. You do not need to upload these files again.';
       // HELMIKUU S8 (Kari, 2026-09-24): a held statement row keeps its own
@@ -967,13 +985,24 @@ export const __createHeldMatchPortalAsksWithClient = async ({client, firmId, cli
       const siblings = group.candidates.length === 1 && row.matched_line_id && heldPlanCompletionActs(configSnapshot)
         ? await readHeldStatementSiblingsWithClient({client, firmId, clientId, documentId:row.document_id, transactionId:tx.id}) : [];
       const rowLabel = sibling => `row ${sibling.line_no ?? '?'}${sibling.line_description ? ` “${sibling.line_description}”` : ''}`;
-      const siblingText = siblings.length
+      const finnishRowLabel = sibling => `rivi ${sibling.line_no ?? '?'}${sibling.line_description ? ` ”${sibling.line_description}”` : ''}`;
+      const siblingText = siblings.length && language === 'fi'
+        ? ` Tämä maksu on tiliotteen ${finnishRowLabel({line_no:row.matched_line_no, line_description:row.matched_line_description})}. `
+          + `${siblings.length === 1 ? 'Myös toinen saman tiliotteen rivi odottaa' : `Myös ${siblings.length} muuta saman tiliotteen riviä odottaa`} vahvistustasi: `
+          + `${siblings.map(sibling => `${finnishRowLabel(sibling)}, ${amountText(sibling.amount, sibling.currency, 'fi')} ${sibling.direction === 'paid' ? 'maksettu' : 'saatu'} ${dayText(sibling.date, 'fi')}`).join('; ')}. `
+          + `Voit vahvistaa kaikki jäljellä olevat rivit kerralla vastauksessasi tai vastata rivi kerrallaan.`
+        : siblings.length
         ? ` This payment is ${rowLabel({line_no:row.matched_line_no, line_description:row.matched_line_description})} of that statement. `
           + `${siblings.length === 1 ? 'One other row of the same statement is' : `${siblings.length} other rows of the same statement are`} also waiting for your confirmation: `
           + `${siblings.map(sibling => `${rowLabel(sibling)}, ${sibling.currency} ${sibling.amount} ${sibling.direction} on ${sibling.date}`).join('; ')}. `
           + `You can confirm all the remaining rows at once in your answer, or keep answering row by row.`
         : '';
-      const question = `About ${tx.currency || ''} ${amount} ${Number(tx.money_out) ? 'paid' : 'received'} on ${toIsoDay(tx.transaction_date)} — ${tx.description || ''}: we have ${files.map(doc => `“${doc.filename}”`).join(', ')} on file. ${confirmation}${siblingText}`;
+      // Finnish: "Tililtäsi maksettiin 1600,00 EUR 12.2.2025 (KUVAUS). Meillä on
+      // tästä jo tiedosto ”lasku.pdf”. …" The bank text and filenames stay verbatim.
+      const question = language === 'fi'
+        ? `${Number(tx.money_out) ? 'Tililtäsi maksettiin' : 'Tilillesi tuli'} ${amountText(amount, tx.currency, 'fi')} ${dayText(toIsoDay(tx.transaction_date), 'fi')}${tx.description ? ` (${tx.description})` : ''}. `
+          + `Meillä on tästä jo ${files.length === 1 ? 'tiedosto' : 'tiedostot'} ${files.map(doc => `”${doc.filename}”`).join(', ')}. ${confirmation}${siblingText}`
+        : `About ${tx.currency || ''} ${amount} ${Number(tx.money_out) ? 'paid' : 'received'} on ${toIsoDay(tx.transaction_date)} — ${tx.description || ''}: we have ${files.map(doc => `“${doc.filename}”`).join(', ')} on file. ${confirmation}${siblingText}`;
       const requestContext = {held_match_groups:heldMatchGroupReceipts([group]), citable_local_evidence:files,
         authority_basis:'persisted_match_requires_owner_confirmation', channel:'portal',
         // A refreshed draft whose other rows all settled drops the old list
@@ -4328,23 +4357,33 @@ export const __draftClientAskBatchWithClient = async ({
   // not intelligence-substituting. Two honest sentences: "matched and posted" for
   // resolve-on-match, "settled ourselves" for an auto_explain retraction (D4).
   if (retractedRequests.length) {
+    // Owner-facing, so in the language the drafted message above it was
+    // written in (the drafter's receipt; the one resolver when it reports none).
+    const sectionLanguage = draftLanguage || preferredOwnerTemplateLanguage(clientProfile);
+    const finnish = sectionLanguage === 'fi';
     const renderLine = (r) => {
-      const amount = r.amount ? `${r.currency ? `${r.currency} ` : ''}${r.amount.toFixed(2)}` : '';
-      const parts = [r.date, amount, r.description].filter(Boolean);
-      return `- ${parts.join(' — ')}`;
+      const amount = r.amount
+        ? (finnish ? amountText(r.amount, r.currency, 'fi') : `${r.currency ? `${r.currency} ` : ''}${r.amount.toFixed(2)}`)
+        : '';
+      const parts = [finnish ? dayText(r.date, 'fi') : r.date, amount, r.description].filter(Boolean);
+      return `- ${parts.join(finnish ? ', ' : ' — ')}`;
     };
     const matched = retractedRequests.filter((r) => r.reason !== 'auto_explained');
     const explained = retractedRequests.filter((r) => r.reason === 'auto_explained');
-    const section = ['', '**Already handled — you can ignore these**'];
+    const section = ['', finnish ? '**Nämä on jo hoidettu, voit jättää ne huomiotta**' : '**Already handled — you can ignore these**'];
     if (matched.length) {
       section.push(
-        "We've since found the supporting material for the following, so there's no need to send that material again:",
+        finnish
+          ? 'Löysimme sittemmin tositteet seuraaviin, joten niitä ei tarvitse enää lähettää:'
+          : "We've since found the supporting material for the following, so there's no need to send that material again:",
         ...matched.map(renderLine)
       );
     }
     if (explained.length) {
       section.push(
-        "We've since settled the following ourselves — small, recurring and clearly business, so no receipt or explanation is needed:",
+        finnish
+          ? 'Kirjasimme seuraavat itse: ne ovat pieniä, toistuvia ja selvästi liiketoimintaan liittyviä, joten kuittia tai selitystä ei tarvita:'
+          : "We've since settled the following ourselves — small, recurring and clearly business, so no receipt or explanation is needed:",
         ...explained.map(renderLine)
       );
     }
