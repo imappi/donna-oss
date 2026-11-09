@@ -34,6 +34,7 @@ import { withFirmDbClient, __endFirmDbPoolForTests, getFinancialReportFromDb } f
 import { getFinlandAlvReturnFromDb, startFinlandAlvReturnFilingInDb } from './finland/statutoryDb.js';
 import { computeConvergenceForDocuments } from './reconcileConvergenceState.js';
 import { setClientFlagStage } from './clientConfig.js';
+import { requestDonnaApi } from './testSupport/apiSeamHarness.js';
 
 const PG_URL = process.env.DONNA_PG_TEST_URL || '';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -242,6 +243,113 @@ test('real PG: an uploaded unpaid supplier bill on an accrual book is asked of t
       assert.deepEqual(await asksFor(seed, 'bill-cash'), []);
     } finally {
       __jevReconciliation.decide = priorDecide;
+      await __endFirmDbPoolForTests().catch(() => {});
+      for (const [k, v] of Object.entries(prior)) { if (v == null) delete process.env[k]; else process.env[k] = v; }
+      await stop();
+    }
+  });
+
+// The purchase side of the census through the real route: GET
+// /reports/finland-alv-return on PostgreSQL with one unpaid sales invoice and
+// one unpaid supplier bill in February, and a paid, posted supplier bill as the
+// neighbour that IS represented (its input ALV is in box 307, not in the
+// exclusions). The sales and purchase exclusions are separate blockers; the
+// statements and the filing start carry both; a cash book lists neither.
+const account = (seed, { id, code, name, type, clientId = ACCRUAL }) => seed.query(
+  `insert into ledger_accounts (id, firm_id, client_id, code, name, account_type, normal_balance, currency)
+   values ($1, $2, $3, $4, $5, $6, $7, 'EUR')`, [id, FIRM, clientId, code, name, type, ['asset', 'expense'].includes(type) ? 'debit' : 'credit']);
+const line = (seed, { journalId, no, accountId, code, debit = 0, credit = 0, tax = null, role = null }) => seed.query(
+  `insert into ledger_lines (id, journal_id, firm_id, client_id, account_id, account_code, line_no, direction, debit, credit, amount, currency, tax_type, payload)
+   values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'EUR', $12, $13::jsonb)`,
+  [`${journalId}-${no}`, journalId, FIRM, ACCRUAL, accountId, code, no, debit ? 'debit' : 'credit', debit, credit, debit || credit, tax, JSON.stringify(role ? { role } : {})]);
+
+test('real PG route: the ALV draft names the unpaid supplier bill apart from the unpaid sales invoice; a paid bill is in the figures, not the exclusions',
+  { skip: !PG_URL && 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async () => {
+    const { seed, url, stop } = await boot();
+    const prior = { DATABASE_URL: process.env.DATABASE_URL, DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX, DONNA_ACCESS_TOKEN: process.env.DONNA_ACCESS_TOKEN };
+    process.env.DATABASE_URL = url; process.env.DATABASE_POOL_MAX = '3'; process.env.DONNA_ACCESS_TOKEN = 'fi09-purchase-route';
+    const routePool = new pg.Pool({ connectionString: url, max: 3 });
+    const alvRoute = async (clientId, period = '2025-02') => {
+      const response = await requestDonnaApi({ url: `/api/donna/firms/reports/finland-alv-return?firm_id=${FIRM}&client_id=${clientId}&period=${period}`,
+        headers: { authorization: 'Bearer fi09-purchase-route' }, pool: routePool });
+      assert.equal(response.statusCode, 200, response.body);
+      return response.json;
+    };
+    try {
+      const empty = await alvRoute(ACCRUAL);
+      assert.equal(empty.review.status, 'ready');
+
+      await insertDocument(seed, { id: 'doc-lumikki', total: 903.6, tax: 183.6, date: '2025-02-12', number: '1002' });
+      await insertBill(seed, { id: 'bill-tukku', total: 248, tax: 48, date: '2025-02-05', number: '4711' });
+      // The neighbour: a supplier bill paid and posted inside February through
+      // its bank line, ALV split to 2940 as the posting writer does.
+      await insertBill(seed, { id: 'bill-kahvi', vendor: 'Kahvi Oy', total: 125.5, tax: 25.5, date: '2025-02-07', number: 'K-88', paymentStatus: 'paid' });
+      await seed.query(`insert into transactions (id, firm_id, client_id, transaction_date, description, money_in, money_out, currency, status, payload)
+        values ('tx-kahvi', $1, $2, '2025-02-10', 'Kahvi Oy', 0, 125.5, 'EUR', 'posted', '{}'::jsonb)`, [FIRM, ACCRUAL]);
+      await seed.query(`insert into reconciliation_matches (id, firm_id, client_id, bank_transaction_id, matched_object_type, matched_object_id, status, match_amount, payload)
+        values ('m-kahvi', $1, $2, 'tx-kahvi', 'supplier_bill', 'bill-kahvi', 'confirmed', 125.5, '{}'::jsonb)`, [FIRM, ACCRUAL]);
+      await journal(seed, { sourceType: 'transaction', sourceId: 'tx-kahvi', date: '2025-02-10' });
+      await account(seed, { id: 'acct-1910', code: '1910', name: 'Pankkitili', type: 'asset' });
+      await account(seed, { id: 'acct-4000', code: '4000', name: 'Ostot', type: 'expense' });
+      await account(seed, { id: 'acct-2940', code: '2940', name: 'Arvonlisäverosaamiset', type: 'liability' });
+      const jid = 'lj-transaction-tx-kahvi';
+      await line(seed, { journalId: jid, no: 1, accountId: 'acct-4000', code: '4000', debit: 100, tax: 'ALV_25_5_INPUT' });
+      await line(seed, { journalId: jid, no: 2, accountId: 'acct-2940', code: '2940', debit: 25.5, role: 'alv_input_deductible' });
+      await line(seed, { journalId: jid, no: 3, accountId: 'acct-1910', code: '1910', credit: 125.5 });
+      // A supplier credit note against the unpaid bill, also unsettled: it
+      // reduces the excluded purchase, never counted twice.
+      await insertBill(seed, { id: 'bill-tukku-cn', total: -62, tax: -12, date: '2025-02-09', number: 'HL-12', paymentStatus: 'credit_note' });
+      // A March bill is March's, not February's.
+      await insertBill(seed, { id: 'bill-march', vendor: 'Maalis Tukku Oy', total: 62, tax: 12, date: '2025-03-03', number: 'M-1' });
+
+      const alv = await alvRoute(ACCRUAL);
+      assert.equal(alv.review.status, 'needs_review');
+      assert.deepEqual(alv.review.blockers, ['unrecognized_sales_documents', 'unrecognized_purchase_documents']);
+      // The paid bill is in the figures: box 307 carries its input ALV.
+      assert.equal(alv.alvReturn.boxes['307'], 25.5);
+      // Sales and purchases are separate lists with their own sentences.
+      assert.deepEqual(alv.review.unrecognizedSales.items.map((i) => i.document_id), ['doc-lumikki']);
+      const purchases = alv.review.unrecognizedPurchases;
+      assert.equal(purchases.side, 'purchase');
+      assert.deepEqual(purchases.items.map((i) => [i.document_id, i.kind, i.vendor, i.net, i.tax, i.rests]),
+        [['bill-tukku', 'invoice', 'Tukku Oy', 200, 48, 'no_settlement'], ['bill-tukku-cn', 'credit_note', 'Tukku Oy', -50, -12, 'no_settlement']]);
+      assert.deepEqual(purchases.represented, [{ document_id: 'bill-kahvi', by: 'settlement_journal' }]);
+      assert.deepEqual(purchases.totals, [{ currency: 'EUR', count: 2, gross: 186, net: 150, tax: 36, tax_unknown_count: 0 }]);
+      assert.equal(purchases.statement, '2 uploaded supplier documents are not recognised in this period\'s posted ledger and are excluded from these figures: 150.00 EUR expense + 36.00 input tax.');
+      // Reconciliation: posted input ALV + named purchase exclusions account for every February supplier document.
+      const februaryBillTax = (await seed.query(`select sum(case when payment_status = 'credit_note' then -abs(tax_amount) else abs(tax_amount) end)::float8 as t
+        from documents where client_id = $1 and document_type = 'supplier_bill' and document_date between '2025-02-01' and '2025-02-28'`, [ACCRUAL])).rows[0].t;
+      assert.equal(Math.round((alv.alvReturn.boxes['307'] + purchases.totals[0].tax) * 100) / 100, februaryBillTax);
+      assert.equal(purchases.items.length + purchases.represented.length, 3);
+      const march = await alvRoute(ACCRUAL, '2025-03');
+      assert.deepEqual(march.review.unrecognizedPurchases.items.map((i) => i.document_id), ['bill-march']);
+      assert.equal(march.review.unrecognizedSales, undefined);
+
+      // The filing start escalates with both blockers, each counted on its own.
+      await setClientFlagStage(seed, { firmId: FIRM, clientId: ACCRUAL, flagKey: 'FINLAND_ALV_FILING', stage: 'auto', source: 'manual', reason: 'fi09 proof' });
+      const started = await startFinlandAlvReturnFilingInDb({ firmId: FIRM, clientId: ACCRUAL, period: '2025-02', actorId: 'fi09-test',
+        deliverAsksImpl: async () => ({ skipped: true }), scopeDriftImpl: async () => null });
+      assert.equal(started.action, 'escalated');
+      assert.deepEqual(started.blockers, ['unrecognized_sales_documents', 'unrecognized_purchase_documents']);
+      assert.match(started.ask.question, /1 ladattua myyntilaskua tai hyvityslaskua/);
+      assert.match(started.ask.question, /2 ladattua ostolaskua tai ostohyvityslaskua .* kulut ja vähennettävä ALV puuttuvat/);
+
+      // The financial statements: a reason per side.
+      const report = await getFinancialReportFromDb({ firmId: FIRM, clientId: ACCRUAL, periodStart: '2025-02-01', periodEnd: '2025-02-28' });
+      const byCode = Object.fromEntries(report.draft.reasons.map((r) => [r.code, r]));
+      assert.deepEqual(byCode.unrecognized_sales_documents.document_ids, ['doc-lumikki']);
+      assert.deepEqual(byCode.unrecognized_purchase_documents.document_ids, ['bill-tukku', 'bill-tukku-cn']);
+      assert.match(byCode.unrecognized_purchase_documents.detail, /150\.00 EUR expense \+ 36\.00 input tax/);
+
+      // Cash basis: unchanged, no purchase exclusion.
+      await insertBill(seed, { id: 'bill-cash', clientId: CASH, total: 248, tax: 48, date: '2025-02-05', number: '4711' });
+      const cashAlv = await alvRoute(CASH);
+      assert.equal(cashAlv.review.status, 'ready');
+      assert.equal(cashAlv.review.unrecognizedPurchases, undefined);
+      const cashReport = await getFinancialReportFromDb({ firmId: FIRM, clientId: CASH, periodStart: '2025-02-01', periodEnd: '2025-02-28' });
+      assert.equal(cashReport.draft.reasons.some((r) => r.code === 'unrecognized_purchase_documents'), false);
+    } finally {
+      await routePool.end().catch(() => {});
       await __endFirmDbPoolForTests().catch(() => {});
       for (const [k, v] of Object.entries(prior)) { if (v == null) delete process.env[k]; else process.env[k] = v; }
       await stop();

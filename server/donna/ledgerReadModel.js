@@ -658,7 +658,7 @@ export const CLOSED_PERIOD_STATUSES = new Set(['locked', 'closed', 'archived', '
 // questions) rather than hiding them behind a clean-looking total. The `stamp`
 // drives the PDF/CSV header so a client can never mistake a half-coded export for
 // a final statement.
-export const buildReportDraftState = ({ readModel = {}, closePeriod = null, salesRecognition = null } = {}) => {
+export const buildReportDraftState = ({ readModel = {}, closePeriod = null, salesRecognition = null, purchaseRecognition = null } = {}) => {
   const reasons = [];
   const trialBalance = readModel.trial_balance || {};
   const balanceSheet = readModel.balance_sheet || null;
@@ -688,9 +688,11 @@ export const buildReportDraftState = ({ readModel = {}, closePeriod = null, sale
   if (pendingQuestions > 0) {
     reasons.push({ code: 'pending_questions', detail: `${pendingQuestions} item${pendingQuestions === 1 ? '' : 's'} awaiting client evidence or review.`, count: pendingQuestions });
   }
-  // FI-09: uploaded sales documents the posted ledger does not recognise in
-  // this period (salesRecognitionGap.js) — the statement says what it omits.
+  // FI-09: uploaded sales documents, and separately uploaded supplier
+  // documents, the posted ledger does not recognise in this period
+  // (salesRecognitionGap.js) — the statement says what it omits.
   if (salesRecognition?.code) reasons.push(salesRecognition);
+  if (purchaseRecognition?.code) reasons.push(purchaseRecognition);
 
   const periodClosed = CLOSED_PERIOD_STATUSES.has(String(closePeriod?.status || '').trim().toLowerCase());
   const isDraft = !periodClosed || reasons.length > 0;
@@ -707,7 +709,7 @@ export const buildReportDraftState = ({ readModel = {}, closePeriod = null, sale
 // endpoint, shared by the client portal and the firm console. It carries NO new
 // numbers — every figure is the deterministic GL aggregation already computed by
 // buildLedgerPeriodReadModel.
-export const buildFinancialReport = ({ firmId = null, clientId = null, readModel = {}, salesRecognition = null } = {}) => {
+export const buildFinancialReport = ({ firmId = null, clientId = null, readModel = {}, salesRecognition = null, purchaseRecognition = null } = {}) => {
   const closePeriod = readModel.ledger_period || null;
   return {
     source: 'donna_ledger',
@@ -725,6 +727,6 @@ export const buildFinancialReport = ({ firmId = null, clientId = null, readModel
     trial_balance: readModel.trial_balance,
     cash: readModel.cash,
     ledger_period: closePeriod,
-    draft: buildReportDraftState({ readModel, closePeriod, salesRecognition })
+    draft: buildReportDraftState({ readModel, closePeriod, salesRecognition, purchaseRecognition })
   };
 };
