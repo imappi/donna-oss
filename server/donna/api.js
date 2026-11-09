@@ -206,7 +206,8 @@ import {
   deliverEvidenceAsksOnAllChannels,
   DEFAULT_FIRM_ID,
   resolveClientCreateFirmIdInDb,
-  adoptResolvedDefaultFirmId
+  adoptResolvedDefaultFirmId,
+  findLedgerAccountByNameOrAlias
 } from './firmDb.js';
 import {
   getFinlandAnnualReturnFromDb,
@@ -8517,15 +8518,9 @@ const donnaFirmsApiHandler = async (req, res) => {
           }
           let resolvedAccountCode = action.account_code || null;
           if (!resolvedAccountCode) {
-            const acctLookup = await queryFirmDb(
-              `select code from ledger_accounts
-                where firm_id = $1 and client_id = $2
-                  and lower(name) = lower($3) and status = 'active'
-                order by (lower(code) = lower($3)) desc, updated_at desc
-                limit 1`,
-              [firmId, clientId, action.account_name]
-            );
-            resolvedAccountCode = acctLookup.rows[0]?.code || null;
+            resolvedAccountCode = (await findLedgerAccountByNameOrAlias({
+              query: queryFirmDb, firmId, clientId, name: action.account_name
+            }))?.code || null;
           }
           // G1d (build-spec PR-11): the patch is the pure builder — it
           // NEVER sets learn_rule, so an ordinary chat correction mints no
@@ -8599,7 +8594,7 @@ const donnaFirmsApiHandler = async (req, res) => {
                 result: {
                   review_item_id: reviewItemId,
                   account_name: action.account_name,
-                  account_code: action.account_code || null,
+                  account_code: resolvedAccountCode,
                   posting: postingOutcome,
                   // The correction≠teaching receipt (G1d): what this
                   // correction did NOT teach, knowable at writer time —
@@ -9061,14 +9056,9 @@ const donnaFirmsApiHandler = async (req, res) => {
             return;
           }
           const personalAccount = action.account_name;
-          const personalAccountLookup = await queryFirmDb(
-            `select code, name from ledger_accounts
-              where firm_id = $1 and client_id = $2
-                and status = 'active' and lower(name) = lower($3)
-              limit 1`,
-            [firmId, clientId, personalAccount]
-          );
-          const personalAccountCode = personalAccountLookup.rows[0]?.code || null;
+          const personalAccountCode = (await findLedgerAccountByNameOrAlias({
+            query: queryFirmDb, firmId, clientId, name: personalAccount
+          }))?.code || null;
           const codingPatch = {
             status: 'accepted',
             review_state: 'accepted',
@@ -9620,21 +9610,19 @@ const donnaFirmsApiHandler = async (req, res) => {
             codingPatch.account_code = action.account_code;
             codingPatch.xero_account_code = action.account_code;
           } else {
-            const acctLookup = await queryFirmDb(
-              `select code from ledger_accounts
-                where firm_id = $1 and client_id = $2
-                  and lower(name) = lower($3) and status = 'active'
-                order by (lower(code) = lower($3)) desc, updated_at desc
-                limit 1`,
-              [firmId, clientId, action.account_name]
-            );
-            if (acctLookup.rows[0]?.code) {
-              codingPatch.account_code = acctLookup.rows[0].code;
-              codingPatch.xero_account_code = acctLookup.rows[0].code;
+            const recodeAccount = await findLedgerAccountByNameOrAlias({
+              query: queryFirmDb, firmId, clientId, name: action.account_name
+            });
+            if (recodeAccount) {
+              codingPatch.account_code = recodeAccount.code;
+              codingPatch.xero_account_code = recodeAccount.code;
             } else {
-              // Authored local-ledger palettes are name-only. Replace the old
-              // transaction code with that name so the writer's coalesce
-              // cannot leave a prior account attached to the new category.
+              // No ledger account answers to this name or palette alias (an
+              // authored local-ledger palette, name-only until first posted).
+              // Same convention as apply_category's buildApplyCategoryCodingPatch:
+              // replace the old transaction code with the name so the writer's
+              // coalesce cannot leave a prior account attached to the new
+              // category; posting reads a code equal to the name as name-only.
               codingPatch.account_code = action.account_name;
             }
           }

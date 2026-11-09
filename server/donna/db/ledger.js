@@ -251,6 +251,33 @@ const resolvePaletteAliasAccountsWithClient = async ({ client, firmId, clientId,
   });
 };
 
+// The ONE lookup a chat correction uses to turn the account name it was given
+// into the client's ledger code (transaction chat apply / mark-personal /
+// re-code, feed chat apply). The chat speaks pack-palette names, and a born
+// coded row (FI-21) keeps that name only as its palette alias, so the match is
+// the row's name OR its alias — the same alias rule the posting resolver above
+// applies. Only rows that carry a code can answer, so a code-less duplicate
+// named like the alias never shadows the coded row posting would land on.
+// Precedence: the row's own name before another row's alias (the coder's
+// account matcher order: code, name, then aliases), then a row whose code is
+// the name itself, then the most recently updated. Returns null on a miss;
+// it never makes up a code.
+export const findLedgerAccountByNameOrAlias = async ({ query, firmId, clientId, name }) => {
+  const label = String(name || '').trim();
+  if (!clientId || !label) return null;
+  const result = await query(
+    `select id, code, name
+       from ledger_accounts
+      where firm_id = $1 and client_id = $2 and status = 'active'
+        and coalesce(code, '') <> ''
+        and (lower(name) = lower($3) or lower(payload->>'palette_name') = lower($3))
+      order by (lower(name) = lower($3)) desc, (lower(code) = lower($3)) desc, updated_at desc
+      limit 1`,
+    [firmId, clientId, label]
+  );
+  return result.rows[0] || null;
+};
+
 // Account class (the missing-account vocabulary) → ledger normal
 // balance. Pure; exported for tests.
 export const __normalBalanceForAccountClass = (accountClass = '') =>
