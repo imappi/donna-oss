@@ -16,12 +16,29 @@
 // blocker on the request's evidence case (the EXISTING bookkeeping_cases
 // queue substrate — no new table, no third spine).
 //
-// A "nudge" here is the same shape every existing re-send takes
-// (createClientEvidenceRequestWithClient's re-upsert, rejectClientEvidenceRequestInDb's
-// follow-up): bump send_count, stamp last_sent_at, advance due_at, refresh the
-// request_payload.evidence_request envelope the client portal renders. The
-// portal reads those columns — that IS the delivery surface; there is no
-// separate re-send channel to invoke.
+// A "nudge" is a REAL reminder: the sweep routes the ask through
+// deliverEvidenceAsksOnAllChannels (db/asks.js), the same one fan-out the first
+// send used, so every per-channel gate (WhatsApp/SMS/Telegram env allowlist +
+// binding, OWNER_EMAIL_ASKS, the sensitive-identifier guard, the
+// delivery-unknown rail) applies unchanged and each attempt lands in the
+// message_delivery_ledger. The deliverer is the one that moves send_count /
+// last_sent_at (108), and only on a genuine send. The client-level gates the
+// first send applies before its fan-out — pilot send containment
+// (INTERNAL_PILOT_SEND_DISABLED) and entity-readiness admission at 'ask_send'
+// — are checked here first; while either refuses, nothing is sent and nothing
+// is counted (the ask stays open on the owner and is re-checked next tick).
+//
+// When no channel delivered, the portal is the only surface left. It counts
+// as a reminder ONLY if a customer-side person can actually see it there (an
+// active, signed-in, client-scoped owner assigned to this client): then the
+// sweep refreshes the request_payload.evidence_request envelope the portal
+// renders and counts the send, as before. When nobody can be reached at all,
+// re-asking is meaningless: the ask is escalated to the firm at once
+// ('owner_unreachable'), never left to age on an invisible clock.
+//
+// One owner for channel reminders: while this cadence ACTS for a client, the
+// evidence-topic reminder sweep (channels/evidenceTopicReminders.js) defers
+// to it, so an ask is never reminded by both.
 //
 // Keep-layer plumbing only: no LLM, no re-judging the question, no re-wording
 // (the drafted question stands verbatim).
@@ -35,6 +52,8 @@ import {
   clientFlagActs, clientFlagObserves, readClientConfigSnapshot
 } from './clientConfig.js';
 import { openOrFindCase, openBlocker, loopsTablesPresent } from './caseManager.js';
+import { readInternalPilotSendContainmentWithClient } from './internalPilotAccess.js';
+import { evaluateEntityReadinessAdmissionWithClient } from './runtimeReadinessAdmission.js';
 
 export const REASK_CADENCE_FLAG_KEY = 'ASK_REASK_CADENCE';
 
@@ -110,12 +129,104 @@ const openFirmEscalationBlocker = async (client, { firmId, clientId, request }) 
   }
 };
 
+// A customer-side person who can see the ask in the portal: an active,
+// signed-in, client-scoped owner with a live capability assignment to this
+// client (the same principal shape owner provisioning and the hosted pilot
+// require). Fail-closed: a read error means "not visible".
+const PORTAL_RECIPIENT_SQL = `
+  select 1
+    from firm_collaborators fc
+    join client_assignments ca
+      on ca.firm_id = fc.firm_id
+     and ca.principal_type = 'firm_collaborator'
+     and ca.principal_id = fc.id
+   where fc.firm_id = $1
+     and ca.client_id = $2
+     and fc.role = 'owner'
+     and fc.seat_role is null
+     and fc.status = 'active'
+     and fc.access_level = 'client_scoped'
+     and fc.user_id is not null
+     and (fc.ends_at is null or fc.ends_at > now())
+     and ca.assignment_kind = 'capability'
+     and ca.status = 'active'
+     and (ca.starts_at is null or ca.starts_at <= now())
+     and (ca.ends_at is null or ca.ends_at > now())
+   limit 1`;
+
+const hasPortalRecipient = async (client, { firmId, clientId }) => {
+  try {
+    const res = await client.query(PORTAL_RECIPIENT_SQL, [firmId, clientId]);
+    return (res.rows || []).length > 0;
+  } catch {
+    return false;
+  }
+};
+
+// The first send's client-level gates, read once per client sweep. Returns a
+// reason when owner messaging is refused, null when the fan-out may run.
+const reminderSendRefusal = async (client, { firmId, clientId, deps }) => {
+  const readContainment = deps.readSendContainment || readInternalPilotSendContainmentWithClient;
+  const evaluateAdmission = deps.evaluateAdmission || evaluateEntityReadinessAdmissionWithClient;
+  try {
+    if ((await readContainment(client, { firmId, clientId }))?.contained) return 'INTERNAL_PILOT_SEND_DISABLED';
+    const admission = await evaluateAdmission({ client, firmId, clientId, boundary: 'ask_send', lock: false });
+    if (admission && admission.allowed === false) return admission.reason_code || 'ENTITY_READINESS_REFUSED';
+    return null;
+  } catch {
+    // Fail closed: an unreadable gate is a refusal, never a send.
+    return 'SEND_GATE_UNREADABLE';
+  }
+};
+
+const defaultDeliver = async (args) => {
+  const { deliverEvidenceAsksOnAllChannels } = await import('./db/asks.js');
+  return deliverEvidenceAsksOnAllChannels(args);
+};
+
+// ESCALATE — stop the re-ask clock (due_at null) and hand the named exception
+// to the firm. The request stays 'open' (the owner can still answer; the reply
+// legs resolve it), but its resting place is now Kari's queue. One
+// transaction; the case blocker is post-commit and best-effort.
+const escalateToFirm = async (client, { firmId, clientId, row, nowIso, reason }) => {
+  const sendCount = Number(row.send_count || 0);
+  const escalation = {
+    at: nowIso,
+    reason,
+    send_count: sendCount,
+    first_sent_at: row.first_sent_at ? new Date(row.first_sent_at).toISOString() : null
+  };
+  await client.query('begin');
+  await client.query(
+    `update client_evidence_requests
+        set request_payload = request_payload || $3::jsonb,
+            due_at = null,
+            updated_at = now()
+      where firm_id = $1 and id = $2 and status = 'open'
+        and coalesce(request_payload->>'escalated_to_firm', '') = ''`,
+    [firmId, row.id, JSON.stringify({ escalated_to_firm: escalation })]
+  );
+  await client.query(
+    `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
+     values ($1, $2, 'system', 'evidence_request.escalated_to_firm', 'client_evidence_request', $3, $4::jsonb)`,
+    [firmId, clientId, row.id, JSON.stringify({
+      transaction_id: row.transaction_id || null,
+      ...escalation
+    })]
+  );
+  await client.query('commit');
+  await openFirmEscalationBlocker(client, { firmId, clientId, request: row });
+};
+
 // The bounded per-client sweep the daily cron runs. Per-item posture: each
 // overdue row is handled in its OWN short transaction, so one poisoned row
 // never rolls back the rest (the F5 lesson); the caller holds no open txn.
-// Returns { skipped?, considered, nudged, escalated, shadow?, errors }.
+// The channel fan-out is a network side effect and runs OUTSIDE any
+// transaction (as the batch send and the operator resend run it).
+// Returns { skipped?, considered, nudged, delivered, portal, held, escalated,
+// shadow?, errors }.
 export const runAskReaskSweep = async ({
-  client, firmId, clientId, env = process.env, now = Date.now(), limit = DEFAULT_LIMIT
+  client, firmId, clientId, env = process.env, now = Date.now(), limit = DEFAULT_LIMIT, deps = {}
 } = {}) => {
   if (!client || !firmId || !clientId) return { skipped: true, reason: 'missing_args' };
   const snapshot = await readClientConfigSnapshot(client, { firmId, clientId });
@@ -142,7 +253,9 @@ export const runAskReaskSweep = async ({
     throw error;
   }
   const rows = overdue.rows || [];
-  const stats = { skipped: false, considered: rows.length, nudged: 0, escalated: 0, errors: 0 };
+  const stats = {
+    skipped: false, considered: rows.length, nudged: 0, delivered: 0, portal: 0, held: 0, escalated: 0, errors: 0
+  };
   if (!rows.length) return stats;
 
   if (!acts) {
@@ -163,16 +276,61 @@ export const runAskReaskSweep = async ({
     return { ...stats, shadow: true };
   }
 
+  const deliver = deps.deliver || defaultDeliver;
+  let sendRefusal;
+  let portalVisible;
+
   for (const row of rows) {
     const sendCount = Number(row.send_count || 0);
     try {
+      if (sendCount >= ASK_REASK_MAX_SEND_COUNT) {
+        // The owner had every reminder the cadence allows and answered none.
+        await escalateToFirm(client, { firmId, clientId, row, nowIso, reason: 'owner_unresponsive' });
+        stats.escalated += 1;
+        continue;
+      }
+
+      // The first send's client-level gates. Refused ⇒ nothing sent, nothing
+      // counted, no envelope rewrite: the ask stays open on the owner and the
+      // next tick re-checks.
+      if (sendRefusal === undefined) sendRefusal = await reminderSendRefusal(client, { firmId, clientId, deps });
+      if (sendRefusal) {
+        stats.held += 1;
+        continue;
+      }
+
+      // NUDGE — the same one fan-out the first send used. Only a channel that
+      // genuinely delivered moves send_count (the deliverer's 108 bump), so
+      // the re-read below is an honest execution verifier.
+      const channelFanout = await deliver({
+        client, firmId, clientId, evidenceRequestIds: [row.id]
+      }).catch((error) => ({ error: error?.message || 'fanout_failed' }));
+      const after = await client.query(
+        'select send_count from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
+        [firmId, row.id]
+      );
+      const afterCount = Number(after.rows?.[0]?.send_count ?? sendCount);
+      const delivered = afterCount > sendCount;
+
+      let surface = delivered ? 'channel' : null;
+      if (!delivered) {
+        if (portalVisible === undefined) portalVisible = await hasPortalRecipient(client, { firmId, clientId });
+        if (portalVisible) surface = 'portal';
+      }
+      if (!surface) {
+        // No channel delivered and nobody can see the ask in the portal: a
+        // reminder cannot reach anyone, so the exception goes to the firm now.
+        await escalateToFirm(client, { firmId, clientId, row, nowIso, reason: 'owner_unreachable' });
+        stats.escalated += 1;
+        continue;
+      }
+
+      const nextSendCount = surface === 'portal' ? sendCount + 1 : afterCount;
+      const nextDueIso = new Date(now + nudgeDays * 86400000).toISOString();
       await client.query('begin');
-      if (sendCount < ASK_REASK_MAX_SEND_COUNT) {
-        // NUDGE — the same column shape every existing re-send writes. The
-        // request_payload.evidence_request envelope is what the client portal
-        // renders, so the bumped send stamp is the visible reminder.
-        const nextSendCount = sendCount + 1;
-        const nextDueIso = new Date(now + nudgeDays * 86400000).toISOString();
+      if (surface === 'portal') {
+        // The portal is the delivery surface for this reminder: the bumped
+        // send stamp in the envelope it renders IS what the owner sees.
         const envelope = {
           ...(row.request_payload?.evidence_request || {}),
           id: row.id,
@@ -193,51 +351,35 @@ export const runAskReaskSweep = async ({
           [firmId, row.id, nextSendCount, nowIso, nextDueIso,
             JSON.stringify({ evidence_request: envelope })]
         );
-        await client.query(
-          `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
-           values ($1, $2, 'system', 'evidence_request.nudged', 'client_evidence_request', $3, $4::jsonb)`,
-          [firmId, clientId, row.id, JSON.stringify({
-            transaction_id: row.transaction_id || null,
-            send_count: nextSendCount,
-            due_at: nextDueIso,
-            nudge_days: nudgeDays
-          })]
-        );
-        await client.query('commit');
-        stats.nudged += 1;
       } else {
-        // ESCALATE — the owner channel is dead (two nudges unanswered). Stop
-        // the re-ask clock (due_at null) and hand the named exception to the
-        // firm. The request stays 'open' (the owner can still answer; the
-        // reply legs resolve it), but its resting place is now Kari's queue.
-        const escalation = {
-          at: nowIso,
-          reason: 'owner_unresponsive',
-          send_count: sendCount,
-          first_sent_at: row.first_sent_at ? new Date(row.first_sent_at).toISOString() : null
-        };
+        // The deliverer already stamped send_count / last_sent_at and the
+        // envelope; the sweep only re-arms the clock and marks the nudge.
         await client.query(
           `update client_evidence_requests
-              set request_payload = request_payload || $3::jsonb,
-                  due_at = null,
+              set due_at = $3::timestamptz,
+                  request_payload = request_payload || jsonb_build_object('evidence_request',
+                    coalesce(request_payload->'evidence_request', '{}'::jsonb)
+                    || jsonb_build_object('nudged_at', $4::bigint)),
                   updated_at = now()
-            where firm_id = $1 and id = $2 and status = 'open'
-              and coalesce(request_payload->>'escalated_to_firm', '') = ''`,
-          [firmId, row.id, JSON.stringify({ escalated_to_firm: escalation })]
+            where firm_id = $1 and id = $2 and status = 'open'`,
+          [firmId, row.id, nextDueIso, now]
         );
-        await client.query(
-          `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
-           values ($1, $2, 'system', 'evidence_request.escalated_to_firm', 'client_evidence_request', $3, $4::jsonb)`,
-          [firmId, clientId, row.id, JSON.stringify({
-            transaction_id: row.transaction_id || null,
-            ...escalation
-          })]
-        );
-        await client.query('commit');
-        // Post-commit, best-effort: the firm-queue surface row (case blocker).
-        await openFirmEscalationBlocker(client, { firmId, clientId, request: row });
-        stats.escalated += 1;
       }
+      await client.query(
+        `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
+         values ($1, $2, 'system', 'evidence_request.nudged', 'client_evidence_request', $3, $4::jsonb)`,
+        [firmId, clientId, row.id, JSON.stringify({
+          transaction_id: row.transaction_id || null,
+          send_count: nextSendCount,
+          due_at: nextDueIso,
+          nudge_days: nudgeDays,
+          surface,
+          channel_fanout: channelFanout
+        })]
+      );
+      await client.query('commit');
+      stats.nudged += 1;
+      if (surface === 'portal') stats.portal += 1; else stats.delivered += 1;
     } catch (error) {
       try { await client.query('rollback'); } catch { /* best-effort */ }
       try {

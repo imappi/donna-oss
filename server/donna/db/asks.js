@@ -4597,7 +4597,9 @@ export const getAskBatchDraftsForFirmFromDb = async ({ firmId = DEFAULT_FIRM_ID 
 // ask_client verbs share the SAME fan-out instead of stopping at the DB
 // (audit §4: "channel fan-out lives only in the ask-batch send"). Returns
 // per-channel results so a caller's receipt can say what actually left.
-export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [] } = {}) => {
+// `deps` is passed through to every deliverer unchanged (their own transport
+// seam, e.g. deps.deliverOwnerMessage) so tests drive the real fan-out.
+export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], deps } = {}) => {
   const results = {};
   // 122 — the OWNER-channel guard, enforced once for all four channels: only
   // client-audience asks may reach WhatsApp/SMS/Telegram/email. A seat/agent
@@ -4627,16 +4629,16 @@ export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientI
     }
   };
   results.whatsapp = await attempt('whatsapp', () =>
-    deliverWhatsAppEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels }));
+    deliverWhatsAppEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   results.sms = await attempt('sms', () =>
-    deliverSmsEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels }));
+    deliverSmsEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   // G14 (outbound-actions M1): Telegram + owner-email join the ask fan-out.
   // Each deliverer carries its own gate (binding / config-plane flag), so an
   // unbound or dark channel is an internal no-op.
   results.telegram = await attempt('telegram', () =>
-    deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels }));
+    deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   results.email = await attempt('email', () =>
-    deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels }));
+    deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   return results;
 };
 
