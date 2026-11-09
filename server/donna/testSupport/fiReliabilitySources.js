@@ -12,6 +12,17 @@
 // recovery; they do NOT prove live-model quality. Neither proves the other.
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { loadRecording } from './recordedProviders.js';
+import { FI_OY_BIRTH_CHART } from '../finland/provisioningPolicy.js';
+
+// FI_PROFILE is an Oy, so its book is born with the coded tilikartta (FI-21).
+// The coder answers in pack-palette names (a source's `account`); posting
+// lands on the coded row the birth chart binds to that name. Expected codes
+// and names come from that binding, never from observed output.
+export const fiBornAccount = (paletteName) => {
+  const account = FI_OY_BIRTH_CHART.accounts.find((row) => row.palette_name === paletteName);
+  if (!account) throw new Error(`FI Oy birth chart binds no row to palette name '${paletteName}'`);
+  return account;
+};
 
 export const FI_PROFILE = Object.freeze({
   companyName: 'Lumo Kahvila Oy', jurisdiction: 'FI', entityType: 'fi-oy', currency: 'EUR',

@@ -9,9 +9,11 @@ import { selfProvisionClientWorkspace } from './selfProvisionDb.js';
 import { getClientBillingContext } from './clientSubscriptionDb.js';
 import { __setFirmDbPoolForTests, __resetFirmDbPoolForTests, __sendClientAskBatchWithClient } from './firmDb.js';
 import { setClientFlagStage } from './clientConfig.js';
-import { INTERNAL_PILOT_ACCESS_FLAG, HOSTED_PILOT_VERSION, PILOT_SEND_RELEASE_ACTION,
+import { INTERNAL_PILOT_ACCESS_FLAG, HOSTED_PILOT_VERSION, PILOT_SEND_RELEASE_ACTION, PILOT_SEND_RELEASE_VERSION,
   readInternalPilotSendContainmentWithClient, readInternalPilotSendRestrictionWithClient } from './internalPilotAccess.js';
 import { releaseInternalPilotSendContainment } from './internalPilotSendRelease.js';
+import { runAskReaskSweep } from './askReaskCadence.js';
+import { RESEND_API_URL } from './email/resendClient.js';
 import { inviteSeatInDb } from './seatsDb.js';
 
 // Real PostgreSQL, the real router, preparation, release and ask-batch send
@@ -29,7 +31,7 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
     __setFirmDbPoolForTests(pool);
     const firmId = 'pilot-send-proof', actorId = 'pilot-send-operator';
     const saved = Object.fromEntries(['DONNA_DEFAULT_FIRM_ID', 'DONNA_DESKTOP_BLOB_DIR', 'DATABASE_URL', 'DONNA_ACCESS_TOKEN', 'SUPABASE_URL',
-      'SUPABASE_PUBLISHABLE_KEY', 'DONNA_AUTH_ALLOWED_EMAILS'].map(key => [key, process.env[key]]));
+      'SUPABASE_PUBLISHABLE_KEY', 'DONNA_AUTH_ALLOWED_EMAILS', 'RESEND_API_KEY'].map(key => [key, process.env[key]]));
     const originalFetch = globalThis.fetch;
     t.after(async () => {
       globalThis.fetch = originalFetch;
@@ -52,9 +54,17 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
     const operator = { userId: 'send-operator-user', email: 'operator@send.invalid' };
     const seatUsers = {};
     Object.assign(process.env, { DATABASE_URL: url.toString(), DONNA_ACCESS_TOKEN: 'not-a-tester-token',
-      SUPABASE_URL: 'https://pilot-auth.invalid', SUPABASE_PUBLISHABLE_KEY: 'synthetic-public-key', DONNA_AUTH_ALLOWED_EMAILS: '' });
+      SUPABASE_URL: 'https://pilot-auth.invalid', SUPABASE_PUBLISHABLE_KEY: 'synthetic-public-key', DONNA_AUTH_ALLOWED_EMAILS: '',
+      RESEND_API_KEY: 'synthetic-resend-key' });
+    // The one outbound channel a release switches on is email (Resend);
+    // every message it would send is captured here, never sent.
+    const emails = [];
     globalThis.fetch = async (address, init) => {
-      assert.equal(address, 'https://pilot-auth.invalid/auth/v1/user', 'no provider or channel network call in this proof');
+      if (address === RESEND_API_URL) {
+        const body = JSON.parse(init.body); emails.push(body);
+        return new Response(JSON.stringify({ id: `synthetic-email-${emails.length}` }), { status: 200 });
+      }
+      assert.equal(address, 'https://pilot-auth.invalid/auth/v1/user', 'no other provider or channel network call in this proof');
       const who = { 'Bearer owner': owner, 'Bearer operator': operator, ...seatUsers }[init.headers.Authorization] || null;
       return new Response(JSON.stringify(who ? { id: who.userId, email: who.email } : {}), { status: who ? 200 : 401 });
     };
@@ -81,6 +91,10 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
         JSON.stringify({ draft: { items: [{ transaction_id: transactionId, disposition: 'ask',
           question: 'What was this card payment for?', evidence_type: 'business_purpose' }] } })]);
     };
+    const ownerEmail = 'owner@send.invalid';
+    await seed.query("update clients set profile = coalesce(profile,'{}'::jsonb) || jsonb_build_object('email',$2::text) where id=$1", [clientId, ownerEmail]);
+    const ownerChannelRows = id => seed.query(`select id, flag_key, stage, source, reason, set_by_actor_type, set_by_actor_id, valid_to from client_capability_config
+      where client_id=$1 and flag_key in ('OWNER_EMAIL_ASKS','ASK_REASK_CADENCE') order by flag_key, created_at`, [id]).then(r => r.rows);
     const sendPath = batchId => `/ask-batches/${batchId}/send`;
     const containment = () => withClient(c => readInternalPilotSendContainmentWithClient(c, { firmId, clientId }));
 
@@ -94,6 +108,8 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
       { code: 'INTERNAL_PILOT_SEND_DISABLED' });
     assert.equal((await seed.query("select status from client_ask_batches where id='batch-held'")).rows[0].status, 'draft');
     assert.equal((await seed.query('select count(*)::int n from client_evidence_requests')).rows[0].n, 0);
+    assert.deepEqual(emails, [], 'a contained client sends nothing');
+    assert.deepEqual(await ownerChannelRows(clientId), [], 'birth stages no owner channel');
 
     // 2. Only an active firm member can review or release.
     const reviewPath = `/clients/${clientId}/cloud-pilot/send-review?firm_id=${firmId}`;
@@ -115,13 +131,21 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
     assert.equal(review.body.contained, true);
     assert.equal(review.body.actor_id, actorId);
     assert.deepEqual(review.body.draft_batches.map(b => [b.id, b.item_count]), [['batch-held', 1]]);
+    // The review names the two owner channels release switches on, and where email goes.
+    const staged = (flag_key, effect) => ({ flag_key, effect, action: 'stage', stage: 'canary', source: 'manual',
+      reason: PILOT_SEND_RELEASE_VERSION, acts_after_release: true });
     assert.deepEqual(review.body.after_release, { send_path: 'existing_ask_batch_send_writer', firm_auto_send_client_asks: false,
-      owner_email_asks: false, delivery_channels_changed: false });
+      owner_email_asks: true, reask_reminders: true,
+      owner_channels: [staged('OWNER_EMAIL_ASKS', 'email_questions_to_owner'),
+        staged('ASK_REASK_CADENCE', 'remind_unanswered_questions_then_escalate_to_firm')],
+      owner_email_recipient: ownerEmail, owner_email_missing: false, delivery_channels_changed: true });
+    assert.deepEqual(await ownerChannelRows(clientId), [], 'a review writes nothing');
     assert.equal((await request('operator', releasePath, { firm_id: firmId, review_digest: review.body.review_digest, confirmed: false })).status, 400);
     await seed.query("update client_ask_batches set subject='Questions about February (redrafted)' where id='batch-held'");
     const stale = await request('operator', releasePath, { firm_id: firmId, review_digest: review.body.review_digest, confirmed: true });
     assert.equal(stale.status, 409); assert.equal(stale.body.code, 'PILOT_SEND_RELEASE_REVIEW_STALE');
     assert.equal((await seed.query('select count(*)::int n from audit_events where action=$1', [PILOT_SEND_RELEASE_ACTION])).rows[0].n, 0);
+    assert.deepEqual(await ownerChannelRows(clientId), [], 'a refused release stages nothing');
 
     // 4. Release: one attributed receipt, nothing sent or approved.
     const current = await request('operator', reviewPath);
@@ -133,10 +157,24 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
     assert.equal(receipts[0].actor_type, 'firm_member'); assert.equal(receipts[0].actor_id, actorId);
     assert.deepEqual(receipts[0].metadata.retained_draft_batch_ids, ['batch-held']);
     assert.equal(receipts[0].metadata.review_digest, current.body.review_digest);
+    // The release staged exactly the two reviewed rows, attributed to the
+    // releasing member and naming the release, and receipted each one.
+    const firstRows = await ownerChannelRows(clientId);
+    assert.deepEqual(firstRows.map(r => [r.flag_key, r.stage, r.source, r.reason, r.set_by_actor_type, r.set_by_actor_id, r.valid_to]), [
+      ['ASK_REASK_CADENCE', 'canary', 'manual', PILOT_SEND_RELEASE_VERSION, 'firm_member', actorId, null],
+      ['OWNER_EMAIL_ASKS', 'canary', 'manual', PILOT_SEND_RELEASE_VERSION, 'firm_member', actorId, null]]);
+    assert.deepEqual(receipts[0].metadata.owner_channel_stage_rows, ['OWNER_EMAIL_ASKS', 'ASK_REASK_CADENCE'].map(flag_key => ({
+      config_row_id: firstRows.find(r => r.flag_key === flag_key).id, flag_key, stage: 'canary', source: 'manual', reason: PILOT_SEND_RELEASE_VERSION })));
+    assert.deepEqual(receipts[0].metadata.owner_channels_left_as_is, []);
+    assert.equal(receipts[0].metadata.delivery_channels_changed, true);
+    assert.deepEqual(released.body.owner_channel_stage_rows, receipts[0].metadata.owner_channel_stage_rows);
+    assert.equal((await seed.query("select count(*)::int n from audit_events where action='client_config.stage_set' and client_id=$1 and resource_id in ('OWNER_EMAIL_ASKS','ASK_REASK_CADENCE')", [clientId])).rows[0].n, 2);
+    assert.deepEqual(emails, [], 'release itself sends nothing');
     assert.deepEqual((await seed.query("select id from client_ask_batches where status <> 'draft'")).rows, [], 'release sends nothing');
     assert.equal((await seed.query('select count(*)::int n from client_evidence_requests')).rows[0].n, 0);
     const again = await request('operator', releasePath, { firm_id: firmId, review_digest: (await request('operator', reviewPath)).body.review_digest, confirmed: true });
     assert.equal(again.body.code, 'PILOT_SEND_NOT_CONTAINED');
+    assert.deepEqual((await ownerChannelRows(clientId)).map(r => r.id), firstRows.map(r => r.id), 'a second release writes nothing');
     assert.equal((await request('operator', reviewPath)).body.release.actor_id, actorId);
     // Cloud evidence intake keys on enrollment history, not on sending.
     assert.equal(await withClient(c => readInternalPilotSendRestrictionWithClient(c, { firmId, clientId })), true);
@@ -147,9 +185,23 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
     assert.equal(sent.body.batch.status, 'sent');
     const ask = (await seed.query("select id, status, audience, send_count from client_evidence_requests where transaction_id='tx-held'")).rows;
     assert.equal(ask.length, 1); assert.equal(ask[0].audience, 'client');
-    assert.equal(ask[0].send_count, 0, 'no delivery channel is enabled by release');
+    // Released: the first question reaches the owner by email.
+    assert.equal(ask[0].send_count, 1, 'the email the release switched on delivered the question');
+    assert.equal(emails.length, 1); assert.deepEqual(emails[0].to, [ownerEmail]);
+    assert.match(emails[0].text, /What was this card payment for\?/);
     const sendReceipt = (await seed.query("select metadata from audit_events where action='ask_batch.send' and resource_id='batch-held'")).rows;
     assert.equal(sendReceipt.length, 1); assert.equal(sendReceipt[0].metadata.evidence_request_count, 1);
+    // Not yet overdue: the daily sweep sends nothing.
+    const notDue = await withClient(c => runAskReaskSweep({ client: c, firmId, clientId }));
+    assert.equal(notDue.nudged, 0); assert.equal(emails.length, 1);
+    // Overdue (8 days on): exactly one real reminder, by email, counted once.
+    const overdueAt = Date.now() + 8 * 86400000;
+    const reminded = await withClient(c => runAskReaskSweep({ client: c, firmId, clientId, now: overdueAt }));
+    assert.equal(reminded.nudged, 1, JSON.stringify(reminded)); assert.equal(reminded.delivered, 1);
+    assert.equal(emails.length, 2); assert.deepEqual(emails[1].to, [ownerEmail]);
+    assert.equal((await seed.query("select send_count from client_evidence_requests where id=$1", [ask[0].id])).rows[0].send_count, 2);
+    const remindedAgain = await withClient(c => runAskReaskSweep({ client: c, firmId, clientId, now: overdueAt }));
+    assert.equal(remindedAgain.nudged, 0, 'one reminder per overdue window'); assert.equal(emails.length, 2);
 
     // 6. Revoking review access afterwards (ordinary and emergency) does not
     //    re-contain and never touches the owner's open question.
@@ -163,6 +215,7 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
     assert.equal((await request('operator', sendPath('batch-late'), { firm_id: firmId, client_id: clientId })).status, 200);
     assert.deepEqual((await seed.query("select id, status from client_evidence_requests where transaction_id='tx-held'")).rows,
       [{ id: ask[0].id, status: ask[0].status }], 'the already-sent question stays with the owner');
+    const emailsBeforeRegrant = emails.length;
 
     // 7. An explicit re-grant of pilot access is new containment.
     await withClient(c => setClientFlagStage(c, { firmId, clientId, flagKey: INTERNAL_PILOT_ACCESS_FLAG, stage: 'canary', source: 'manual',
@@ -171,6 +224,10 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
     await draftBatch('batch-regrant', 'tx-regrant');
     await assert.rejects(withClient(c => __sendClientAskBatchWithClient({ client: c, firmId, clientId, batchId: 'batch-regrant', actorId })),
       { code: 'INTERNAL_PILOT_SEND_DISABLED' });
+    // Contained again: the staged channels stay, yet no reminder leaves.
+    const heldSweep = await withClient(c => runAskReaskSweep({ client: c, firmId, clientId, now: Date.now() + 40 * 86400000 }));
+    assert.equal(heldSweep.nudged, 0, JSON.stringify(heldSweep)); assert.ok(heldSweep.held >= 1, JSON.stringify(heldSweep));
+    assert.equal(emails.length, emailsBeforeRegrant, 'a contained client sends nothing');
 
     // 8. Staff seats (Kari, 2026-09-23: the operator team acts through seats).
     //    Release is policy_change → partner and up, through the one capability
@@ -218,9 +275,51 @@ test('real PG: pilot send containment refuses, a member release is receipted, re
     assert.equal(seatReceipt.actor_type, 'seat'); assert.equal(seatReceipt.actor_id, seatReview.body.actor_id);
     assert.equal(seatReceipt.metadata.seat_role, 'partner');
     assert.equal(seatReceipt.metadata.authority_basis, 'partner_seat_confirmed_pilot_send_release');
+    // Idempotent: the rows the first release wrote stand; the second writes none and says so.
+    assert.deepEqual(seatReview.body.after_release.owner_channels.map(r => [r.flag_key, r.action, r.existing_stage, r.existing_scope]),
+      [['OWNER_EMAIL_ASKS', 'left_as_is', 'canary', 'client'], ['ASK_REASK_CADENCE', 'left_as_is', 'canary', 'client']]);
+    assert.deepEqual(seatReceipt.metadata.owner_channel_stage_rows, []);
+    assert.deepEqual(seatReceipt.metadata.owner_channels_left_as_is.map(r => r.flag_key), ['OWNER_EMAIL_ASKS', 'ASK_REASK_CADENCE']);
+    assert.equal(seatReceipt.metadata.delivery_channels_changed, false);
+    assert.deepEqual((await ownerChannelRows(clientId)).map(r => r.id), firstRows.map(r => r.id));
     assert.equal((await containment()).release.actor_id, seatReview.body.actor_id);
     assert.equal((await request('operator', sendPath('batch-regrant'), { firm_id: firmId, client_id: clientId })).status, 200,
       'a seat release reaches the same real send writer');
     // The portal owner is a plain collaborator: never a releaser, whatever its role resolves to.
     assert.equal((await request('owner', reviewPath)).status, 403);
+
+    // 9. A client whose owner already chose OFF keeps it; the review digest
+    //    covers which flags will be staged; no owner email is said plainly.
+    const owner2 = { userId: 'send-owner-2', email: 'owner2@send.invalid' };
+    const { clientId: secondId } = await selfProvisionClientWorkspace({ auth: owner2, companyName: 'Synthetic Second Oy', jurisdiction: 'FI', entityType: 'fi-oy' });
+    await prepareFinnishHostedPilotInDb({ firmId, clientId: secondId, actorId, profilePatch: { companyName: 'Synthetic Second Oy', jurisdiction: 'FI',
+      entityType: 'fi-oy', accountingCurrency: 'EUR', accounting_system: 'none', accounting_view: 'management_books', accountingBasis: 'accrual' } });
+    await seed.query("update clients set profile = coalesce(profile,'{}'::jsonb) - 'email' - 'contact_email' - 'owner_email' where id=$1", [secondId]);
+    const secondReviewPath = `/clients/${secondId}/cloud-pilot/send-review?firm_id=${firmId}`;
+    const secondReleasePath = `/clients/${secondId}/cloud-pilot/send-release`;
+    const before = (await request('operator', secondReviewPath)).body;
+    assert.equal(before.contained, true);
+    assert.deepEqual(before.after_release.owner_channels.map(r => r.action), ['stage', 'stage']);
+    assert.equal(before.after_release.owner_email_recipient, null);
+    assert.equal(before.after_release.owner_email_missing, true, 'email questions would have nowhere to go');
+    const off = await withClient(c => setClientFlagStage(c, { firmId, clientId: secondId, flagKey: 'OWNER_EMAIL_ASKS', stage: 'off', source: 'manual',
+      reason: 'synthetic explicit owner choice', actorType: 'firm_member', actorId }));
+    const after = (await request('operator', secondReviewPath)).body;
+    assert.notEqual(after.review_digest, before.review_digest, 'the digest covers the flags to be staged');
+    assert.deepEqual(after.after_release.owner_channels[0], { flag_key: 'OWNER_EMAIL_ASKS', effect: 'email_questions_to_owner', action: 'left_as_is',
+      existing_stage: 'off', existing_source: 'manual', existing_scope: 'client', acts_after_release: false });
+    assert.equal(after.after_release.owner_email_asks, false);
+    assert.equal(after.after_release.owner_email_missing, false, 'no warning for a channel that stays off');
+    const staleSecond = await request('operator', secondReleasePath, { firm_id: firmId, review_digest: before.review_digest, confirmed: true });
+    assert.equal(staleSecond.body.code, 'PILOT_SEND_RELEASE_REVIEW_STALE');
+    const secondRelease = await request('operator', secondReleasePath, { firm_id: firmId, review_digest: after.review_digest, confirmed: true });
+    assert.equal(secondRelease.status, 200, JSON.stringify(secondRelease));
+    const secondRows = await ownerChannelRows(secondId);
+    assert.deepEqual(secondRows.map(r => [r.flag_key, r.stage, r.valid_to]), [['ASK_REASK_CADENCE', 'canary', null], ['OWNER_EMAIL_ASKS', 'off', null]]);
+    assert.equal(secondRows.find(r => r.flag_key === 'OWNER_EMAIL_ASKS').id, off.id, 'the earlier explicit off row is untouched');
+    assert.deepEqual(secondRelease.body.owner_channel_stage_rows.map(r => r.flag_key), ['ASK_REASK_CADENCE']);
+    assert.deepEqual(secondRelease.body.owner_channels_left_as_is, [{ flag_key: 'OWNER_EMAIL_ASKS', existing_stage: 'off', existing_source: 'manual', existing_scope: 'client' }]);
+    // Release never touches any other flag (invoicing, dunning, payments stay as born).
+    assert.equal((await seed.query(`select count(*)::int n from client_capability_config where client_id=$1 and reason=$2`,
+      [secondId, PILOT_SEND_RELEASE_VERSION])).rows[0].n, 1);
   });

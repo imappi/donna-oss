@@ -796,7 +796,10 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
     const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
     if (!request) { notAwaiting.push(askId); continue; }
-    const period = request.request_payload?.period || request.request_payload?.period_label || 'this period';
+    // No period on the ask ⇒ the owner-language label the email copy uses
+    // ('this period' / 'tämä kausi'), matching the template language asked for.
+    const period = request.request_payload?.period || request.request_payload?.period_label
+      || (OWNER_EMAIL_ASK_COPY[preferredLanguage] || OWNER_EMAIL_ASK_COPY[OWNER_TEMPLATE_FALLBACK_LANGUAGE]).periodFallback;
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
       // Sensitive-identifier ask: never send over WhatsApp — record a visible

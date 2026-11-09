@@ -31,7 +31,7 @@ import { REVIEW_QUEUE_WITH_CODING_STATE_SQL, rowToTransactionReviewPayload } fro
 import { rowToClientEvidenceRequestPayload } from './asks.js';
 import { ledgerRecordId, rowToLedgerAccountPayload, rowToLedgerJournalPayload, rowToLedgerLinePayload } from './ledger.js';
 import { getFirmSnapshotFromDb } from './snapshot.js';
-import { readSalesRecognitionGapWithClient, salesRecognitionDraftReason } from '../salesRecognitionGap.js';
+import { readRecognitionGapWithClient, recognitionDraftReason } from '../salesRecognitionGap.js';
 
 // Snapshot shape for a close_periods row: the row as stored, with the two
 // `date` columns normalized to calendar-day strings (see
@@ -486,12 +486,14 @@ export const getFinancialReportFromDb = async ({
     throw error;
   }
   const readModel = await getLedgerPeriodPreviewFromDb({ firmId, clientId, periodStart, periodEnd, basis });
-  // FI-09: an accrual statement names the uploaded sales documents its posted
-  // ledger does not recognise in the period (a cash view recognises at
-  // settlement by definition, so it has none to name).
-  const salesRecognition = readModel.basis === 'cash' ? null : salesRecognitionDraftReason(await withFirmDbClient((client) =>
-    readSalesRecognitionGapWithClient({ client, firmId, clientId, period: { starts_on: readModel.period_start, ends_on: readModel.period_end } })));
-  return buildFinancialReport({ firmId, clientId, readModel, salesRecognition });
+  // FI-09: an accrual statement names the uploaded sales documents and the
+  // uploaded supplier documents its posted ledger does not recognise in the
+  // period, each under its own reason (a cash view recognises at settlement by
+  // definition, so it has none to name).
+  const gap = readModel.basis === 'cash' ? null : await withFirmDbClient((client) =>
+    readRecognitionGapWithClient({ client, firmId, clientId, period: { starts_on: readModel.period_start, ends_on: readModel.period_end } }));
+  return buildFinancialReport({ firmId, clientId, readModel,
+    salesRecognition: recognitionDraftReason(gap?.sales), purchaseRecognition: recognitionDraftReason(gap?.purchase) });
 };
 
 // `open_financials` latest-month resolution reads the ledger's own terminal
