@@ -13,6 +13,12 @@ export const NUMBER_STYLES = Object.freeze({
 // UI language is deliberately separate from book locale and counterparty
 // correspondence language. Only `ready` entries can appear in production;
 // test-only entries remain available solely to explicit development labs.
+//
+// Optional presentation defaults a locale may carry (absent = today's
+// behaviour, so English and Arabic output is unchanged):
+//   currencyDisplay  Intl currencyDisplay for accounting amounts ('code').
+//   negativeStyle    'parentheses' (default) or 'minus' for negative amounts.
+// Only what a person reads changes; stored amounts and dates never do.
 export const INTERFACE_LOCALES = Object.freeze({
   en: Object.freeze({
     tag: 'en',
@@ -30,6 +36,20 @@ export const INTERFACE_LOCALES = Object.freeze({
     maturity: 'alpha',
     autonym: 'العربية',
     productionLabel: 'العربية — إصدار تجريبي'
+  }),
+  // Finnish: machine-authored, not yet reviewed by a professional translator,
+  // hence alpha and a production label that says "early version". Euro
+  // amounts read "1 234,56 €" with a minus sign, as Finnish books print them.
+  fi: Object.freeze({
+    tag: 'fi',
+    formatLocale: 'fi',
+    direction: 'ltr',
+    status: 'ready',
+    maturity: 'alpha',
+    autonym: 'Suomi',
+    productionLabel: 'Suomi — varhainen versio',
+    currencyDisplay: 'symbol',
+    negativeStyle: 'minus'
   }),
   'ar-XB': Object.freeze({
     tag: 'ar-XB',
@@ -116,7 +136,11 @@ export const decodeInterfacePreferences = (
   return {
     ...resolved,
     numberStyle: normalizeNumberStyle(object.numberStyle),
-    fallbackReason: parseFailed ? 'preferences_invalid' : resolved.fallbackReason
+    fallbackReason: parseFailed ? 'preferences_invalid' : resolved.fallbackReason,
+    // True only when this device holds a person's own saved choice. A surface
+    // default (see LocaleProvider's useSurfaceInterfaceLocaleDefault) may apply
+    // while this is false and never once it is true.
+    saved: !parseFailed && typeof object.locale === 'string' && Boolean(object.locale.trim())
   };
 };
 
@@ -165,7 +189,7 @@ export const writeInterfacePreferences = ({
     dispatch.dispatchEvent(new CustomEvent(INTERFACE_PREFERENCES_EVENT, { detail: persisted }));
   }
 
-  return { ...resolved, numberStyle: persisted.numberStyle };
+  return { ...resolved, numberStyle: persisted.numberStyle, saved: true };
 };
 
 export const applyDocumentLocale = (documentLike, preferences) => {

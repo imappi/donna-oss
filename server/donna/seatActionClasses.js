@@ -104,6 +104,16 @@ export const VERB_ACTION_CLASS = Object.freeze({
   remember_fact: 'policy_change',
   forget_fact: 'policy_change',
   retire_rule: 'policy_change',
+  // route-level (reconciliationAuthorityRoutes.js): standing delegated authority
+  // for material reconciliation matches. Widening (grant / approve /
+  // re-activate) AND narrowing (suspend / revoke) are governance, so both sit
+  // at PARTNER: one rung decides a client's autonomy in either direction. A
+  // senior who sees a bad auto-accept corrects the match itself, which
+  // auto-suspends the grant without needing this verb.
+  grant_reconciliation_authority: 'policy_change',
+  approve_reconciliation_authority: 'policy_change',
+  suspend_reconciliation_authority: 'policy_change',
+  revoke_reconciliation_authority: 'policy_change',
   release_pilot_send_containment: 'policy_change', // route-level: a standing per-client decision that
                                                    // lets owner questions leave draft; external seats
                                                    // are fenced (CLIENT_FACING_CHASE_VERBS) and every

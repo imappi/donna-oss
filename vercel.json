@@ -575,6 +575,30 @@
       "destination": "/api/donna-router?path=firms/delegated-authority-metrics"
     },
     {
+      "source": "/api/donna/firms/reconciliation-authority-grants",
+      "destination": "/api/donna-router?path=firms/reconciliation-authority-grants"
+    },
+    {
+      "source": "/api/donna/firms/reconciliation-authority-grants/preview",
+      "destination": "/api/donna-router?path=firms/reconciliation-authority-grants/preview"
+    },
+    {
+      "source": "/api/donna/firms/reconciliation-authority-grants/mint",
+      "destination": "/api/donna-router?path=firms/reconciliation-authority-grants/mint"
+    },
+    {
+      "source": "/api/donna/firms/reconciliation-authority-grants/approve",
+      "destination": "/api/donna-router?path=firms/reconciliation-authority-grants/approve"
+    },
+    {
+      "source": "/api/donna/firms/reconciliation-authority-grants/suspend",
+      "destination": "/api/donna-router?path=firms/reconciliation-authority-grants/suspend"
+    },
+    {
+      "source": "/api/donna/firms/reconciliation-authority-grants/revoke",
+      "destination": "/api/donna-router?path=firms/reconciliation-authority-grants/revoke"
+    },
+    {
       "source": "/api/donna/firms/roles/roster",
       "destination": "/api/donna-router?path=firms/roles/roster"
     },

@@ -1,5 +1,6 @@
 import FinnishCompanyDetails from './FinnishCompanyDetails.jsx';
 import ClientOwnerAccessCard from './ClientOwnerAccessCard.jsx';
+import ReconciliationAuthorityGrants from './ReconciliationAuthorityGrants.jsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { readAccountingProfile } from '../lib/accountingProfile.js';
 import { useIntl } from 'react-intl';
@@ -1461,6 +1462,8 @@ const ProfileTab = ({ profile, queue, onRequestDelete, onDatabaseSnapshot }) => 
           profile={profile}
           onDatabaseSnapshot={onDatabaseSnapshot}
         />
+
+        <ReconciliationAuthorityGrants clientId={profile.id} />
 
         {showComplianceCard && (
           <Card label={message('mounted.workspace.filing')} title={message('mounted.workspace.returnReadiness')} accent={T.alert}>

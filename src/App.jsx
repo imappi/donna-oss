@@ -76,8 +76,9 @@ import {
   isLocaleMountedPreview,
   isLocaleWorkspacePreview
 } from './i18n/localeRegistry.js';
-import { useInterfaceLocale } from './i18n/LocaleProvider.jsx';
-import { INTERFACE_CATALOG_VERSION } from './i18n/localeCatalog.js';
+import { SurfaceInterfaceLocaleDefault, useInterfaceLocale } from './i18n/LocaleProvider.jsx';
+import { portalClientForDefault, portalDefaultInterfaceLocale } from './i18n/portalInterfaceLocale.js';
+import { getInterfaceCatalogVersion } from './i18n/localeCatalog.js';
 
 import './styles.css';
 
@@ -1477,7 +1478,12 @@ const AppSession = ({ oauthRedirect }) => {
     // the portal unchanged. It fails OPEN (renders the portal) when billing is
     // disabled or its status check errors, so nothing is walled off until the
     // Stripe env is configured.
+    // The portal opens in its owner's language unless this device holds the
+    // person's own choice (src/i18n/portalInterfaceLocale.js states the rule).
     return (
+      <SurfaceInterfaceLocaleDefault
+        locale={portalDefaultInterfaceLocale(portalClientForDefault(firmClients, getClientPortalEntityId()))}
+      >
       <ClientPortalGate clientId={getClientPortalEntityId()}>
         <ClientPortal
           clients={firmClients}
@@ -1493,6 +1499,7 @@ const AppSession = ({ oauthRedirect }) => {
           onSnapshotInvalidated={refreshDatabaseSnapshot}
         />
       </ClientPortalGate>
+      </SurfaceInterfaceLocaleDefault>
     );
   }
 
@@ -1778,7 +1785,7 @@ const AppSession = ({ oauthRedirect }) => {
               view: activeTab === 'queue' && firmHomeSelected ? 'inbox' : activeTab,
               interface_locale: interfaceLocale,
               interface_direction: interfaceDirection,
-              catalog_version: INTERFACE_CATALOG_VERSION,
+              catalog_version: getInterfaceCatalogVersion(interfaceLocale),
               ...(selectedFirmClientId && !firmHomeSelected ? { client_id: selectedFirmClientId } : {})
             }}
             onClose={() => setFeedbackOpen(false)}

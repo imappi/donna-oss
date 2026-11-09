@@ -246,6 +246,25 @@ await test('canary: an overdue ask at the ceiling escalates exactly once — rec
   assert.ok(hasCall(client, 'bookkeeping_case_blockers'), 'firm-queue surface row attempted');
 });
 
+await test('canary: an owner who answered "still unpaid" is not unresponsive: only sends after that answer count toward escalation', async () => {
+  const acknowledged = { obligation_open_acknowledged: { at: '2026-01-01T00:00:00.000Z', send_count: 3 } };
+  const client = makeMockClient([
+    notContained,
+    cannedConfig(configRowAt('canary')),
+    cannedOverdue([OVERDUE_ROW({ id: 'evr-ack', send_count: 3, request_payload: acknowledged }),
+      OVERDUE_ROW({ id: 'evr-ack-ignored', send_count: 6, request_payload: acknowledged })]),
+    { match: 'to_regclass', rows: [{ present: 'x' }] },
+    { match: 'from bookkeeping_cases', rows: [{ id: 'case-9', status: 'open' }] },
+    portalRecipient
+  ]);
+  const swept = await runAskReaskSweep({ client, firmId: 'firm-1', clientId: 'client-1', now: NOW,
+    deps: { deliver: async () => ({}), evaluateAdmission: admitted } });
+  assert.equal(swept.escalated, 1, 'three unanswered sends after the answer: escalated');
+  assert.equal(swept.nudged, 1, 'acknowledged at send 3, overdue at send 3: re-asked, not escalated');
+  const escalate = client.calls.find((c) => c.sql.includes('due_at = null'));
+  assert.ok(escalate.params.includes('evr-ack-ignored'));
+});
+
 await test('a poisoned row rolls back alone; the rest of the sweep continues', async () => {
   let failedOnce = false;
   const client = makeMockClient([
