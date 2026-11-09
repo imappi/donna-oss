@@ -68,20 +68,20 @@ const codeMessage = (intl, prefix, code, fallbackId, values) => {
 
 // A calendar day. Timestamps (created_at, last_used_at, suspension time)
 // read as their UTC day, the same day the screen printed before; the
-// formatter places it in the reader's locale. Unparseable → the dash.
+// formatter's own defaults place it in the reader's locale (Apr 20, 2025 /
+// 20.4.2025). Unparseable → the dash.
 export const authorityDate = (value, formatDate) => {
   if (!value) return NO_VALUE;
   try {
-    return formatDate(String(value instanceof Date ? value.toISOString() : value).slice(0, 10), {
-      day: '2-digit', month: 'short', year: 'numeric'
-    });
+    return formatDate(String(value instanceof Date ? value.toISOString() : value).slice(0, 10));
   } catch {
     return NO_VALUE;
   }
 };
 
 // An amount with its currency, the way the match hero prints money: whole
-// amounts without decimals, the currency code placed by the locale.
+// amounts without decimals; the locale decides the currency's form and place
+// (GBP 1,200 / 1 200 £) and how a negative reads.
 export const authorityAmount = (amount, currency, formatAmount) => {
   if (amount === null || amount === undefined || amount === '') return NO_VALUE;
   const n = Number(amount);
@@ -90,8 +90,7 @@ export const authorityAmount = (amount, currency, formatAmount) => {
     return formatAmount(n, {
       currency: String(currency || '').trim() || null,
       minimumFractionDigits: Math.abs(n) % 1 ? 2 : 0,
-      maximumFractionDigits: 2,
-      negativeStyle: 'minus'
+      maximumFractionDigits: 2
     });
   } catch {
     return NO_VALUE;

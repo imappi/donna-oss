@@ -38,7 +38,12 @@ const setValue = async (node, value) => {
   });
   await flush();
 };
-const render = async (element) => { root = createRoot(document.getElementById('root')); await act(async () => root.render(React.createElement(LocaleProvider, null, element))); await flush(); };
+const render = async (element, locale = null) => {
+  root = createRoot(document.getElementById('root'));
+  const preferences = locale ? { initialPreferences: { locale } } : null;
+  await act(async () => root.render(React.createElement(LocaleProvider, preferences, element)));
+  await flush();
+};
 
 const gates = { A: true, B: true, C: true, D: true, E: false };
 const heldMatch = { id: 'm-held', status: 'suggested', bank_transaction_id: 'tx-1', payload: { authorization: { band: 'suggested', reasons: ['above_materiality_ceiling'], gates, model: 'scripted' } } };
@@ -176,7 +181,7 @@ test('grants view: proposed grants wait for approve or decline; suspension cause
   assert.match(card.textContent, /Proposed — waiting for approval/);
   const proposedRow = $('grant-g-proposed');
   assert.ok(proposedRow.querySelector('[data-testid="grant-action-approve"]') && proposedRow.querySelector('[data-testid="grant-action-decline"]'));
-  assert.match($('grant-g-suspended').textContent, /Suspended automatically on Aug 01, 2025: .*\(Match rejected\)/);
+  assert.match($('grant-g-suspended').textContent, /Suspended automatically on Aug 1, 2025: .*\(Match rejected\)/);
   assert.match($('grant-g-suspended').textContent, /1 correction/);
   assert.match($('grant-g-active').textContent, /Granted by partner@ledgerlight\.example on Apr 20, 2025/);
   assert.doesNotMatch(proposedRow.textContent, /Granted by/, 'a proposed grant has not been granted by anyone yet');
@@ -209,6 +214,113 @@ test('grants view hides itself for a principal the server refuses (403)', async 
   const api = { list: async () => { throw Object.assign(new Error('owner'), { status: 403 }); } };
   await render(React.createElement(Grants, { clientId: 'client-a', api }));
   assert.equal($('reconciliation-authority-grants'), null);
+});
+
+// What a person reads, per locale: dates, amounts with their currency,
+// document types, statuses, suspension causes and refusals all come from the
+// interface formatter and catalogs — never the raw ISO date, the bare number
+// or the code. The canonical values sent back stay untouched.
+const formattedCases = {
+  en: {
+    status: 'Active', suspendedStatus: 'Suspended', documentType: 'Bill', ceiling: 'Up to GBP 1,500',
+    grantedOn: 'Apr 20, 2025', lastUsed: 'Jul 27, 2025', reviewBy: 'Review by Jan 1, 2026', expires: 'Expires on Mar 31, 2026',
+    suspension: /Suspended automatically on Aug 1, 2025: .*\(Match rejected\)/,
+    example: 'Harbour Lane Properties Ltd · GBP 1,200 · Apr 16, 2025', archetype: 'Recurring rent or lease',
+    refusal: 'Could not save: Only a firm member or a partner seat can change standing authority for this client.',
+    mintRefusal: 'Could not grant: Set a ceiling that covers this match’s amount.',
+    ineligible: /already exists \(Active\)/
+  }
+};
+
+const formattedGrantList = () => ({ client_id: 'client-a', delegated_authority_acts: true, grants: [
+  grantRow({ expires_at: '2026-03-31T00:00:00Z' }),
+  grantRow({ id: 'g-suspended', status: 'suspended', correction_count: 1, inert_reason: 'suspended', last_auto_suspension: { at: '2025-08-01T00:00:00Z', reason: 'match_rejected', match_id: 'm3' } })
+] });
+const serverRefusal = (code, message) => Object.assign(new Error(message), { status: 403, code, body: { error: message, code } });
+
+for (const [locale, expected] of Object.entries(formattedCases)) {
+  test(`${locale}: the grants view formats dates, amounts, document types, statuses and refusals`, async () => {
+    const sent = [];
+    const api = {
+      list: async () => formattedGrantList(),
+      suspend: async (body) => { sent.push(body); throw serverRefusal('CAPABILITY_REQUIRED', 'Your seat (senior) cannot change standing authority — it needs partner.'); }
+    };
+    await render(React.createElement(Grants, { clientId: 'client-a', api }), locale);
+    const active = $('grant-g-active');
+    const read = (row, id) => text(row.querySelector(`[data-testid="${id}"]`));
+    assert.equal(read(active, 'grant-status'), expected.status);
+    assert.equal(read($('grant-g-suspended'), 'grant-status'), expected.suspendedStatus);
+    assert.match(read(active, 'grant-scope'), new RegExp(` · ${expected.documentType} · `));
+    assert.match(read(active, 'grant-ceiling'), new RegExp(`${expected.archetype} · ${expected.ceiling}$`));
+    assert.match(read(active, 'grant-granted-by'), new RegExp(`partner@ledgerlight\\.example.*${expected.grantedOn}`));
+    assert.match(read(active, 'grant-usage'), new RegExp(expected.lastUsed));
+    assert.equal(read(active, 'grant-review-by'), expected.reviewBy);
+    assert.equal(read(active, 'grant-expires'), expected.expires);
+    assert.match(read($('grant-g-suspended'), 'grant-auto-suspension'), expected.suspension);
+    const shown = text($('reconciliation-authority-grants'));
+    for (const raw of ['2025-04-20', '2025-07-27', '2026-01-01', '2026-03-31', '2025-08-01', '1500 GBP', 'supplier', 'match_rejected', 'match rejected', 'recurring_rent_lease']) {
+      assert.equal(shown.includes(raw), false, `raw value ${raw} is on screen`);
+    }
+    await setValue(active.querySelector('[data-testid="grant-reason"]'), 'Tenant moved premises');
+    await click(active.querySelector('[data-testid="grant-action-suspend"]'));
+    assert.deepEqual(sent, [{ clientId: 'client-a', grantId: 'g-active', reason: 'Tenant moved premises' }], 'canonical values go back unchanged');
+    assert.equal(text(active.querySelector('[role="alert"]')), expected.refusal);
+    assert.doesNotMatch(shown + text(active), /Your seat \(senior\)/, 'the server’s English text is not shown');
+  });
+
+  test(`${locale}: the held-match preview formats the example and the ceiling refusal`, async () => {
+    const minted = [];
+    await render(React.createElement(Held, {
+      match: heldMatch, clientId: 'client-a', onConfirmMatch: async () => {},
+      preview: async () => ({ preview }),
+      mint: async (body) => { minted.push(body); throw serverRefusal('GRANT_CEILING_BELOW_EXAMPLE', 'The ceiling must cover this example match.'); }
+    }), locale);
+    await click($('held-authorise'));
+    assert.equal(text($('grant-example')), expected.example);
+    assert.equal(text($('grant-archetype')), expected.archetype);
+    assert.match(text($('grant-scope')), new RegExp(` · ${expected.documentType} · `));
+    assert.equal($('grant-ceiling').value, '1200', 'the ceiling input keeps the canonical number');
+    await click($('grant-acknowledge'));
+    await click($('grant-submit'));
+    assert.deepEqual([minted[0].amountCeiling, minted[0].currency], [1200, 'GBP']);
+    assert.equal(text($('grant-preview').querySelector('[role="alert"]')), expected.mintRefusal);
+    await act(async () => root.unmount()); root = null;
+    await render(React.createElement(Held, { match: heldMatch, clientId: 'client-a', onConfirmMatch: async () => {},
+      preview: async () => ({ preview: { ...preview, eligible: false, ineligible_reason: 'grant_exists', existing_grant: { id: 'g', status: 'active' } } }) }), locale);
+    await click($('held-authorise'));
+    assert.match(text($('grant-ineligible')), expected.ineligible, 'the existing grant’s status is a label, not its code');
+  });
+}
+
+test('unknown codes, dates and amounts fall back to a catalog message or the dash and never crash', async () => {
+  const list = { client_id: 'client-a', delegated_authority_acts: true, grants: [grantRow({
+    id: 'g-odd', status: 'paused_by_regulator', archetype: 'quarterly_levy', scope_key: 'merchant:x|doc:lease-schedule|acct:7100', example: null,
+    authorized_by_actor_id: null, authorized_by_actor_type: 'robot', amount_ceiling: 'not-a-number', created_at: 'yesterday', last_used_at: null, use_count: 0,
+    review_after: 'soon', last_auto_suspension: { at: 'later', reason: 'gremlins' }
+  })] };
+  await render(React.createElement(Grants, { clientId: 'client-a', api: { list: async () => list, suspend: async () => { throw new Error('offline'); }, revoke: async () => { throw new Error('offline'); } } }));
+  const row = $('grant-g-odd');
+  const read = (id) => text(row.querySelector(`[data-testid="${id}"]`));
+  assert.equal(read('grant-status'), 'Status not recognised');
+  assert.equal(read('grant-ceiling'), 'Other kind of match · Up to —');
+  assert.equal(read('grant-granted-by'), 'Granted by a firm authority on —');
+  assert.equal(read('grant-review-by'), 'Review by —');
+  assert.match(read('grant-scope'), / · Lease Schedule · /, 'an unknown document type reads title-cased, as on the match hero');
+  assert.doesNotMatch(row.textContent, /paused_by_regulator|quarterly_levy|robot|gremlins|firm\.reconAuthority/);
+
+  const suspended = { ...list, grants: [{ ...list.grants[0], status: 'suspended' }] };
+  await act(async () => root.unmount()); root = null;
+  await render(React.createElement(Grants, { clientId: 'client-a', api: { list: async () => suspended, suspend: async () => { throw new Error('offline'); }, revoke: async () => { throw new Error('offline'); } } }));
+  assert.equal(text($('grant-auto-suspension')), 'Suspended automatically on —: a person corrected a match this grant accepted (Match corrected).');
+  await setValue(document.querySelector('[data-testid="grant-reason"]'), 'Check');
+  await click(document.querySelector('[data-testid="grant-action-revoke"]'));
+  assert.equal(text(document.querySelector('[data-testid="grant-g-odd"] [role="alert"]')), 'Could not save: Something went wrong. Try again.', 'a network failure with no code');
+
+  await act(async () => root.unmount()); root = null;
+  await render(React.createElement(Held, { match: heldMatch, clientId: 'client-a', onConfirmMatch: async () => {},
+    preview: async () => ({ preview: { ...preview, eligible: false, ineligible_reason: 'brand_new_reason' } }) }));
+  await click($('held-authorise'));
+  assert.equal(text($('grant-ineligible')), 'This match cannot be pre-authorised right now.');
 });
 
 test('mounted: the real FirmClientWorkspace Profile tab renders the grants card from the grants route', async () => {
