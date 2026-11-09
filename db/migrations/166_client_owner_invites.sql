@@ -53,3 +53,18 @@ create index if not exists client_owner_invites_firm_client_idx
   on client_owner_invites(firm_id, client_id, created_at desc);
 create index if not exists client_owner_invites_collaborator_idx
   on client_owner_invites(firm_id, collaborator_id) where collaborator_id is not null;
+
+-- Invite rows carry an invitee's name and email and a token hash: server-side
+-- only, never browser-readable (mirror 163's guarded block).
+alter table client_owner_invites enable row level security;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname='anon') then
+    revoke all on client_owner_invites from anon;
+  end if;
+  if exists (select 1 from pg_roles where rolname='authenticated') then
+    revoke all on client_owner_invites from authenticated;
+  end if;
+  if exists (select 1 from pg_roles where rolname='service_role') then
+    grant select, insert, update, delete on client_owner_invites to service_role;
+  end if;
+end $$;
