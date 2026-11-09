@@ -284,7 +284,7 @@ const proveJevHeldRowsConfirmedTogether = async ({pool, firmId, clientId, actorI
     const minted = await withClient(client => __createHeldMatchPortalAsksWithClient({client, firmId, clientId}));
     const asks = await rows(`select id,transaction_id,question,request_payload from client_evidence_requests where id=any($1::text[]) and transaction_id like 'rows-bank-%' order by transaction_id`, [minted]);
     assert.deepEqual(asks.map(ask => ask.transaction_id), ['rows-bank-1','rows-bank-2','rows-bank-3'], 'each held row keeps its own question');
-    assert.match(asks[0].question, /2 other rows of the same statement are also waiting for your confirmation: row 2 “Settlement 2”, EUR 722\.00 received on 2025-02-19; row 3 “Settlement 3”, EUR 833\.00 received on 2025-02-20\. You can confirm all the remaining rows at once in your answer, or keep answering row by row\.$/);
+    assert.match(asks[0].question, /Myös 2 muuta saman tiliotteen riviä odottaa vahvistustasi: rivi 2 ”Settlement 2”, 722,00 EUR saatu 19\.2\.2025; rivi 3 ”Settlement 3”, 833,00 EUR saatu 20\.2\.2025\. Voit vahvistaa kaikki jäljellä olevat rivit kerralla vastauksessasi tai vastata rivi kerrallaan\.$/);
     assert.deepEqual(asks[0].request_payload.held_match_siblings.map(row => row.transaction_id), ['rows-bank-2','rows-bank-3']);
     globalThis.fetch = async (target, init) => {
       if (String(target) === 'https://api.openai.com/v1/responses') {
@@ -369,8 +369,8 @@ const proveHeldMatchPortalReply = async ({pool, firmId, clientId, actorId, withC
       assert.equal(minted.length,1);
       const askId = minted[0];
       const mintedAsk = (await pool.query('select question from client_evidence_requests where id=$1',[askId])).rows[0];
-      assert.match(mintedAsk.question,new RegExp(`we have “${id}\\.pdf” on file\\. Please confirm that this payment settles that document`),mintedAsk.question);
-      assert.doesNotMatch(mintedAsk.question,/which of these/,'one held document is a confirmation, not a choice (H-3a)');
+      assert.match(mintedAsk.question,new RegExp(`Meillä on tästä jo tiedosto ”${id}\\.pdf”\\. Vahvistathan, että tämä maksu koskee tätä tositetta`),mintedAsk.question);
+      assert.doesNotMatch(mintedAsk.question,/mitä näistä tositteista/,'one held document is a confirmation, not a choice (H-3a)');
       if (outage) await persistHostReadinessAttempt({withFirmDbClientFn:withClient,
         certificate:buildHostOperationalFailureCertificate({certificate:hostCertificate,checkId:'evidence_storage',reasonCode:'fixture_reply_storage_unavailable'})});
       const result = await resolveClientEvidenceRequestInDb({firmId,evidenceRequestId:askId,

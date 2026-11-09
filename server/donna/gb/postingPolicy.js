@@ -1,14 +1,30 @@
 // Country-owned VAT posting composition; the UK control accounts come from the entity chart.
 import {
   GB_VAT_CODES, GB_VAT_INPUT_ROLE, GB_VAT_OUTPUT_ROLE, applyGbVatCodingToCoding,
-  gbVatControlAccountFromChart, gbVatDirectionForTransaction, gbVatOutputCodeForRate, resolveGbVatCodeForCoding,
+  gbVatControlAccountFromChart, gbVatDirectionForTransaction, gbVatOutputCodeForRate, resolveGbVatCode, resolveGbVatCodeForCoding,
   resolveGbVatSplitForPosting, splitGbVatGross
 } from './vatCodes.js';
 import { ledgerAccountTypeFor } from '../ledger.js';
+import { assertTaxSourceEvidence } from '../taxSourceEvidence.js';
 
 const salesTaxRole = 'liability.sales_tax_payable';
 const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const refuse = (code, message) => { throw Object.assign(new Error(message), { code, statusCode: 409 }); };
+
+// The Finnish evidence rule as UK law and practice allow it (owner decision
+// 2026-11-09; the PR records each rule and its source). Two UK differences:
+//  - The input rule binds the machine only. A reclaim without a VAT invoice
+//    is lawful for some small purchases (the parking, toll, phone and
+//    vending concession) and where HMRC accepts alternative evidence; that is
+//    a person's judgement, and no client or supply fact for it exists here.
+//  - A deduction is a code that reports input tax (Box 4). Blocked input VAT
+//    carries its rate only as documentation and claims nothing.
+const GB_TAX_EVIDENCE = Object.freeze({
+  refusalCode: 'TRANSACTION_GB_VAT_EVIDENCE_REQUIRED', inputRuleCoversAcceptedCoding: false,
+  resolveEntry: ({ taxType = '', taxTreatment = '', direction = '' } = {}) => resolveGbVatCode(resolveGbVatCodeForCoding({ taxType, taxTreatment, direction })),
+  deductibleInput: entry => entry.direction === 'in' && Boolean(entry.return_boxes?.tax || entry.return_boxes?.input_tax),
+  taxedOutput: entry => entry.direction === 'out' && entry.rate > 0
+});
 
 export const GB_POSTING_POLICY = Object.freeze({
   jurisdiction: 'gb', policyId: 'gb_posting', policyVersion: 1,
@@ -16,6 +32,7 @@ export const GB_POSTING_POLICY = Object.freeze({
   supplierBillAdmissionFlagKey: 'JURISDICTION_TAX_CODING', supplierBillNeedsChart: true,
   nativeTaxCodePrefixes: Object.freeze(['VAT_']), nativeTaxCodes: Object.freeze(GB_VAT_CODES.map(({ code }) => code)),
   salesInvoiceChannels: Object.freeze(['outbound']), salesTaxControlRole: salesTaxRole,
+  taxEvidence: GB_TAX_EVIDENCE,
   capabilities: Object.freeze({ prepareLedgerAccounts: true, enrichCoding: true, transactionSplit: true,
     salesInvoiceTaxPosting: true, supplierBillTaxPosting: true,
     planArSettlement: false, arSettlementReceivableCoding: false, assertPostableTaxCoding: true, sourceTaxPosting: false }),
@@ -26,14 +43,20 @@ export const GB_POSTING_POLICY = Object.freeze({
       controlAccount: gbVatControlAccountFromChart(ledgerAccounts, salesTaxRole) }) : coding,
   // RT-23 — the FI twin (TRANSACTION_ALV_TREATMENT_UNRESOLVED), same law: a
   // P&L leg for a VAT-coding client posts only with a resolved VAT_ code;
-  // 'VAT check' (the unsure marker) or unknown prose refuses by name.
-  assertPostableTaxCoding: ({ coding = {}, transaction = {}, taxCodingEnabled = false } = {}) => {
+  // 'VAT check' (the unsure marker) or unknown prose refuses by name. Before
+  // it, the shared source-evidence rule for the selected code.
+  assertPostableTaxCoding: ({ coding = {}, transaction = {}, taxCodingEnabled = false, matchedDocument: document = null, autonomousCoding = false } = {}) => {
     if (!taxCodingEnabled) return coding;
-    if (!['revenue', 'expense'].includes(ledgerAccountTypeFor(coding))) return coding;
     const stamped = String(coding.xero_tax_type || coding.tax_type || '').trim().toUpperCase();
+    const direction = gbVatDirectionForTransaction(transaction, coding);
+    // A control-account settlement is stamped NONE; never revive its treatment.
+    if (stamped !== 'NONE') assertTaxSourceEvidence({ rule: GB_TAX_EVIDENCE, transaction, document, autonomousCoding,
+      entry: GB_TAX_EVIDENCE.resolveEntry({ taxType: stamped, direction,
+        taxTreatment: coding.tax_treatment || transaction.tax_treatment || transaction.ai_suggestion?.tax_treatment || '' }) });
+    if (!['revenue', 'expense'].includes(ledgerAccountTypeFor(coding))) return coding;
     if (stamped === 'NONE' || GB_VAT_CODES.some((entry) => entry.code === stamped)) return coding;
     // Resolvability, not stamping (the FI twin's posture).
-    const code = resolveGbVatCodeForCoding({ taxType: stamped, taxTreatment: coding.tax_treatment || '', direction: gbVatDirectionForTransaction(transaction) });
+    const code = resolveGbVatCodeForCoding({ taxType: stamped, taxTreatment: coding.tax_treatment || '', direction });
     if (code) return coding;
     const treatment = String(coding.tax_treatment || '').trim();
     refuse('TRANSACTION_GB_VAT_TREATMENT_UNRESOLVED',

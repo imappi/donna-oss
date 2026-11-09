@@ -78,19 +78,20 @@ test('real PG: a bank-only supplier refund coded to income with output ALV ends 
  assert.equal(await journals('refund'),0);
  await pool.query("update transactions set status='approved' where id='refund'");
 
- // 2. Other income with no ALV (interest, compensation, a grant) still posts.
- await bankLine('interest','Synthetic bank interest',3.1);
- await code({account:'Other income',tax:'Ei ALV-käsittelyä'});
- assert.equal((await tx('interest')).coding_state,'posted',JSON.stringify((await tx('interest')).payload.ledger_post_refusal));
- assert.deepEqual((await lines('interest')).filter(l=>Number(l.credit)>0).map(l=>[l.account_name,l.credit]),[['Other income','3.10']]);
-
- // 3. Operating revenue backed by a matched sales invoice still posts output ALV.
+ // 2. Operating revenue backed by a matched sales invoice still posts output ALV.
  await bankLine('sale','Synthetic customer payment',124);
  await source('sales-invoice','sales_invoice',124,25.2,'sale');
  await code({account:'Sales',tax:'ALV 25,5 %'});
  assert.equal((await tx('sale')).coding_state,'posted',JSON.stringify((await tx('sale')).payload.ledger_post_refusal));
  assert.deepEqual((await lines('sale')).filter(l=>Number(l.credit)>0).map(l=>[l.account_name,l.credit,l.tax_type]),
    [['Sales','98.80','ALV_25_5_OUTPUT'],['Suoritettava arvonlisävero','25.20','NONE']]);
+
+ // 3. Other income with no ALV (interest, compensation, a grant) still posts,
+ //    to Other income, with the Sales row now in the chart beside it.
+ await bankLine('interest','Synthetic bank interest',3.1);
+ await code({account:'Other income',tax:'Ei ALV-käsittelyä'});
+ assert.equal((await tx('interest')).coding_state,'posted',JSON.stringify((await tx('interest')).payload.ledger_post_refusal));
+ assert.deepEqual((await lines('interest')).filter(l=>Number(l.credit)>0).map(l=>[l.account_name,l.credit]),[['Other income','3.10']]);
 
  // 4. A supplier refund coded to its expense with its purchase source reverses
  //    the expense and its input ALV, governed by the existing input rule.

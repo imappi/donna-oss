@@ -72,29 +72,45 @@ const BLOCKER_VIEWS = {
   }
 };
 
-// FI-09: uploaded sales documents the posted ledger does not recognise in the
-// period. The engine names each one; the hint lists them so the firm sees
-// exactly what the boxes leave out.
+// FI-09: uploaded sales documents, and separately uploaded supplier documents,
+// the posted ledger does not recognise in the period. The engine names each
+// one; the hint lists them so the firm sees exactly what the boxes leave out.
 const RECOGNITION_RESTS = {
   no_settlement: 'maksua ei ole tiliotteilla',
   settlement_proposed: 'maksu on ehdotettu, ei vahvistettu',
   settlement_unposted: 'maksu on täsmäytetty, mutta kirjaus odottaa',
   settled_outside_period: 'maksu on kirjattu toiselle kaudelle'
 };
-const unrecognizedSalesHint = (gap) => {
+const RECOGNITION_VIEWS = {
+  unrecognized_sales_documents: {
+    reviewKey: 'unrecognizedSales',
+    label: 'Ladattuja myyntilaskuja puuttuu kirjanpidosta',
+    lead: 'Nämä ladatut laskut eivät ole vielä tämän kauden kirjanpidossa, joten niiden myynti ja ALV puuttuvat yllä olevista luvuista:',
+    what: (item) => (item.kind === 'credit_note' ? 'Hyvityslasku' : 'Myyntilasku'),
+    netLabel: ''
+  },
+  unrecognized_purchase_documents: {
+    reviewKey: 'unrecognizedPurchases',
+    label: 'Ladattuja ostolaskuja puuttuu kirjanpidosta',
+    lead: 'Nämä ladatut ostolaskut eivät ole vielä tämän kauden kirjanpidossa, joten niiden kulut ja vähennettävä ALV puuttuvat yllä olevista luvuista:',
+    what: (item) => (item.kind === 'credit_note' ? 'Ostohyvityslasku' : 'Ostolasku'),
+    netLabel: 'kulu '
+  }
+};
+const unrecognizedHint = (view, gap) => {
   const items = Array.isArray(gap?.items) ? gap.items : [];
   const rows = items.map((item) => {
-    const what = item.kind === 'credit_note' ? 'Hyvityslasku' : 'Myyntilasku';
-    const who = [item.invoice_numbers?.[0], item.customer].filter(Boolean).join(', ');
-    const amount = item.tax == null ? `${formatEur(item.gross)} (ALV-erittely puuttuu)` : `${formatEur(item.net)} + ALV ${formatEur(item.tax)}`;
-    return `${what}${who ? ` ${who}` : ''}${item.document_date ? ` (${fiDate(item.document_date)})` : ' (päiväys puuttuu)'}: ${amount} — ${RECOGNITION_RESTS[item.rests] || item.rests}${item.on_nobody ? '' : ', kysytty'}.`;
+    const who = [item.invoice_numbers?.[0], item.counterparty ?? item.customer ?? item.vendor].filter(Boolean).join(', ');
+    const amount = item.tax == null ? `${formatEur(item.gross)} (ALV-erittely puuttuu)` : `${view.netLabel}${formatEur(item.net)} + ALV ${formatEur(item.tax)}`;
+    return `${view.what(item)}${who ? ` ${who}` : ''}${item.document_date ? ` (${fiDate(item.document_date)})` : ' (päiväys puuttuu)'}: ${amount} — ${RECOGNITION_RESTS[item.rests] || item.rests}${item.on_nobody ? '' : ', kysytty'}.`;
   });
-  return ['Nämä ladatut laskut eivät ole vielä tämän kauden kirjanpidossa, joten niiden myynti ja ALV puuttuvat yllä olevista luvuista:', ...rows].join(' ');
+  return [view.lead, ...rows].join(' ');
 };
 
 export const alvBlockerView = (code, review = null) => {
-  if (code === 'unrecognized_sales_documents') {
-    return { code, severity: 'blocker', label: 'Ladattuja myyntilaskuja puuttuu kirjanpidosta', hint: unrecognizedSalesHint(review?.unrecognizedSales) };
+  const recognition = RECOGNITION_VIEWS[code];
+  if (recognition) {
+    return { code, severity: 'blocker', label: recognition.label, hint: unrecognizedHint(recognition, review?.[recognition.reviewKey]) };
   }
   const known = BLOCKER_VIEWS[code];
   if (known) return { code, ...known };

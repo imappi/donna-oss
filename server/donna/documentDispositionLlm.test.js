@@ -28,6 +28,7 @@ import {
   isTechnicalNeedsHuman,
   machineRerunDueAt,
   buildNeedsHumanOwnerQuestion,
+  buildOwnerReplyClarificationQuestion,
   MACHINE_RERUN_MAX_ATTEMPTS,
   OWNER_ASK_MAX_GENERATIONS
 } from './documentDispositionLlm.js';
@@ -1141,6 +1142,58 @@ test('RT-10 answer leg — an UNCLEAR reply gets ONE bounded clarification ask a
   const laneIdx = client.calls.findIndex((c) => c.sql.includes('update reconciliation_evaluations') && c.sql.includes('payload = coalesce(payload'));
   assert.ok(flipIdx !== -1 && laneIdx > flipIdx, 'resolve first, then the lane lands on the verdict row');
   assert.equal(findAudits(client, 'document.disposition.owner_asked').length, 1);
+});
+
+// Owner language: the code-built document questions are written in the
+// owner's language (preferredOwnerTemplateLanguage); English is byte-identical.
+const FI_DOC = {
+  id: 'doc-fi-1', document_type: 'receipt', vendor_name: 'Kahvila Esimerkki Oy', total_amount: '1234.5',
+  currency: 'EUR', document_date: '2025-02-03', filename: 'kuitti-0203.pdf'
+};
+const CASH_QUESTION = { owner_question: 'The receipt shows a cash payment. Was it paid from company cash or from your personal funds?', owner_question_evidence_type: 'payment_method' };
+
+test('owner language — the needs-human question and its wrapper, in Finnish and byte-identical English', () => {
+  assert.equal(buildNeedsHumanOwnerQuestion({ document: FI_DOC, semantic: NEEDS_HUMAN }),
+    'About the receipt from Kahvila Esimerkki Oy for EUR 1234.50 dated 2025-02-03 (kuitti-0203.pdf): What is this document for, and how does it relate to your business?');
+  assert.equal(buildNeedsHumanOwnerQuestion({ document: FI_DOC, semantic: NEEDS_HUMAN, language: 'fi' }),
+    'Kuitti (Kahvila Esimerkki Oy, 1234,50 EUR, päivätty 3.2.2025, kuitti-0203.pdf): Mitä tämä tosite koskee, ja miten se liittyy yrityksesi toimintaan?');
+  // The forced cash-funding question keeps its English receipt and reads Finnish to a Finnish owner.
+  assert.equal(buildNeedsHumanOwnerQuestion({ document: FI_DOC, semantic: CASH_QUESTION }),
+    `About the receipt from Kahvila Esimerkki Oy for EUR 1234.50 dated 2025-02-03 (kuitti-0203.pdf): ${CASH_QUESTION.owner_question}`);
+  assert.equal(buildNeedsHumanOwnerQuestion({ document: FI_DOC, semantic: CASH_QUESTION, language: 'fi' }),
+    'Kuitti (Kahvila Esimerkki Oy, 1234,50 EUR, päivätty 3.2.2025, kuitti-0203.pdf): Kuitin mukaan se maksettiin käteisellä. Maksettiinko se yrityksen kassasta vai omista rahoistasi?');
+  const forced = parseDocumentDispositionResponse(JSON.stringify({ ...AUTO_EXPLAIN, settlement_channel: 'cash', funding_source: 'unknown' }));
+  assert.equal(forced.owner_question, CASH_QUESTION.owner_question, 'the parser stores the one English fact');
+  // A model-drafted question passes through as written; only the wrapper changes.
+  assert.equal(buildNeedsHumanOwnerQuestion({ document: { document_type: 'supplier_bill' }, semantic: { owner_question: 'Mihin hankinta liittyi?', owner_question_evidence_type: 'business_purpose' }, language: 'fi' }),
+    'Ostolasku: Mihin hankinta liittyi?');
+});
+
+test('owner language — the second-round clarification questions, in Finnish and byte-identical English', () => {
+  assert.equal(buildOwnerReplyClarificationQuestion({ document: FI_DOC }),
+    "Thanks — we could not tell from your answer how the receipt from Kahvila Esimerkki Oy (kuitti-0203.pdf) was paid. Was it cash, a personal card, or a business account we don't yet have statements for?");
+  assert.equal(buildOwnerReplyClarificationQuestion({ document: FI_DOC, answeredEvidenceType: 'bank_statement' }),
+    "Thanks — we still could not tell which account paid the receipt from Kahvila Esimerkki Oy (kuitti-0203.pdf). Which bank or card account was it, and could you upload that account's statement for the period?");
+  assert.equal(buildOwnerReplyClarificationQuestion({ document: FI_DOC, language: 'fi' }),
+    'Kuitti (Kahvila Esimerkki Oy, kuitti-0203.pdf): Kiitos vastauksestasi! Emme pystyneet päättelemään vastauksestasi, miten se maksettiin. Maksettiinko se käteisellä, omalla kortillasi vai yrityksen tililtä, jonka tiliotteita meillä ei vielä ole?');
+  assert.equal(buildOwnerReplyClarificationQuestion({ document: FI_DOC, answeredEvidenceType: 'bank_statement', language: 'fi' }),
+    'Kuitti (Kahvila Esimerkki Oy, kuitti-0203.pdf): Kiitos vastauksestasi! Emme vieläkään pystyneet päättelemään, miltä tililtä se maksettiin. Mikä pankki- tai korttitili se oli? Voisitko lähettää sen tilin tiliotteen kyseiseltä kaudelta?');
+});
+
+test('owner language — both mint paths read the owner language from the client profile', async () => {
+  const sweepClient = makeMockClient([...sweepResponses({ candidates: [EXXON_DOC] }), { match: 'select profile from clients', rows: [{ profile: { jurisdiction: 'FI' } }] }]);
+  const sweepStubs = makeLaneStubs();
+  await runDocumentDispositionForClient({
+    client: sweepClient, firmId: 'firm-1', clientId: 'client-1', mode: 'shadow',
+    apiKeyOverride: 'sk-test', fetchImpl: makeFetchOk(NEEDS_HUMAN), laneDeps: sweepStubs.laneDeps
+  });
+  assert.match(sweepStubs.mints[0].question, /^Kuitti \(Exxon, 41,20 USD, päivätty 14\.5\.2026, exxon-receipt\.pdf\): Mitä tämä tosite koskee/);
+  const replyClient = makeMockClient([...replyResponses(), { match: 'select profile from clients', rows: [{ profile: { locale: 'fi-FI' } }] }]);
+  const replyStubs = makeLaneStubs();
+  await runOwnerReplyRedisposition({
+    ...REPLY_ARGS, client: replyClient, apiKeyOverride: 'sk-test', fetchImpl: makeFetchOk(NEEDS_HUMAN), laneDeps: replyStubs.laneDeps
+  });
+  assert.match(replyStubs.mints[0].question, /Kiitos vastauksestasi! Emme pystyneet päättelemään vastauksestasi/);
 });
 
 test('RT-10 answer leg — a second unclear reply rests owner_ask_exhausted (never a third nag), request still consumed', async () => {

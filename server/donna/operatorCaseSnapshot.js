@@ -31,6 +31,7 @@ import {
   DEFAULT_FIRM_ID
 } from './firmDb.js';
 import { generateMatchExplanation as defaultGenerateMatchExplanation } from './matchExplanation.js';
+import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 // The two-terminal-states projection (the FIRST principle's home). Pure /
 // dependency-free, so importing it keeps this assembler unit-testable with
 // injected deps. Slice C reads the row's terminal state THROUGH this module —
@@ -411,7 +412,18 @@ const resolveTransactionFocus = async ({
     }
   }
 
-  const explanation = d.generateMatchExplanation({ transaction, match, document, reviewItem });
+  // The proactive ask-client question is sent to the owner, so it is worded
+  // in the owner's language (one profile read, the one resolver).
+  const clientRow = await d.queryFirmDb(
+    'select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1',
+    [firmId, clientId]
+  );
+  const ownerProfile = clientRow.rows?.[0]
+    ? { ...(clientRow.rows[0].profile || {}), jurisdiction: clientRow.rows[0].profile?.jurisdiction || clientRow.rows[0].jurisdiction }
+    : null;
+  const explanation = d.generateMatchExplanation({
+    transaction, match, document, reviewItem, language: preferredOwnerTemplateLanguage(ownerProfile)
+  });
   // Same optional signed-URL augmentation the artifact-drawer block did,
   // so this stays a drop-in for that consumer. Best-effort.
   if (explanation && !explanation.documentUrl && document?.storage_bucket && document?.storage_object_key && createSignedUrl) {
