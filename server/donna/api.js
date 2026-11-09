@@ -1731,6 +1731,7 @@ export const runParseCronTask = async ({ task = 'all', clientId = null, authoriz
       let bucketRefused = 0;
       let bucketAuditFailed = 0;
       let bucketDeleteErrors = 0;
+      const deleteFailures = [];
       const refusedKeys = [];
       for (const { orphan, firmIdFromKey, clientIdFromKey } of decoded) {
         if (!knownFirmIds.has(firmIdFromKey)) {
@@ -1763,7 +1764,14 @@ export const runParseCronTask = async ({ task = 'all', clientId = null, authoriz
         }
         const deleteResult = await deleteEvidenceObjects({ bucket, keys: [orphan.key] });
         if (!deleteResult?.deleted) {
+          // The authorized receipt stands as the record of the attempt and the
+          // object is retried on the next sweep; the store's refusal is named
+          // here and fails the run (parseCronSummaryFailures).
           bucketDeleteErrors += 1;
+          const refusal = deleteResult?.errors?.[0];
+          const error = refusal ? `status ${refusal.status}${refusal.detail ? ` ${refusal.detail}` : ''}` : 'not_deleted';
+          if (deleteFailures.length < 10) deleteFailures.push({ key: orphan.key, error });
+          console.error('[parse-cron storage_orphans] delete failed; object kept', { bucket, key: orphan.key, error });
           continue;
         }
         bucketDeleted += 1;
@@ -1795,7 +1803,8 @@ export const runParseCronTask = async ({ task = 'all', clientId = null, authoriz
         refused: bucketRefused,
         refused_keys: refusedKeys,
         audit_failures: bucketAuditFailed,
-        delete_errors: bucketDeleteErrors
+        delete_errors: bucketDeleteErrors,
+        ...(deleteFailures.length ? { delete_failures: deleteFailures } : {})
       });
     }
     summary.storage_orphans = {

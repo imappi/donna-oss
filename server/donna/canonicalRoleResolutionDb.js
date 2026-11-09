@@ -50,6 +50,7 @@ import { llmCall } from './llmCall.js';
 import { proposeCanonicalRoles } from './canonicalRoleProposer.js';
 import { planCanonicalRoleResolution } from './canonicalRoleResolution.js';
 import { buildCanonicalRoleAsk } from './canonicalRoleAsk.js';
+import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 import { roleMeta } from './accountRoles.js';
 
 export const CANONICAL_ROLE_RESOLUTION_FLAG_KEY = 'CANONICAL_ROLE_RESOLUTION';
@@ -466,8 +467,14 @@ export const __runCanonicalRoleResolutionWithClient = async ({
       );
     }
 
+    // The owner's language, from the client row already read (the profile, with
+    // the client's jurisdiction where the profile does not carry one).
+    const ownerLanguage = preferredOwnerTemplateLanguage({
+      ...(clientRow.profile && typeof clientRow.profile === 'object' ? clientRow.profile : {}),
+      jurisdiction: clientRow.profile?.jurisdiction || clientRow.jurisdiction
+    });
     for (const ask of plan.asks) {
-      const built = buildCanonicalRoleAsk({ ask });
+      const built = buildCanonicalRoleAsk({ ask, language: ownerLanguage });
       // buildCanonicalRoleAsk fails closed on a refusal it has no wording for;
       // count it so the receipt shows the planner asked for something this
       // module could not express (a growth seam, not a silent drop).

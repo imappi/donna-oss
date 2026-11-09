@@ -253,6 +253,35 @@ test('a parse-cron task whose summary carries a caught failure fails the run (th
   assert.deepEqual(parseCronSummaryFailures({ diagnostics: { error: 'read failed', counts_error: 'read failed' } }), []);
 });
 
+test('the partial-failure shapes (outbox failed[], a per-firm coding step error, a refused orphan delete) fail their desktop run; a clean neighbour of each succeeds', async () => {
+  const clean = {
+    outbox: { outbox: { transport: 'local_job', picked: 1, requeued: [{ document_id: 'doc-a', parse_run_id: 'run-a', job_id: 1 }], already_queued: [], failed: [], without_run_id: 0 } },
+    coding_convergence: { coding_convergence: { firms: [{ firm_id: 'firm-synthetic-1', result: { coder: [], swept: [], ledger_posted: [], errors: 1, posted_correction_recovery: [{ state: 'failed' }] } }], errors: 1 } },
+    storage_orphans: { storage_orphans: { buckets: [{ bucket: 'evidence', scanned: 2, deleted: 1, refused: 1, audit_failures: 0, delete_errors: 0 }], scanned_total: 2, deleted_total: 1, refused_total: 1 } }
+  };
+  const failed = {
+    outbox: { outbox: { ...clean.outbox.outbox, failed: [{ document_id: 'doc-b', parse_run_id: 'run-b', error: 'relation "local_jobs" does not exist' }] } },
+    coding_convergence: { coding_convergence: { firms: [{ firm_id: 'firm-synthetic-1', result: { coder: [], swept: [], ledger_posted: [], errors: 1, coder_discovery_error: 'connect ECONNREFUSED 127.0.0.1:5432' } }], errors: 1 } },
+    storage_orphans: { storage_orphans: { buckets: [{ bucket: 'evidence', scanned: 2, deleted: 0, refused: 0, audit_failures: 0, delete_errors: 1, delete_failures: [{ key: 'f/c/a.pdf', error: 'status 500' }] }], scanned_total: 2, deleted_total: 0, refused_total: 0 } }
+  };
+  let current = clean;
+  const built = buildDesktopHandlerManifest({ deps: { runParseCronTask: async ({ task }) => current[task] } });
+  const step = { run: async (_name, fn) => fn() };
+  const logger = { log: () => {}, error: () => {} };
+  const run = (task) => built.find((e) => e.functionId === `parse-cron:${task}`).run({ step, logger, payload: {} });
+  for (const task of Object.keys(clean)) {
+    current = clean;
+    assert.deepEqual(await run(task), clean[task], `${task}: a clean summary is the job result`);
+    current = failed;
+    await assert.rejects(run(task), (error) => {
+      assert.equal(error.code, 'PARSE_CRON_TASK_FAILED');
+      assert.deepEqual(error.failures, parseCronSummaryFailures(failed[task]));
+      assert.ok(error.failures.length === 1 && error.failures[0].task === task, JSON.stringify(error.failures));
+      return true;
+    }, `${task}: a partial failure fails the run`);
+  }
+});
+
 test('the manifest module does not read vercel.json (or any file) at runtime', () => {
   const source = readFileSync(new URL('./handlerManifest.js', import.meta.url), 'utf8');
   assert.ok(!/['"`]vercel\.json['"`]/.test(source), 'vercel.json is the cloud\'s descriptor, never a path literal here; the desktop schedule lives in this module');
