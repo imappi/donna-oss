@@ -74,6 +74,7 @@
 // excluded: RT-14 (2026-09-02) deleted them and their gates for good.
 
 import { parseDocumentJobDeclaration, runParseDocumentJob } from './parseDocumentJob.js';
+import { parseCronSummaryFailures } from '../parseCronSummaryFailures.js';
 import { convergenceDriftNightlyEntry } from '../convergenceDriftCheck.js';
 import { runBankLineDisposition } from '../inngest/bankLineDisposition.js';
 import { runDocumentTerminalDrainSweep } from '../inngest/documentTerminalDrain.js';
@@ -294,6 +295,20 @@ export const buildDesktopHandlerManifest = ({ ledgerAdapterConnected = true, dep
         const runTask = deps.runParseCronTask || await loadParseCronRunner();
         const summary = await step.run('task', () => runTask({ task, logger }));
         logger?.log?.(`[desktop-scheduler] parse-cron ${task} → ${Object.keys(summary || {}).join(',') || 'empty'}`);
+        // A task that caught its own error into the summary did not succeed:
+        // the same rule the cloud route answers 500 PARSE_CRON_TASK_FAILED on.
+        // Throwing (outside the step) lets the scheduler settle the job as
+        // failed with the failures in its last_error; at maxAttempts 1 it rests
+        // dead and the next tick enqueues a fresh job.
+        const failures = parseCronSummaryFailures(summary);
+        if (failures.length) {
+          const error = new Error(`Parse-cron task ${task} failed (PARSE_CRON_TASK_FAILED): ${JSON.stringify(failures)}`);
+          error.code = 'PARSE_CRON_TASK_FAILED';
+          error.failures = failures;
+          error.summary = summary;
+          logger?.error?.(`[desktop-scheduler] parse-cron ${task} failed`, failures);
+          throw error;
+        }
         return summary;
       }
     });
