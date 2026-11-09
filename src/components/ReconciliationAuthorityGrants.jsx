@@ -6,9 +6,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
 
+import { useInterfaceLocale } from '../i18n/LocaleProvider.jsx';
+
 import { D } from './shared/design-tokens.js';
 import { btnPrimary, btnChip, btnDisabled } from './shared/buttons.js';
-import { defaultReviewDate, describeGrantScope, grantActionsFor, humanizeSlug } from '../lib/heldMatchAuthority.js';
+import {
+  authorityActor,
+  authorityAmount,
+  authorityArchetype,
+  authorityDate,
+  authorityDocumentType,
+  authorityGrantStatus,
+  authorityRefusal,
+  authoritySuspensionCause,
+  defaultReviewDate,
+  describeGrantScope,
+  grantActionsFor
+} from '../lib/heldMatchAuthority.js';
 import {
   approveReconciliationAuthorityGrant,
   fetchReconciliationAuthorityGrants,
@@ -23,12 +37,13 @@ const DEFAULT_API = {
   revoke: revokeReconciliationAuthorityGrant
 };
 const ACTIVATING = new Set(['approve', 'reactivate']);
-const day = (value) => String(value || '').slice(0, 10);
 const input = { font: 'inherit', fontSize: 12.5, padding: '4px 6px', border: `1px solid ${D.ruleSoft}`, borderRadius: 4, minWidth: 0 };
 
 const GrantRow = ({ grant, clientId, delegatedAuthorityActs, api, onChanged }) => {
   const intl = useIntl();
+  const { formatAmount, formatDate } = useInterfaceLocale();
   const message = (id, values) => intl.formatMessage({ id }, values);
+  const date = (value) => authorityDate(value, formatDate);
   const [reason, setReason] = useState('');
   const [reviewDate, setReviewDate] = useState(defaultReviewDate());
   const [busy, setBusy] = useState(false);
@@ -48,7 +63,7 @@ const GrantRow = ({ grant, clientId, delegatedAuthorityActs, api, onChanged }) =
       setReason('');
       onChanged?.(result);
     } catch (err) {
-      setError(err?.message || String(err));
+      setError(authorityRefusal(intl, err));
     } finally {
       setBusy(false);
     }
@@ -58,20 +73,21 @@ const GrantRow = ({ grant, clientId, delegatedAuthorityActs, api, onChanged }) =
   return (
     <li data-testid={`grant-${grant.id}`} style={{ listStyle: 'none', padding: '12px 0', borderTop: `1px solid ${D.ruleSoft}`, fontSize: 12.5, color: D.ink }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-        <strong data-testid="grant-status">{message(`firm.reconAuthority.grants.status.${grant.status}`)}</strong>
-        <span>{message('firm.reconAuthority.preview.scopeValue', { vendor: grant.example?.vendor_name || scope.merchant || '—', label: humanizeSlug(scope.document_type) || '—', account: scope.account || '—' })}</span>
+        <strong data-testid="grant-status">{authorityGrantStatus(intl, grant.status)}</strong>
+        <span data-testid="grant-scope">{message('firm.reconAuthority.preview.scopeValue', { vendor: grant.example?.vendor_name || scope.merchant || '—', label: authorityDocumentType(intl, scope.document_type), account: scope.account || '—' })}</span>
       </div>
       <div style={{ marginTop: 4, color: D.inkSoft, display: 'grid', gap: 2 }}>
-        <span>{message(`firm.reconAuthority.archetype.${grant.archetype}`)} · {message('firm.reconAuthority.grants.ceilingValue', { amount: grant.amount_ceiling, currency: grant.currency })}</span>
-        {grant.status !== 'proposed' && <span>{message('firm.reconAuthority.grants.grantedBy', { actor: grant.authorized_by_actor_id || grant.authorized_by_actor_type || '—', date: day(grant.created_at) })}</span>}
-        <span data-testid="grant-usage">{message('firm.reconAuthority.grants.usage', { count: grant.use_count, date: day(grant.last_used_at) })} · {message('firm.reconAuthority.grants.corrections', { count: grant.correction_count })}</span>
-        {grant.review_after && <span>{message('firm.reconAuthority.grants.reviewBy', { date: day(grant.review_after) })}</span>}
+        <span data-testid="grant-ceiling">{authorityArchetype(intl, grant.archetype)} · {message('firm.reconAuthority.grants.ceilingValue', { amount: authorityAmount(grant.amount_ceiling, grant.currency, formatAmount) })}</span>
+        {grant.status !== 'proposed' && <span data-testid="grant-granted-by">{message('firm.reconAuthority.grants.grantedBy', { actor: authorityActor(intl, grant.authorized_by_actor_id, grant.authorized_by_actor_type), date: date(grant.created_at) })}</span>}
+        <span data-testid="grant-usage">{message('firm.reconAuthority.grants.usage', { count: grant.use_count, date: date(grant.last_used_at) })} · {message('firm.reconAuthority.grants.corrections', { count: grant.correction_count })}</span>
+        {grant.review_after && <span data-testid="grant-review-by">{message('firm.reconAuthority.grants.reviewBy', { date: date(grant.review_after) })}</span>}
+        {grant.expires_at && <span data-testid="grant-expires">{message('firm.reconAuthority.grants.expiresOn', { date: date(grant.expires_at) })}</span>}
         {inert && <span>{inert}</span>}
         {grant.status === 'suspended' && grant.last_auto_suspension && (
-          <span data-testid="grant-auto-suspension">{message('firm.reconAuthority.grants.autoSuspended', { date: day(grant.last_auto_suspension.at), reason: humanizeSlug(grant.last_auto_suspension.reason) || '—' })}</span>
+          <span data-testid="grant-auto-suspension">{message('firm.reconAuthority.grants.autoSuspended', { date: date(grant.last_auto_suspension.at), reason: authoritySuspensionCause(intl, grant.last_auto_suspension.reason) })}</span>
         )}
         {grant.status === 'revoked' && grant.revoked_reason && (
-          <span>{message('firm.reconAuthority.grants.revokedBecause', { actor: grant.revoked_by_actor_id || '—', reason: grant.revoked_reason })}</span>
+          <span>{message('firm.reconAuthority.grants.revokedBecause', { actor: authorityActor(intl, grant.revoked_by_actor_id, null), reason: grant.revoked_reason })}</span>
         )}
       </div>
       {actions.length > 0 && (

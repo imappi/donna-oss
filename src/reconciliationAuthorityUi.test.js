@@ -28,6 +28,8 @@ const original = new Map(['window', 'document', 'navigator', 'localStorage', 'HT
   .map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
 const flush = async () => act(async () => { await new Promise((r) => setTimeout(r, 10)); });
 const $ = (id) => document.querySelector(`[data-testid="${id}"]`);
+// Intl separates a currency code and digit groups with no-break spaces.
+const text = (node) => node.textContent.replace(/[\u00a0\u202f]/g, ' ');
 const click = async (node) => { await act(async () => node.click()); await flush(); };
 const setValue = async (node, value) => {
   await act(async () => {
@@ -123,7 +125,7 @@ test('authorise future matches: shows exactly what is granted, nothing pre-ticke
   assert.match(form.textContent, /Accept the match only\. Posting authority is not available\./);
   assert.equal($('grant-currency').textContent, 'GBP');
   assert.equal($('grant-ceiling').value, '1200');
-  assert.match(form.textContent, /2025-04-16/, 'this match is the example');
+  assert.equal(text($('grant-example')), 'Harbour Lane Properties Ltd · GBP 1,200 · Apr 16, 2025', 'this match is the example, formatted');
   assert.equal($('grant-acknowledge').checked, false, 'nothing is pre-ticked');
   assert.equal($('grant-submit').disabled, true);
   await click($('grant-submit'));
@@ -140,7 +142,7 @@ test('authorise future matches: shows exactly what is granted, nothing pre-ticke
 });
 
 test('an ineligible match explains why and offers no grant form', async () => {
-  for (const [reason, text] of [['not_pre_authorisable', /cannot be pre-authorised/], ['delegated_authority_off', /Delegated authority is off/], ['grant_exists', /already exists \(active\)/]]) {
+  for (const [reason, text] of [['not_pre_authorisable', /cannot be pre-authorised/], ['delegated_authority_off', /Delegated authority is off/], ['grant_exists', /already exists \(Active\)/]]) {
     await render(React.createElement(Held, { match: heldMatch, clientId: 'client-a', onConfirmMatch: async () => {},
       preview: async () => ({ preview: { ...preview, eligible: false, ineligible_reason: reason, existing_grant: reason === 'grant_exists' ? { id: 'g', status: 'active' } : null } }) }));
     await click($('held-authorise'));
@@ -174,12 +176,12 @@ test('grants view: proposed grants wait for approve or decline; suspension cause
   assert.match(card.textContent, /Proposed — waiting for approval/);
   const proposedRow = $('grant-g-proposed');
   assert.ok(proposedRow.querySelector('[data-testid="grant-action-approve"]') && proposedRow.querySelector('[data-testid="grant-action-decline"]'));
-  assert.match($('grant-g-suspended').textContent, /Suspended automatically on 2025-08-01.*match rejected/);
+  assert.match($('grant-g-suspended').textContent, /Suspended automatically on Aug 01, 2025: .*\(Match rejected\)/);
   assert.match($('grant-g-suspended').textContent, /1 correction/);
-  assert.match($('grant-g-active').textContent, /Granted by partner@ledgerlight\.example on 2025-04-20/);
+  assert.match($('grant-g-active').textContent, /Granted by partner@ledgerlight\.example on Apr 20, 2025/);
   assert.doesNotMatch(proposedRow.textContent, /Granted by/, 'a proposed grant has not been granted by anyone yet');
-  assert.match($('grant-g-active').textContent, /Used 2 times, last 2025-07-27/);
-  assert.match($('grant-g-active').textContent, /Up to 1500 GBP/);
+  assert.match($('grant-g-active').textContent, /Used 2 times, last Jul 27, 2025/);
+  assert.match(text($('grant-g-active')), /Up to GBP 1,500/);
   assert.equal($('grants-flag-off'), null);
   const suspend = $('grant-g-active').querySelector('[data-testid="grant-action-suspend"]');
   assert.equal(suspend.disabled, true, 'no reason, no action');
