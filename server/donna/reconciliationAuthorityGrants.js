@@ -483,7 +483,12 @@ export const mintAuthorityGrant = async ({
           currency,
           source,
           status: effectiveStatus,
-          model
+          model,
+          // The in-product mint records who granted it and from which example
+          // match (provenance.granted_by / .example) — the receipt names both.
+          ...(provenance && (provenance.granted_by || provenance.example)
+            ? { granted_by: provenance.granted_by || null, example: provenance.example || null, reason: provenance.reason || null }
+            : {})
         })
       ]
     );
@@ -515,4 +520,236 @@ export const loadActiveGrantsForClient = async ({ client, firmId, clientId } = {
     if (error?.code === '42P01' || error?.code === '42703') return [];
     throw error;
   }
+};
+
+// ── Governance: the human surface over the store ─────────────────────────────
+// The in-product way a firm authority approves, re-activates, suspends or
+// revokes a standing grant (the mint itself stays mintAuthorityGrant above).
+// This module stays the ONE owner of grant state: the routes
+// (reconciliationAuthorityRoutes.js) decide WHO may act; this writer decides
+// whether the transition is legal and writes it together with its audit
+// receipt on the caller's open transaction. The receipt is a precondition, not
+// a best effort: a failed audit insert throws, so the caller rolls the status
+// change back with it.
+//
+// Transitions (from → to). `approve` activates a proposed grant (a learned
+// pattern only ever proposes, guard 5.2); `reactivate` restores a suspended or
+// revoked grant after a person's re-review; `suspend` and `revoke` narrow
+// authority and take effect on the very next findActiveAuthorityGrant (status
+// is read per lookup, nothing is cached).
+export const GRANT_GOVERNANCE_TRANSITIONS = Object.freeze({
+  approve: Object.freeze({ from: Object.freeze(['proposed']), to: 'active' }),
+  reactivate: Object.freeze({ from: Object.freeze(['suspended', 'revoked']), to: 'active' }),
+  suspend: Object.freeze({ from: Object.freeze(['active']), to: 'suspended' }),
+  revoke: Object.freeze({ from: Object.freeze(['proposed', 'active', 'suspended']), to: 'revoked' })
+});
+
+const governanceError = (message, statusCode, code) =>
+  Object.assign(new Error(message), { statusCode, code });
+
+// Apply one governance transition. Returns the updated row summary. Throws a
+// typed 4xx on every refusal (not found / illegal transition / missing reason /
+// missing time bound / non-authority actor / accept_and_post).
+export const transitionAuthorityGrant = async ({
+  client,
+  firmId,
+  clientId,
+  grantId,
+  transition,
+  actorType,
+  actorId,
+  reason,
+  reviewAfter = null,
+  expiresAt = null,
+  receipt = {},
+  asOf = new Date()
+} = {}) => {
+  const rule = GRANT_GOVERNANCE_TRANSITIONS[transition];
+  if (!client || !firmId || !clientId || !grantId || !rule) {
+    throw governanceError('A grant, a client and a known action are required.', 400, 'GRANT_TRANSITION_INVALID');
+  }
+  const why = String(reason || '').trim();
+  if (!why) throw governanceError('A reason is required.', 400, 'GRANT_REASON_REQUIRED');
+  if (!actorId) throw governanceError('The acting person must be named.', 403, 'GRANT_ACTOR_REQUIRED');
+  const activating = rule.to === 'active';
+  // Widening authority needs a firm-side AUTHORITY (guard 5.1) and a time bound;
+  // narrowing it never needs more than a named person with the right seat.
+  if (activating && !RUNTIME_MINT_ACTOR_TYPES.includes(actorType)) {
+    throw governanceError('Only a firm authority may activate a grant.', 403, 'GRANT_AUTHORITY_REQUIRED');
+  }
+  const now = toEpoch(asOf);
+  const reviewMs = toEpoch(reviewAfter);
+  const expiresMs = toEpoch(expiresAt);
+  if (activating) {
+    if (reviewMs == null && expiresMs == null) {
+      throw governanceError('A review-after or expiry date is required.', 400, 'GRANT_TIME_BOUND_REQUIRED');
+    }
+    if ((reviewMs != null && reviewMs <= now) || (expiresMs != null && expiresMs <= now)) {
+      throw governanceError('The review-after or expiry date must be in the future.', 400, 'GRANT_TIME_BOUND_PAST');
+    }
+  }
+
+  const current = await client.query(
+    `select id, status, action, correction_count, provenance
+       from reconciliation_authority_grants
+      where firm_id = $1 and client_id = $2 and id = $3
+      for update`,
+    [firmId, clientId, grantId]
+  );
+  const row = current.rows[0];
+  if (!row) throw governanceError('Grant not found.', 404, 'GRANT_NOT_FOUND');
+  if (!rule.from.includes(row.status)) {
+    throw governanceError(`A ${row.status} grant cannot be ${transition}d.`, 409, 'GRANT_TRANSITION_ILLEGAL');
+  }
+  // accept_and_post has no posting authority in V1 (guard 5.3): it fails closed
+  // at lookup and is never activated from the product either.
+  if (activating && row.action !== 'accept_match') {
+    throw governanceError('Only accept-match grants can be activated.', 409, 'GRANT_ACTION_UNSUPPORTED');
+  }
+
+  const priorCorrections = Number(row.correction_count) || 0;
+  const entry = {
+    transition,
+    from_status: row.status,
+    to_status: rule.to,
+    actor_type: actorType || null,
+    actor_id: actorId,
+    reason: why,
+    at: new Date(now).toISOString(),
+    ...(activating ? { review_after: reviewAfter, expires_at: expiresAt } : {}),
+    ...(transition === 'reactivate' ? { cleared_correction_count: priorCorrections } : {})
+  };
+  const updated = await client.query(
+    `update reconciliation_authority_grants
+        set status = $4,
+            -- re-activation IS the re-review the lookup's correction guard waits
+            -- for: the person who reviewed the correction clears it, and the
+            -- cleared count rides on the provenance + the receipt below.
+            correction_count = case when $5 then 0 else correction_count end,
+            review_after = case when $6 then $7::timestamptz else review_after end,
+            expires_at = case when $6 then $8::timestamptz else expires_at end,
+            revoked_by_actor_id = case when $4 = 'revoked' then $9 else revoked_by_actor_id end,
+            revoked_reason = case when $4 = 'revoked' then $10 else revoked_reason end,
+            provenance = jsonb_set(coalesce(provenance, '{}'::jsonb), '{governance}',
+              coalesce(provenance->'governance', '[]'::jsonb) || jsonb_build_array($11::jsonb)),
+            updated_at = now()
+      where firm_id = $1 and client_id = $2 and id = $3
+      returning id, status, correction_count, review_after, expires_at`,
+    [
+      firmId, clientId, grantId, rule.to,
+      transition === 'reactivate', activating, reviewAfter, expiresAt,
+      actorId, why, JSON.stringify(entry)
+    ]
+  );
+  await client.query(
+    `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+     values ($1, $2, $3, $4, $5, 'reconciliation_authority_grant', $6, $7::jsonb)`,
+    [
+      firmId, clientId, actorType || 'firm_operator', actorId,
+      `reconciliation_authority_grant.${transition === 'approve' ? 'approved' : `${transition}d`}`,
+      grantId,
+      JSON.stringify({ ...entry, prior_correction_count: priorCorrections, ...receipt })
+    ]
+  );
+  const out = updated.rows[0];
+  return {
+    id: out.id,
+    status: out.status,
+    from_status: row.status,
+    correction_count: Number(out.correction_count) || 0,
+    review_after: out.review_after,
+    expires_at: out.expires_at
+  };
+};
+
+// Whether a grant row could act right now, amount aside — the same clauses as
+// grantRowAllowsAutoAccept minus the per-match amount/currency, so the grants
+// view says "inert" for exactly the rows the lookup would skip.
+export const grantInertReason = (grant, { asOf = new Date() } = {}) => {
+  if (!grant) return 'missing';
+  if (grant.status !== 'active') return grant.status;
+  if (grant.action !== 'accept_match') return 'action_unsupported';
+  if (Number(grant.correction_count) > 0) return 'corrected';
+  const now = toEpoch(asOf);
+  const validFrom = toEpoch(grant.valid_from);
+  if (validFrom != null && validFrom > now) return 'not_yet_valid';
+  const expiresAt = toEpoch(grant.expires_at);
+  if (expiresAt != null && expiresAt <= now) return 'expired';
+  const reviewAfter = toEpoch(grant.review_after);
+  if (reviewAfter != null && reviewAfter <= now) return 'review_due';
+  return null;
+};
+
+// The grants view read: every grant for one client with its usage and its last
+// auto-suspension cause. Usage is read from the persisted accept receipts
+// (payload.authorization.delegated_authority.grant_id, written by
+// grantAuthority) — the store's use_count column is never bumped by the accept
+// path, so the receipts are the honest source. Read-only.
+export const listAuthorityGrantsForClient = async ({ client, firmId, clientId, asOf = new Date() } = {}) => {
+  if (!client || !firmId || !clientId) return [];
+  let result;
+  try {
+    result = await client.query(
+      `select g.*,
+              coalesce(u.uses, 0)::int as receipt_use_count,
+              u.last_used_at as receipt_last_used_at,
+              s.created_at as last_auto_suspended_at,
+              s.metadata as last_auto_suspension
+         from reconciliation_authority_grants g
+         left join lateral (
+           select count(*) as uses, max(m.updated_at) as last_used_at
+             from reconciliation_matches m
+            where m.firm_id = g.firm_id and m.client_id = g.client_id
+              and m.payload->'authorization'->'delegated_authority'->>'grant_id' = g.id
+         ) u on true
+         left join lateral (
+           select a.created_at, a.metadata
+             from audit_events a
+            where a.firm_id = g.firm_id and a.resource_type = 'reconciliation_authority_grant'
+              and a.resource_id = g.id and a.action = 'reconciliation_authority_grant.auto_suspended'
+            order by a.created_at desc, a.id desc
+            limit 1
+         ) s on true
+        where g.firm_id = $1 and g.client_id = $2
+        order by case g.status when 'proposed' then 0 when 'active' then 1 when 'suspended' then 2 else 3 end,
+                 g.updated_at desc`,
+      [firmId, clientId]
+    );
+  } catch (error) {
+    if (error?.code === '42P01' || error?.code === '42703') return [];
+    throw error;
+  }
+  return (result.rows || []).map((g) => ({
+    id: g.id,
+    scope_kind: g.scope_kind,
+    scope_key: g.scope_key,
+    archetype: g.archetype,
+    action: g.action,
+    amount_ceiling: Number(g.amount_ceiling),
+    currency: g.currency,
+    status: g.status,
+    source: g.source,
+    authorized_by_actor_type: g.authorized_by_actor_type,
+    authorized_by_actor_id: g.authorized_by_actor_id,
+    created_at: g.created_at,
+    updated_at: g.updated_at,
+    valid_from: g.valid_from,
+    review_after: g.review_after,
+    expires_at: g.expires_at,
+    revoked_by_actor_id: g.revoked_by_actor_id,
+    revoked_reason: g.revoked_reason,
+    correction_count: Number(g.correction_count) || 0,
+    use_count: Number(g.receipt_use_count) || 0,
+    last_used_at: g.receipt_last_used_at || null,
+    last_auto_suspension: g.last_auto_suspended_at
+      ? {
+          at: g.last_auto_suspended_at,
+          reason: g.last_auto_suspension?.reason || null,
+          match_id: g.last_auto_suspension?.match_id || null
+        }
+      : null,
+    example: g.provenance?.example || null,
+    governance: Array.isArray(g.provenance?.governance) ? g.provenance.governance : [],
+    inert_reason: grantInertReason(g, { asOf })
+  }));
 };

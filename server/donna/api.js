@@ -510,6 +510,7 @@ import { logStorageCleanupAuthorizedInDb, logStorageCleanupRefusedInDb } from '.
 // ceiling (the pure leaf). Threaded into the shadow snapshot loaders' riskContext so the
 // `materiality_band` flag resolves instead of staying `unknown`. Shadow-only by inheritance.
 import { loadActiveGrantsForClient } from './reconciliationAuthorityGrants.js';
+import { handleReconciliationAuthorityRequest } from './reconciliationAuthorityRoutes.js';
 import { materialityThresholdFromGrants, matchVerdictFromAuthorization } from './authorityEnvelope.js';
 // Slice G consumer: the focus transaction's PERSISTED reconciliation-match authorization →
 // rendered into the shadow receipt's `matchVerdict` (preflight's `match_reconciles` check) so the
@@ -2360,6 +2361,18 @@ const donnaFirmsApiHandler = async (req, res) => {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ facts }));
+      return;
+    }
+
+    // Standing delegated authority for material reconciliation matches — the
+    // in-product grant / review / revoke surface. Typed routes, capability-
+    // checked and receipted in-transaction inside the module (one owner):
+    // reconciliationAuthorityRoutes.js. Literal paths (vercelRewrites scan):
+    // '/reconciliation-authority-grants', '/reconciliation-authority-grants/preview',
+    // '/reconciliation-authority-grants/mint', '/reconciliation-authority-grants/approve',
+    // '/reconciliation-authority-grants/suspend', '/reconciliation-authority-grants/revoke'.
+    if (requestUrl.pathname.startsWith('/reconciliation-authority-grants')
+      && await handleReconciliationAuthorityRequest({ req, res, requestUrl, readBody, defaultFirmId: DEFAULT_FIRM_ID })) {
       return;
     }
 
@@ -12509,10 +12522,15 @@ const donnaFirmsApiHandler = async (req, res) => {
         auth: req.donnaAuth,
         clientIds: collectClientIds(match?.client_id)
       });
+      // The authorization receipt is server-written (the one-time authority
+      // receipt on a held confirm, the matcher's gates); a request body never
+      // supplies or overwrites it.
+      const { authorization: _ignoredAuthorization, ...patch } = body?.patch && typeof body.patch === 'object' ? body.patch : {};
       const snapshot = await updateReconciliationMatchInDb({
         firmId,
         matchId,
-        patch: body?.patch && typeof body.patch === 'object' ? body.patch : {}
+        patch,
+        actorId: access.principal?.email || access.principal?.userId || access.principal?.principalId || 'system'
       });
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
