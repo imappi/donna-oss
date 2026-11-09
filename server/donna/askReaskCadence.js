@@ -77,6 +77,13 @@ export const ASK_REASK_MAX_SEND_COUNT = 3;
 
 const DEFAULT_LIMIT = 25;
 
+// Sends the owner has not answered. An owner who answered "still unpaid"
+// (request_payload.obligation_open_acknowledged, written by the owner-reply
+// reader with the send_count at that answer) is not unresponsive: only the
+// sends after that answer count toward the escalation bound.
+const unansweredSendCount = (row) => Number(row.send_count || 0)
+  - Number(row.request_payload?.obligation_open_acknowledged?.send_count || 0);
+
 // Overdue open asks: past due_at (when set — the flag-gated mint path sets it)
 // AND at least the nudge interval past the LAST GENUINE SEND, so the recorded
 // cadence ("7 days between sends") holds even when a re-arm write was lost.
@@ -156,7 +163,7 @@ export const runAskReaskSweep = async ({
 
   if (!acts) {
     // Shadow stage: receipt the would-run, touch nothing.
-    const wouldNudge = rows.filter((r) => Number(r.send_count || 0) < ASK_REASK_MAX_SEND_COUNT).length;
+    const wouldNudge = rows.filter((r) => unansweredSendCount(r) < ASK_REASK_MAX_SEND_COUNT).length;
     try {
       await client.query(
         `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
@@ -179,7 +186,7 @@ export const runAskReaskSweep = async ({
   for (const row of rows) {
     const sendCount = Number(row.send_count || 0);
     try {
-      if (sendCount >= ASK_REASK_MAX_SEND_COUNT) {
+      if (unansweredSendCount(row) >= ASK_REASK_MAX_SEND_COUNT) {
         // The owner had every reminder the cadence allows and answered none.
         await escalateAskToFirmWithClient(client, { firmId, clientId, row, nowIso, reason: 'owner_unresponsive' });
         stats.escalated += 1;
@@ -192,7 +199,7 @@ export const runAskReaskSweep = async ({
       if (sendGate === undefined) {
         sendGate = await gateOwnerSendWithClient({
           client, firmId, clientId, surface: 'ask_reask',
-          evidenceRequestIds: rows.filter((r) => Number(r.send_count || 0) < ASK_REASK_MAX_SEND_COUNT).map((r) => r.id),
+          evidenceRequestIds: rows.filter((r) => unansweredSendCount(r) < ASK_REASK_MAX_SEND_COUNT).map((r) => r.id),
           deps
         });
       }

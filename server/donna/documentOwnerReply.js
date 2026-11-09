@@ -38,6 +38,9 @@ export const redisposeDocumentOwnerReplyWithClient = async ({ client, firmId, re
     return { skipped: 'disposition_flag_inactive', request_resolved: false };
   }
   const { runOwnerReplyRedisposition } = await import('./documentDispositionLlm.js');
+  // The asking lane's "still unpaid" answer, where it has one (the
+  // no-settlement lanes); the reader is told it is valid on that lane.
+  const { noSettlementAskStillOpen } = await import('./salesRecognitionGap.js');
   // The #1748 shape: the reconciliation_reasoning lane's seat decides when a
   // non-claude rung is seated. Best-effort read; null ⇒ the strong default.
   let decidingPolicy = null;
@@ -52,20 +55,22 @@ export const redisposeDocumentOwnerReplyWithClient = async ({ client, firmId, re
     ownerReply: request.response_payload?.reply || '',
     replyDocumentIds: request.response_payload?.document_ids || [],
     actorId,
-    decidingPolicy
+    decidingPolicy,
+    stillOpen: noSettlementAskStillOpen(request.request_payload?.lane)
   });
 };
 
 // Called by processOwnerReplyWithClient under its lease. Throws a coded error
 // for the clock's bounded failure receipt; on a consequence (the ask resolved
-// by a verdict, a live match, or a resolved ask plus a clarification asked of
-// the owner) writes the completed processing receipt.
+// by a verdict, a live match, a resolved ask plus a clarification asked of
+// the owner, or the ask back on the owner because they said it is still
+// unpaid) writes the completed processing receipt.
 export const processDocumentOwnerReplyWithClient = async ({ client, firmId, request, expectedReplyKey, attempts = 0, actorId = 'system' }) => {
   const persisted = (await client.query('select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3',
     [firmId, request.client_id, request.id])).rows[0];
   assertCurrentOwnerReply(persisted, expectedReplyKey);
   const disposition = await redisposeDocumentOwnerReplyWithClient({ client, firmId, request: persisted, actorId });
-  if (!disposition?.request_resolved) {
+  if (!disposition?.request_resolved && !disposition?.obligation_open) {
     const skipped = disposition?.skipped || null;
     const code = skipped === 'disposition_flag_inactive' ? 'OWNER_REPLY_CONSUMER_INACTIVE'
       : SOURCE_INVALID_SKIPS.has(skipped) ? 'OWNER_REPLY_SOURCE_INVALID'
@@ -74,11 +79,13 @@ export const processDocumentOwnerReplyWithClient = async ({ client, firmId, requ
     throw Object.assign(new Error('The document answer could not be processed.'), { code, documentDisposition: disposition });
   }
   const processing = { reply_key: expectedReplyKey, state: 'completed', attempts: attempts + 1,
-    driven_action: disposition.lane?.kind === 'owner_ask' ? 'owner_clarification'
+    driven_action: disposition.obligation_open ? 'owner_reported_still_open'
+      : disposition.lane?.kind === 'owner_ask' ? 'owner_clarification'
       : disposition.lane?.kind === 'owner_ask_exhausted' ? 'owner_clarification_exhausted'
         : disposition.skipped === 'live_match' ? 'live_match' : 'document_redisposition',
     disposition: disposition.disposition || null,
-    ...(disposition.clarification_request_id ? { clarification_request_id: disposition.clarification_request_id } : {}) };
+    ...(disposition.clarification_request_id ? { clarification_request_id: disposition.clarification_request_id } : {}),
+    ...(disposition.obligation_open ? { recheck_at: disposition.lane.recheck_at } : {}) };
   await recordOwnerReplyProcessingReceipt({ client, firmId, clientId: request.client_id, evidenceRequestId: request.id,
     actorId, processing, metadata: { document_id: documentOwnerReplyDocumentId(persisted) } });
   return { applied: true, document_disposition: disposition };
