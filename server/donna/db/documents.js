@@ -4,7 +4,7 @@
 // symbol keeps its old import path through firmDb.js, which re-exports it; helpers another
 // plane needs are exported here and NOT re-exported by firmDb.js. Zero behaviour change.
 
-import { __clearReconciliationMatchesForDuplicateWithClient, __unwindTransactionMatchesForDocumentWithClient } from '../parseDocumentsDb.js';
+import { __clearReconciliationMatchesForDuplicateWithClient, __promoteDuplicateHeirsWithClient, __unwindTransactionMatchesForDocumentWithClient } from '../parseDocumentsDb.js';
 import { reverseCreditApplicationsForDocument, reverseReminderSettlementWithClient } from '../creditNoteApplications.js';
 import { toIsoDay } from '../dates.js';
 
@@ -83,20 +83,6 @@ export const syncDocumentsAndTransactionsInDb = async ({
           [firmId, replacementIds]
         );
         const incomingDocumentIds = documents.map((document) => document?.id).filter(Boolean);
-        // Promote any rows pointing at to-be-deleted docs as their
-        // canonical (clear duplicate_of). Without this the delete
-        // below leaves dangling pointers — see the comment in the
-        // single-doc delete path further down for the integrity
-        // story. We do this BEFORE the delete so the FROM clause
-        // doesn't have to coordinate with cascading state.
-        await client.query(
-          `update documents
-              set duplicate_of = null, updated_at = now()
-            where firm_id = $1
-              and duplicate_of = any($2::text[])
-              and not (id = any($3::text[]))`,
-          [firmId, replacementIds, incomingDocumentIds]
-        );
         // Unwind any confirmed transaction matches whose target is one
         // of the to-be-deleted docs, and delete the docs' match rows
         // (dangling matched_object_id rows read as "line taken" to the
@@ -117,13 +103,22 @@ export const syncDocumentsAndTransactionsInDb = async ({
             });
           }
         }
-        await client.query(
+        const deletedDocuments = await client.query(
           `delete from documents
            where firm_id = $1
              and id = any($2::text[])
-             and not (id = any($3::text[]))`,
+             and not (id = any($3::text[]))
+           returning id`,
           [firmId, replacementIds, incomingDocumentIds]
         );
+        // Repoint the rows that named a deleted doc as their canonical
+        // (duplicate_of has no FK) — one heir per (client, bytes); see the
+        // single-doc delete path below for the integrity story.
+        await __promoteDuplicateHeirsWithClient(client, {
+          firmId,
+          deletedIds: deletedDocuments.rows.map((row) => row.id),
+          excludeIds: incomingDocumentIds
+        });
       }
 
       // Batched multi-row upserts. Statement uploads commonly produce
@@ -488,20 +483,6 @@ export const deleteDocumentInDb = async ({ firmId = DEFAULT_FIRM_ID, documentId,
         'delete from transaction_review_queue where firm_id = $1 and item_type = $2 and item_id = $3',
         [firmId, 'document_line', documentId]
       );
-      // Clear `duplicate_of` on any rows that reference this doc as
-      // their canonical. The column has no FK by design (migration 011
-      // — "logical reference, no FK"), so deleting a canonical without
-      // this UPDATE leaves dangling pointers that confuse re-dedup
-      // passes and break "view canonical" UI affordances. NULL is the
-      // promote-to-canonical state; downstream dedup passes will
-      // re-mark if a new canonical emerges.
-      const promoted = await client.query(
-        `update documents
-            set duplicate_of = null, updated_at = now()
-          where firm_id = $1 and duplicate_of = $2
-          returning id`,
-        [firmId, documentId]
-      );
       // Unwind confirmed transaction matches whose target is this doc.
       // Symmetric inverse of firmDb.js:2762-2779. See helper docstring
       // in parseDocumentsDb.js for the asymmetric-cleanup story.
@@ -532,13 +513,22 @@ export const deleteDocumentInDb = async ({ firmId = DEFAULT_FIRM_ID, documentId,
         'delete from documents where firm_id = $1 and id = $2',
         [firmId, documentId]
       );
+      // Repoint the rows that reference this doc as their canonical. The
+      // column has no FK by design (migration 011 — "logical reference, no
+      // FK"), so deleting a canonical without this leaves dangling pointers
+      // that confuse re-dedup passes and break "view canonical" UI
+      // affordances. One heir per (client, bytes) is promoted and the rest
+      // point at it, after the delete, so the unique canonical index
+      // (migration 164) never sees two canonicals of the same bytes.
+      const heirs = await __promoteDuplicateHeirsWithClient(client, { firmId, deletedIds: [documentId] });
       await client.query(
         `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
          values ($1, $2, 'system', 'document.deleted', 'document', $3, $4::jsonb)`,
         [firmId, doc.client_id, documentId, JSON.stringify({
           filename: doc.filename,
           document_type: doc.document_type,
-          promoted_duplicates: promoted.rows.map((r) => r.id),
+          promoted_duplicates: [...heirs.promoted, ...heirs.cleared],
+          repointed_duplicates: heirs.repointed,
           transactions_deleted: deletedTx.rows.length,
           transaction_matches_unwound: unwound.unwound
         })]

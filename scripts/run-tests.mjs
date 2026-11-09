@@ -102,13 +102,6 @@ const QUARANTINED_TESTS = new Map([
 // Markers are emitted by server/donna/testSupport/dmemFixtureSupport.js as
 // `[dmem] DMEM_EXPECTED_FAILURE <id> :: <fingerprint>` (or DMEM_REGISTERED_GAP).
 const EXPECTED_FAILURE_TESTS = new Map([
-  ['server/donna/dmemS01ReceiptIdentityPgLifecycle.test.js', {
-    wave: 'W2 (L1b index) — L1 flipped by W4 (FI-04)',
-    acceptance: 'ACC-C01, ACC-C02',
-    marks: [
-      'DMEM_EXPECTED_FAILURE S01/L1b :: S01/L1: the byte-hash index on documents (firm_id, client_id, checksum_sha256) is unique, so a concurrent first upload cannot create two rows',
-    ]
-  }],
   ['server/donna/dmemS05EffectiveDatePgLifecycle.test.js', {
     wave: 'W3 (W2 flipped the L1 schema layer 2026-09-04 — migration 142; the mint persisting the value is W3); L3/L4 flipped by W1 (the bounded cascade + its receipt)',
     acceptance: 'ACC-F09, ACC-C08',
@@ -159,10 +152,6 @@ const EXPECTED_FAILURE_TESTS = new Map([
       'DMEM_REGISTERED_GAP S12/L3-replay :: no replay entry point exists for an accounting decision on this tree; a decision retained without its pre-action envelope can only be classified historical_context_unavailable (LR-4), never replayed or reconstructed',
     ]
   }],
-  // FI reliability pass, 2026-09-12 (docs/finding-2026-09-12-fi-reliability-pass.md
-  // row 5): the totals-mismatch reply completion is UNRESOLVED on this tree. The
-  // fixture reproduces it on the real desktop assembly and is required to fail
-  // until the reasoning-and-accounting contract that closes it lands.
   ['server/donna/dmemCompatibilityRollbackOraclePgLifecycle.test.js', {
     wave: 'W3 (the projection) — the rollback legs span the W2 stores since 2026-09-04',
     acceptance: 'CR-01 (INV-23 rollback oracle)',

@@ -544,10 +544,14 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     ["result/callback", "mutation", "6ea09582913613802b71d19a8a815428dbf784148879142051a2268a18f2bfd1", 1, ["update:client_rules"]],
   ]),
   ...group("server/donna/db/documents.js", "Existing runtime SQL boundary in server/donna/db/documents.js.", [
+    // Re-pinned 2026-11-09 for the canonical upload fence (migration 164): both
+    // statements are unchanged; the enclosing body now repoints duplicate chains
+    // after the replacement delete through __promoteDuplicateHeirsWithClient. No
+    // memory target is added.
     // insert into documents ( id, firm_id, client_id, filename, document_type, status, uploaded_at, source, file_url, vendor_name, customer_name, document_date, due_date, total_amount, currency, tax_amount, reference_number, payment_status, extra …
-    ["syncDocumentsAndTransactionsInDb/callback", "dynamic_sql", "bebbbc2e03e7cdff102a5bc7dc110b54bffa16f8ae93aca81eaa41077139723d", 1, []],
+    ["syncDocumentsAndTransactionsInDb/callback", "dynamic_sql", "eb0223b85ed9a3476e405d2fabb64e6104a3dee686bd6288c5c30e622c6782cb", 1, []],
     // insert into transactions ( id, firm_id, client_id, document_id, transaction_date, description, money_in, money_out, currency, status, external_transaction_id, raw_description, cleaned_description, direction, category, account_code, confiden …
-    ["syncDocumentsAndTransactionsInDb/callback", "dynamic_sql", "aea806ea12cea5100d365a64a0c60223133e740a52a0ea16031350b7159c355b", 1, []],
+    ["syncDocumentsAndTransactionsInDb/callback", "dynamic_sql", "5264bb7a5fea7213e2405e6f0e1e7c50cdec821966b20baf8a909139d7cc6bb9", 1, []],
   ]),
   ...group("server/donna/db/hmrc.js", "Existing runtime SQL boundary in server/donna/db/hmrc.js.", [
     // select * from hmrc_connections where firm_id = $1 and client_id = $2 and status in ('active', 'expired', 'error') __DYNAMIC_SQL__ order by grant_created_at desc limit 1
