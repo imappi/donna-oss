@@ -2584,9 +2584,10 @@ export default function DonnaClientPortal({
         <header
           style={{
             display: 'flex',
+            flexWrap: 'wrap',
             alignItems: 'baseline',
             justifyContent: 'space-between',
-            gap: '1.5rem',
+            gap: '0.75rem 1.5rem',
             paddingBottom: '1rem',
             borderBottom: `1px solid ${D.rule}`,
             fontFamily: D.mono,
@@ -2621,7 +2622,7 @@ export default function DonnaClientPortal({
             <span aria-hidden="true">·</span>
             <span>{intl.formatMessage({ id: 'portal.documentsIntake' })}</span>
           </span>
-          <span style={{ display: 'inline-flex', alignItems: 'baseline', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '0.5rem 1.25rem' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'baseline', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '0.5rem 1.25rem', marginInlineStart: 'auto', minWidth: 0, maxWidth: '100%' }}>
           {/* Interface language — the owner's own choice, saved on this device;
               once made it wins over the portal's default (the owner's language,
               src/i18n/portalInterfaceLocale.js). Labels come from the registry:
