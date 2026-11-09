@@ -30,8 +30,8 @@ const assertReportReadsRan = (pool) => {
   assert.equal(pool.matching(/from ledger_journals/).length, 1, 'journal read must run');
   assert.equal(pool.matching(/from ledger_lines ll/).length, 1, 'ledger-line read must run');
   assert.equal(pool.matching(/from transactions/).length, 1, 'transaction read must run');
-  assert.equal(pool.matching(/from documents/).length, 2, 'statement-document and sales-recognition reads must run');
-  assert.equal(pool.matching(/document_type = 'sales_invoice'/).length, 1, 'FI-09 sales-recognition census read must run');
+  assert.equal(pool.matching(/from documents/).length, 2, 'statement-document and recognition-census reads must run');
+  assert.equal(pool.matching(/document_type in \('sales_invoice', 'supplier_bill'\)/).length, 1, 'FI-09 recognition census read (sales and purchase) must run');
   assert.equal(pool.matching(/from transaction_review_queue/).length, 1, 'review read must run');
   assert.equal(pool.matching(/from close_periods/).length, 1, 'close-period read must run');
 };

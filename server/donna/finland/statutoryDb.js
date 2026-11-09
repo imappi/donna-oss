@@ -40,7 +40,7 @@ import { rowToClientEvidenceRequestPayload } from '../db/asks.js';
 import { rowToLedgerLinePayload } from '../db/ledger.js';
 import { getLedgerPeriodPreviewFromDb } from '../db/close.js';
 import { deliverWhatsAppEvidenceAsksAfterSend } from '../db/channels.js';
-import { readSalesRecognitionGapWithClient, salesRecognitionStatement, SALES_RECOGNITION_BLOCKER } from '../salesRecognitionGap.js';
+import { readRecognitionGapWithClient, recognitionStatement } from '../salesRecognitionGap.js';
 
 
 const dayBeforeIso = (iso) => {
@@ -442,13 +442,16 @@ export const getFinlandAlvReturnFromDb = async ({
       lines: linesResult.rows.map(rowToLedgerLinePayload)
     });
     // FI-09: the boxes read the posted ledger only. Uploaded sales documents
-    // the ledger does not recognise in this period are named, totalled and
-    // block the return — never a silently understated output tax.
-    const unrecognizedSales = await readSalesRecognitionGapWithClient({ client, firmId, clientId, period: resolvedPeriod });
-    const review = unrecognizedSales.items.length
-      ? { ...computed.review, status: 'needs_review', blockers: [...computed.review.blockers, SALES_RECOGNITION_BLOCKER],
-          unrecognizedSales: { statement: salesRecognitionStatement(unrecognizedSales), ...unrecognizedSales } }
-      : computed.review;
+    // and uploaded supplier documents the ledger does not recognise in this
+    // period are named, totalled and block the return, each side under its own
+    // blocker — never a silently understated output or input tax.
+    const gap = await readRecognitionGapWithClient({ client, firmId, clientId, period: resolvedPeriod });
+    let review = computed.review;
+    for (const [key, side] of [['unrecognizedSales', gap.sales], ['unrecognizedPurchases', gap.purchase]]) {
+      if (!side.items.length) continue;
+      review = { ...review, status: 'needs_review', blockers: [...review.blockers, side.blocker],
+        [key]: { statement: recognitionStatement(side), ...side } };
+    }
     return {
       ...computed,
       review,
@@ -2218,11 +2221,13 @@ export const startFinlandAlvReturnFilingInDb = async ({
     const uncoded = computed.review?.uncodedRevenueLines?.length || 0;
     const incompatible = computed.review?.incompatibleLines?.length || 0;
     const unrecognized = computed.review?.unrecognizedSales?.items?.length || 0;
+    const unrecognizedPurchases = computed.review?.unrecognizedPurchases?.items?.length || 0;
     const question = [
       `ALV-ilmoitus (${computed.period.key}) ei ole vielä valmis lähetettäväksi.`,
       uncoded ? `${uncoded} tulotapahtumaa ilman ALV-käsittelyä — kerro, mitä myyntiä nämä ovat.` : '',
       incompatible ? `${incompatible} kirjausta, joiden ALV-koodi ei sovi tilille — tarkistan ne kanssasi.` : '',
       unrecognized ? `${unrecognized} ladattua myyntilaskua tai hyvityslaskua ei ole vielä kirjattu tämän kauden myyntiin, joten niiden myynti ja ALV puuttuvat laskelmasta.` : '',
+      unrecognizedPurchases ? `${unrecognizedPurchases} ladattua ostolaskua tai ostohyvityslaskua ei ole vielä kirjattu tämän kauden ostoihin, joten niiden kulut ja vähennettävä ALV puuttuvat laskelmasta.` : '',
       driftBlockers.length
         ? 'Kirjanpidossa on toimintaa, jonka ALV-käsittely tarkistetaan ennen lähetystä (mm. rakennusalan käännetty ALV) — selvitän sen kanssasi.'
         : ''

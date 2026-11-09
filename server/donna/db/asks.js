@@ -30,9 +30,12 @@ import { distillAndStageFirmFactCandidates } from '../firmFacts.js';
 import { onAskBatchSent, onClientReplyReceived, onEvidenceRequestCreated } from '../loopsShadowProducers.js';
 import { validateAskAddressee } from '../askAudience.js';
 import { clientFlagActs, clientFlagObserves, readClientConfigSnapshot } from '../clientConfig.js';
-import { readInternalPilotAccessWithClient, readInternalPilotSendContainmentWithClient } from '../internalPilotAccess.js';
+import { readInternalPilotAccessWithClient } from '../internalPilotAccess.js';
 import { loadEligibleCreditNotes } from '../creditNoteApplications.js';
-import { checkEntityReadinessAdmissionWithClient, EntityReadinessAdmissionError, readRetainedProcessingScopeInDb } from '../runtimeReadinessAdmission.js';
+import { recordEntityReadinessBlockedWithClient, EntityReadinessAdmissionError, readRetainedProcessingScopeInDb } from '../runtimeReadinessAdmission.js';
+import {
+  deliverOwnerFollowUpWithClient, evaluateOwnerSendGateWithClient, gateOwnerSendWithClient, INTERNAL_PILOT_SEND_DISABLED
+} from '../ownerAskDelivery.js';
 // RT-16 — the ONE coding state (transactions.coding_state, migration 138):
 // the machine, the legacy-input mapping, the DTO projection, the writer.
 import { applyCodingTransition, applyCodingTransitionIfAllowed, codingStateFromReviewState, isDecidedCodingState, normalizeTransactionReviewState } from '../codingState.js';
@@ -57,6 +60,8 @@ import { linkReplyEvidenceMatchesInDb, loadMatchedDocumentsForTransactions } fro
 import { postLedgerTransactionInDb } from './ledger.js';
 import { getXeroAccountsForClient } from './xero.js';
 import { deliverEmailEvidenceAsksAfterSend, deliverSmsEvidenceAsksAfterSend, deliverTelegramEvidenceAsksAfterSend, deliverWhatsAppEvidenceAsksAfterSend } from './channels.js';
+import { preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
+import { amountText, dayText } from '../salesRecognitionGap.js';
 import { getFirmSnapshotFromDb } from './snapshot.js';
 
 export const rowToClientEvidenceRequestPayload = (row = {}) => ({
@@ -267,7 +272,11 @@ const createClientEvidenceRequestWithClient = async ({
   // G2 PR-14 — optional collector the caller passes to learn whether this call
   // MINTED the ask or collapsed onto a live one. Filled in beside the upsert below;
   // deliberately not a field on the returned request payload (see the note there).
-  mintOutcome = null
+  mintOutcome = null,
+  // The owner's language for the fallback question below, when the caller
+  // holds the client profile; absent ⇒ read once, only when that fallback
+  // is used (a caller-written question is stored as given).
+  language = null
 } = {}) => {
   const cleanClientId = String(clientId || '').trim();
   const cleanTransactionId = String(transactionId || '').trim();
@@ -399,13 +408,19 @@ const createClientEvidenceRequestWithClient = async ({
   }
 
   const now = new Date().toISOString();
-  const documentLabel = document
-    ? [document.vendor_name || document.customer_name || '', document.filename || ''].filter(Boolean).join(' — ')
-    : '';
-  const finalQuestion = cleanQuestion ||
-    (document
+  const fallbackLanguage = cleanQuestion ? null : (language || preferredOwnerTemplateLanguage(
+    (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, cleanClientId])).rows?.[0]?.profile));
+  const documentParts = document ? [document.vendor_name || document.customer_name || '', document.filename || ''].filter(Boolean) : [];
+  const documentLabel = documentParts.join(' — ');
+  // Finnish names the document and the bank text after a colon or in
+  // brackets, so nothing from the evidence is inflected.
+  const finalQuestion = cleanQuestion || (fallbackLanguage === 'fi'
+    ? (document
+      ? `Miten tämä tosite maksettiin${documentParts.length ? ` (${documentParts.join(', ')})` : ''}? Käteisellä, omalla kortillasi vai tililtä, jonka tiliote meidän pitäisi saada?`
+      : `${transaction?.description ? `Tapahtuma: ${transaction.description}. Kerro, mihin yrityksesi tarpeeseen se liittyi` : 'Kerro, mihin yrityksesi tarpeeseen tämä tapahtuma liittyi'}, ja lähetä siitä kuitti tai muu tosite.`)
+    : (document
       ? `How was ${documentLabel || 'this document'} paid — cash, a personal card, or an account we should have a statement for?`
-      : `Please confirm the business purpose and upload supporting evidence for ${transaction?.description || 'this transaction'}.`);
+      : `Please confirm the business purpose and upload supporting evidence for ${transaction?.description || 'this transaction'}.`));
   // ── Ask identity (108) — collapse duplicate UPLOADS onto one canonical case ──
   //
   // Every upload stays its own immutable document row. What changes is what the
@@ -954,8 +969,14 @@ export const __createHeldMatchPortalAsksWithClient = async ({client, firmId, cli
         .sort((a,b) => a.document_id.localeCompare(b.document_id));
       if (!files.length) throw Object.assign(new Error('Held match has no identifiable document.'), {code:'HELD_MATCH_EVIDENCE_NOT_READY'});
       const amount = Math.abs(Number(tx.money_out) || Number(tx.money_in)).toFixed(2);
+      const language = preferredOwnerTemplateLanguage((await client.query(
+        'select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows[0]?.profile);
       // One held document is a confirmation, not a choice between documents.
-      const confirmation = files.length === 1
+      const confirmation = language === 'fi'
+        ? (files.length === 1
+          ? 'Vahvistathan, että tämä maksu koskee tätä tositetta, ja kerro, jos olette sopineet muista muutoksista. Tiedostoa ei tarvitse lähettää uudelleen.'
+          : 'Kerro, mitä näistä tositteista tämä maksu koskee, ja kerro, jos olette sopineet muista muutoksista. Tiedostoja ei tarvitse lähettää uudelleen.')
+        : files.length === 1
         ? 'Please confirm that this payment settles that document, and tell us about any other agreed adjustments. You do not need to upload it again.'
         : 'Please confirm which of these documents this payment settles, and tell us about any other agreed adjustments. You do not need to upload these files again.';
       // HELMIKUU S8 (Kari, 2026-09-24): a held statement row keeps its own
@@ -967,13 +988,24 @@ export const __createHeldMatchPortalAsksWithClient = async ({client, firmId, cli
       const siblings = group.candidates.length === 1 && row.matched_line_id && heldPlanCompletionActs(configSnapshot)
         ? await readHeldStatementSiblingsWithClient({client, firmId, clientId, documentId:row.document_id, transactionId:tx.id}) : [];
       const rowLabel = sibling => `row ${sibling.line_no ?? '?'}${sibling.line_description ? ` “${sibling.line_description}”` : ''}`;
-      const siblingText = siblings.length
+      const finnishRowLabel = sibling => `rivi ${sibling.line_no ?? '?'}${sibling.line_description ? ` ”${sibling.line_description}”` : ''}`;
+      const siblingText = siblings.length && language === 'fi'
+        ? ` Tämä maksu on tiliotteen ${finnishRowLabel({line_no:row.matched_line_no, line_description:row.matched_line_description})}. `
+          + `${siblings.length === 1 ? 'Myös toinen saman tiliotteen rivi odottaa' : `Myös ${siblings.length} muuta saman tiliotteen riviä odottaa`} vahvistustasi: `
+          + `${siblings.map(sibling => `${finnishRowLabel(sibling)}, ${amountText(sibling.amount, sibling.currency, 'fi')} ${sibling.direction === 'paid' ? 'maksettu' : 'saatu'} ${dayText(sibling.date, 'fi')}`).join('; ')}. `
+          + `Voit vahvistaa kaikki jäljellä olevat rivit kerralla vastauksessasi tai vastata rivi kerrallaan.`
+        : siblings.length
         ? ` This payment is ${rowLabel({line_no:row.matched_line_no, line_description:row.matched_line_description})} of that statement. `
           + `${siblings.length === 1 ? 'One other row of the same statement is' : `${siblings.length} other rows of the same statement are`} also waiting for your confirmation: `
           + `${siblings.map(sibling => `${rowLabel(sibling)}, ${sibling.currency} ${sibling.amount} ${sibling.direction} on ${sibling.date}`).join('; ')}. `
           + `You can confirm all the remaining rows at once in your answer, or keep answering row by row.`
         : '';
-      const question = `About ${tx.currency || ''} ${amount} ${Number(tx.money_out) ? 'paid' : 'received'} on ${toIsoDay(tx.transaction_date)} — ${tx.description || ''}: we have ${files.map(doc => `“${doc.filename}”`).join(', ')} on file. ${confirmation}${siblingText}`;
+      // Finnish: "Tililtäsi maksettiin 1600,00 EUR 12.2.2025 (KUVAUS). Meillä on
+      // tästä jo tiedosto ”lasku.pdf”. …" The bank text and filenames stay verbatim.
+      const question = language === 'fi'
+        ? `${Number(tx.money_out) ? 'Tililtäsi maksettiin' : 'Tilillesi tuli'} ${amountText(amount, tx.currency, 'fi')} ${dayText(toIsoDay(tx.transaction_date), 'fi')}${tx.description ? ` (${tx.description})` : ''}. `
+          + `Meillä on tästä jo ${files.length === 1 ? 'tiedosto' : 'tiedostot'} ${files.map(doc => `”${doc.filename}”`).join(', ')}. ${confirmation}${siblingText}`
+        : `About ${tx.currency || ''} ${amount} ${Number(tx.money_out) ? 'paid' : 'received'} on ${toIsoDay(tx.transaction_date)} — ${tx.description || ''}: we have ${files.map(doc => `“${doc.filename}”`).join(', ')} on file. ${confirmation}${siblingText}`;
       const requestContext = {held_match_groups:heldMatchGroupReceipts([group]), citable_local_evidence:files,
         authority_basis:'persisted_match_requires_owner_confirmation', channel:'portal',
         // A refreshed draft whose other rows all settled drops the old list
@@ -1378,6 +1410,7 @@ const recodeTransactionAfterClientReplyWithClient = async ({
   const supportNote = String(suggestionPayload.support_note || '').trim()
     || (reply ? `Client reply: ${reply.slice(0, 200)}` : '');
 
+  let nativeFollowUp = null;
   await client.query('begin');
   try {
     const currentTransaction = (await client.query(
@@ -1603,7 +1636,7 @@ const recodeTransactionAfterClientReplyWithClient = async ({
       );
     }
 
-    await consumeNativeUnresolvedCodingWithClient({ client, firmId, clientId, transactionId, policy: currentPolicy,
+    nativeFollowUp = await consumeNativeUnresolvedCodingWithClient({ client, firmId, clientId, transactionId, policy: currentPolicy,
       suggestion: suggestionPayload, actorId, answeredRequestId: evidenceRequest.id });
     await client.query(
       `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
@@ -1707,6 +1740,10 @@ const recodeTransactionAfterClientReplyWithClient = async ({
   return {
     applied: applies,
     suggestion: suggestionPayload,
+    // The follow-up ask the answer left on the owner (a native unresolved
+    // coding mints one); the owner-reply clock delivers it through the gated
+    // fan-out (ownerReplyRecovery.js).
+    ...(nativeFollowUp?.id ? { follow_up_request_id: nativeFollowUp.id } : {}),
     // W1 (INV-04): the committed learning — candidates staged, never facts minted.
     learning: {
       rules_minted: [],
@@ -2478,6 +2515,23 @@ export const acceptClientEvidenceRequestInDb = async ({
   });
 };
 
+// The reject writer's own fallback follow-up, used only when the firm gave no
+// follow-up question and the ask carries none: in the owner's language
+// (preferredOwnerTemplateLanguage — the one resolver), English unchanged.
+export const REJECT_FOLLOW_UP_FALLBACK_QUESTION = Object.freeze({
+  en: 'Please upload supporting evidence.',
+  fi: 'Lähetäthän vielä tähän liittyvän tositteen.'
+});
+
+// The firm rejected what the owner sent: the ask goes back to 'open' with the
+// follow-up question, in one transaction with the queue/line/audit writes. The
+// follow-up then reaches the owner through the ONE gated fan-out
+// (deliverOwnerFollowUpWithClient, the re-ask sweep's precedent): only a
+// deliverer that genuinely sent moves send_count / last_sent_at; refused ⇒
+// nothing sent or counted and the ask stays open on the owner; undelivered ⇒
+// it stays with an owner who can see it in the portal, or is escalated to the
+// firm ('owner_unreachable') when nobody can. This writer never stamps a send
+// itself — that was a sent state with no delivery behind it (INV-14, 147).
 export const rejectClientEvidenceRequestInDb = async ({
   firmId = DEFAULT_FIRM_ID,
   evidenceRequestId,
@@ -2497,6 +2551,7 @@ export const rejectClientEvidenceRequestInDb = async ({
   }
 
   return withFirmDbClient(async (client) => {
+    let existingRow = null;
     await client.query('begin');
     try {
       const existing = await client.query(
@@ -2513,6 +2568,7 @@ export const rejectClientEvidenceRequestInDb = async ({
         error.code = 'EVIDENCE_REQUEST_NOT_FOUND';
         throw error;
       }
+      existingRow = row;
 
       const now = new Date().toISOString();
       const previousResponse = row.response_payload || {};
@@ -2520,15 +2576,19 @@ export const rejectClientEvidenceRequestInDb = async ({
         ...(Array.isArray(previousResponse.document_ids) ? previousResponse.document_ids : []),
         ...(Array.isArray(previousResponse.documents) ? previousResponse.documents.map((document) => document?.id || document) : [])
       ].filter(Boolean)));
-      const nextQuestion = cleanFollowUpQuestion || row.question || row.request_payload?.evidence_request?.question || 'Please upload supporting evidence.';
-      const nextSendCount = Number(row.send_count || 0) + 1;
+      let nextQuestion = cleanFollowUpQuestion || row.question || row.request_payload?.evidence_request?.question || '';
+      if (!nextQuestion) {
+        const profile = (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, row.client_id])).rows[0]?.profile;
+        nextQuestion = REJECT_FOLLOW_UP_FALLBACK_QUESTION[preferredOwnerTemplateLanguage(profile)]
+          || REJECT_FOLLOW_UP_FALLBACK_QUESTION.en;
+      }
+      // The envelope keeps its own (genuine) send stamps; the next ones are the
+      // deliverer's to write.
       const rejectedEvidencePayload = {
         ...(row.request_payload?.evidence_request || {}),
         id: row.id,
         status: 'open',
         question: nextQuestion,
-        sent_at: new Date(now).getTime(),
-        send_count: nextSendCount,
         rejected_at: new Date(now).getTime()
       };
       const nextRequestPayload = {
@@ -2552,9 +2612,7 @@ export const rejectClientEvidenceRequestInDb = async ({
              question = $3,
              request_payload = request_payload || $4::jsonb,
              response_payload = $5::jsonb,
-             last_sent_at = $6::timestamptz,
-             send_count = $7,
-             due_at = coalesce($8::timestamptz, due_at),
+             due_at = coalesce($6::timestamptz, due_at),
              resolved_at = null,
              resolved_by = null,
              updated_at = now()
@@ -2566,12 +2624,9 @@ export const rejectClientEvidenceRequestInDb = async ({
           nextQuestion,
           JSON.stringify(nextRequestPayload),
           JSON.stringify(nextResponsePayload),
-          now,
-          nextSendCount,
           dueAt ? new Date(dueAt).toISOString() : null
         ]
       );
-      const request = rowToClientEvidenceRequestPayload(updated.rows[0]);
 
       if (row.review_item_id) {
         await client.query(
@@ -2640,15 +2695,28 @@ export const rejectClientEvidenceRequestInDb = async ({
       );
 
       await client.query('commit');
-      const snapshot = await getFirmSnapshotFromDb({ firmId });
-      return {
-        evidence_request: request,
-        snapshot
-      };
     } catch (error) {
       await client.query('rollback');
       throw error;
     }
+
+    // Post-commit: the follow-up is a network side effect. A client-audience
+    // ask only — a seat/agent question has no owner delivery.
+    const followUpDelivery = ((existingRow.audience || 'client') === 'client')
+      ? await deliverOwnerFollowUpWithClient({
+        client, firmId, clientId: existingRow.client_id, evidenceRequestIds: [cleanRequestId], surface: 'evidence_rejection'
+      }).catch((error) => ({ error: error?.message || 'follow_up_failed' }))
+      : null;
+    const current = await client.query(
+      'select * from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
+      [firmId, cleanRequestId]
+    );
+    const snapshot = await getFirmSnapshotFromDb({ firmId });
+    return {
+      evidence_request: rowToClientEvidenceRequestPayload(current.rows[0]),
+      follow_up_delivery: followUpDelivery,
+      snapshot
+    };
   });
 };
 
@@ -3069,6 +3137,10 @@ export const amendClientEvidenceRequestInDb = async ({
 // this is replay protection, not cadence policy (askReaskCadence owns how often
 // an unanswered owner is nagged).
 //
+// The client-level gate is the fan-out's own (ownerAskDelivery.js): a
+// send-contained or readiness-refused client gets nothing from a resend, and
+// the operator sees `skipped_reason: 'send_refused'` with the refusal code.
+//
 // The audit is the gap this closes. The fan-out writes the
 // message_delivery_ledger, never audit_events, and the only resend-shaped
 // audit in the tree is the SYSTEM cadence's 'evidence_request.nudged'. An
@@ -3152,8 +3224,23 @@ export const resendClientEvidenceRequestInDb = async ({
     const priorSendCount = Number(row.send_count || 0);
     const deliver = deliverImpl || deliverEvidenceAsksOnAllChannels;
     const channelFanout = await deliver({
-      client, firmId, clientId: row.client_id, evidenceRequestIds: [row.id]
+      client, firmId, clientId: row.client_id, evidenceRequestIds: [row.id], surface: 'operator_resend'
     }).catch((error) => ({ error: error?.message || 'fanout_failed' }));
+    // The fan-out's client gate (send containment / readiness admission)
+    // refused: nothing left, nothing counted, and the refusal is already
+    // receipted ('evidence_request.send_refused'). Reported to the operator as
+    // the refusal it is, never as a resend.
+    if (channelFanout?.refused) {
+      return {
+        resent: false,
+        delivered: false,
+        evidence_request_id: row.id,
+        status: row.status,
+        send_count: priorSendCount,
+        skipped_reason: 'send_refused',
+        send_refused: channelFanout.refused
+      };
+    }
 
     const after = await client.query(
       'select send_count, last_sent_at from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
@@ -4328,23 +4415,33 @@ export const __draftClientAskBatchWithClient = async ({
   // not intelligence-substituting. Two honest sentences: "matched and posted" for
   // resolve-on-match, "settled ourselves" for an auto_explain retraction (D4).
   if (retractedRequests.length) {
+    // Owner-facing, so in the language the drafted message above it was
+    // written in (the drafter's receipt; the one resolver when it reports none).
+    const sectionLanguage = draftLanguage || preferredOwnerTemplateLanguage(clientProfile);
+    const finnish = sectionLanguage === 'fi';
     const renderLine = (r) => {
-      const amount = r.amount ? `${r.currency ? `${r.currency} ` : ''}${r.amount.toFixed(2)}` : '';
-      const parts = [r.date, amount, r.description].filter(Boolean);
-      return `- ${parts.join(' — ')}`;
+      const amount = r.amount
+        ? (finnish ? amountText(r.amount, r.currency, 'fi') : `${r.currency ? `${r.currency} ` : ''}${r.amount.toFixed(2)}`)
+        : '';
+      const parts = [finnish ? dayText(r.date, 'fi') : r.date, amount, r.description].filter(Boolean);
+      return `- ${parts.join(finnish ? ', ' : ' — ')}`;
     };
     const matched = retractedRequests.filter((r) => r.reason !== 'auto_explained');
     const explained = retractedRequests.filter((r) => r.reason === 'auto_explained');
-    const section = ['', '**Already handled — you can ignore these**'];
+    const section = ['', finnish ? '**Nämä on jo hoidettu, voit jättää ne huomiotta**' : '**Already handled — you can ignore these**'];
     if (matched.length) {
       section.push(
-        "We've since found the supporting material for the following, so there's no need to send that material again:",
+        finnish
+          ? 'Löysimme sittemmin tositteet seuraaviin, joten niitä ei tarvitse enää lähettää:'
+          : "We've since found the supporting material for the following, so there's no need to send that material again:",
         ...matched.map(renderLine)
       );
     }
     if (explained.length) {
       section.push(
-        "We've since settled the following ourselves — small, recurring and clearly business, so no receipt or explanation is needed:",
+        finnish
+          ? 'Kirjasimme seuraavat itse: ne ovat pieniä, toistuvia ja selvästi liiketoimintaan liittyviä, joten kuittia tai selitystä ei tarvita:'
+          : "We've since settled the following ourselves — small, recurring and clearly business, so no receipt or explanation is needed:",
         ...explained.map(renderLine)
       );
     }
@@ -4561,7 +4658,14 @@ export const getAskBatchDraftsForFirmFromDb = async ({ firmId = DEFAULT_FIRM_ID 
 // per-channel results so a caller's receipt can say what actually left.
 // `deps` is passed through to every deliverer unchanged (their own transport
 // seam, e.g. deps.deliverOwnerMessage) so tests drive the real fan-out.
-export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], deps } = {}) => {
+//
+// The client-level gate (ownerAskDelivery.js: pilot send containment +
+// entity-readiness admission at 'ask_send') runs here, before any deliverer,
+// so EVERY caller of the fan-out is gated by the same decision. Refused ⇒ no
+// deliverer runs, nothing is counted, the refusal is receipted
+// ('evidence_request.send_refused', naming `surface`) and the result carries
+// `refused: <code>` so the caller can keep the ask on the owner.
+export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], surface = 'ask_send', deps } = {}) => {
   const results = {};
   // 122 — the OWNER-channel guard, enforced once for all four channels: only
   // client-audience asks may reach WhatsApp/SMS/Telegram/email. A seat/agent
@@ -4582,6 +4686,12 @@ export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientI
     }
   }
   const evidenceRequestIdsForChannels = clientAudienceIds;
+  if (evidenceRequestIdsForChannels.length) {
+    const gate = await gateOwnerSendWithClient({
+      client, firmId, clientId, surface, evidenceRequestIds: evidenceRequestIdsForChannels, deps: deps || {}
+    });
+    if (!gate.allowed) return { ...results, refused: gate.code };
+  }
   const attempt = async (channel, deliver) => {
     try {
       return await deliver();
@@ -5032,21 +5142,21 @@ export const __sendClientAskBatchWithClient = async ({
     // Check the persisted batch's client under its send lock, covering both
     // the scheduled producer and manual Send. A release only removes this
     // hold; every gate below and every channel's own gate still apply.
-    if ((await readInternalPilotSendContainmentWithClient(client, { firmId, clientId: batchRow.client_id })).contained) {
+    // The ONE owner-send gate (ownerAskDelivery.js), shared with the fan-out,
+    // the re-ask and evidence-topic sweeps and the operator resend.
+    const sendGate = await evaluateOwnerSendGateWithClient({ client, firmId, clientId: batchRow.client_id, lock: true });
+    if (sendGate.error) throw sendGate.error;
+    if (sendGate.code === INTERNAL_PILOT_SEND_DISABLED) {
       throw Object.assign(new Error('Internal pilot questions remain drafts until an operator releases question sending for this client.'), {
-        statusCode: 409, code: 'INTERNAL_PILOT_SEND_DISABLED'
+        statusCode: 409, code: INTERNAL_PILOT_SEND_DISABLED
       });
     }
-
-    const admission = await checkEntityReadinessAdmissionWithClient({
-      client,
-      firmId,
-      clientId: batchRow.client_id,
-      boundary: 'ask_send',
-      resourceType: 'client_ask_batch',
-      resourceId: cleanBatchId
-    });
-    if (!admission.allowed) {
+    if (sendGate.admission) {
+      const admission = sendGate.admission;
+      await recordEntityReadinessBlockedWithClient({
+        client, firmId, clientId: batchRow.client_id, boundary: 'ask_send', decision: admission,
+        resourceType: 'client_ask_batch', resourceId: cleanBatchId
+      });
       await client.query('commit');
       const error = new EntityReadinessAdmissionError(admission);
       error.transactionCommitted = true;

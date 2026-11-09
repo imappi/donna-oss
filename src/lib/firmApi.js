@@ -2662,3 +2662,26 @@ export const cloudPilotOperation = async ({ firmId,clientId,action='review',revi
 };
 
 export const fetchFinnishProfileIntake = async ({ clientId, signal } = {}) => parseJsonResponse(await firmFetch(`/api/donna/firms/clients/${encodeURIComponent(clientId)}/profile`, { signal, headers: { Accept: 'application/json' } }));
+
+// Standing delegated authority for material reconciliation matches
+// (server/donna/reconciliationAuthorityRoutes.js). Every write needs a firm
+// authority; the server derives the scope from the held example match.
+const RECON_AUTHORITY_BASE = '/api/donna/firms/reconciliation-authority-grants';
+const postReconciliationAuthority = async (action, body) => parseJsonResponse(await firmFetch(`${RECON_AUTHORITY_BASE}/${action}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+  body: JSON.stringify(body)
+}));
+export const fetchReconciliationAuthorityGrants = async ({ clientId, signal } = {}) => parseJsonResponse(await firmFetch(
+  `${RECON_AUTHORITY_BASE}?client_id=${encodeURIComponent(clientId)}`, { signal, headers: { Accept: 'application/json' } }));
+export const previewReconciliationAuthorityGrant = async ({ clientId, matchId, signal } = {}) => parseJsonResponse(await firmFetch(
+  `${RECON_AUTHORITY_BASE}/preview?client_id=${encodeURIComponent(clientId)}&match_id=${encodeURIComponent(matchId)}`,
+  { signal, headers: { Accept: 'application/json' } }));
+export const mintReconciliationAuthorityGrant = ({ clientId, matchId, amountCeiling, currency, reviewAfter, acknowledged, reason }) =>
+  postReconciliationAuthority('mint', { client_id: clientId, match_id: matchId, amount_ceiling: amountCeiling, currency, review_after: reviewAfter, acknowledged, reason });
+export const approveReconciliationAuthorityGrant = ({ clientId, grantId, reviewAfter, reason }) =>
+  postReconciliationAuthority('approve', { client_id: clientId, grant_id: grantId, review_after: reviewAfter, reason });
+export const suspendReconciliationAuthorityGrant = ({ clientId, grantId, reason }) =>
+  postReconciliationAuthority('suspend', { client_id: clientId, grant_id: grantId, reason });
+export const revokeReconciliationAuthorityGrant = ({ clientId, grantId, reason }) =>
+  postReconciliationAuthority('revoke', { client_id: clientId, grant_id: grantId, reason });

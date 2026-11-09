@@ -213,3 +213,27 @@ test('FI-09: excluded uploaded sales documents are listed by name, amount and st
   assert.match(view.hint, /Myyntilasku 1002, Lumikki Oy \(12\.2\.2025\): 720,00 € \+ ALV 183,60 € — maksua ei ole tiliotteilla, kysytty\./);
   assert.match(view.hint, /Hyvityslasku \(päiväys puuttuu\): −50,00 € \(ALV-erittely puuttuu\) — maksu on kirjattu toiselle kaudelle\./);
 });
+
+test('FI-09: excluded uploaded supplier documents have their own blocker, listed apart from the sales ones with expense and input ALV', () => {
+  const vm = buildAlvReturnViewModel(envelope({
+    review: {
+      status: 'needs_review',
+      blockers: ['unrecognized_sales_documents', 'unrecognized_purchase_documents'],
+      unrecognizedSales: { items: [
+        { document_id: 'd1', kind: 'invoice', invoice_numbers: ['1002'], customer: 'Lumikki Oy', counterparty: 'Lumikki Oy', document_date: '2025-02-12', net: 720, tax: 183.6, gross: 903.6, rests: 'no_settlement', on_nobody: false }
+      ] },
+      unrecognizedPurchases: { items: [
+        { document_id: 'b1', side: 'purchase', kind: 'invoice', invoice_numbers: ['4711'], vendor: 'Tukku Oy', counterparty: 'Tukku Oy', document_date: '2025-02-05', net: 200, tax: 48, gross: 248, rests: 'no_settlement', on_nobody: false },
+        { document_id: 'b2', side: 'purchase', kind: 'credit_note', invoice_numbers: ['HL-12'], vendor: 'Tukku Oy', counterparty: 'Tukku Oy', document_date: '2025-02-09', net: -50, tax: -12, gross: -62, rests: 'settlement_proposed', on_nobody: true }
+      ] }
+    }
+  }));
+  const [sales, purchases] = vm.blockers;
+  assert.equal(sales.label, 'Ladattuja myyntilaskuja puuttuu kirjanpidosta');
+  assert.doesNotMatch(sales.hint, /Tukku/);
+  assert.equal(purchases.label, 'Ladattuja ostolaskuja puuttuu kirjanpidosta');
+  assert.match(purchases.hint, /^Nämä ladatut ostolaskut .* kulut ja vähennettävä ALV puuttuvat/);
+  assert.match(purchases.hint, /Ostolasku 4711, Tukku Oy \(5\.2\.2025\): kulu 200,00 € \+ ALV 48,00 € — maksua ei ole tiliotteilla, kysytty\./);
+  assert.match(purchases.hint, /Ostohyvityslasku HL-12, Tukku Oy \(9\.2\.2025\): kulu −50,00 € \+ ALV −12,00 € — maksu on ehdotettu, ei vahvistettu\./);
+  assert.doesNotMatch(purchases.hint, /Lumikki/);
+});

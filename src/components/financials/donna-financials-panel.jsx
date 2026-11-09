@@ -3359,6 +3359,11 @@ function ReconcilePanel({
           await onUpdateReconciliationMatch(txMatch.id, { status: 'rejected' });
         }
       : null;
+    // Line-level confirm of THIS match (the server stamps a one-time authority
+    // receipt on a held material match; it never mints a standing grant).
+    const confirmMatch = (txMatch?.id && onUpdateReconciliationMatch)
+      ? () => onUpdateReconciliationMatch(txMatch.id, { status: 'confirmed' })
+      : null;
     onArtifact({
       type: 'transaction',
       title: sourceTx?.description || row.desc || message('mounted.financial.transaction'),
@@ -3369,6 +3374,7 @@ function ReconcilePanel({
         onOpenMatchedDocument: txMatchedDoc ? () => openDocument(txMatchedDoc) : null,
         onOpenDocument: openDocument,
         onRejectMatch: rejectMatch,
+        onConfirmMatch: confirmMatch,
         clientId,
         onSnapshotApplied: onDatabaseSnapshot,
         onUpdate: onUpdateTransaction,

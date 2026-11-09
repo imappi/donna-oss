@@ -5,6 +5,12 @@ import { readClientConfigSnapshot, clientFlagActs } from './clientConfig.js';
 import { exceedsMaterialityCeiling } from './dispositionMateriality.js';
 import { readJevCase, jevCasePrompt } from './jevPreview.js';
 
+// The fixed whose-cash question (the cash-funding guard's, here and in the
+// document disposition parser). It is the stored, English receipt of the fact
+// being asked; the owner-facing question is worded in the owner's language
+// where the ask is built (documentDispositionLlm.buildNeedsHumanOwnerQuestion).
+export const CASH_FUNDING_OWNER_QUESTION = 'The receipt shows a cash payment. Was it paid from company cash or from your personal funds?';
+
 export async function jevDispositionEnabled(client, firmId, clientId, override) {
   if (typeof override === 'boolean') return override;
   const snapshot = await readClientConfigSnapshot(client, { firmId, clientId, strict: true });
@@ -44,10 +50,13 @@ export function jevDispositionPlans({ kind, direction = 'money_out', amount, mat
     }
     if (direction !== 'money_in') add('ask_cash_funding', 'The document establishes cash payment, but does not establish whether company cash or the owner personally funded it. Ask only whose cash paid it; acknowledge the held receipt and known payment method.',
       {disposition:'needs_human',settlement_channel:'cash',funding_source:'unknown',
-        owner_question:'The receipt shows a cash payment. Was it paid from company cash or from your personal funds?',
+        owner_question:CASH_FUNDING_OWNER_QUESTION,
         owner_question_evidence_type:'payment_method'});
     if (!ownerReply) add('ask_payment_method', 'The document is understood, but how it was paid is an absent owner-only fact. Ask the owner for the payment method; do not ask if local evidence or their reply already supplies it.',
       { disposition: 'chase_evidence', unmatchable_reason: 'evidence_needed' });
+    // The asking lane accepts "still unpaid" (salesRecognitionGap's stillOpen).
+    if (ownerReply?.stillOpen) add('acknowledge_still_open', `The owner answer says this document is still unpaid: ${ownerReply.stillOpen.meaning}. The question invited exactly that answer, in any wording or language, so it is clear and complete; nothing is settled and the question stays with the owner to ask again later. A partial payment, a dispute or a payment the owner cannot place is not this.`,
+      { disposition: 'obligation_open', expense_kind: 'open_obligation', line_identified: true });
     if (!ownerReply || ownerReply.answeredEvidenceType === 'payment_method') add('ask_missing_statement', 'The evidence identifies settlement through an account whose bank statement is missing. Ask for that statement; this is a specific missing source, not uncertainty about interpreting available material.',
       { disposition: 'chase_evidence', settlement_channel: 'uncovered_account', unmatchable_reason: 'evidence_needed' });
   }
@@ -88,5 +97,6 @@ const dispositionExplanation = selected => ({
   resolve_statutory: 'Identified as a statutory payment. Posting still requires the matched notice or identified obligation.',
   resolve_immaterial: 'The supplied evidence explains this ordinary business item.',
   resolve_cash: 'The supplied evidence establishes cash settlement.',
+  acknowledge_still_open: 'The owner says this document is still unpaid; it stays open with them.',
   resolve_personal_card: 'The supplied evidence establishes settlement using the owner’s personal card.'
 }[selected] || 'Further accounting work is required.');
