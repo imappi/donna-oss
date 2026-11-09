@@ -7,6 +7,7 @@ import {
 import { SALES_INVOICE_RECEIVABLE_ACCOUNT, SUPPLIER_BILL_PAYABLES_ACCOUNT, ledgerAccountTypeFor } from '../ledger.js';
 import { documentSourceComponents } from '../documentAllocationComponents.js';
 import { planArSettlement } from './issuedInvoiceSettlement.js';
+import { settledSalesEvidence } from '../codingRevenueEvidence.js';
 
 const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const refuse = (code, message) => { throw Object.assign(new Error(message), { code, statusCode: 409 }); };
@@ -49,7 +50,7 @@ export const FI_POSTING_POLICY = Object.freeze({
   // unknown prose treatment or a missing one refuses by name. Balance-sheet
   // codings (a loan repayment, TyEL payable, owner funds) are not VAT legs
   // and post as before; an ALV control account already carries 'NONE'.
-  assertPostableTaxCoding: ({ coding = {}, transaction = {}, taxCodingEnabled = false, matchedDocument: document = null } = {}) => {
+  assertPostableTaxCoding: ({ coding = {}, transaction = {}, taxCodingEnabled = false, matchedDocument: document = null, autonomousCoding = false } = {}) => {
     if (!taxCodingEnabled) return coding;
     const suggestion = transaction.ai_suggestion || {};
     // The component writer validates every selected code against the locked source.
@@ -70,6 +71,13 @@ export const FI_POSTING_POLICY = Object.freeze({
     // A bank descriptor is not purchase-tax evidence, even on an immaterial line.
     if (selectedEntry?.direction === 'in' && selectedEntry.rate > 0 && (!document || !['confirmed', 'auto_matched'].includes(document.match_status))) {
       refuse('TRANSACTION_ALV_EVIDENCE_REQUIRED', 'A deductible VAT posting needs the usable source document and its current settled relationship.');
+    }
+    // The output twin: a receipt is not a sale. Money in from a supplier is
+    // normally a purchase refund, so the machine's output VAT on a bank line
+    // needs the settled sales source; a person's accepted decision carries its own.
+    if (autonomousCoding && selectedEntry?.direction === 'out' && selectedEntry.rate > 0
+      && Number(transaction.money_in || 0) > 0 && !settledSalesEvidence(document)) {
+      refuse('TRANSACTION_ALV_EVIDENCE_REQUIRED', 'An output VAT posting on money received needs the settled sales source. The bank movement alone does not establish a sale; a supplier refund reverses its purchase instead.');
     }
     if (document && !document.matched_line_id && suggestion.posting_requirement !== 'document_allocation'
       && Math.round(Number(document.total_amount) * 100) === Math.round(gross * 100)) {
@@ -105,6 +113,7 @@ export const FI_POSTING_POLICY = Object.freeze({
     return { code, taxType: code === 'ALV_OUT_OF_SCOPE' ? 'NONE' : code,
       rate: entry?.rate ?? null, sourceRate: supplierTaxRate(entry) ?? null,
       inputDeductible: entry?.direction === 'in' && Number(entry.rate) > 0 && Boolean(entry.return_boxes?.deductible),
+      outputTaxed: entry?.direction === 'out' && Number(entry.rate) > 0,
       inputTaxRoles: ['alv_input', ALV_SPLIT_CONTROL.in.role],
       controlAccounts: Object.values(ALV_SPLIT_CONTROL).map(control => control.account),
       splitRequired: ['standard','reduced'].includes(entry?.kind) && entry.rate > 0,

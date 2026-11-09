@@ -1,12 +1,12 @@
 // DMEM-R1 W0 — S01, receipt identity (forensic §13.1; docs/audit-2026-09-04-memory-re-baseline.md
 // §1 canaries 1–2; ACC-C01, ACC-C02).
 //
-// L1b is an EXPECTED FAILURE on the current tree (registered in scripts/run-tests.mjs),
-// with RT-10's containment PINNED. Two similar Screwfix receipts one day apart (distinct
+// RT-10's containment is PINNED. Two similar Screwfix receipts one day apart (distinct
 // bytes) and one byte-identical re-upload go through the real routes: the twins
-// are distinct documents, the duplicate auto-collapses at register (RT-10). What
-// does not hold yet: the byte-hash index is not unique (a concurrent first upload
-// can still create two rows). The live Exxon case — when every line × document
+// are distinct documents, the duplicate auto-collapses at register (RT-10), and
+// the byte-hash index is unique over canonical rows (migration 164), so a
+// concurrent first upload cannot create two (raced through the routes in
+// documentCanonicalUploadFencePgLifecycle.test.js). The live Exxon case — when every line × document
 // edge is `suggested` and the firm confirms ONE, the crossed suggestions used to
 // survive the single-link confirm (`updateReconciliationMatchInDb`, db/reconcile.js)
 // and a surviving `suggested` edge suppresses the evidence ask on its line
@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 
 import { bootApplianceForTest, applianceHarnessSkipReason } from './testSupport/applianceHarness.js';
 import { loadRecording } from './testSupport/recordedProviders.js';
-import { expectedFailure, layerMessage, seedBankLine } from './testSupport/dmemFixtureSupport.js';
+import { layerMessage, seedBankLine } from './testSupport/dmemFixtureSupport.js';
 import { loadApplianceFixture } from './fixtures/appliance/index.js';
 import { updateReconciliationMatchInDb } from './firmDb.js';
 
@@ -74,11 +74,11 @@ test(
         assert.equal(dupRow.duplicate_of, docA.documentId, layerMessage(S, 1, 'the collapse points at the canonical document'));
       });
 
-      await t.test('L1b database state — the byte-hash identity is enforced by a unique index', () => expectedFailure({ id: `${S}/L1b`, fingerprint: S01_FINGERPRINTS.L1b }, async () => {
+      await t.test('L1b database state — the byte-hash identity is enforced by a unique index', async () => {
         const index = (await appliance.query("select indexdef from pg_indexes where tablename = 'documents' and indexname = 'documents_firm_client_checksum_idx'")).rows[0];
-        assert.ok(index, layerMessage(S, 1, 'the checksum index exists (migration 011)'));
+        assert.ok(index, layerMessage(S, 1, 'the checksum index exists (migrations 011, 164)'));
         assert.match(index.indexdef, /CREATE UNIQUE INDEX/, S01_FINGERPRINTS.L1b);
-      }));
+      });
 
       // ── The live Exxon state: every line × document edge suggested. ──
       // A third same-amount line carries a lone suggestion to docA only (the

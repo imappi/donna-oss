@@ -8,6 +8,7 @@ import { resolveClientCodingPolicyWithClient } from './db/coding.js';
 import { withCodingPolicyIncidentLock } from './codingPolicyRecovery.js';
 import { listStructuredOwnerReplyEvidenceTypes, supportsStructuredOwnerReply } from './statutoryRegistry.js';
 import { processStructuredOwnerReplyWithClient } from './structuredOwnerReply.js';
+import { documentOwnerReplyDocumentId, processDocumentOwnerReplyWithClient } from './documentOwnerReply.js';
 
 export const OWNER_REPLY_MAX_ATTEMPTS = 3;
 // An answer exhausted on a PROVIDER outage (never a policy failure, never a
@@ -25,7 +26,12 @@ export const DISCOVER_OWNER_REPLIES_SQL = `
           and coalesce(t.coding_state, '') not in ('applied', 'held', 'posted', 'synced', 'closed'))
          or (r.transaction_id is null and r.audience = 'client'
              and (r.evidence_type = any($3::text[])
-                  or r.evidence_type || '#' || coalesce(r.request_payload->>'lane', '') = any($3::text[]))))
+                  or r.evidence_type || '#' || coalesce(r.request_payload->>'lane', '') = any($3::text[])))
+         -- A document-anchored ask: its consumer is the reply-informed
+         -- re-disposition (documentOwnerReply.js), lock-step with
+         -- documentOwnerReplyDocumentId.
+         or (r.transaction_id is null and r.review_item_id is null
+             and nullif(btrim(r.request_payload->>'document_id'), '') is not null))
     and (nullif(btrim(r.response_payload->>'reply'), '') is not null
          or jsonb_array_length(coalesce(r.response_payload->'document_ids', '[]'::jsonb)) > 0)
     and coalesce(r.response_payload->'reply_processing'->>'state', '') not in ('completed', 'needs_clarification')
@@ -47,7 +53,9 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
       'select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3',
       [firmId, clientId, evidenceRequestId]
     )).rows[0];
-    if (!request || request.status !== 'replied' || (!request.transaction_id && !supportsStructuredOwnerReply(request))) return { applied: false, skipped: 'no_pending_reply' };
+    const structured = !request?.transaction_id && supportsStructuredOwnerReply(request);
+    const documentReply = !request?.transaction_id && !structured && Boolean(documentOwnerReplyDocumentId(request));
+    if (!request || request.status !== 'replied' || (!request.transaction_id && !structured && !documentReply)) return { applied: false, skipped: 'no_pending_reply' };
     const replyKey = ownerReplyIdentity(request);
     const previous = request.response_payload?.reply_processing || {};
     if (expectedReplyKey && expectedReplyKey !== replyKey) return { applied: false, skipped: 'reply_superseded' };
@@ -79,6 +87,9 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
     const tx = request.transaction_id ? (await client.query('select coding_state, transaction_date from transactions where firm_id = $1 and client_id = $2 and id = $3', [firmId, clientId, request.transaction_id])).rows[0] : null;
     if (request.transaction_id && (!tx || ['applied', 'held', 'posted', 'synced', 'closed'].includes(tx.coding_state))) return { applied: false, skipped: 'terminal_or_missing_transaction' };
     try {
+      if (documentReply) {
+        return await processDocumentOwnerReplyWithClient({ client, firmId, request, expectedReplyKey: replyKey, attempts, actorId });
+      }
       if (!request.transaction_id) {
         return await processStructuredOwnerReplyWithClient({ client, firmId, request, expectedReplyKey: replyKey, attempts });
       }
@@ -125,7 +136,8 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
         } catch (receiptError) { await client.query('rollback'); throw receiptError; }
       }
       return { applied: false, error: error?.message || 'Reply processing failed.', code: error?.code || 'OWNER_REPLY_PROCESSING_FAILED',
-        policy_failure: policyFailure, retry_pending: nextAttempts < OWNER_REPLY_MAX_ATTEMPTS, exhausted: nextAttempts >= OWNER_REPLY_MAX_ATTEMPTS };
+        policy_failure: policyFailure, retry_pending: nextAttempts < OWNER_REPLY_MAX_ATTEMPTS, exhausted: nextAttempts >= OWNER_REPLY_MAX_ATTEMPTS,
+        ...(error?.documentDisposition ? { document_disposition: error.documentDisposition } : {}) };
     }
   } finally { await client.query('select pg_advisory_unlock(hashtextextended($1, 0))', [lease]); }
 };

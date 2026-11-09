@@ -2,8 +2,13 @@
 // escalate to the firm). Mock-pg harness (substring handlers). Pins:
 //   - flag off ⇒ clean skip (born on the plane, envFallback false);
 //   - shadow ⇒ would-run receipted, nothing mutated;
-//   - an overdue ask below the send ceiling is NUDGED (send_count +1,
-//     due_at advanced, audit evidence_request.nudged), in its own txn;
+//   - an overdue ask below the send ceiling is NUDGED through the first
+//     send's own fan-out: with OWNER_EMAIL_ASKS on, one email + one ledger
+//     row, and send_count moves only through the deliverer's bump;
+//   - no channel delivered: a portal-visible ask is a portal nudge (count +1,
+//     as before); an ask nobody can see escalates ('owner_unreachable')
+//     without inflating the count;
+//   - send containment / readiness refusal ⇒ nothing sent, nothing counted;
 //   - an overdue ask AT the ceiling is ESCALATED exactly once
 //     (request_payload.escalated_to_firm + due_at cleared + audit
 //     evidence_request.escalated_to_firm + the firm-owned case blocker);
@@ -15,6 +20,8 @@ import test from 'node:test';
 import {
   runAskReaskSweep, askReaskNudgeDays, ASK_REASK_MAX_SEND_COUNT, REASK_CADENCE_FLAG_KEY
 } from './askReaskCadence.js';
+import { deliverEvidenceAsksOnAllChannels } from './db/asks.js';
+import { OWNER_EMAIL_ASKS_FLAG_KEY } from './db/channels.js';
 
 const makeMockClient = (handlers = []) => {
   const calls = [];
@@ -40,6 +47,14 @@ const hasCall = (client, needle) => client.calls.some((c) => c.sql.toLowerCase()
 const callsMatching = (client, needle) => client.calls.filter((c) => c.sql.toLowerCase().includes(needle));
 
 const cannedConfig = (rows) => ({ match: 'from client_capability_config', rows });
+// The send-containment read (internalPilotAccess.js) is the only config read
+// that projects `as released`; no pilot enrollment ⇒ not contained.
+const notContained = { match: 'as released', rows: [] };
+const portalRecipient = { match: 'from firm_collaborators', rows: [{ '?column?': 1 }] };
+// Readiness admission at 'ask_send' (not enforced for an unenrolled client).
+const admitted = async () => ({ enforced: false, allowed: true, boundary: 'ask_send' });
+// A fan-out where every channel is dark / unbound: nothing left, no bump.
+const darkFanout = async () => ({ email: { skipped: true, reason: 'flag_off' } });
 const configRowAt = (stage) => [{ flag_key: REASK_CADENCE_FLAG_KEY, stage, source: 'manual', client_id: 'client-1' }];
 // The overdue gather is the only SELECT ... FROM client_evidence_requests in
 // the sweep (the nudge/escalate writes are UPDATEs, which don't contain this
@@ -90,20 +105,126 @@ await test('shadow: the would-run is receipted, nothing mutated', async () => {
   assert.ok(!hasCall(client, 'update client_evidence_requests'), 'nothing mutated at shadow');
 });
 
-await test('canary: an overdue ask below the ceiling is nudged — send_count +1, due_at advanced, audited', async () => {
+await test('canary, no channel delivered, owner can see the portal: portal nudge — send_count +1, due_at advanced, audited', async () => {
   const client = makeMockClient([
+    notContained,
     cannedConfig(configRowAt('canary')),
+    portalRecipient,
     cannedOverdue([OVERDUE_ROW()])
   ]);
-  const out = await runAskReaskSweep({ client, firmId: 'firm-1', clientId: 'client-1', now: NOW });
+  const out = await runAskReaskSweep({
+    client, firmId: 'firm-1', clientId: 'client-1', now: NOW,
+    deps: { deliver: darkFanout, evaluateAdmission: admitted }
+  });
   assert.equal(out.nudged, 1);
+  assert.equal(out.portal, 1);
+  assert.equal(out.delivered, 0);
   assert.equal(out.escalated, 0);
   const nudge = client.calls.find((c) => c.sql.includes('set send_count = $3'));
-  assert.ok(nudge, 'nudge update ran');
+  assert.ok(nudge, 'portal nudge update ran');
   assert.equal(nudge.params[2], 2, 'send_count 1 → 2');
   assert.equal(nudge.params[4], new Date(NOW + 7 * 86400000).toISOString(), 'due_at advanced one interval');
   assert.ok(hasCall(client, 'evidence_request.nudged'), 'nudge audited');
   assert.ok(!hasCall(client, 'due_at = null'), 'no escalation ran');
+});
+
+// The real fan-out (db/asks.js deliverEvidenceAsksOnAllChannels → the email
+// deliverer in db/channels.js) driven against the mock client; only the
+// transport (deliverOwnerMessage) is faked. WhatsApp/SMS/Telegram stay dark
+// on their env allowlists, as in a default environment.
+const realFanoutHarness = ({ emailOn = true, contained = false, portal = false } = {}) => {
+  let sendCount = 1;
+  const sends = [];
+  const configRows = [
+    ...configRowAt('canary'),
+    ...(emailOn ? [{ flag_key: OWNER_EMAIL_ASKS_FLAG_KEY, stage: 'canary', source: 'manual', client_id: 'client-1' }] : [])
+  ];
+  const client = makeMockClient([
+    { match: 'as released', rows: contained
+      ? [{ client_id: 'client-1', flag_key: 'INTERNAL_PILOT_ACCESS', stage: 'canary', source: 'manual', reason: 'donna.fi-hosted-pilot.v1', valid_to: null, released: false }]
+      : [] },
+    cannedConfig(configRows),
+    ...(portal ? [portalRecipient] : []),
+    { match: 'select company_name, profile from clients', rows: [{ company_name: 'Example Oy', profile: { email: 'owner@example.test' } }] },
+    { match: 'set send_count = send_count + 1', rows: () => { sendCount += 1; return [{ id: 'evr-1' }]; } },
+    { match: 'select send_count from client_evidence_requests', rows: () => [{ send_count: sendCount }] },
+    { match: 'select id from client_evidence_requests', rows: [{ id: 'evr-1' }] },
+    { match: 'select * from client_evidence_requests', rows: [OVERDUE_ROW()] },
+    cannedOverdue([OVERDUE_ROW()])
+  ]);
+  const deliver = (args) => deliverEvidenceAsksOnAllChannels({
+    ...args,
+    deps: { deliverOwnerMessage: async (msg) => { sends.push(msg); return { ok: true, id: 'email-msg-1' }; } }
+  });
+  return { client, sends, deliver, sendCount: () => sendCount };
+};
+
+await test('email channel on: the nudge is ONE real email, ONE ledger row, send_count moved only by the deliverer', async () => {
+  const h = realFanoutHarness({ emailOn: true });
+  const out = await runAskReaskSweep({
+    client: h.client, firmId: 'firm-1', clientId: 'client-1', now: NOW,
+    deps: { deliver: h.deliver, evaluateAdmission: admitted }
+  });
+  assert.equal(out.nudged, 1);
+  assert.equal(out.delivered, 1);
+  assert.equal(out.portal, 0);
+  assert.equal(h.sends.length, 1, 'exactly one owner message');
+  assert.equal(h.sends[0].channel, 'email');
+  assert.equal(h.sends[0].recipient.email, 'owner@example.test');
+  assert.match(h.sends[0].email.text, /Who was check 3851 paid to\?/);
+  const ledger = callsMatching(h.client, 'insert into message_delivery_ledger');
+  assert.equal(ledger.length, 1, 'one delivery-ledger entry');
+  assert.equal(ledger[0].params[2], 'email');
+  assert.equal(ledger[0].params[4], 'evr-1');
+  assert.equal(h.sendCount(), 2, 'the deliverer bumped send_count once');
+  assert.ok(!hasCall(h.client, 'set send_count = $3'), 'the sweep never bumps a delivered nudge itself');
+  const rearm = h.client.calls.find((c) => c.sql.includes('set due_at = $3'));
+  assert.equal(rearm.params[2], new Date(NOW + 7 * 86400000).toISOString(), 'clock re-armed');
+  const audit = h.client.calls.find((c) => c.sql.includes('evidence_request.nudged'));
+  assert.equal(JSON.parse(audit.params[3]).surface, 'channel');
+});
+
+await test('email channel off and nobody in the portal: nothing sent, count not inflated, the ask goes to the firm', async () => {
+  const h = realFanoutHarness({ emailOn: false });
+  const out = await runAskReaskSweep({
+    client: h.client, firmId: 'firm-1', clientId: 'client-1', now: NOW,
+    deps: { deliver: h.deliver, evaluateAdmission: admitted }
+  });
+  assert.equal(h.sends.length, 0, 'nothing sent');
+  assert.equal(h.sendCount(), 1, 'send_count untouched');
+  assert.ok(!hasCall(h.client, 'set send_count = $3'), 'no phantom nudge');
+  assert.ok(!hasCall(h.client, 'insert into message_delivery_ledger'), 'no ledger row for a dark channel');
+  assert.equal(out.nudged, 0);
+  assert.equal(out.escalated, 1);
+  const escalate = h.client.calls.find((c) => c.sql.includes('due_at = null'));
+  assert.ok(escalate.params.find((p) => typeof p === 'string' && p.includes('owner_unreachable')), 'named exception');
+});
+
+await test('send-contained client: the email gate is on but nothing is sent, counted or rewritten', async () => {
+  const h = realFanoutHarness({ emailOn: true, contained: true, portal: true });
+  let fanouts = 0;
+  const out = await runAskReaskSweep({
+    client: h.client, firmId: 'firm-1', clientId: 'client-1', now: NOW,
+    deps: { deliver: async (args) => { fanouts += 1; return h.deliver(args); }, evaluateAdmission: admitted }
+  });
+  assert.equal(fanouts, 0, 'the fan-out never ran');
+  assert.equal(h.sends.length, 0);
+  assert.equal(h.sendCount(), 1);
+  assert.equal(out.held, 1);
+  assert.equal(out.nudged, 0);
+  assert.equal(out.escalated, 0);
+  assert.ok(!hasCall(h.client, 'update client_evidence_requests'), 'row untouched');
+});
+
+await test('entity-readiness refusal at ask_send holds the reminder the same way', async () => {
+  const h = realFanoutHarness({ emailOn: true });
+  const out = await runAskReaskSweep({
+    client: h.client, firmId: 'firm-1', clientId: 'client-1', now: NOW,
+    deps: { deliver: h.deliver, evaluateAdmission: async () => ({ enforced: true, allowed: false, reason_code: 'ENTITY_NOT_READY' }) }
+  });
+  assert.equal(h.sends.length, 0);
+  assert.equal(out.held, 1);
+  assert.equal(h.sendCount(), 1);
 });
 
 await test('canary: an overdue ask at the ceiling escalates exactly once — receipt, audit, firm blocker; re-ask clock stops', async () => {
@@ -128,7 +249,9 @@ await test('canary: an overdue ask at the ceiling escalates exactly once — rec
 await test('a poisoned row rolls back alone; the rest of the sweep continues', async () => {
   let failedOnce = false;
   const client = makeMockClient([
+    notContained,
     cannedConfig(configRowAt('canary')),
+    portalRecipient,
     cannedOverdue([OVERDUE_ROW({ id: 'evr-bad' }), OVERDUE_ROW({ id: 'evr-good' })]),
     {
       match: 'set send_count = $3',
@@ -139,7 +262,10 @@ await test('a poisoned row rolls back alone; the rest of the sweep continues', a
     }
   ]);
   // The throwing handler consumes the first nudge; the second must still land.
-  const out = await runAskReaskSweep({ client, firmId: 'firm-1', clientId: 'client-1', now: NOW });
+  const out = await runAskReaskSweep({
+    client, firmId: 'firm-1', clientId: 'client-1', now: NOW,
+    deps: { deliver: darkFanout, evaluateAdmission: admitted }
+  });
   assert.equal(out.errors, 1);
   assert.equal(out.nudged, 1);
   assert.ok(callsMatching(client, 'rollback').length >= 1, 'poisoned row rolled back');

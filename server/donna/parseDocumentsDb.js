@@ -407,7 +407,13 @@ export const registerDocumentInDb = async ({
       // bank_statement skipping an `unknown` canonical) is gone: the router
       // now fixes types (RT-05, decision D6), so a misclassified canonical is
       // re-typed by the parse, not by re-uploading the same bytes.
-      if (document.checksum_sha256) {
+      //
+      // The read alone cannot hold under concurrency, so migration 164 makes
+      // `documents_firm_client_checksum_idx` unique over exactly this notion of
+      // a canonical row; the fresh insert below turns a lost race on it into
+      // this same collapse (collapseOnto).
+      const readCanonical = async () => {
+        if (!document.checksum_sha256) return null;
         const byHash = await client.query(
           `select ${DOC_THIN_COLUMNS}, uploaded_at from documents
            where firm_id=$1 and client_id=$2 and checksum_sha256=$3
@@ -423,112 +429,114 @@ export const registerDocumentInDb = async ({
             document.id
           ]
         );
-        if (byHash.rows.length) {
-          const existing = byHash.rows[0];
-          const documentType = document.document_type || 'unknown';
-          const filename = document.filename || document.document_label || document.id;
-          const collapsedAt = new Date().toISOString();
-          const duplicateSummary = {
-            reason: 'duplicate_auto_collapsed',
-            duplicate_reason: 'byte_match',
-            document_type: documentType,
-            existing_document_id: existing.id,
-            existing_filename: existing.filename || null,
-            existing_parse_status: existing.parse_status || null,
-            existing_uploaded_at: toIso(existing.uploaded_at),
-            collapsed_at: collapsedAt
-          };
-          const payload = { ...document, parse_run_id: null };
-          const collapsed = await client.query(
-            `insert into documents (
-               id, firm_id, client_id, filename, document_type, status, uploaded_at,
-               source, file_url, vendor_name, customer_name, document_date, due_date,
-               total_amount, currency, tax_amount, reference_number, payment_status, extraction_confidence,
-               storage_bucket, storage_object_key, checksum_sha256,
-               parse_status, parse_run_id, parse_attempts, parse_enqueued_at, parse_event_sent_at,
-               parse_completed_at, duplicate_of, batch_id, parse_summary, payload
-             )
-             values (
-               $1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()),
-               $8, null, $9, $10, $11::date, $12::date,
-               $13, $14, $15, $16, coalesce($17, 'unknown'), $18,
-               $19, $20, $21,
-               'skipped', null, 0, null, null,
-               now(), $22, $23, $24::jsonb, $25::jsonb
-             )
-             on conflict (id) do nothing
-             returning ${DOC_THIN_COLUMNS}`,
-            [
-              document.id,
-              firmId,
-              document.client_id,
-              filename,
-              documentType,
-              document.status || 'received',
-              document.uploaded_at ? new Date(Number(document.uploaded_at)).toISOString() : null,
-              document.source || 'client_upload',
-              document.vendor_name || null,
-              document.customer_name || null,
-              document.document_date || null,
-              document.due_date || null,
-              document.total_amount ?? null,
-              document.currency || null,
-              document.tax_amount ?? null,
-              document.reference_number || null,
-              document.payment_status || null,
-              document.extraction_confidence ?? null,
-              document.storage_bucket,
-              document.storage_object_key,
-              document.checksum_sha256 || null,
-              existing.id,
-              batchId,
-              JSON.stringify(duplicateSummary),
-              JSON.stringify(payload)
-            ]
-          );
-          if (!collapsed.rows.length) {
-            // id collision (concurrent register for the same doc id).
-            // Re-read and return whatever is there.
-            const fallback = await client.query(
-              `select ${DOC_THIN_COLUMNS} from documents where firm_id=$1 and id=$2 and client_id=$3`,
-              [firmId, document.id, document.client_id]
-            );
-            if (!fallback.rows.length) throw Object.assign(new Error('Document not found.'), { statusCode: 404, code: 'DOCUMENT_NOT_FOUND' });
-            await client.query('commit');
-            return {
-              document: rowToThinParseStatus(fallback.rows[0] || {}),
-              created: false,
-              already_exists: true,
-              duplicate_reason: 'id_conflict',
-              parse_run_id: fallback.rows[0]?.parse_run_id || null
-            };
-          }
-          await releaseCloudPilotRegistration({client,firmId,document,intake});
-          await audit(client, {
+        return byHash.rows[0] || null;
+      };
+      const collapseOnto = async (existing) => {
+        const documentType = document.document_type || 'unknown';
+        const filename = document.filename || document.document_label || document.id;
+        const collapsedAt = new Date().toISOString();
+        const duplicateSummary = {
+          reason: 'duplicate_auto_collapsed',
+          duplicate_reason: 'byte_match',
+          document_type: documentType,
+          existing_document_id: existing.id,
+          existing_filename: existing.filename || null,
+          existing_parse_status: existing.parse_status || null,
+          existing_uploaded_at: toIso(existing.uploaded_at),
+          collapsed_at: collapsedAt
+        };
+        const payload = { ...document, parse_run_id: null };
+        const collapsed = await client.query(
+          `insert into documents (
+             id, firm_id, client_id, filename, document_type, status, uploaded_at,
+             source, file_url, vendor_name, customer_name, document_date, due_date,
+             total_amount, currency, tax_amount, reference_number, payment_status, extraction_confidence,
+             storage_bucket, storage_object_key, checksum_sha256,
+             parse_status, parse_run_id, parse_attempts, parse_enqueued_at, parse_event_sent_at,
+             parse_completed_at, duplicate_of, batch_id, parse_summary, payload
+           )
+           values (
+             $1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()),
+             $8, null, $9, $10, $11::date, $12::date,
+             $13, $14, $15, $16, coalesce($17, 'unknown'), $18,
+             $19, $20, $21,
+             'skipped', null, 0, null, null,
+             now(), $22, $23, $24::jsonb, $25::jsonb
+           )
+           on conflict (id) do nothing
+           returning ${DOC_THIN_COLUMNS}`,
+          [
+            document.id,
             firmId,
-            clientId: document.client_id,
-            documentId: document.id,
-            action: 'document.duplicate.auto_collapsed',
-            metadata: {
-              parse_run_id: null,
-              duplicate_of: existing.id,
-              reason: 'byte_match',
-              canonical_parse_status: existing.parse_status || null,
-              batch_id: batchId
-            }
-          });
+            document.client_id,
+            filename,
+            documentType,
+            document.status || 'received',
+            document.uploaded_at ? new Date(Number(document.uploaded_at)).toISOString() : null,
+            document.source || 'client_upload',
+            document.vendor_name || null,
+            document.customer_name || null,
+            document.document_date || null,
+            document.due_date || null,
+            document.total_amount ?? null,
+            document.currency || null,
+            document.tax_amount ?? null,
+            document.reference_number || null,
+            document.payment_status || null,
+            document.extraction_confidence ?? null,
+            document.storage_bucket,
+            document.storage_object_key,
+            document.checksum_sha256 || null,
+            existing.id,
+            batchId,
+            JSON.stringify(duplicateSummary),
+            JSON.stringify(payload)
+          ]
+        );
+        if (!collapsed.rows.length) {
+          // id collision (concurrent register for the same doc id).
+          // Re-read and return whatever is there.
+          const fallback = await client.query(
+            `select ${DOC_THIN_COLUMNS} from documents where firm_id=$1 and id=$2 and client_id=$3`,
+            [firmId, document.id, document.client_id]
+          );
+          if (!fallback.rows.length) throw Object.assign(new Error('Document not found.'), { statusCode: 404, code: 'DOCUMENT_NOT_FOUND' });
           await client.query('commit');
           return {
-            document: rowToThinParseStatus(collapsed.rows[0]),
-            created: true,
-            already_exists: false,
-            duplicate_reason: 'byte_match',
-            duplicate_of: existing.id,
-            auto_collapsed: true,
-            parse_run_id: null
+            document: rowToThinParseStatus(fallback.rows[0] || {}),
+            created: false,
+            already_exists: true,
+            duplicate_reason: 'id_conflict',
+            parse_run_id: fallback.rows[0]?.parse_run_id || null
           };
         }
-      }
+        await releaseCloudPilotRegistration({client,firmId,document,intake});
+        await audit(client, {
+          firmId,
+          clientId: document.client_id,
+          documentId: document.id,
+          action: 'document.duplicate.auto_collapsed',
+          metadata: {
+            parse_run_id: null,
+            duplicate_of: existing.id,
+            reason: 'byte_match',
+            canonical_parse_status: existing.parse_status || null,
+            batch_id: batchId
+          }
+        });
+        await client.query('commit');
+        return {
+          document: rowToThinParseStatus(collapsed.rows[0]),
+          created: true,
+          already_exists: false,
+          duplicate_reason: 'byte_match',
+          duplicate_of: existing.id,
+          auto_collapsed: true,
+          parse_run_id: null
+        };
+      };
+      const canonical = await readCanonical();
+      if (canonical) return collapseOnto(canonical);
 
       // Per-client rate limit (parse_enqueued_at within rolling hour).
       // File-size cap is already enforced upstream in /upload-url.
@@ -556,53 +564,67 @@ export const registerDocumentInDb = async ({
         parse_run_id: parseRunId
       };
 
-      const inserted = await client.query(
-        `insert into documents (
-           id, firm_id, client_id, filename, document_type, status, uploaded_at,
-           source, file_url, vendor_name, customer_name, document_date, due_date,
-           total_amount, currency, tax_amount, reference_number, payment_status, extraction_confidence,
-           storage_bucket, storage_object_key, checksum_sha256,
-           parse_status, parse_run_id, parse_attempts, parse_enqueued_at, parse_event_sent_at,
-           batch_id, payload
-         )
-         values (
-           $1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()),
-           $8, null, $9, $10, $11::date, $12::date,
-           $13, $14, $15, $16, coalesce($17, 'unknown'), $18,
-           $19, $20, $21,
-           case when $22::uuid is null then 'skipped' else 'pending' end, $22, 0,
-           case when $22::uuid is null then null else now() end, null,
-           $23, $24::jsonb
-         )
-         on conflict (id) do nothing
-         returning ${DOC_THIN_COLUMNS}`,
-        [
-          document.id,
-          firmId,
-          document.client_id,
-          filename,
-          documentType,
-          document.status || 'received',
-          document.uploaded_at ? new Date(Number(document.uploaded_at)).toISOString() : null,
-          document.source || 'client_upload',
-          document.vendor_name || null,
-          document.customer_name || null,
-          document.document_date || null,
-          document.due_date || null,
-          document.total_amount ?? null,
-          document.currency || null,
-          document.tax_amount ?? null,
-          document.reference_number || null,
-          document.payment_status || null,
-          document.extraction_confidence ?? null,
-          document.storage_bucket,
-          document.storage_object_key,
-          document.checksum_sha256 || null,
-          parseRunId,
-          batchId,
-          JSON.stringify(payload)
-        ]
-      );
+      // A concurrent first upload of the same bytes may have committed its
+      // canonical since the Layer 2 read: the unique index refuses this insert,
+      // and the loser becomes the ordinary byte-match collapse onto the winner.
+      // Any other error is rethrown unchanged.
+      await client.query('savepoint register_canonical_insert');
+      let inserted;
+      try {
+        inserted = await client.query(
+          `insert into documents (
+             id, firm_id, client_id, filename, document_type, status, uploaded_at,
+             source, file_url, vendor_name, customer_name, document_date, due_date,
+             total_amount, currency, tax_amount, reference_number, payment_status, extraction_confidence,
+             storage_bucket, storage_object_key, checksum_sha256,
+             parse_status, parse_run_id, parse_attempts, parse_enqueued_at, parse_event_sent_at,
+             batch_id, payload
+           )
+           values (
+             $1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()),
+             $8, null, $9, $10, $11::date, $12::date,
+             $13, $14, $15, $16, coalesce($17, 'unknown'), $18,
+             $19, $20, $21,
+             case when $22::uuid is null then 'skipped' else 'pending' end, $22, 0,
+             case when $22::uuid is null then null else now() end, null,
+             $23, $24::jsonb
+           )
+           on conflict (id) do nothing
+           returning ${DOC_THIN_COLUMNS}`,
+          [
+            document.id,
+            firmId,
+            document.client_id,
+            filename,
+            documentType,
+            document.status || 'received',
+            document.uploaded_at ? new Date(Number(document.uploaded_at)).toISOString() : null,
+            document.source || 'client_upload',
+            document.vendor_name || null,
+            document.customer_name || null,
+            document.document_date || null,
+            document.due_date || null,
+            document.total_amount ?? null,
+            document.currency || null,
+            document.tax_amount ?? null,
+            document.reference_number || null,
+            document.payment_status || null,
+            document.extraction_confidence ?? null,
+            document.storage_bucket,
+            document.storage_object_key,
+            document.checksum_sha256 || null,
+            parseRunId,
+            batchId,
+            JSON.stringify(payload)
+          ]
+        );
+      } catch (error) {
+        if (error?.code !== '23505' || error?.constraint !== 'documents_firm_client_checksum_idx') throw error;
+        await client.query('rollback to savepoint register_canonical_insert');
+        const winner = await readCanonical();
+        if (!winner) throw error;
+        return collapseOnto(winner);
+      }
 
       // The `on conflict (id) do nothing` falls through if a concurrent
       // request inserted the same id between Layer 1 and now. Re-read.
@@ -5063,6 +5085,80 @@ export const __clearReconciliationMatchesForDuplicateWithClient = async (
   return { deleted: result.rows.length };
 };
 
+// ── duplicate-chain heir on canonical delete ───────────────────────────
+//
+// `documents.duplicate_of` has no FK (migration 011), so every writer that
+// deletes a canonical repoints the rows that named it. Clearing them all was
+// the old answer; with several byte-identical collapsed rows that would mint
+// several canonicals of the same bytes, which the unique index from migration
+// 164 refuses. The one owner of that repoint, run AFTER the delete:
+//   - per (client, bytes), the heir is an existing canonical of those bytes if
+//     one survives, else the oldest row that is eligible to be one (not a
+//     `duplicate_pending` placeholder, not `failed`), which is promoted;
+//   - the other rows of that group are pointed at the heir;
+//   - rows with no bytes, rows with no eligible heir, and `duplicate_pending`
+//     placeholders (the owner's open question) are cleared as before.
+export const __promoteDuplicateHeirsWithClient = async (
+  client,
+  { firmId, deletedIds = [], excludeIds = [] } = {}
+) => {
+  const ids = [...new Set(deletedIds.filter(Boolean))];
+  const result = { promoted: [], repointed: {}, cleared: [] };
+  if (!client || !firmId || !ids.length) return result;
+  const orphans = (await client.query(
+    `select id, client_id, checksum_sha256, parse_status from documents
+      where firm_id = $1 and duplicate_of = any($2::text[]) and not (id = any($3::text[]))
+      order by created_at asc, id asc
+      for update`,
+    [firmId, ids, excludeIds.filter(Boolean)]
+  )).rows;
+  const eligible = (row) => !['duplicate_pending', 'failed'].includes(row.parse_status);
+  const groups = new Map();
+  for (const row of orphans) {
+    if (!row.checksum_sha256 || row.parse_status === 'duplicate_pending') {
+      result.cleared.push(row.id);
+      continue;
+    }
+    const key = JSON.stringify([row.client_id, row.checksum_sha256]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  for (const rows of groups.values()) {
+    const [{ client_id: clientId, checksum_sha256: checksum }] = rows;
+    const surviving = (await client.query(
+      `select id from documents
+        where firm_id = $1 and client_id = $2 and checksum_sha256 = $3
+          and duplicate_of is null and parse_status not in ('duplicate_pending', 'failed')
+        order by created_at asc limit 1`,
+      [firmId, clientId, checksum]
+    )).rows[0];
+    const heir = surviving?.id || rows.find(eligible)?.id || null;
+    for (const row of rows) {
+      if (!heir) result.cleared.push(row.id);
+      else if (row.id === heir) result.promoted.push(row.id);
+      else result.repointed[row.id] = heir;
+    }
+  }
+  const toClear = [...result.promoted, ...result.cleared];
+  if (toClear.length) {
+    await client.query(
+      `update documents set duplicate_of = null, updated_at = now()
+        where firm_id = $1 and id = any($2::text[])`,
+      [firmId, toClear]
+    );
+  }
+  const repointed = Object.entries(result.repointed);
+  if (repointed.length) {
+    await client.query(
+      `update documents d set duplicate_of = h.heir, updated_at = now()
+         from unnest($2::text[], $3::text[]) as h(id, heir)
+        where d.firm_id = $1 and d.id = h.id`,
+      [firmId, repointed.map(([id]) => id), repointed.map(([, heir]) => heir)]
+    );
+  }
+  return result;
+};
+
 export const clearReconciliationMatchesForDuplicateInDb = async ({
   firmId,
   documentId
@@ -5468,20 +5564,6 @@ export const __resolveDuplicateWithClient = async ({
         error.details = counts;
         throw error;
       }
-      // Promote any OTHER rows in the chain that point at this
-      // canonical (multi-version uploads where ad287f23 ← dcbff74c,
-      // c075768f). Without this, deleting `oldId` leaves dangling
-      // duplicate_of pointers on the other chain members. The
-      // current row's own duplicate_of gets cleared by the UPDATE
-      // below; this NULLs out everyone else's reference too.
-      await client.query(
-        `update documents
-            set duplicate_of = null, updated_at = now()
-          where firm_id = $1
-            and duplicate_of = $2
-            and id <> $3`,
-        [firmId, oldId, documentId]
-      );
       // Before the canonical DELETE, unwind any transactions whose
       // confirmed match pointed at it. Without this, the matched
       // transactions stay at reconciliation_status='reconciled' with
@@ -5547,6 +5629,12 @@ export const __resolveDuplicateWithClient = async ({
          returning ${DOC_THIN_COLUMNS}`,
         [firmId, documentId, parseRunId]
       );
+      // Repoint the OTHER rows in the chain that pointed at the deleted
+      // canonical (multi-version uploads where ad287f23 ← dcbff74c,
+      // c075768f): without it they keep dangling duplicate_of pointers.
+      // Run after the delete and after this row took its place, so one heir
+      // per (client, bytes) — this row, when its bytes match — survives.
+      const heirs = await __promoteDuplicateHeirsWithClient(client, { firmId, deletedIds: [oldId] });
       await audit(client, {
         firmId,
         clientId: row.client_id,
@@ -5554,6 +5642,8 @@ export const __resolveDuplicateWithClient = async ({
         action: 'document.parse.duplicate_resolved',
         metadata: {
           action: 'replace',
+          promoted_duplicates: [...heirs.promoted, ...heirs.cleared],
+          repointed_duplicates: heirs.repointed,
           deleted_document_id: oldId,
           parse_run_id: parseRunId,
           transactions_deleted: deletedTx.rows.length,

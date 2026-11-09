@@ -279,6 +279,13 @@ test('W: alvDirectionForTransaction reads the transaction in the plain accountin
   assert.equal(alvDirectionForTransaction({ money_in: 500 }), 'out'); // sale
   assert.equal(alvDirectionForTransaction({ money_out: 120 }), 'in'); // purchase
   assert.equal(alvDirectionForTransaction({}), '');
+  // Not yet in the chart: a known account name carries its canonical class,
+  // so a purchase refund on its expense account stays on the input side.
+  assert.equal(alvDirectionForTransaction({ money_in: 49.9 }, { proposed_account: 'Operating supplies' }), 'in');
+  assert.equal(alvDirectionForTransaction({ money_out: 49.9 }, { proposed_account: 'Other income' }), 'out');
+  // A stored chart type wins; an unknown name keeps the cash-side fallback.
+  assert.equal(alvDirectionForTransaction({ money_in: 49.9 }, { proposed_account: 'Operating supplies', account_type: 'revenue' }), 'out');
+  assert.equal(alvDirectionForTransaction({ money_in: 49.9 }, { proposed_account: 'Synthetic custom account' }), 'out');
 });
 
 test('W: applyAlvCodingToCoding stamps the code on both fields the journal builder reads', () => {

@@ -23,7 +23,7 @@ import { toIsoDay } from '../dates.js';
 import { suggestTransactionCoding } from '../transactionLlm.js';
 // Q9 (the sole-model lab, 2026-08-16): the coding lane's model-policy
 // resolution — same pattern as the disposition sweep owner (Q6c).
-import { readLaneDecidingPolicy } from '../modelLanePolicy.js';
+import { documentOwnerReplyDocumentId, redisposeDocumentOwnerReplyWithClient } from '../documentOwnerReply.js';
 // `dismissFirmFact` (G2 PR-14): the reverse executor's memory leg routes a minted
 // fact to the SAME governed tombstone writer the forget_fact verb uses (INV-1).
 import { distillAndStageFirmFactCandidates } from '../firmFacts.js';
@@ -2148,7 +2148,13 @@ export const resolveClientEvidenceRequestInDb = async ({
       let recode = null;
       const { supportsStructuredOwnerReply } = await import('../statutoryRegistry.js');
       const structuredReply = supportsStructuredOwnerReply(row);
-      if (hasReplyContent && (row.transaction_id || structuredReply) && !cleanNextReviewState) {
+      // A document-anchored ask (request_payload.document_id, transaction_id
+      // null) without a registered factual consumer: its consumer is the
+      // reply-informed re-disposition, driven through the SAME owner-reply
+      // clock so a failed first attempt is retried under its bounds.
+      const docAskDocumentId = documentOwnerReplyDocumentId(row);
+      const documentReply = Boolean(docAskDocumentId) && !structuredReply;
+      if (hasReplyContent && (row.transaction_id || structuredReply || documentReply) && !cleanNextReviewState) {
         try {
           const { processOwnerReplyWithClient } = await import('../ownerReplyRecovery.js');
           recode = await processOwnerReplyWithClient({ client, firmId, clientId: row.client_id,
@@ -2167,82 +2173,33 @@ export const resolveClientEvidenceRequestInDb = async ({
 
       // Doc-first drain Slice 4a (docs/donna-settlement-answer-and-ledger-entry-plan.md
       // §2) — the ANSWER leg, the doc-anchored sibling of the recode branch
-      // above: a reply on a doc-anchored ask (request_payload.document_id,
-      // transaction_id null) feeds ONE reply-informed re-disposition whose
-      // upserted verdict replaces the chase_evidence that minted the ask, and
-      // the request flips 'resolved' in the same commit — the doc leaves the
-      // "With the client" limbo for one of the two honest terminals (or the
-      // visible needs_human violation). Gated on the SAME plane flag the ask
-      // leg acts under (an ask can only exist where the flag acts, so the
-      // question and its answer are live together; ∅/off/staged-down ⇒ the
-      // leg never runs, byte-identical to pre-4a). Dynamic import: the static
-      // chain documentDispositionLlm → reconciliationLlmCore → firmDb is a
-      // cycle (the same TDZ documentDispositionShape.js exists to avoid).
+      // above: a reply on a doc-anchored ask feeds ONE reply-informed
+      // re-disposition whose upserted verdict replaces the chase_evidence that
+      // minted the ask, and the request flips 'resolved' in the same commit.
+      // Gated on the SAME plane flag the ask leg acts under
+      // (documentOwnerReply.js). A plain document ask rode the owner-reply
+      // clock above; its outcome is reported here, never as a bank-line recode.
       let documentDisposition = null;
-      const docAskDocumentId = !row.transaction_id && !row.review_item_id
-        ? String(row.request_payload?.document_id || '').trim() || null
-        : null;
-      // A matched invoice is the prerequisite for the VAT business-use ask,
-      // never its answer. Its registered factual consumer owns resolution,
+      if (documentReply && recode) {
+        documentDisposition = recode.document_disposition
+          || (recode.error ? { error: recode.error, code: recode.code || null } : { skipped: recode.skipped || null });
+        recode = null;
+      }
+      // A registered factual consumer that also names a document keeps its
+      // re-disposition pass. A matched invoice is the prerequisite for the VAT
+      // business-use ask, never its answer: its consumer owns resolution,
       // including failed interpretation and clarification; the generic
       // live-match redisposition must not erase that still-owed fact.
-      if (hasReplyContent && docAskDocumentId && !cleanNextReviewState && row.evidence_type !== 'ae_vat_business_use') {
+      if (hasReplyContent && docAskDocumentId && structuredReply && !cleanNextReviewState && row.evidence_type !== 'ae_vat_business_use') {
         try {
-          const configSnapshot = await readClientConfigSnapshot(client, { firmId, clientId: row.client_id });
-          const dispositionActs = clientFlagActs({
-            flagKey: DOCUMENT_NO_LINE_DISPOSITION_FLAG_KEY,
-            snapshot: configSnapshot,
-            envFallback: () => false // born on the plane — a DB stage row is the ONLY on
-          });
-          if (dispositionActs) {
-            const { runOwnerReplyRedisposition } = await import('../documentDispositionLlm.js');
-            // The #1748 shape (2026-08-19 follow-up): the answer leg rides
-            // the reconciliation_reasoning lane's seat — a seated non-claude
-            // rung decides the re-disposition keyless over the compatible
-            // endpoint. Best-effort read; null ⇒ the strong default decides.
-            let replyDecidingPolicy = null;
-            try {
-              replyDecidingPolicy = await readLaneDecidingPolicy({
-                client, firmId, clientId: row.client_id, laneId: 'reconciliation_reasoning'
-              });
-            } catch { replyDecidingPolicy = null; }
-            documentDisposition = await runOwnerReplyRedisposition({
-              client,
-              firmId,
-              clientId: row.client_id,
-              documentId: docAskDocumentId,
-              evidenceRequestId: row.id,
-              answeredEvidenceType: row.evidence_type || 'payment_method',
-              askedQuestion: row.question || '',
-              ownerReply: cleanReply,
-              replyDocumentIds: responsePayload.document_ids || [],
-              actorId,
-              decidingPolicy: replyDecidingPolicy
-            });
-            if (documentDisposition?.request_resolved) {
-              const refreshed = await client.query(
-                'select * from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
-                [firmId, cleanRequestId]
-              );
-              if (refreshed.rows[0]) request = rowToClientEvidenceRequestPayload(refreshed.rows[0]);
-            }
-          } else {
-            // F8 flag-down semantics: the answer leg is staged off (the flag
-            // moved between send and reply — the "live together" premise is
-            // false across time), so NOTHING will process this reply. The
-            // request rests 'replied', which the F8 metric now counts as
-            // HANGING ('owner_answered_processing') — visible, never
-            // owner-labeled. Receipt WHY it rests so the violation is
-            // explicable from the audit trail alone; a human reads the reply.
-            await client.query(
-              `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
-               values ($1, $2, 'system', $3, 'evidence_request.reply_unprocessed', 'client_evidence_request', $4, $5::jsonb)`,
-              [firmId, row.client_id, actorId, row.id, JSON.stringify({
-                document_id: docAskDocumentId,
-                reason: 'disposition_flag_inactive'
-              })]
+          documentDisposition = await redisposeDocumentOwnerReplyWithClient({ client, firmId,
+            request: { ...row, response_payload: { ...responsePayload, reply: cleanReply } }, actorId });
+          if (documentDisposition?.request_resolved) {
+            const refreshed = await client.query(
+              'select * from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
+              [firmId, cleanRequestId]
             );
-            documentDisposition = { skipped: 'disposition_flag_inactive' };
+            if (refreshed.rows[0]) request = rowToClientEvidenceRequestPayload(refreshed.rows[0]);
           }
         } catch (redisposeError) {
           documentDisposition = { error: redisposeError?.message || 'Reply re-disposition failed.' };
@@ -4602,7 +4559,9 @@ export const getAskBatchDraftsForFirmFromDb = async ({ firmId = DEFAULT_FIRM_ID 
 // ask_client verbs share the SAME fan-out instead of stopping at the DB
 // (audit §4: "channel fan-out lives only in the ask-batch send"). Returns
 // per-channel results so a caller's receipt can say what actually left.
-export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [] } = {}) => {
+// `deps` is passed through to every deliverer unchanged (their own transport
+// seam, e.g. deps.deliverOwnerMessage) so tests drive the real fan-out.
+export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], deps } = {}) => {
   const results = {};
   // 122 — the OWNER-channel guard, enforced once for all four channels: only
   // client-audience asks may reach WhatsApp/SMS/Telegram/email. A seat/agent
@@ -4632,16 +4591,16 @@ export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientI
     }
   };
   results.whatsapp = await attempt('whatsapp', () =>
-    deliverWhatsAppEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels }));
+    deliverWhatsAppEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   results.sms = await attempt('sms', () =>
-    deliverSmsEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels }));
+    deliverSmsEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   // G14 (outbound-actions M1): Telegram + owner-email join the ask fan-out.
   // Each deliverer carries its own gate (binding / config-plane flag), so an
   // unbound or dark channel is an internal no-op.
   results.telegram = await attempt('telegram', () =>
-    deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels }));
+    deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   results.email = await attempt('email', () =>
-    deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels }));
+    deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   return results;
 };
 
