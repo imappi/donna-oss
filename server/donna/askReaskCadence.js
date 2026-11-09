@@ -69,6 +69,13 @@ export const ASK_REASK_MAX_SEND_COUNT = 3;
 
 const DEFAULT_LIMIT = 25;
 
+// Sends the owner has not answered. An owner who answered "still unpaid"
+// (request_payload.obligation_open_acknowledged, written by the owner-reply
+// reader with the send_count at that answer) is not unresponsive: only the
+// sends after that answer count toward the escalation bound.
+const unansweredSendCount = (row) => Number(row.send_count || 0)
+  - Number(row.request_payload?.obligation_open_acknowledged?.send_count || 0);
+
 // Overdue open asks. due_at is authoritative when set (the flag-gated mint
 // path now sets it); for asks whose due_at is null the sweep infers the same
 // clock from the LAST GENUINE SEND. Escalated requests are excluded: their
@@ -260,7 +267,7 @@ export const runAskReaskSweep = async ({
 
   if (!acts) {
     // Shadow stage: receipt the would-run, touch nothing.
-    const wouldNudge = rows.filter((r) => Number(r.send_count || 0) < ASK_REASK_MAX_SEND_COUNT).length;
+    const wouldNudge = rows.filter((r) => unansweredSendCount(r) < ASK_REASK_MAX_SEND_COUNT).length;
     try {
       await client.query(
         `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
@@ -283,7 +290,7 @@ export const runAskReaskSweep = async ({
   for (const row of rows) {
     const sendCount = Number(row.send_count || 0);
     try {
-      if (sendCount >= ASK_REASK_MAX_SEND_COUNT) {
+      if (unansweredSendCount(row) >= ASK_REASK_MAX_SEND_COUNT) {
         // The owner had every reminder the cadence allows and answered none.
         await escalateToFirm(client, { firmId, clientId, row, nowIso, reason: 'owner_unresponsive' });
         stats.escalated += 1;
