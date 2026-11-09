@@ -23,6 +23,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
 import { assignExclusiveCitableEvidence } from './localEvidenceInventory.js';
+// The one owner-language resolver (also behind the WhatsApp template choice).
+import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 // The shared provider transport (2026-09-13): one deadline over headers +
 // body, capped by the worker's execution budget, and ONE typed failure for
 // a missing key, 401/403, 429/5xx, a reset socket, a hung request and an
@@ -355,7 +357,10 @@ export const buildAskDraftInput = ({
     jurisdiction: clientProfile.jurisdiction || '',
     entity_type: clientProfile.entityType || '',
     accounting_currency:
-      clientProfile.accountingCurrency || clientProfile.baseCurrency || clientProfile.defaultCurrency || ''
+      clientProfile.accountingCurrency || clientProfile.baseCurrency || clientProfile.defaultCurrency || '',
+    // The language the owner reads ('fi' | 'en'). The prompt tells the model
+    // to write every owner-facing word in it; nothing translates in code.
+    language: preferredOwnerTemplateLanguage(clientProfile)
   },
   period: { start: periodStart || null, end: periodEnd || null },
   coding_items: (() => {
@@ -617,6 +622,8 @@ export const buildAskMessageSchema = () => ({
 });
 
 const instructions = `You draft the bookkeeping firm's periodic message to its client. The firm's pipeline has already coded the client's bank lines with a strong model; every coding item below carries that PERSISTED VERDICT — the proposed account, the coding model's own reasoning, its confidence, and (when it wanted client input) its ask_client_question. Your job is to turn those verdicts into ONE clear client message. Do not re-code the transactions and do not second-guess the verdicts.
+
+Write in the owner's language. client.language is an ISO 639-1 code ("fi" = Finnish, "en" = English). Write subject, message_markdown, every question, request_text, and every other client-facing string entirely in that language, including section headings; the quoted example phrasings and section names in these instructions are illustrations in English, so render them in client.language. Keep amounts, currencies, dates, counterparty and company names, filenames, account numbers, IBANs, and document identifiers exactly as they appear in the input; never translate, convert, or reformat them. summary is internal and stays in English.
 
 All fields ending in _ref are opaque CALL-LOCAL HANDLES, such as transaction_1, document_2, or request_3. Copy the exact handle from the input into the matching output field; do not alter, infer, shorten, or reorder its characters. Handles are only for output anchoring: never mention them in subject, message_markdown, summary, question, request_text, fyi_note, or any other client-facing prose.
 
@@ -1139,6 +1146,9 @@ export const draftClientAskMessage = async ({
     // batches.model can be scored against it. (CLAUDE.md "the model id is
     // part of the receipt".)
     model: payload.model || config.model,
-    response_id: payload.id || ''
+    response_id: payload.id || '',
+    // The language the draft was asked to be written in — part of the same
+    // receipt, so a batch can be read against what it was instructed.
+    language: input.client.language
   };
 };
