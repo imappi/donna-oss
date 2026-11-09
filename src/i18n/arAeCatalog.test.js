@@ -99,9 +99,9 @@ const intentionalCanonicalValues = new Set([
 // Re-pin deliberately, in the same change as the keys.
 test('AR-3A plus AR-3B install one immutable 2,621-message Alpha catalog for AR-3C activation', () => {
   assert.equal(AR_AE_CATALOG_VERSION, '2026-09-28.sg-native-intake.1');
-  assert.equal(Object.keys(en).length, 2676);
-  assert.equal(Object.keys(arAE).length, 2676);
-  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2676);
+  assert.equal(Object.keys(en).length, 2681);
+  assert.equal(Object.keys(arAE).length, 2681);
+  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2681);
   assert.equal(AR_AE_CATALOG_METADATA.maturity, 'alpha');
   assert.equal(AR_AE_CATALOG_METADATA.displayLabel, 'العربية · إصدار تجريبي');
   assert.equal(AR_AE_CATALOG_METADATA.authorship, 'machine-authored');
@@ -193,7 +193,9 @@ test('the frozen glossary preserves official versus proposed terminology status'
 // tray labels); any later English change outside
 // `mounted.*` re-pins it in the commit that makes it. The mounted source pin
 // moved for the retired owner checkout (2026-10-21: three `mounted.billing.*`
-// strings now say the accounting firm gives access).
+// strings now say the accounting firm gives access) and for the pilot send
+// release (2026-11-09: five `mounted.settings.cloudPilot.send.*` strings name
+// the owner channels a release switches on; `send.effect` reworded).
 test('the pre-AR-3B English catalog semantics are pinned and the mounted source is pinned', () => {
   const remainingSource = readFileSync(new URL('./catalogs/remainingSurfaces.en.js', import.meta.url));
   const mountedSource = readFileSync(new URL('./catalogs/mountedSurfaces.en.js', import.meta.url));
@@ -201,7 +203,7 @@ test('the pre-AR-3B English catalog semantics are pinned and the mounted source 
     Object.entries(en).filter(([key]) => !key.startsWith('mounted.'))
   );
   assert.equal(hash(remainingSource), '9ff4fe808f5b506276fe953be73f36a5127d2817477ad6c14c0896c82cf88b85');
-  assert.equal(hash(mountedSource), '949fe7932c32a14b1455f67790706ef69d37c590e888058c5aec72f00de74b06');
+  assert.equal(hash(mountedSource), 'a38893f36abc735770dae7c5da10bca7525afb1a9f95e04fb9b02f303cb852a5');
   assert.equal(hash(JSON.stringify(preAr3bEn)), '4092684f621577f6e1e776d081ba08aee579fad6e12dce04a80402919e3cbd38');
 });
 

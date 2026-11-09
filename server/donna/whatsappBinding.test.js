@@ -331,6 +331,21 @@ test('deliverWhatsAppEvidenceAsksAfterSend sends the FI template and records the
   assert.equal(fi.state.ledger.get('meta:wamid.fi').provider_payload.language, 'fi');
 });
 
+test('deliverWhatsAppEvidenceAsksAfterSend: an ask with no period label falls back in the owner language', async () => {
+  const phoneHash = hashPhoneE164('+358401234567');
+  const binding = { id: 'binding', firm_id: 'firm', client_id: 'client', phone_e164: '+358401234567', phone_hash: phoneHash, revoked_at: null };
+  const periods = {};
+  for (const [language, profile] of [['fi', { jurisdiction: 'FI' }], ['en', { jurisdiction: 'GB' }]]) {
+    const db = makeFakeClient({ profile, bindings: [binding], asks: [{ id: `ask_${language}`, firm_id: 'firm', client_id: 'client', question: 'kuitti?', request_payload: {} }] });
+    await deliverWhatsAppEvidenceAsksAfterSend({
+      client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: [`ask_${language}`],
+      env: { WHATSAPP_ENABLED: 'true', WHATSAPP_CLIENTS: 'client' },
+      deps: { deliverOwnerMessage: async (msg) => { periods[language] = msg.template.bodyParameters[0]; return { ok: true, id: `wamid.${language}`, body: {} }; }, OWNER_CHANNELS: { WHATSAPP: 'whatsapp' } }
+    });
+  }
+  assert.deepEqual(periods, { fi: 'tämä kausi', en: 'this period' });
+});
+
 test('preferredOwnerTemplateLanguage: an explicit owner language beats the jurisdiction default', () => {
   assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI', locale: 'en-GB' }), 'en');
   assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI', language: 'en' }), 'en');
