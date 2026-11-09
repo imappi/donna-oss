@@ -26,6 +26,7 @@ import { INTERFACE_LOCALES, resolveInterfaceLocale } from './localeRegistry.js';
 const IDENTICAL_TO_ENGLISH = Object.freeze({
   "auth.email.placeholder": "example value (you@company-com.example)",
   "lifecycle.demo": "the same word in Finnish (Demo)",
+  "firm.reconAuthority.preview.exampleValue": "arguments only ({vendor} · {amount} {currency} · {date})",
   "mounted.financial.annual.uncomputedAsset": "arguments only ({category} ({base}): {reason})",
   "mounted.financial.finland.yel": "code or abbreviation (YEL)",
   "mounted.import.validationSummary": "arguments only ({valid} · {blocked} · {issues})",

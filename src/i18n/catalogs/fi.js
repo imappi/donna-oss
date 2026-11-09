@@ -1,5 +1,6 @@
 import fiDetails from './fiDetails.fi.js';
 import pilotSetup from './pilotSetup.fi.js';
+import reconciliationAuthority from './reconciliationAuthority.fi.js';
 import foundation from './fi/foundation.js';
 import upload from './fi/upload.js';
 import documentFirm from './fi/documentFirm.js';
@@ -19,7 +20,7 @@ import mounted from './fi/mounted.js';
 // translated locale. Machine-authored and not yet reviewed by a professional
 // translator: the registry marks it alpha and its label says "early version".
 // Bump the date and suffix in the same change as any message edit.
-export const FI_CATALOG_VERSION = '2026-11-09.fi-alpha.2';
+export const FI_CATALOG_VERSION = '2026-11-09.fi-alpha.3';
 
 export const FI_CATALOG_METADATA = Object.freeze({
   locale: 'fi',
@@ -30,7 +31,7 @@ export const FI_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-28.sg-native-intake.1',
   catalogVersion: FI_CATALOG_VERSION,
-  expectedMessageCount: 2617,
+  expectedMessageCount: 2681,
   register: 'informal second person singular (sinä); never teitittely',
   outOfScope: Object.freeze([
     'server-built text: emails, SMS, chat-channel messages, questions written by code or a model',
@@ -106,6 +107,8 @@ export const FI_GLOSSARY = Object.freeze({
   accountant: term('kirjanpitäjä'),
   snooze: term('lykätä', 'not “torkuttaa”'),
   secretarial: term('yhtiöhallinto'),
+  standing_authority: term('pysyvä valtuutus', 'one grant; the screen and the concept are “pysyvät valtuudet”'),
+  materiality_threshold: term('olennaisuusraja'),
   supplier: term('toimittaja'),
   opening_balance: term('alkusaldo')
 });
@@ -163,6 +166,7 @@ const fi = Object.freeze({
 
   ...fiDetails,
   ...pilotSetup,
+  ...reconciliationAuthority,
   ...foundation,
   ...upload,
   ...documentFirm,
