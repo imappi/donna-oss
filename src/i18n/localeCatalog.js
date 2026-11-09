@@ -2,8 +2,14 @@ import { parse, TYPE } from '@formatjs/icu-messageformat-parser';
 
 import en from './catalogs/en.js';
 import arAE, { AR_AE_CATALOG_VERSION } from './catalogs/ar-AE.js';
+import fi, { FI_CATALOG_VERSION } from './catalogs/fi.js';
 
-export const INTERFACE_CATALOG_VERSION = AR_AE_CATALOG_VERSION;
+// The version of the interface catalog's source contract: the English keys,
+// arguments and mounted-surface namespace every installed locale must match.
+// It used to be defined as the Arabic catalog's own version; the two moved in
+// lock-step while Arabic was the only translation, and the value is unchanged.
+// Each translated catalog now carries its own version beside it.
+export const INTERFACE_CATALOG_VERSION = '2026-09-28.sg-native-intake.1';
 
 const PSEUDO_CHARS = Object.freeze({
   a: 'á', b: 'ƀ', c: 'ç', d: 'đ', e: 'ë', f: 'ƒ', g: 'ğ', h: 'ħ', i: 'ï',
@@ -106,8 +112,21 @@ const arXB = buildPseudoCatalog(en);
 export const INTERFACE_CATALOGS = Object.freeze({
   en,
   'ar-AE': arAE,
+  fi,
   'ar-XB': arXB
 });
+
+// The version a feedback report or receipt should name for the catalog a
+// person was actually reading. The pseudo locale is derived from English.
+export const INTERFACE_CATALOG_VERSIONS = Object.freeze({
+  en: INTERFACE_CATALOG_VERSION,
+  'ar-AE': AR_AE_CATALOG_VERSION,
+  fi: FI_CATALOG_VERSION,
+  'ar-XB': INTERFACE_CATALOG_VERSION
+});
+
+export const getInterfaceCatalogVersion = (locale) =>
+  INTERFACE_CATALOG_VERSIONS[locale] || INTERFACE_CATALOG_VERSION;
 
 const collectArguments = (elements, result = new Set()) => {
   for (const element of elements) {
@@ -192,5 +211,6 @@ export const assertCatalogParity = (source, candidate, { locale = 'unknown' } = 
 
 assertCatalogParity(en, arXB, { locale: 'ar-XB' });
 assertCatalogParity(en, arAE, { locale: 'ar-AE' });
+assertCatalogParity(en, fi, { locale: 'fi' });
 
 export const getInterfaceCatalog = (locale) => INTERFACE_CATALOGS[locale] || null;
