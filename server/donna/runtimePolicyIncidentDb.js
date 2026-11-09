@@ -7,6 +7,7 @@ import {
 } from './codingPolicyRecovery.js';
 import { ownerReplyIdentity } from './ownerReplyIdentity.js';
 import { supportsStructuredOwnerReply } from './statutoryRegistry.js';
+import { documentOwnerReplyDocumentId } from './documentOwnerReply.js';
 import { evaluateRetainedProcessingScopeWithClient, EntityReadinessAdmissionError } from './runtimeReadinessAdmission.js';
 
 export const RUNTIME_POLICY_CLAIMED_ACTION = 'runtime.policy_incident.claimed';
@@ -21,7 +22,8 @@ const sourceProjection = row => replySource(row) ? { ...row, metadata: { ...row.
 const currentReply = row => row.request_status === 'replied'
   // Visibility follows the registered ask kind; an unresolved country is the
   // condition to repair, while the worker still refuses it before any effect.
-  && (row.transaction_id || (row.audience === 'client' && supportsStructuredOwnerReply(row)))
+  && (row.transaction_id || (row.audience === 'client' && supportsStructuredOwnerReply(row))
+    || documentOwnerReplyDocumentId(row))
   && (row.transaction_id || null) === (row.metadata.transaction_id || null)
   && ownerReplyIdentity({ id: row.resource_id, response_payload: row.response_payload, responded_at: row.responded_at }) === row.metadata.reply_key;
 const sourceJoins = `
@@ -32,7 +34,7 @@ const sourceJoins = `
        join clients c on c.id = a.client_id and c.firm_id = a.firm_id`;
 const sourceColumns = `a.*, t.coding_state, t.description, c.company_name,
        case when a.resource_type = 'transaction' then t.id else r.transaction_id end as transaction_id,
-       r.status as request_status, r.response_payload, r.request_payload, r.responded_at, r.evidence_type, r.audience`;
+       r.status as request_status, r.response_payload, r.request_payload, r.responded_at, r.evidence_type, r.audience, r.review_item_id`;
 const fail = (code, message, statusCode = 409) => {
   const error = new Error(message);
   error.code = code;
