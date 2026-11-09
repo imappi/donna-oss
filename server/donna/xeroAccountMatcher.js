@@ -94,9 +94,12 @@ const preferredTargetsFor = ({ account = '', transaction = {} } = {}) => {
     return ['suspense', 'intercompany clearing'];
   }
   if (key === 'suspense') return ['suspense'];
-  if (/^sales|sales income|revenue|income$/.test(key)) return ['sales income', 'sales'];
+  // Named non-operating income before the generic sales bucket: the sales
+  // pattern's `income$` / `revenue` would otherwise catch "Other income" and
+  // "Interest income" and route them to Sales (those two rows were dead).
   if (/other income|other revenue/.test(key)) return ['other income', 'other revenue'];
   if (/interest income/.test(key)) return ['interest income'];
+  if (/^sales|sales income|revenue|income$/.test(key)) return ['sales income', 'sales'];
   if (/bank fees|taxes and bank fees/.test(key)) return ['bank fees'];
   if (/software|subscription|saas|it software|it and software/.test(key)) return ['it software', 'it and software', 'subscriptions', 'office expenses', 'general expenses'];
   if (/marketing|advertising/.test(key)) return ['marketing', 'advertising'];
@@ -160,11 +163,18 @@ const findPreferredAccount = (accounts = [], targets = []) => {
   return null;
 };
 
-export const resolveXeroAccount = ({ account = '', transaction = {}, xeroAccounts = [] } = {}) => {
+// `substitute` says whose chart this is. An EXTERNAL chart (the Xero mirror)
+// names accounts its own way, so a coded name with no exact row maps onto the
+// nearest curated target there. Donna's OWN chart (substitute: false) is the
+// coder's vocabulary: the coded account resolves by code, name or palette
+// alias, or not at all — the caller then mints it by name (receipted) or
+// refuses. A different account of the same type is never substituted, which
+// would also post past evidence rules that keyed on the coded account's role.
+export const resolveXeroAccount = ({ account = '', transaction = {}, xeroAccounts = [], substitute = true } = {}) => {
   const candidates = postableXeroAccounts(xeroAccounts);
   if (!candidates.length) return null;
   const exact = findExactAccount(candidates, account);
-  if (exact) return exact;
+  if (exact || !substitute) return exact;
   return findPreferredAccount(candidates, preferredTargetsFor({ account, transaction }));
 };
 
@@ -214,10 +224,10 @@ const xeroFieldsFor = (match, { taxTreatment = '', taxType = '', direction = '',
   };
 };
 
-export const enrichCodingWithXeroAccount = ({ coding = {}, transaction = {}, xeroAccounts = [], jurisdiction = null } = {}) => {
+export const enrichCodingWithXeroAccount = ({ coding = {}, transaction = {}, xeroAccounts = [], jurisdiction = null, substitute = true } = {}) => {
   const resolvedJurisdiction = normalizeJurisdictionKey(jurisdiction);
   const account = coding.account_code || coding.proposed_account || coding.account || '';
-  const match = resolveXeroAccount({ account, transaction, xeroAccounts });
+  const match = resolveXeroAccount({ account, transaction, xeroAccounts, substitute });
   if (!match) {
     return xeroAccounts.length
       ? { ...coding, xero_account_match_status: account ? 'unmatched' : 'missing_account' }
@@ -232,13 +242,13 @@ export const enrichCodingWithXeroAccount = ({ coding = {}, transaction = {}, xer
       jurisdiction: resolvedJurisdiction
     }),
     alternatives: Array.isArray(coding.alternatives)
-      ? coding.alternatives.map((alternative) => enrichAlternativeWithXeroAccount({ alternative, transaction, xeroAccounts, jurisdiction: resolvedJurisdiction }))
+      ? coding.alternatives.map((alternative) => enrichAlternativeWithXeroAccount({ alternative, transaction, xeroAccounts, jurisdiction: resolvedJurisdiction, substitute }))
       : coding.alternatives
   };
 };
 
-export const enrichAlternativeWithXeroAccount = ({ alternative = {}, transaction = {}, xeroAccounts = [], jurisdiction = null } = {}) => {
-  const match = resolveXeroAccount({ account: alternative.account || alternative.account_code || alternative.proposed_account || '', transaction, xeroAccounts });
+export const enrichAlternativeWithXeroAccount = ({ alternative = {}, transaction = {}, xeroAccounts = [], jurisdiction = null, substitute = true } = {}) => {
+  const match = resolveXeroAccount({ account: alternative.account || alternative.account_code || alternative.proposed_account || '', transaction, xeroAccounts, substitute });
   if (!match) return alternative;
   return {
     ...alternative,
