@@ -255,6 +255,18 @@ import {
   assertSeatExportAllowed
 } from './seatsDb.js';
 import {
+  getClientOwnerAccessInDb,
+  inviteClientOwnerInDb,
+  resendClientOwnerInviteInDb,
+  revokeClientOwnerInviteInDb,
+  removeClientOwnerAccessInDb,
+  recordClientOwnerInviteEmailOutcomeInDb,
+  sendClientOwnerInviteEmail,
+  acceptClientOwnerInviteInDb,
+  principalIsFirmInvitedOwnerInDb,
+  readFirmNameInDb
+} from './clientOwnerInvitesDb.js';
+import {
   handleOutboundUnsubscribe, handleOutboundApproval, handleOutboundPayLinkWebhook,
   handleOutboundReplyWebhook
 } from './outbound/outboundRoutes.js';
@@ -885,6 +897,9 @@ const validateSupabaseBearerToken = async (token) => {
     type: 'supabase_user',
     userId: String(user?.id || ''),
     email,
+    // GoTrue's own confirmation stamp. Read by the owner-invite acceptance,
+    // which binds a principal by email and so needs the email proven.
+    emailVerified: Boolean(user?.email_confirmed_at || user?.confirmed_at),
     staff: config.allowedEmails.size === 0 || config.allowedEmails.has(email)
   };
 };
@@ -938,6 +953,10 @@ export const resolveSubmittedDonnaAuth = async (req, { pathname = '' } = {}) => 
     //     firm — database membership is the authority, the allowlist is not a
     //     second gate in front of it.
     if (pathname === '/api/donna/firms/self-provision') return supabaseAuth;
+    //   - /owner-invites/accept: a firm-invited owner has no principal until
+    //     the invite binds one; the route itself requires the verified email
+    //     to match the invite (clientOwnerInvitesDb.js). Grants nothing else.
+    if (pathname === '/api/donna/firms/owner-invites/accept') return supabaseAuth;
     // A DATABASE membership is authority in its own right (a self-provisioned
     // firm's administrator is never on a staff allowlist): admit the member
     // into exactly their firm. Ambiguous memberships still refuse.
@@ -2766,6 +2785,12 @@ const donnaFirmsApiHandler = async (req, res) => {
       }
       const firmId = requestUrl.searchParams.get('firm_id') || DEFAULT_FIRM_ID;
       const access = await assertFirmAccess({ firmId, auth: req.donnaAuth });
+      if (await principalIsFirmInvitedOwnerInDb({ firmId, principal: access.principal })) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'A client portal owner cannot manage the firm’s team.', code: 'CLIENT_OWNER_PORTAL_ONLY' }));
+        return;
+      }
       try {
         const roster = await listFirmSeats({
           firmId,
@@ -2799,6 +2824,12 @@ const donnaFirmsApiHandler = async (req, res) => {
       const body = await readBody();
       const firmId = body?.firm_id || DEFAULT_FIRM_ID;
       const access = await assertFirmAccess({ firmId, auth: req.donnaAuth });
+      if (await principalIsFirmInvitedOwnerInDb({ firmId, principal: access.principal })) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'A client portal owner cannot manage the firm’s team.', code: 'CLIENT_OWNER_PORTAL_ONLY' }));
+        return;
+      }
       try {
         let payload;
         if (seatWriteRoute === 'invite') {
@@ -2867,6 +2898,90 @@ const donnaFirmsApiHandler = async (req, res) => {
         res.statusCode = error?.statusCode || 500;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: error?.message || 'Unknown error', code: error?.code }));
+      }
+      return;
+    }
+
+    // Client-owner portal invites (clientOwnerInvitesDb.js, migration 166):
+    // the firm invites its client's business owner into THAT client's portal.
+    // Auth + transport only here; the authorization law (firm owner only,
+    // never a portal principal), the same-firm conflict rule and every
+    // in-transaction receipt live in the module. Literal pathnames, like the
+    // seat routes above.
+    const ownerAccessWriteRoute =
+      (requestUrl.pathname === '/owner-access/invite' && 'invite')
+      || (requestUrl.pathname === '/owner-access/resend' && 'resend')
+      || (requestUrl.pathname === '/owner-access/revoke' && 'revoke')
+      || (requestUrl.pathname === '/owner-access/remove' && 'remove')
+      || null;
+    if ((requestUrl.pathname === '/owner-access' && req.method === 'GET')
+      || (ownerAccessWriteRoute && req.method === 'POST')) {
+      if (!isFirmDatabaseConfigured()) {
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Firm database is not configured.' }));
+        return;
+      }
+      const body = ownerAccessWriteRoute ? await readBody() : null;
+      const firmId = resolveRequestFirmId({ body, query: requestUrl.searchParams, auth: req.donnaAuth });
+      const clientId = String(body?.client_id || requestUrl.searchParams.get('client_id') || '').trim();
+      try {
+        if (!clientId) throw Object.assign(new Error('client_id is required.'), { statusCode: 400, code: 'CLIENT_ID_REQUIRED' });
+        const access = await assertFirmAccess({ firmId, auth: req.donnaAuth, clientIds: [clientId] });
+        const actorPrincipal = access.principal;
+        let payload;
+        if (!ownerAccessWriteRoute) {
+          payload = await getClientOwnerAccessInDb({ firmId, clientId, actorPrincipal });
+        } else if (ownerAccessWriteRoute === 'invite' || ownerAccessWriteRoute === 'resend') {
+          const minted = ownerAccessWriteRoute === 'invite'
+            ? await inviteClientOwnerInDb({ firmId, clientId, actorPrincipal,
+              invite: { name: body?.name, email: body?.email, language: body?.language ?? null } })
+            : await resendClientOwnerInviteInDb({ firmId, clientId, actorPrincipal });
+          // Post-commit, best-effort, stamped — the staff-invite posture. The
+          // token leaves this process only inside the email.
+          const firmName = await readFirmNameInDb({ firmId });
+          const inviteEmail = await sendClientOwnerInviteEmail({ invite: minted.invite, token: minted.token,
+            firmName, companyName: minted.emailContext.companyName, language: minted.emailContext.language });
+          await recordClientOwnerInviteEmailOutcomeInDb({ firmId, clientId, inviteId: minted.invite.id,
+            actorPrincipal, outcome: inviteEmail });
+          payload = { ...(await getClientOwnerAccessInDb({ firmId, clientId, actorPrincipal })), invite_email: inviteEmail };
+        } else if (ownerAccessWriteRoute === 'revoke') {
+          payload = await revokeClientOwnerInviteInDb({ firmId, clientId, actorPrincipal });
+        } else {
+          payload = await removeClientOwnerAccessInDb({ firmId, clientId, actorPrincipal });
+        }
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(payload));
+      } catch (error) {
+        res.statusCode = error?.statusCode || 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: error?.message || 'Unknown error', code: error?.code }));
+      }
+      return;
+    }
+
+    // Acceptance: the signed-in person whose VERIFIED email matches the invite
+    // becomes that client's owner principal. The token names the firm and the
+    // client; nothing on the request can. Admitted past the auth gate only for
+    // this path (resolveSubmittedDonnaAuth).
+    if (requestUrl.pathname === '/owner-invites/accept' && req.method === 'POST') {
+      if (!isFirmDatabaseConfigured()) {
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Firm database is not configured.' }));
+        return;
+      }
+      const body = await readJsonBody(req);
+      try {
+        const accepted = await acceptClientOwnerInviteInDb({ auth: req.donnaAuth, token: String(body?.token || '') });
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(accepted));
+      } catch (error) {
+        res.statusCode = error?.statusCode || 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: error?.statusCode ? error.message : 'Could not accept the invitation.', code: error?.code }));
       }
       return;
     }

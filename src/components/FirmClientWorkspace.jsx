@@ -1,4 +1,5 @@
 import FinnishCompanyDetails from './FinnishCompanyDetails.jsx';
+import ClientOwnerAccessCard from './ClientOwnerAccessCard.jsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { readAccountingProfile } from '../lib/accountingProfile.js';
 import { useIntl } from 'react-intl';
@@ -2311,7 +2312,12 @@ const FirmClientWorkspace = ({
           onDatabaseSnapshot={onDatabaseSnapshot}
         />
       )}
-      {activeTab === 'people' && <PeopleTab profile={profile} />}
+      {activeTab === 'people' && (
+        <>
+          <ClientOwnerAccessCard clientId={profile?.id} enabled={firmDataSource === 'database'} />
+          <PeopleTab profile={profile} />
+        </>
+      )}
     </section>
   );
 };

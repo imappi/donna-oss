@@ -842,6 +842,41 @@ export const revokeFirmRoleGrant = async ({ clientId, grantId, reason = null } =
   return postRoleEmployment('grants/revoke', { client_id: clientId, grant_id: grantId, reason });
 };
 
+// ── Client owner portal access (server/donna/clientOwnerInvitesDb.js) ───────
+//
+// The firm invites a client's business owner into that client's portal.
+// Firm-owner gated server-side; a 403 is a fence, not a fault.
+export const fetchClientOwnerAccess = async ({ clientId, signal } = {}) => {
+  if (!clientId) throw new Error('fetchClientOwnerAccess: clientId is required');
+  const response = await firmFetch(`/api/donna/firms/owner-access?client_id=${encodeURIComponent(clientId)}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    signal
+  });
+  return parseJsonResponse(response);
+};
+
+export const postClientOwnerAccess = async (action, { clientId, ...payload } = {}) => {
+  if (!['invite', 'resend', 'revoke', 'remove'].includes(action)) throw new Error(`postClientOwnerAccess: unknown action ${action}`);
+  if (!clientId) throw new Error('postClientOwnerAccess: clientId is required');
+  const response = await firmFetch(`/api/donna/firms/owner-access/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ client_id: clientId, ...payload })
+  });
+  return parseJsonResponse(response);
+};
+
+export const acceptClientOwnerInvite = async ({ token, signal } = {}) => {
+  const response = await firmFetch('/api/donna/firms/owner-invites/accept', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ token }),
+    signal
+  });
+  return parseJsonResponse(response);
+};
+
 // ── Human seats (docs/design-donna-seats-roles-access.md) ────────────────
 //
 // The roster is FIRM-level (seats span ventures); writes are owner-gated

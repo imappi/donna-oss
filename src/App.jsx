@@ -21,6 +21,7 @@ import OperatorProviderFailures from './components/financials/OperatorProviderFa
 // in RT-14.)
 import ClientPortal from './components/donna-client-portal.jsx';
 import ClientPortalGate from './components/ClientPortalGate.jsx';
+import OwnerInviteAccept from './components/OwnerInviteAccept.jsx';
 import { FirmShellNavControls } from './components/DesktopTitlebar.jsx';
 import UploadTray from './components/UploadTray.jsx';
 import SettingsSidebar from './components/settings/SettingsSidebar.jsx';
@@ -182,6 +183,12 @@ const isFinlandLandingRoute = () => {
 const isWorkspaceStartRoute = () => {
   const path = getCurrentPath();
   return path === '/start' || path === '/start/';
+};
+// /owner-invite is where a firm's owner-invitation email lands (see
+// OwnerInviteAccept). Not firmDataMode and never auth-redirected.
+const isOwnerInviteRoute = () => {
+  const path = getCurrentPath();
+  return path === '/owner-invite' || path === '/owner-invite/';
 };
 // /oauth/consent is where Supabase's OAuth 2.1 server sends an owner so a chat
 // app (ChatGPT app / Claude connector) can be allowed or declined
@@ -1305,6 +1312,13 @@ const AppSession = ({ oauthRedirect }) => {
   // Checkout). Intercepted before the firm gate / landing fallback.
   if (isWorkspaceStartRoute()) {
     return <WorkspaceProvisioner oauthRedirect={oauthRedirect} />;
+  }
+
+  // A firm's owner invitation (server/donna/clientOwnerInvitesDb.js): sign in,
+  // accept, land in that client's portal. Owner journey, never firmDataMode,
+  // never auth-redirected — same reasons as /start.
+  if (isOwnerInviteRoute()) {
+    return <OwnerInviteAccept oauthRedirect={oauthRedirect} />;
   }
 
   // The chat-surface consent page: intercepted before the firm gate / landing

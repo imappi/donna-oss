@@ -631,6 +631,30 @@
       "destination": "/api/donna-router?path=firms/seats/entities"
     },
     {
+      "source": "/api/donna/firms/owner-access",
+      "destination": "/api/donna-router?path=firms/owner-access"
+    },
+    {
+      "source": "/api/donna/firms/owner-access/invite",
+      "destination": "/api/donna-router?path=firms/owner-access/invite"
+    },
+    {
+      "source": "/api/donna/firms/owner-access/resend",
+      "destination": "/api/donna-router?path=firms/owner-access/resend"
+    },
+    {
+      "source": "/api/donna/firms/owner-access/revoke",
+      "destination": "/api/donna-router?path=firms/owner-access/revoke"
+    },
+    {
+      "source": "/api/donna/firms/owner-access/remove",
+      "destination": "/api/donna-router?path=firms/owner-access/remove"
+    },
+    {
+      "source": "/api/donna/firms/owner-invites/accept",
+      "destination": "/api/donna-router?path=firms/owner-invites/accept"
+    },
+    {
       "source": "/api/donna/firms/mentions/notifications",
       "destination": "/api/donna-router?path=firms/mentions/notifications"
     },
