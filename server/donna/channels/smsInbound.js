@@ -10,10 +10,11 @@ import {
   resolveClientEvidenceRequestInDb,
   recordEvidenceTopicTurnInDb,
   getClientEntityAxisFromDb,
+  getClientOwnerLanguageInDb,
   withFirmDbClient
 } from '../firmDb.js';
 import { readClientConfigSnapshot } from '../clientConfig.js';
-import { processAnchoredInboundMessage } from './inboundCore.js';
+import { processAnchoredInboundMessage, resolveInboundOwnerLanguage } from './inboundCore.js';
 import { smsEnvAllowsClient, sendSmsText } from './sms.js';
 import { resolveAssistantName } from '../assistantIdentity.js';
 import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
@@ -22,8 +23,24 @@ import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
 // interpolate the per-client name; "Donna portal" stays — that is the product
 // brand, not the assistant. Default build is byte-identical to the pre-rename
 // copy. The unbound fast-path has no resolvable client, so it keeps the default.
-export const buildSmsInboundCopy = ({ assistantName } = {}) => {
+//
+// `language` is the owner's (preferredOwnerTemplateLanguage); anything but 'fi'
+// gets the English copy, unchanged. The Finnish help text invites LOPETA, which
+// isSmsStop accepts.
+export const buildSmsInboundCopy = ({ assistantName, language = 'en' } = {}) => {
   const name = resolveAssistantName({ assistant_name: assistantName });
+  if (language === 'fi') {
+    return Object.freeze({
+      textResolved: 'Selvä, hoidettu.',
+      mediaSaved: 'Selvä, tallennettu.',
+      topicOpen: 'Selvä, pidän tämän kysymyksen avoimena.',
+      unanchored: 'Vastaa suoraan siihen kysymykseen, johon vastaat, tai lisää viestiin sen Ref, niin yhdistän sen oikein.',
+      unbound: 'Yhdistä tekstiviestit ensin Donna-portaalistasi, niin hoidan tämän.',
+      voiceDeferred: 'En osaa vielä kuunnella ääniviestejä. Kirjoita vastaus tai lähetä kuva, niin hoidan sen.',
+      help: `Täällä ${name}. Tämä numero on nopeita kirjanpitokysymyksiä ja kuitteja varten. Vastaa LOPETA, niin katkaisen yhteyden.`,
+      stopped: 'Yhteys katkaistu. En lähetä enää viestejä tähän numeroon, ellet yhdistä uudelleen portaalistasi.'
+    });
+  }
   return Object.freeze({
     textResolved: "Got it. That's handled.",
     mediaSaved: "Got it, that's saved.",
@@ -37,12 +54,15 @@ export const buildSmsInboundCopy = ({ assistantName } = {}) => {
 };
 
 export const SMS_INBOUND_COPY = buildSmsInboundCopy();
+const SMS_INBOUND_COPY_FI = buildSmsInboundCopy({ language: 'fi' });
+const smsInboundCopyFor = (language) => (language === 'fi' ? SMS_INBOUND_COPY_FI : SMS_INBOUND_COPY);
 
 const sha256Hex = (bytes) => createHash('sha256').update(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || '')).digest('hex');
 
 export const smsKeyword = (body = '') => String(body || '').trim().toUpperCase();
-export const isSmsStop = (body = '') => ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT'].includes(smsKeyword(body));
-export const isSmsHelp = (body = '') => smsKeyword(body) === 'HELP';
+// LOPETA / APUA are the Finnish keywords the Finnish copy invites.
+export const isSmsStop = (body = '') => ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'LOPETA'].includes(smsKeyword(body));
+export const isSmsHelp = (body = '') => ['HELP', 'APUA'].includes(smsKeyword(body));
 
 export const downloadTwilioMedia = async ({ mediaUrl, env = process.env, fetchImpl = globalThis.fetch } = {}) => {
   const accountSid = String(env.TWILIO_ACCOUNT_SID || '').trim();
@@ -75,6 +95,7 @@ const smsConfig = {
   actorFallback: 'sms:webhook',
   capabilities: { generalOwnerChat: false, ownerInitiatedMedia: false, persistOwnerThread: true },
   copy: SMS_INBOUND_COPY,
+  copyFor: smsInboundCopyFor,
   allowsClient: (clientId, gateContext, env) => ownerChannelAllowsClient({ channel: 'sms', clientId, gateContext, envFallback: smsEnvAllowsClient, env }),
   extractText: (message = {}) => message.body || message.Body || '',
   extractContextId: () => '',
@@ -96,23 +117,29 @@ const defaultDeps = (deps = {}) => ({
   // FI-13 slice 13.2: persisted legal-form reader for the opening-balance intake
   // (Oy equity → Oy accounts). Soft-fails to inboundCore's 'toiminimi' default.
   getClientEntityType: deps.getClientEntityType || getClientEntityAxisFromDb,
+  // The owner's language for the acknowledgement copy (inboundCore picks it).
+  getOwnerLanguage: deps.getOwnerLanguage || getClientOwnerLanguageInDb,
   fetchImpl: deps.fetchImpl
 });
 
 
 export const handleSmsComplianceCommand = async ({ body = '', from = '', firmId = 'donna-demo-firm', bindings = null, deps = {} } = {}) => {
   const sendText = deps.sendText || sendSmsText;
+  const getOwnerLanguage = deps.getOwnerLanguage || getClientOwnerLanguageInDb;
   if (isSmsHelp(body)) {
-    await sendText({ to: from, text: SMS_INBOUND_COPY.help });
+    const language = await resolveInboundOwnerLanguage({ firmId, bindings: bindings || [], deps: { getOwnerLanguage } });
+    await sendText({ to: from, text: smsInboundCopyFor(language).help });
     return { handled: true, action: 'help' };
   }
   if (!isSmsStop(body)) return { handled: false };
   const activeBindings = bindings || await (deps.getBindingsByPhoneHash || getActiveSmsBindingsByPhoneHashInDb)({ phoneHash: deps.phoneHash });
+  // Read before revoking: the language follows the clients this number was bound to.
+  const language = await resolveInboundOwnerLanguage({ firmId, bindings: activeBindings || [], deps: { getOwnerLanguage } });
   const revokeBinding = deps.revokeBinding || revokeWhatsAppBindingInDb;
   for (const binding of activeBindings || []) {
     await revokeBinding({ firmId: binding.firm_id || firmId, clientId: binding.client_id, bindingId: binding.id, actorId: binding.collaborator_id || 'sms:webhook' }).catch(() => null);
   }
-  await sendText({ to: from, text: SMS_INBOUND_COPY.stopped });
+  await sendText({ to: from, text: smsInboundCopyFor(language).stopped });
   return { handled: true, action: 'stop', revoked: (activeBindings || []).length };
 };
 

@@ -327,13 +327,31 @@ export const SENSITIVE_ASK_WA_ITEM_PARAM = 'my next question for you';
 // reads there (the ledger records it under this template name).
 export const SENSITIVE_ASK_NOTICE_TEMPLATE = 'donna_sensitive_ask_notice_v1';
 
-export const sensitiveAskPortalNoticeText = ({ assistantName = 'Donna', url = null, askRef = null } = {}) => {
+// `language` is the owner's (preferredOwnerTemplateLanguage); anything but 'fi'
+// gets the English notice, unchanged. The portal section is named by its title
+// as the portal shows it. "(ref X)" stays verbatim in both languages because
+// extractAskRef anchors a reply on the word "ref".
+const SENSITIVE_ASK_NOTICE_COPY = Object.freeze({
+  en: Object.freeze({
+    lead: (name) => `${name} here. I have a question for you that is too sensitive for this chat, so I put it in your secure Donna portal.`,
+    withLink: (url, ref) => `Answer it under What I still need from you: ${url}${ref}`,
+    withoutLink: (ref) => `Open your Donna portal and look under What I still need from you.${ref}`
+  }),
+  fi: Object.freeze({
+    lead: (name) => `Hei, täällä ${name}. Minulla on sinulle kysymys, joka on liian arkaluonteinen tähän keskusteluun, joten laitoin sen suojattuun Donna-portaaliisi.`,
+    withLink: (url, ref) => `Löydät sen kohdasta What I still need from you: ${url}${ref}`,
+    withoutLink: (ref) => `Avaa Donna-portaalisi ja katso kohta What I still need from you.${ref}`
+  })
+});
+
+export const sensitiveAskPortalNoticeText = ({ assistantName = 'Donna', url = null, askRef = null, language = 'en' } = {}) => {
+  const copy = SENSITIVE_ASK_NOTICE_COPY[language] || SENSITIVE_ASK_NOTICE_COPY.en;
   const name = String(assistantName || '').trim() || 'Donna';
   const ref = askRef ? ` (ref ${askRef})` : '';
-  const lead = `${name} here. I have a question for you that is too sensitive for this chat, so I put it in your secure Donna portal.`;
+  const lead = copy.lead(name);
   return url
-    ? `${lead} Answer it under What I still need from you: ${url}${ref}`
-    : `${lead} Open your Donna portal and look under What I still need from you.${ref}`;
+    ? `${lead} ${copy.withLink(url, ref)}`
+    : `${lead} ${copy.withoutLink(ref)}`;
 };
 
 // Audit the share (best-effort at the call site; the receipt also rides the

@@ -527,3 +527,83 @@ test('a throwing send is counted and the sweep continues to the next doc', async
   assert.deepEqual(sentFor, ['d2']);
   assert.deepEqual(outcome, { swept: 2, sent: 1, skipped: { threw: 1 } });
 });
+
+// ── The owner's language ────────────────────────────────────────────────────
+//
+// Finnish owners read Finnish copy, d.m.yyyy dates and decimal commas. English
+// stays byte-identical (the pins above). Same voice rule: no em or en dashes.
+
+test('Finnish single-document summaries: every status, Finnish date and amount formats', () => {
+  const fi = (document, clientName = 'Esimerkki Oy') => buildOwnerMediaSummaryText({ document, clientName, language: 'fi' });
+  assert.equal(fi({ parse_status: 'completed', vendor_name: 'K-Market', total_amount: '42.17', currency: 'eur', document_date: '2026-07-02' }),
+    'Luin sen: K-Market, 42,17 EUR, 2.7.2026. Se on arkistoitu yrityksen Esimerkki Oy tietoihin.');
+  assert.equal(fi({ parse_status: 'completed', vendor_name: '', total_amount: null }),
+    'Luin kuvan, mutta en saanut siitä myyjää tai summaa. Se on tallennettu yrityksen Esimerkki Oy tietoihin.');
+  assert.equal(fi({ parse_status: 'failed', filename: 'file_13.jpg', uploaded_at: '2026-07-21T08:00:00Z' }),
+    'En saanut selvää kuvasta file_13.jpg (21.7.2026). Se on tallennettu yrityksen Esimerkki Oy tietoihin ja merkitty tarkistettavaksi uudelleen.');
+  assert.equal(fi({ parse_status: 'failed' }, null), 'En saanut selvää siitä kuvasta. Se on tallennettu ja merkitty tarkistettavaksi uudelleen.');
+  assert.equal(fi({ parse_status: 'duplicate_pending', parse_summary: { existing_filename: 'kuitti.pdf', existing_uploaded_at: '2026-07-01' } }),
+    'Tämä on minulla jo tallessa yrityksen Esimerkki Oy tiedoissa. Se on sama kuin kuitti.pdf (1.7.2026). Muuta ei tarvita.');
+  assert.equal(fi({ parse_status: 'duplicate_pending' }, null), 'Tämä on minulla jo tallessa. Muuta ei tarvita.');
+  for (const status of ['completed', 'failed', 'duplicate_pending']) {
+    const text = fi({ parse_status: status, vendor_name: 'K-Market', total_amount: '1', currency: 'EUR', filename: 'a.jpg', uploaded_at: '2026-07-21' });
+    assert.ok(!/[–—]/.test(text), `no dash: ${text}`);
+    assert.ok(!/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/.test(text), `no English month: ${text}`);
+  }
+  // English through an explicit language is the historical copy.
+  assert.equal(
+    buildOwnerMediaSummaryText({ document: { parse_status: 'completed', vendor_name: 'Exxon', total_amount: '42.17', currency: 'usd', document_date: '2026-07-12' }, clientName: 'Honeybee Hills Apiary LLC', language: 'en' }),
+    'Read it: Exxon, 42.17 USD, 12 Jul 2026. It is filed for Honeybee Hills Apiary LLC.'
+  );
+});
+
+test('Finnish album summary: per-file lines, totals with decimal commas, plural header', () => {
+  const docs = [
+    { parse_status: 'completed', vendor_name: 'K-Market', total_amount: '10.50', currency: 'EUR', document_date: '2026-07-02', filename: 'a.jpg' },
+    { parse_status: 'completed', vendor_name: 'Neste', total_amount: '20.25', currency: 'EUR', document_date: '2026-07-03', filename: 'b.jpg' }
+  ];
+  assert.equal(buildOwnerMediaGroupSummaryText({ documents: docs, clientName: 'Esimerkki Oy', language: 'fi' }), [
+    'Luin 2 tositetta (Esimerkki Oy):',
+    'K-Market, 10,50 EUR, 2.7.2026',
+    'Neste, 20,25 EUR, 3.7.2026',
+    'Yhteensä 30,75 EUR.',
+    'Kaikki arkistoitu.'
+  ].join('\n'));
+  const mixed = buildOwnerMediaGroupSummaryText({ documents: [docs[0], { parse_status: 'failed', filename: 'c.jpg' }, { parse_status: 'duplicate_pending' }], language: 'fi' });
+  assert.equal(mixed, [
+    'Lähettämäsi 3 tiedostoa:',
+    'K-Market, 10,50 EUR, 2.7.2026',
+    'c.jpg: en saanut siitä selvää. Se on tallennettu ja merkitty tarkistettavaksi uudelleen.',
+    'Yksi tiedosto: jo tallessa.',
+    'Yhteensä 10,50 EUR.'
+  ].join('\n'));
+});
+
+test('the send path reads the owner language and a Finnish owner gets the Finnish summary', async () => {
+  const sent = [];
+  const reads = [];
+  const outcome = await sendOwnerMediaParseSummary({
+    firmId: 'firm-1',
+    documentId: 'tg_doc_1',
+    deps: happyDeps({
+      getOwnerLanguage: async (args) => { reads.push(args); return 'fi'; },
+      sendText: async (args) => { sent.push(args); return { ok: true }; }
+    })
+  });
+  assert.equal(outcome.sent, true);
+  assert.deepEqual(reads, [{ firmId: 'firm-1', clientId: 'honeybee-hills-apiary-llc' }]);
+  assert.equal(sent[0].text, 'Luin sen: Exxon, 42,17 USD, 12.7.2026. Se on arkistoitu yrityksen Honeybee Hills Apiary LLC tietoihin.');
+});
+
+test('an unreadable owner language degrades to the English summary, never a lost one', async () => {
+  const sent = [];
+  await sendOwnerMediaParseSummary({
+    firmId: 'firm-1',
+    documentId: 'tg_doc_1',
+    deps: happyDeps({
+      getOwnerLanguage: async () => { throw new Error('db down'); },
+      sendText: async (args) => { sent.push(args); return { ok: true }; }
+    })
+  });
+  assert.equal(sent[0].text, 'Read it: Exxon, 42.17 USD, 12 Jul 2026. It is filed for Honeybee Hills Apiary LLC.');
+});

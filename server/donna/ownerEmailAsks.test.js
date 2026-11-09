@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { deliverEmailEvidenceAsksAfterSend, OWNER_EMAIL_ASKS_FLAG_KEY } from './firmDb.js';
+import { defaultFrom, senderWithDisplayName } from './email/resendClient.js';
 
 const FIRM = 'firm-1';
 const CLIENT = 'client-1';
@@ -162,4 +163,48 @@ test('a non-Finnish owner gets the English copy, named by the resolver and the f
   assert.ok(renamed.sent[0].email.subject.startsWith('Tessa: 1 question'));
   assert.ok(renamed.sent[0].email.text.startsWith('Hi — Tessa here. To keep'));
   assert.doesNotMatch(renamed.sent[0].email.text, /Donna/);
+});
+
+test('first-ask emails carry no reminder wording; the re-ask sweep marker selects it in both languages', async () => {
+  const fiProfile = { email: 'owner@books.example', jurisdiction: 'FI', assistant_name: 'Aino' };
+  const first = okDeliver();
+  const firstClient = makeMockClient({ profile: fiProfile, firmName: 'Tilitoimisto Esimerkki Oy', asks: [askRow('ask-1', 'Mikä tämä oli?')] });
+  await deliverEmailEvidenceAsksAfterSend({ client: firstClient, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1'], deps: first });
+  assert.doesNotMatch(`${first.sent[0].email.subject}\n${first.sent[0].email.text}`, /Muistut/);
+  assert.equal(ledgerPayloads(firstClient)[0].wording, undefined);
+
+  const fi = okDeliver();
+  const fiClient = makeMockClient({ profile: fiProfile, firmName: 'Tilitoimisto Esimerkki Oy', asks: [askRow('ask-1', 'Mikä tämä oli?')] });
+  await deliverEmailEvidenceAsksAfterSend({ client: fiClient, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1'], deps: { ...fi, askWording: 'reminder' } });
+  assert.equal(fi.sent[0].email.subject, 'Tilitoimisto Esimerkki Oy: 1 kysymys kirjanpidostasi (muistutus) — Roofline Co');
+  assert.ok(fi.sent[0].email.text.startsWith('Hei! Täällä Aino, Tilitoimisto Esimerkki Oy. Muistutan vielä: tarvitsen sinulta vastauksen yhteen kysymykseen, jotta kirjanpitosi pysyy ajan tasalla:'), fi.sent[0].email.text);
+  assert.ok(fi.sent[0].email.text.includes('(ref ASK1)'), 'the reply anchor survives the reminder wording');
+  assert.deepEqual(ledgerPayloads(fiClient).map((p) => [p.language, p.wording]), [['fi', 'reminder']]);
+
+  const en = okDeliver();
+  const enClient = makeMockClient({ asks: [askRow('ask-1', 'q1'), askRow('ask-2', 'q2')] });
+  await deliverEmailEvidenceAsksAfterSend({ client: enClient, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1', 'ask-2'], deps: { ...en, askWording: 'reminder' } });
+  assert.equal(en.sent[0].email.subject, 'Donna: 2 questions about your books (reminder) — Roofline Co');
+  assert.ok(en.sent[0].email.text.startsWith('Hi — Donna here. A quick reminder: I still need a few answers only you can give to keep your books current:'), en.sent[0].email.text);
+});
+
+test('the From display name names the firm and keeps the configured sender address; no firm keeps the default sender', async () => {
+  const named = okDeliver();
+  const client = makeMockClient({ profile: { email: 'owner@books.example', jurisdiction: 'FI', assistant_name: 'Aino' }, firmName: 'Tilitoimisto Esimerkki Oy', asks: [askRow('ask-1', 'q')] });
+  await deliverEmailEvidenceAsksAfterSend({ client, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1'], deps: named });
+  const configured = defaultFrom();
+  const address = (configured.match(/<([^<>]+)>\s*$/) || [null, configured])[1].trim();
+  assert.equal(named.sent[0].email.from, `"Aino, Tilitoimisto Esimerkki Oy" <${address}>`);
+
+  const bare = okDeliver();
+  const bareClient = makeMockClient({ asks: [askRow('ask-1', 'q')] });
+  await deliverEmailEvidenceAsksAfterSend({ client: bareClient, firmId: FIRM, clientId: CLIENT, evidenceRequestIds: ['ask-1'], deps: bare });
+  assert.equal('from' in bare.sent[0].email, false, 'no firm on file: the configured sender, unchanged');
+});
+
+test('senderWithDisplayName swaps only the display name', () => {
+  assert.equal(senderWithDisplayName('Aino, Esimerkki Oy', 'Donna <donna@updates.example.test>'), '"Aino, Esimerkki Oy" <donna@updates.example.test>');
+  assert.equal(senderWithDisplayName('Aino', 'donna@updates.example.test'), '"Aino" <donna@updates.example.test>');
+  assert.equal(senderWithDisplayName('Bad "quote" <x>', 'Donna <donna@updates.example.test>'), '"Bad quote x" <donna@updates.example.test>');
+  assert.equal(senderWithDisplayName('', 'Donna <donna@updates.example.test>'), 'Donna <donna@updates.example.test>');
 });

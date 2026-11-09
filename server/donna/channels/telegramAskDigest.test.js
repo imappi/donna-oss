@@ -132,3 +132,48 @@ test('the single-ask template is untouched by the digest work', () => {
   assert.match(rendered, /^Donna needs one thing for June 2026: What was the Delta charge for\?/);
   assert.match(rendered, /Ref: LC1234$/);
 });
+
+// ── The owner's language ────────────────────────────────────────────────────
+
+test('a Finnish digest: header with the shared period, Finnish footer, Refs kept, no dashes', () => {
+  const text = buildTelegramAskDigestText({
+    language: 'fi',
+    items: [item(1, { period: 'heinäkuu 2026', question: 'Mikä tämä ostos oli?' }), item(2, { period: 'heinäkuu 2026', question: 'Oliko tämä työmatka?' })],
+    portalUrl: 'https://app.example.com/portal/acme/asks'
+  });
+  assert.equal(text, [
+    'Donna tarvitsee sinulta 2 asiaa (heinäkuu 2026):',
+    '',
+    '1. Mikä tämä ostos oli? Ref: LC00001',
+    '2. Oliko tämä työmatka? Ref: LC00002',
+    '',
+    'Vastaa tähän kuvalla tai kirjoittamalla. Jos vastaat vain yhteen, mainitse sen Ref.',
+    'Voit myös vastata kaikkiin portaalissasi:',
+    'https://app.example.com/portal/acme/asks'
+  ].join('\n'));
+  assert.doesNotMatch(text, /[–—]/);
+});
+
+test('a Finnish digest: mixed periods, the Finnish period fallback, and singular/plural overflow', () => {
+  const mixed = buildTelegramAskDigestText({ language: 'fi', items: [item(1, { period: '' }), item(2, { period: 'kesäkuu 2026' })] });
+  assert.match(mixed, /^Donna tarvitsee sinulta 2 asiaa:/);
+  assert.match(mixed, /1\. \[tämä kausi\] /);
+  assert.match(mixed, /2\. \[kesäkuu 2026\] /);
+  const nine = Array.from({ length: TELEGRAM_ASK_DIGEST_MAX_ITEMS + 1 }, (_, i) => item(i + 1));
+  assert.match(buildTelegramAskDigestText({ language: 'fi', items: nine }), /\nYksi kysymys lisää odottaa portaalissasi\.$/);
+  const ten = Array.from({ length: TELEGRAM_ASK_DIGEST_MAX_ITEMS + 2 }, (_, i) => item(i + 1));
+  assert.match(buildTelegramAskDigestText({ language: 'fi', items: ten }), /\n2 kysymystä lisää odottaa portaalissasi\.$/);
+});
+
+test('the English digest is unchanged when the language is given explicitly', () => {
+  const items = [item(1), item(2)];
+  assert.equal(buildTelegramAskDigestText({ items, language: 'en' }), buildTelegramAskDigestText({ items }));
+  assert.equal(buildTelegramAskDigestText({ items }), [
+    'Donna needs 2 things for July 2026:',
+    '',
+    '1. What was this charge 1 for, and was it a business expense? Ref: LC00001',
+    '2. What was this charge 2 for, and was it a business expense? Ref: LC00002',
+    '',
+    "Reply here with a photo or in words. If you're answering just one, mention its Ref."
+  ].join('\n'));
+});

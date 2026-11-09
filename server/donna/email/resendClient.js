@@ -31,6 +31,21 @@ const API_KEY = () => env('RESEND_API_KEY');
 export const defaultFrom = () => env('EMAIL_FROM') || 'Donna <donna@updates.donnamail.example>';
 export const defaultReplyTo = () => env('EMAIL_REPLY_TO') || 'support@books.example';
 
+// The configured sender with a different DISPLAY NAME, for mail written on a
+// firm's behalf (owner question emails name the accounting firm). The ADDRESS
+// is taken verbatim from the configured sender (`Name <addr>` or a bare
+// address), so the verified sending domain never changes. The name is quoted
+// (RFC 5322) because firm names carry commas and dots. A blank name returns
+// the configured sender unchanged.
+export const senderWithDisplayName = (displayName, configured = defaultFrom()) => {
+  const name = String(displayName || '').replace(/[\r\n"\\<>]/g, ' ').replace(/\s+/g, ' ').trim();
+  const raw = String(configured || '').trim();
+  if (!name) return raw;
+  const bracketed = raw.match(/<([^<>]+)>\s*$/);
+  const address = (bracketed ? bracketed[1] : raw).trim();
+  return address ? `"${name}" <${address}>` : raw;
+};
+
 // Email is ENABLED once the API key exists. When disabled the feature stays
 // inert; nothing it gates is walled off.
 export const isEmailEnabled = () => Boolean(API_KEY());

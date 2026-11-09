@@ -26,6 +26,8 @@ export const deliverOwnerMessage = async ({ channel, recipient, template, email,
       // (WhatsApp templates are Meta-registered — name changes there ride
       // template re-registration, not this path.)
       assistantName: template?.assistantName || null,
+      // The owner's language (preferredOwnerTemplateLanguage); absent ⇒ English.
+      language: template?.language || 'en',
       deps: deps.sms || deps
     });
   }
@@ -38,6 +40,7 @@ export const deliverOwnerMessage = async ({ channel, recipient, template, email,
       templateName: template?.name,
       bodyParameters: template?.bodyParameters || [],
       assistantName: template?.assistantName || null,
+      language: template?.language || 'en',
       deps: deps.telegram || deps
     });
   }

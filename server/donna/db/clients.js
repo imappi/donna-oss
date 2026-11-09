@@ -13,6 +13,7 @@ import { resolveClientLifecycle, resolveClientLifecycleAxis, assertFinnishProfil
 import { purgeFirmFactsForDeletedClient } from '../firmFacts.js';
 import { recordAuthorityPlaneWipeReceipt, snapshotAuthorityPlaneForClient } from '../authorityPlaneReceipt.js';
 import { resolveAssistantName } from '../assistantIdentity.js';
+import { OWNER_TEMPLATE_FALLBACK_LANGUAGE, preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
 import { readClientConfigSnapshot, setClientFlagStage } from '../clientConfig.js';
 import { isDesktopHostEnv, seedDesktopClientPlaneRowsWithClient } from '../desktop/hostPlaneSeed.js';
 import { seedNewClientReadinessEnrollmentWithClient } from '../runtimeReadinessEnrollment.js';
@@ -2342,6 +2343,24 @@ export const requireClientInFirm = async ({ client, firmId, clientId }) => {
 };
 
 export { DEFAULT_FIRM_ID, DEMO_FIRM_ID };
+
+// The owner's language for code-side owner-channel copy (inbound acks, parse
+// summaries, topic reminders): the ONE resolver over the client's profile.
+// Never throws; 'en' when the row is missing or unreadable.
+export const getClientOwnerLanguageInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId } = {}) => {
+  if (!clientId) return OWNER_TEMPLATE_FALLBACK_LANGUAGE;
+  try {
+    return await withFirmDbClient(async (client) => {
+      const result = await client.query(
+        'select profile from clients where firm_id = $1 and id = $2 limit 1',
+        [firmId, clientId]
+      );
+      return preferredOwnerTemplateLanguage(result.rows[0]?.profile);
+    });
+  } catch {
+    return OWNER_TEMPLATE_FALLBACK_LANGUAGE;
+  }
+};
 
 // Display name for owner-channel receipts ("saved for <client>"). A binding can
 // point at a different client than the owner assumes (the 2026-07-20 honeybee

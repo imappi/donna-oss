@@ -13,6 +13,7 @@ import {
   getClientEntityAxisFromDb,
   getClientDisplayNameInDb,
   getClientEvidenceRequestByIdInDb,
+  getClientOwnerLanguageInDb,
   withFirmDbClient
 } from '../firmDb.js';
 import { telegramInboundMessageId } from './telegramWebhookCore.js';
@@ -26,7 +27,7 @@ import {
 } from '../statutoryRegistry.js';
 import { readClientConfigSnapshot } from '../clientConfig.js';
 import { createIrasSubmitGstF5 } from '../inboundCountryRegistry.js';
-import { processAnchoredInboundMessage } from './inboundCore.js';
+import { processAnchoredInboundMessage, resolveInboundOwnerLanguage } from './inboundCore.js';
 import { telegramEnvAllowsClient, sendTelegramText, telegramApiUrl } from './telegram.js';
 import { resolveAssistantName } from '../assistantIdentity.js';
 import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
@@ -35,8 +36,29 @@ import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
 // "Donna portal" stays — that is the product brand. Default build is
 // byte-identical to the pre-rename copy. The unbound fast-path has no
 // resolvable client, so it keeps the default.
-export const buildTelegramInboundCopy = ({ assistantName } = {}) => {
+//
+// `language` is the owner's (preferredOwnerTemplateLanguage); anything but 'fi'
+// gets the English copy, unchanged. The Finnish copy holds the same voice rule
+// (no em or en dashes) and invites LOPETA, which isTelegramStop accepts.
+const buildTelegramInboundCopyFi = (name) => Object.freeze({
+  textResolved: 'Selvä, hoidettu.',
+  mediaSaved: 'Selvä. Luen sitä nyt.',
+  mediaSavedFor: (clientName) => `Selvä. Tallensin sen yrityksen ${clientName} tietoihin. Luen sitä nyt.`,
+  mediaSavedMany: 'Selvä. Luen niitä nyt.',
+  mediaSavedForMany: (clientName) => `Selvä. Tallensin ne yrityksen ${clientName} tietoihin. Luen niitä nyt.`,
+  mediaFailed: 'En saanut tallennettua sitä kuvaa. Lähetä se uudelleen.',
+  topicOpen: 'Selvä. Pidän tämän kysymyksen avoimena.',
+  unanchored: 'Vastaa suoraan siihen kysymykseen, johon vastaat (napauta Vastaa), tai lisää viestiin sen Ref, niin yhdistän sen oikein.',
+  voiceDeferred: 'En osaa vielä kuunnella ääniviestejä. Kirjoita vastaus tai lähetä kuva, niin hoidan sen.',
+  unbound: 'Yhdistä Telegram ensin Donna-portaalistasi, niin hoidan tämän.',
+  started: `Täällä ${name}. Tämä keskustelu on kuitteja ja nopeita kirjanpitokysymyksiä varten. Kirjoitan sinulle tänne, kun tarvitsen jotain.`,
+  help: `Täällä ${name}. Tämä keskustelu on kuitteja ja nopeita kirjanpitokysymyksiä varten. Vastaa LOPETA, niin katkaisen yhteyden.`,
+  stopped: 'Yhteys katkaistu. En lähetä enää viestejä tähän keskusteluun, ellet yhdistä uudelleen Donna-portaalistasi. Avoimet kysymykset odottavat portaalissa.'
+});
+
+export const buildTelegramInboundCopy = ({ assistantName, language = 'en' } = {}) => {
   const name = resolveAssistantName({ assistant_name: assistantName });
+  if (language === 'fi') return buildTelegramInboundCopyFi(name);
   return Object.freeze({
     textResolved: "Got it. That's handled.",
     // A photo parses asynchronously; the "booked to X" follow-up rides the
@@ -65,13 +87,15 @@ export const buildTelegramInboundCopy = ({ assistantName } = {}) => {
     unanchored: "Reply right on the question you're answering (tap Reply), or add its Ref and I'll match it.",
     voiceDeferred: "I can't do voice notes yet. Type your answer or send a photo and I'll take it.",
     unbound: "Connect Telegram from your Donna portal first, then I'll pick this up.",
-    started: "It's Donna. This chat is for receipts and quick bookkeeping questions. I'll message you here when I need one thing.",
+    started: `It's ${name}. This chat is for receipts and quick bookkeeping questions. I'll message you here when I need one thing.`,
     help: `It's ${name}. This chat is for receipts and quick bookkeeping questions. Reply STOP to disconnect.`,
     stopped: "You're disconnected. I won't message this chat again unless you reconnect from your Donna portal. Open questions remain in the portal."
   });
 };
 
 export const TELEGRAM_INBOUND_COPY = buildTelegramInboundCopy();
+const TELEGRAM_INBOUND_COPY_FI = buildTelegramInboundCopy({ language: 'fi' });
+const telegramInboundCopyFor = (language) => (language === 'fi' ? TELEGRAM_INBOUND_COPY_FI : TELEGRAM_INBOUND_COPY);
 
 const sha256Hex = (bytes) => createHash('sha256').update(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || '')).digest('hex');
 
@@ -141,6 +165,7 @@ const telegramConfig = {
   actorFallback: 'telegram:webhook',
   capabilities: { generalOwnerChat: true, ownerInitiatedMedia: true, persistOwnerThread: true },
   copy: TELEGRAM_INBOUND_COPY,
+  copyFor: telegramInboundCopyFor,
   allowsClient: (clientId, gateContext, env) => ownerChannelAllowsClient({ channel: 'telegram', clientId, gateContext, envFallback: telegramEnvAllowsClient, env }),
   extractText: (message = {}) => message.text || message.caption || '',
   // A tapped reply carries reply_to_message; its message_id is the outbound ask
@@ -158,6 +183,8 @@ const defaultDeps = (deps = {}) => ({
   getAskById: deps.getAskById || getClientEvidenceRequestByIdInDb,
   claimInboundMessage: deps.claimInboundMessage || claimInboundTelegramMessageInDb,
   getClientDisplayName: deps.getClientDisplayName || getClientDisplayNameInDb,
+  // The owner's language for the acknowledgement copy (inboundCore picks it).
+  getOwnerLanguage: deps.getOwnerLanguage || getClientOwnerLanguageInDb,
   resolveEvidenceRequest: deps.resolveEvidenceRequest || resolveClientEvidenceRequestInDb,
   recordEvidenceTopicTurn: deps.recordEvidenceTopicTurn || recordEvidenceTopicTurnInDb,
   appendClientPortalChatMessage: deps.appendClientPortalChatMessage,
@@ -201,17 +228,21 @@ const defaultDeps = (deps = {}) => ({
 
 export const handleTelegramComplianceCommand = async ({ body = '', from = '', firmId = 'donna-demo-firm', bindings = null, deps = {} } = {}) => {
   const sendText = deps.sendText || sendTelegramText;
+  const getOwnerLanguage = deps.getOwnerLanguage || getClientOwnerLanguageInDb;
   if (isTelegramHelp(body)) {
-    await sendText({ to: from, text: TELEGRAM_INBOUND_COPY.help });
+    const language = await resolveInboundOwnerLanguage({ firmId, bindings: bindings || [], deps: { getOwnerLanguage } });
+    await sendText({ to: from, text: telegramInboundCopyFor(language).help });
     return { handled: true, action: 'help' };
   }
   if (!isTelegramStop(body)) return { handled: false };
   const activeBindings = bindings || await (deps.getBindingsByPhoneHash || getActiveTelegramBindingsByPhoneHashInDb)({ phoneHash: deps.phoneHash });
+  // Read before revoking: the language follows the clients this chat was bound to.
+  const language = await resolveInboundOwnerLanguage({ firmId, bindings: activeBindings || [], deps: { getOwnerLanguage } });
   const revokeBinding = deps.revokeBinding || revokeWhatsAppBindingInDb;
   for (const binding of activeBindings || []) {
     await revokeBinding({ firmId: binding.firm_id || firmId, clientId: binding.client_id, bindingId: binding.id, actorId: binding.collaborator_id || 'telegram:webhook' }).catch(() => null);
   }
-  await sendText({ to: from, text: TELEGRAM_INBOUND_COPY.stopped });
+  await sendText({ to: from, text: telegramInboundCopyFor(language).stopped });
   return { handled: true, action: 'stop', revoked: (activeBindings || []).length };
 };
 

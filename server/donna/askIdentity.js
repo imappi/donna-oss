@@ -179,11 +179,20 @@ export const askAffordances = ({ anchor = '', evidenceType = '' } = {}) => {
 
 // The owner-facing tail for an ask, built from its affordances. Voice rule
 // (Kari 2026-07-21): never an em or en dash; comma, colon, or a new sentence.
-export const renderAskAffordanceTail = (affordances = {}) => {
+// `language` is the owner's (preferredOwnerTemplateLanguage); anything but 'fi'
+// gets the English tail, unchanged. The Finnish 'not sure' keyword it invites
+// ("en ole varma") is one assessEvidenceTopicTurn reads.
+const ASK_AFFORDANCE_TAIL_COPY = Object.freeze({
+  en: Object.freeze({ photo: 'reply with a photo', words: 'answer in words', wordsOnly: 'just reply in words', notSure: "reply 'not sure'", or: ', or ' }),
+  fi: Object.freeze({ photo: 'vastaa kuvalla', words: 'kirjoita vastaus', wordsOnly: 'vastaa vain kirjoittamalla', notSure: "vastaa 'en ole varma'", or: ' tai ' })
+});
+
+export const renderAskAffordanceTail = (affordances = {}, language = 'en') => {
+  const copy = ASK_AFFORDANCE_TAIL_COPY[language] || ASK_AFFORDANCE_TAIL_COPY.en;
   const options = [];
-  if (affordances.photo) options.push('reply with a photo');
-  options.push(affordances.photo ? 'answer in words' : 'just reply in words');
-  if (affordances.not_sure) options.push("reply 'not sure'");
+  if (affordances.photo) options.push(copy.photo);
+  options.push(affordances.photo ? copy.words : copy.wordsOnly);
+  if (affordances.not_sure) options.push(copy.notSure);
   if (options.length === 1) return options[0];
-  return `${options.slice(0, -1).join(', ')}, or ${options[options.length - 1]}`;
+  return `${options.slice(0, -1).join(', ')}${copy.or}${options[options.length - 1]}`;
 };

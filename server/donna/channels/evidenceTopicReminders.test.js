@@ -232,3 +232,58 @@ test('one owner for channel reminders: where the re-ask cadence acts, this sweep
   assert.equal(result.deferred, 1);
   assert.equal(result.sent, 0);
 });
+
+// ── The owner's language ────────────────────────────────────────────────────
+
+test('buildEvidenceTopicReminderText: English unchanged, Finnish in the sinä form for every outcome', () => {
+  const topic = (outcome) => ({ current_need: 'Lähetä Nesteen kuitti', last_assessment: { outcome } });
+  assert.equal(buildEvidenceTopicReminderText({ topic: { current_need: 'Please send the Exxon receipt', last_assessment: { outcome: 'defer_later' } } }),
+    'Quick reminder: Please send the Exxon receipt. Send the answer or attach the evidence when you have it.');
+  assert.equal(buildEvidenceTopicReminderText({ topic: { current_need: 'x', last_assessment: { outcome: 'clarification_requested' } }, language: 'en' }),
+    'Quick reminder: x. If the question was unclear, reply here and I’ll keep it with the open request.');
+  assert.equal(buildEvidenceTopicReminderText({}), 'Quick reminder: that open item. Reply here or in the portal when you have it.');
+
+  assert.equal(buildEvidenceTopicReminderText({ topic: topic('defer_later'), language: 'fi' }),
+    'Pieni muistutus: Lähetä Nesteen kuitti. Lähetä vastaus tai liitä tosite, kun se on sinulla.');
+  assert.equal(buildEvidenceTopicReminderText({ topic: topic('clarification_requested'), language: 'fi' }),
+    'Pieni muistutus: Lähetä Nesteen kuitti. Jos kysymys oli epäselvä, vastaa tähän, niin liitän viestisi avoimeen pyyntöön.');
+  assert.equal(buildEvidenceTopicReminderText({ topic: { current_need: 'Mikä tämä ostos oli?' }, language: 'fi' }),
+    'Pieni muistutus: Mikä tämä ostos oli? Vastaa tähän tai portaalissa, kun sinulla on vastaus.');
+  assert.equal(buildEvidenceTopicReminderText({ language: 'fi' }), 'Pieni muistutus: avoin asia. Vastaa tähän tai portaalissa, kun sinulla on vastaus.');
+});
+
+test('the sweep reads the owner language once per client and sends the reminder in it', async () => {
+  const sent = [];
+  const reads = [];
+  const result = await runEvidenceTopicReminderSweep({
+    firmId: 'firm-1',
+    now: '2026-07-14T10:00:00.000Z',
+    deps: {
+      listOpenEvidenceTopics: async () => [openTopicRequest({ id: 'ask-1' }), openTopicRequest({ id: 'ask-2' })],
+      getOwnerLanguage: async (args) => { reads.push(args); return 'fi'; },
+      sendReminder: async (args) => { sent.push(args); return { message_id: `msg-${args.evidenceRequestId}` }; },
+      stampReminder: async (args) => ({ evidence_topic: args.topicState }),
+      withFirmDbClient: async (fn) => fn({
+        query: async () => ({ rows: [{ flag_key: EVIDENCE_TOPIC_REMINDERS_FLAG_KEY, stage: 'canary', source: 'test', client_id: 'client-1' }] })
+      })
+    }
+  });
+  assert.equal(result.sent, 2);
+  assert.deepEqual(reads, [{ firmId: 'firm-1', clientId: 'client-1' }], 'one language read per client');
+  assert.deepEqual(sent.map((args) => args.language), ['fi', 'fi']);
+  assert.match(sent[0].text, /^Pieni muistutus: Please send the Exxon receipt\. Lähetä vastaus/);
+});
+
+test('the reminder ledger entry records the language sent', async () => {
+  const db = bindingDbClient({ telegram: { id: 'tgb', phone_e164: '555', phone_hash: 'h' } });
+  await sendEvidenceTopicReminderViaBoundChannel({
+    firmId: 'firm-1', clientId: 'client-1', evidenceRequestId: 'ask-1',
+    text: 'Pieni muistutus: avoin asia.', language: 'fi',
+    now: '2026-07-14T10:00:00.000Z',
+    env: { TELEGRAM_ENABLED: 'true', TELEGRAM_CLIENTS: 'client-1' },
+    deps: { withFirmDbClient: async (fn) => fn(db), sendTelegramText: async () => ({ ok: true, id: 'tg-1' }) }
+  });
+  const insert = db.queries.find((q) => /insert into message_delivery_ledger/i.test(q.sql));
+  const payload = JSON.parse(insert.params[insert.params.length - 1]);
+  assert.deepEqual(payload.reminder, { status: 'sent', language: 'fi' });
+});
