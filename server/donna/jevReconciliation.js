@@ -12,14 +12,14 @@ import { applyReminderSettlementWithClient } from './creditNoteApplications.js';
 import { planRefundGroup } from './jevRefundGroup.js';
 import { NO_SETTLEMENT_OBLIGATION_TYPES, JEV_PREPARATION_CONTRACT } from './documentDispositionShape.js';
 import { suggestedMatchHasSettleLane } from './reconciliationTwinAging.js';
-import { ensureSalesRecognitionAskWithClient } from './salesRecognitionGap.js';
+import { ensureNoSettlementAskWithClient, noSettlementAskStatsKey } from './salesRecognitionGap.js';
 
 export const __jevReconciliation = {
   decide: args => decideJevReconciliation(args),
   write: args => upsertMatchAndCascade(args),
   record: args => recordReconciliationEvaluation(args),
   authorize: args => authorizeJevMatch(args),
-  salesRecognitionAsk: args => ensureSalesRecognitionAskWithClient(args)
+  noSettlementAsk: args => ensureNoSettlementAskWithClient(args)
 };
 const familyFor = type => type === 'issued_receipt' ? 'sales_invoice' : type === 'deposit_slip' ? 'payout_statement' : type;
 const minor = n => Math.round(Number(n || 0) * 100);
@@ -343,9 +343,11 @@ export async function runJevReconciliationForDocument({ client, firmId, clientId
           payload:{decision_engine:'jev',disposition:'no_settlement',probability:result.decision.probability,
             evidence_packet_sha256:result.evidence_packet_sha256,assessment:'No supplied payment settles this document. The obligation remains open.',
             scope:{transaction_ids:result.candidates.map(t=>t.id),absence_proven:false},accounting_complete:false}});
-        // FI-09: an open sales-invoice obligation on accrual books is not
-        // recognised anywhere yet; put it on the owner (the existing doc ask).
-        if(negativeAccepted && result.document?.document_type==='sales_invoice') stats.sales_recognition_ask=await __jevReconciliation.salesRecognitionAsk({client,firmId,clientId,documentId,reason:'jev_no_settlement'});
+        // FI-09: an open sales-invoice or supplier-bill obligation on accrual
+        // books is not recorded anywhere yet; put it on the owner (the
+        // existing doc ask, one lane per obligation type).
+        const askKey=noSettlementAskStatsKey(result.document?.document_type);
+        if(negativeAccepted && askKey) stats[askKey]=await __jevReconciliation.noSettlementAsk({client,firmId,clientId,documentId,documentType:result.document.document_type,reason:'jev_no_settlement'});
         await client.query(ownsTransaction?'commit':'release savepoint jev_negative_assessment');
       } catch(error) {
         negativeAccepted=false;

@@ -36,6 +36,7 @@ import {
 } from './handlerManifest.js';
 import { parseCronExpression } from './cronSchedule.js';
 import { SUPPORTED_CRON_TASKS } from '../api.js';
+import { parseCronSummaryFailures } from '../parseCronSummaryFailures.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -226,6 +227,30 @@ test('a parse-cron entry calls the task runner in-process with its task name —
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('a parse-cron task whose summary carries a caught failure fails the run (the cloud route\'s 500 rule); a clean summary still succeeds', async () => {
+  const summaries = {
+    loops_inbox: { loops_inbox: { error: 'connect ECONNREFUSED 127.0.0.1:5432' } },
+    coding_convergence: { coding_convergence: { firms: [{ firm_id: 'firm-synthetic-1', considered: 0 }] } }
+  };
+  const built = buildDesktopHandlerManifest({
+    deps: { runParseCronTask: async ({ task }) => summaries[task] }
+  });
+  const step = { run: async (_name, fn) => fn() };
+  const logger = { log: () => {}, error: () => {} };
+  const run = (task) => built.find((e) => e.functionId === `parse-cron:${task}`).run({ step, logger, payload: {} });
+
+  await assert.rejects(run('loops_inbox'), (error) => {
+    assert.equal(error.code, 'PARSE_CRON_TASK_FAILED');
+    assert.deepEqual(error.failures, [{ task: 'loops_inbox', error: 'connect ECONNREFUSED 127.0.0.1:5432' }]);
+    assert.match(error.message, /ECONNREFUSED/, 'the failures ride in the message, which becomes the job\'s last_error');
+    return true;
+  });
+  assert.deepEqual(await run('coding_convergence'), summaries.coding_convergence, 'a clean summary is the job result, unchanged');
+  // The read-only diagnostics task is not on the desktop schedule; the one
+  // rule the entries read still leaves its own read errors alone.
+  assert.deepEqual(parseCronSummaryFailures({ diagnostics: { error: 'read failed', counts_error: 'read failed' } }), []);
 });
 
 test('the manifest module does not read vercel.json (or any file) at runtime', () => {

@@ -331,6 +331,32 @@ test('deliverWhatsAppEvidenceAsksAfterSend sends the FI template and records the
   assert.equal(fi.state.ledger.get('meta:wamid.fi').provider_payload.language, 'fi');
 });
 
+test('preferredOwnerTemplateLanguage: an explicit owner language beats the jurisdiction default', () => {
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI', locale: 'en-GB' }), 'en');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI', language: 'en' }), 'en');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI', preferredLanguage: 'sv' }), 'en');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'US', locale: 'fi-FI' }), 'fi');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI', locale: '  ' }), 'fi', 'a blank locale is unset');
+});
+
+test('deliverWhatsAppEvidenceAsksAfterSend sends en to an English-speaking owner of a Finnish company', async () => {
+  const phoneHash = hashPhoneE164('+358401234567');
+  const binding = { id: 'binding', firm_id: 'firm', client_id: 'client', phone_e164: '+358401234567', phone_hash: phoneHash, revoked_at: null };
+  const db = makeFakeClient({
+    profile: { jurisdiction: 'FI', locale: 'en-GB' },
+    bindings: [binding],
+    asks: [{ id: 'ask_en', firm_id: 'firm', client_id: 'client', question: 'receipt?', request_payload: { period: 'June 2026' } }]
+  });
+  const languages = [];
+  await deliverWhatsAppEvidenceAsksAfterSend({
+    client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask_en'],
+    env: { WHATSAPP_ENABLED: 'true', WHATSAPP_CLIENTS: 'client' },
+    deps: { deliverOwnerMessage: async (msg) => { languages.push(msg.template.languageCode); return { ok: true, id: 'wamid.en', body: {} }; }, OWNER_CHANNELS: { WHATSAPP: 'whatsapp' } }
+  });
+  assert.deepEqual(languages, ['en'], 'the explicit English locale wins over jurisdiction FI');
+  assert.equal(db.state.ledger.get('meta:wamid.en').provider_payload.language, 'en');
+});
+
 test('deliverWhatsAppEvidenceAsksAfterSend falls back to en when the fi template is not approved (132001)', async () => {
   const phoneHash = hashPhoneE164('+358401234567');
   const binding = { id: 'binding', firm_id: 'firm', client_id: 'client', phone_e164: '+358401234567', phone_hash: phoneHash, revoked_at: null };

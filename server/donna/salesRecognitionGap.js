@@ -25,6 +25,14 @@
 // ledger. A GB or US accrual book has the same hole and reads the same census.
 // Cash-basis books are unchanged: there income is recognised at settlement.
 //
+// The purchase side has the same hole: an uploaded supplier bill on an accrual
+// book with no settling payment is journaled nowhere either. The same hook puts
+// it on the owner through its own lane (supplier_bill_settlement), sharing the
+// ask primitive and the never-twice check. There is no purchase-side census yet,
+// so the drafts do not yet list such bills as excluded.
+//
+// Both questions are written in the owner's language (preferredOwnerTemplateLanguage).
+//
 // Keep-layer posture: read-only SQL plus pure classification; no model call.
 
 import { invoiceNumbersOf } from './creditNoteApplications.js';
@@ -33,8 +41,11 @@ import { __createClientEvidenceRequestWithClient } from './db/asks.js';
 import { readClientConfigSnapshot, clientFlagActs } from './clientConfig.js';
 import { DOCUMENT_NO_LINE_DISPOSITION_FLAG_KEY } from './documentDispositionShape.js';
 import { toIsoDay } from './dates.js';
+import { preferredOwnerTemplateLanguage } from './db/channels.js';
 
 export const SALES_RECOGNITION_ASK_LANE = 'sales_invoice_recognition';
+// Its purchase-side sibling: an uploaded supplier bill with no settling payment.
+export const SUPPLIER_BILL_SETTLEMENT_ASK_LANE = 'supplier_bill_settlement';
 // The existing doc-anchored settlement lane: resolved by the ledger writer when
 // a journal posts against the document (resolveOpenSettlementRequestsForDocument),
 // answered through the existing doc-ask reply consumer.
@@ -252,7 +263,16 @@ export const readSalesRecognitionGapWithClient = async ({ client, firmId, client
   return classifySalesRecognitionGap({ basis, period, documents, matches, transactionJournals, issuedJournals, applications, asks });
 };
 
-const amountText = (value, currency) => `${Number(value).toFixed(2)}${currency ? ` ${currency}` : ''}`;
+const amountText = (value, currency, language = 'en') => {
+  const fixed = Number(value).toFixed(2);
+  return `${language === 'fi' ? fixed.replace('.', ',') : fixed}${currency ? ` ${currency}` : ''}`;
+};
+// Finnish owners read 12.2.2025, not 2025-02-12.
+const dayText = (iso, language = 'en') => {
+  if (!iso || language !== 'fi') return iso;
+  const [y, m, d] = iso.split('-');
+  return `${Number(d)}.${Number(m)}.${y}`;
+};
 
 const printedInvoiceNumber = (document = {}) => {
   const refs = Array.isArray(obj(document.parse_summary).references) ? document.parse_summary.references : [];
@@ -260,7 +280,22 @@ const printedInvoiceNumber = (document = {}) => {
   return String(printed?.value || document.reference_number || '').trim();
 };
 
-export const buildSalesRecognitionQuestion = ({ document = {} } = {}) => {
+// The Finnish header names the counterparty inside the brackets so no company
+// name has to be inflected: "Myyntilasku 1002 (Lumikki Oy, 903,60 EUR, päivätty 12.2.2025)".
+const finnishHeader = ({ label, document, counterparty }) => {
+  const number = printedInvoiceNumber(document) ? ` ${printedInvoiceNumber(document)}` : '';
+  const date = day(document.document_date);
+  const parts = [counterparty, amountText(document.total_amount, document.currency, 'fi'), date ? `päivätty ${dayText(date, 'fi')}` : null].filter(Boolean);
+  return `${label}${number} (${parts.join(', ')})`;
+};
+
+export const buildSalesRecognitionQuestion = ({ document = {}, language = 'en' } = {}) => {
+  if (language === 'fi') {
+    return `${finnishHeader({ label: 'Myyntilasku', document, counterparty: document.customer_name })}: `
+      + 'Donnalla olevissa tiliotteissa ei näy tälle laskulle maksua. Donna ei vielä kirjaa maksamatonta myyntilaskua kirjanpitoon, '
+      + 'joten se jää pois sen kauden myynnistä ja arvonlisäverosta, ja luonnoksissa se näkyy pois jätettynä. '
+      + 'Onko asiakas maksanut laskun? Jos on, milloin ja mille tilille? Jos lasku on vielä maksamatta, vastaa "vielä maksamatta".';
+  }
   const number = printedInvoiceNumber(document) ? ` ${printedInvoiceNumber(document)}` : '';
   const customer = document.customer_name ? ` to ${document.customer_name}` : '';
   const date = day(document.document_date);
@@ -270,13 +305,52 @@ export const buildSalesRecognitionQuestion = ({ document = {} } = {}) => {
     + 'Has the customer paid it? If so, when, and into which account? If it is still unpaid, reply "still unpaid".';
 };
 
+// The purchase-side question. It invites only answers the doc-ask reply path
+// consumes (runOwnerReplyRedisposition): an account and a date (matched once
+// that statement arrives, or a statement request for an account Donna lacks),
+// or the owner's own cash or personal card (the documentSettlementEntry
+// owner-funds journal). A "still unpaid" reply has no consumer there, so it is
+// not invited: an unpaid bill keeps this question open, and the ledger post
+// against the bill's bank line resolves it (resolveOpenSettlementRequestsForDocument).
+export const buildSupplierBillSettlementQuestion = ({ document = {}, language = 'en' } = {}) => {
+  if (language === 'fi') {
+    return `${finnishHeader({ label: 'Ostolasku', document, counterparty: document.vendor_name })}: `
+      + 'Donnalla olevissa tiliotteissa ei näy tälle laskulle maksua. Donna ei vielä kirjaa maksamatonta ostolaskua kirjanpitoon, '
+      + 'joten se puuttuu sen kauden kuluista ja arvonlisäverosta. '
+      + 'Onko lasku maksettu? Jos on, milloin ja miltä tililtä? Jos maksoit sen omilla rahoillasi käteisellä tai omalla kortillasi, kerro kumpi. '
+      + 'Jos lasku on vielä maksamatta, sinun ei tarvitse vastata nyt: kysymys sulkeutuu itsestään, kun maksu näkyy tiliotteella, jonka lähetät.';
+  }
+  const number = printedInvoiceNumber(document) ? ` ${printedInvoiceNumber(document)}` : '';
+  const vendor = document.vendor_name ? ` from ${document.vendor_name}` : '';
+  const date = day(document.document_date);
+  return `Supplier bill${number}${vendor} (${amountText(document.total_amount, document.currency)}${date ? `, dated ${date}` : ''}) `
+    + 'has no payment on the bank statements Donna holds. Donna does not yet record an unpaid supplier bill in the books, '
+    + 'so it is missing from that period\'s expenses and VAT. '
+    + 'Has it been paid? If so, when, and from which account? If you paid it with your own money, in cash or on a personal card, say which. '
+    + 'If it is still unpaid, you don\'t need to reply now: this question closes on its own once the payment shows on a bank statement you send.';
+};
+
+// One lane per obligation type that the scoped no-settlement negative leaves
+// unrecorded on an accrual book (NO_SETTLEMENT_OBLIGATION_TYPES). The census
+// above covers the sales lane only; the purchase-side census is not built yet.
+const NO_SETTLEMENT_ASK_LANES = Object.freeze({
+  sales_invoice: { lane: SALES_RECOGNITION_ASK_LANE, statsKey: 'sales_recognition_ask', buildQuestion: buildSalesRecognitionQuestion,
+    recognition: 'unrecognised_uploaded_sales_invoice', refusal: 'not_an_uploaded_sales_invoice' },
+  supplier_bill: { lane: SUPPLIER_BILL_SETTLEMENT_ASK_LANE, statsKey: 'supplier_bill_settlement_ask', buildQuestion: buildSupplierBillSettlementQuestion,
+    recognition: 'unrecorded_uploaded_supplier_bill', refusal: 'not_an_uploaded_supplier_bill' }
+});
+export const noSettlementAskStatsKey = (documentType) => NO_SETTLEMENT_ASK_LANES[documentType]?.statsKey || null;
+
 // The ask hook. Called where the runtime concludes that no supplied payment
-// settles an uploaded sales invoice (jevReconciliation's scoped negative). On
-// an accrual book where the doc-ask lane acts, the invoice becomes ONE
-// doc-anchored payment-method question through the canonical ask primitive.
-// Never re-asked once this lane asked it (an answered question stays answered;
-// the census keeps listing the invoice on every draft).
-export const ensureSalesRecognitionAskWithClient = async ({ client, firmId, clientId, documentId, reason = 'no_settlement', actorId = 'system' } = {}) => {
+// settles an uploaded sales invoice or supplier bill (jevReconciliation's
+// scoped negative). On an accrual book where the doc-ask lane acts, the
+// document becomes ONE doc-anchored payment-method question to the owner, in
+// the owner's language, through the canonical ask primitive. Never re-asked
+// once its lane asked it (an answered question stays answered; for a sales
+// invoice the census keeps listing it on every draft).
+export const ensureNoSettlementAskWithClient = async ({ client, firmId, clientId, documentId, documentType, reason = 'no_settlement', actorId = 'system' } = {}) => {
+  const lane = NO_SETTLEMENT_ASK_LANES[documentType];
+  if (!lane) return { minted: false, reason: 'not_a_no_settlement_obligation' };
   const snapshot = await readClientConfigSnapshot(client, { firmId, clientId });
   if (!clientFlagActs({ flagKey: DOCUMENT_NO_LINE_DISPOSITION_FLAG_KEY, snapshot, envFallback: () => false })) {
     return { minted: false, reason: 'flag_off' };
@@ -284,31 +358,31 @@ export const ensureSalesRecognitionAskWithClient = async ({ client, firmId, clie
   const clientRow = (await client.query('select profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
   if (!clientRow || basisOf(clientRow) !== 'accrual') return { minted: false, reason: 'not_accrual' };
   const document = (await client.query(
-    `select id, document_type, parse_status, duplicate_of, payment_status, customer_name, total_amount, currency,
+    `select id, document_type, parse_status, duplicate_of, payment_status, customer_name, vendor_name, total_amount, currency,
             document_date, reference_number, structured_reference, parse_summary
        from documents where firm_id = $1 and client_id = $2 and id = $3`,
     [firmId, clientId, documentId]
   )).rows[0];
-  if (!document || document.document_type !== 'sales_invoice' || document.parse_status !== 'completed'
+  if (!document || document.document_type !== documentType || document.parse_status !== 'completed'
     || document.duplicate_of || String(document.payment_status || '').toLowerCase() === 'credit_note') {
-    return { minted: false, reason: 'not_an_uploaded_sales_invoice' };
+    return { minted: false, reason: lane.refusal };
   }
   const prior = (await client.query(
     `select id from client_evidence_requests
       where firm_id = $1 and client_id = $2 and request_payload->>'document_id' = $3
         and request_payload->>'lane' = $4
       limit 1`,
-    [firmId, clientId, documentId, SALES_RECOGNITION_ASK_LANE]
+    [firmId, clientId, documentId, lane.lane]
   )).rows[0];
   if (prior) return { minted: false, reason: 'already_asked', evidence_request_id: prior.id };
   const mintOutcome = {};
   const request = await __createClientEvidenceRequestWithClient({
     client, firmId, clientId, documentId,
-    question: buildSalesRecognitionQuestion({ document }),
+    question: lane.buildQuestion({ document, language: preferredOwnerTemplateLanguage(clientRow.profile) }),
     evidenceType: SALES_RECOGNITION_ASK_EVIDENCE_TYPE,
     actorId,
     markTransactionNeedsClient: false,
-    requestContext: { lane: SALES_RECOGNITION_ASK_LANE, reason, recognition: 'unrecognised_uploaded_sales_invoice' },
+    requestContext: { lane: lane.lane, reason, recognition: lane.recognition },
     mintOutcome
   });
   return { minted: mintOutcome.minted ?? Boolean(request), reason, evidence_request_id: request?.id || null };

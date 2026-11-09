@@ -4309,7 +4309,7 @@ export const __draftClientAskBatchWithClient = async ({
   );
   const verdictsAsOf = new Date(Math.max(lastEvaluatedAtMs, lastSuggestedAtMs) || Date.now()).toISOString();
 
-  const { draft, model, response_id: responseId } = await draftFn({
+  const { draft, model, response_id: responseId, language: draftLanguage } = await draftFn({
     clientProfile,
     codingItems,
     internalMovementLines,
@@ -4405,6 +4405,10 @@ export const __draftClientAskBatchWithClient = async ({
   const batchPayload = {
     draft,
     response_id: responseId || '',
+    // Drafting receipt beside the model id (the column) and response_id: the
+    // owner language the drafter was instructed to write in. null when an
+    // injected drafter does not report one.
+    language: draftLanguage || null,
     // Exact direct-ask anchors generation-time validation approved. The send
     // writer rechecks only batches minted by this freshness-aware code; older
     // persisted drafts remain readable and follow their historical contract.
@@ -4507,6 +4511,7 @@ export const __draftClientAskBatchWithClient = async ({
         batchId,
         JSON.stringify({
           model: model || null,
+          language: draftLanguage || null,
           period_start: cleanPeriodStart,
           period_end: cleanPeriodEnd,
           counts: draft.counts,
