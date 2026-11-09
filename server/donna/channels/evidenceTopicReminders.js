@@ -9,6 +9,7 @@ import {
   withFirmDbClient
 } from '../firmDb.js';
 import { REASK_CADENCE_FLAG_KEY } from '../askReaskCadence.js';
+import { gateOwnerSendWithClient } from '../ownerAskDelivery.js';
 import { prepareOwnerAskQuestion } from './askSafety.js';
 import { sendSmsText } from './sms.js';
 import { sendTelegramText, telegramEnvAllowsClient } from './telegram.js';
@@ -153,8 +154,9 @@ export const runEvidenceTopicReminderSweep = async ({
 
   const requests = await listOpenEvidenceTopics({ firmId, clientId, limit });
   const candidates = selectDueEvidenceTopicReminders({ requests, now, limit });
-  const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, deferred: 0, failed: 0 };
+  const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, deferred: 0, refused: 0, failed: 0 };
   const snapshots = new Map();
+  const sendGates = new Map();
 
   for (const candidate of candidates) {
     const request = candidate.request;
@@ -183,6 +185,24 @@ export const runEvidenceTopicReminderSweep = async ({
     // same question, so this sweep defers to it.
     if (clientFlagActs({ flagKey: REASK_CADENCE_FLAG_KEY, snapshot: snapshots.get(key), envFallback: () => false, env })) {
       stats.deferred += 1;
+      continue;
+    }
+    // The ONE owner-send gate every owner message passes (ownerAskDelivery.js:
+    // pilot send containment + entity-readiness admission at 'ask_send'), read
+    // once per client per sweep. Refused ⇒ nothing sent, nothing stamped, and
+    // the refusal is receipted for the operator ('evidence_request.send_refused').
+    if (!sendGates.has(key)) {
+      const clientCandidateIds = candidates
+        .filter((c) => `${c.request.firm_id || firmId}:${c.request.client_id}` === key)
+        .map((c) => c.request.id);
+      const gate = await withClient((client) => gateOwnerSendWithClient({
+        client, firmId: request.firm_id || firmId, clientId: request.client_id,
+        surface: 'evidence_topic_reminder', evidenceRequestIds: clientCandidateIds, deps
+      })).catch(() => ({ allowed: false, code: 'SEND_GATE_UNREADABLE' }));
+      sendGates.set(key, gate);
+    }
+    if (!sendGates.get(key).allowed) {
+      stats.refused += 1;
       continue;
     }
 
