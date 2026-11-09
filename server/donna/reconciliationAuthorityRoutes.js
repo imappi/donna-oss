@@ -329,6 +329,7 @@ const send = (res, statusCode, body) => {
 // refusal commits only its own receipt.
 const governedWrite = async ({ firmId, clientId, access, verb, run, grantId = null, matchId = null }) =>
   withFirmDbClient(async (client) => {
+    let committed = null;
     await client.query('begin');
     try {
       const { principal, decision } = await resolveActing(client, { firmId, clientId, access, actionType: verb });
@@ -339,11 +340,14 @@ const governedWrite = async ({ firmId, clientId, access, verb, run, grantId = nu
       }
       const out = await run(client, { principal, decision });
       await client.query('commit');
-      return { ...out, ...(await listPayload(client, { firmId, clientId })) };
+      committed = out;
     } catch (error) {
       await client.query('rollback').catch(() => {});
       throw error;
     }
+    // The write is committed; a failed refresh read must not report it as failed.
+    const fresh = await listPayload(client, { firmId, clientId }).catch(() => null);
+    return { ...committed, ...(fresh || { grants: null }) };
   });
 
 const mint = async ({ firmId, clientId, access, body }) => {
