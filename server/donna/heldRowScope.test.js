@@ -104,10 +104,10 @@ test('real PG: a held statement row question names its siblings, and one answer 
   await mint();
   const askFor = async transactionId => (await rows(`select * from client_evidence_requests where transaction_id=$1 and status in ('draft','open') order by id`, [transactionId]))[0];
   const first = await askFor('all-bank-1');
-  assert.match(first.question, /This payment is row 1 “Settlement 1” of that statement\. 2 other rows of the same statement are also waiting for your confirmation: row 3 “Settlement 3”, EUR 2600\.00 received on 2026-09-04; row 4 “Settlement 4”, EUR 1800\.00 received on 2026-09-05\. You can confirm all the remaining rows at once in your answer, or keep answering row by row\.$/);
+  assert.match(first.question, /Tämä maksu on tiliotteen rivi 1 ”Settlement 1”\. Myös 2 muuta saman tiliotteen riviä odottaa vahvistustasi: rivi 3 ”Settlement 3”, 2600,00 EUR saatu 4\.9\.2026; rivi 4 ”Settlement 4”, 1800,00 EUR saatu 5\.9\.2026\. Voit vahvistaa kaikki jäljellä olevat rivit kerralla vastauksessasi tai vastata rivi kerrallaan\.$/);
   assert.deepEqual(first.request_payload.held_match_siblings.map(row => [row.transaction_id, row.line_no, row.amount, row.date]),
     [['all-bank-3', 3, '2600.00', '2026-09-04'], ['all-bank-4', 4, '1800.00', '2026-09-05']]);
-  assert.match((await askFor('all-bank-4')).question, /row 1 “Settlement 1”, EUR 1600\.00 received on 2026-09-02; row 3 “Settlement 3”/, 'every held row names its siblings');
+  assert.match((await askFor('all-bank-4')).question, /rivi 1 ”Settlement 1”, 1600,00 EUR saatu 2\.9\.2026; rivi 3 ”Settlement 3”/, 'every held row names its siblings');
   assert.equal((await askFor('all-bank-2')), undefined, 'a settled row has no question');
 
   // Synthetic transports: the reply coder (OpenAI) and the scope reader (Anthropic).
@@ -174,7 +174,7 @@ test('real PG: a held statement row question names its siblings, and one answer 
   assert.equal((await evaluation('only')).payload.execution, 'held_for_authority');
   await mint();
   assert.equal((await askFor('only-bank-3')).request_payload.held_match_siblings.length, 0, 'its refreshed draft no longer names a settled row');
-  assert.doesNotMatch((await askFor('only-bank-3')).question, /other row/);
+  assert.doesNotMatch((await askFor('only-bank-3')).question, /saman tiliotteen rivi/);
   await answer('only-bank-3', 'Yes, this one too.');
   assert.deepEqual(await states('only'), [['only-bank-1', 'auto_matched'], ['only-bank-2', 'auto_matched'], ['only-bank-3', 'auto_matched']], 'row by row still completes');
 

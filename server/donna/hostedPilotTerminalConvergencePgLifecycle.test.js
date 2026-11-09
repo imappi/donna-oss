@@ -129,7 +129,7 @@ test('real PG: hosted processing heals disposition enrollment and mints grounded
   assert.equal(questions.length,2,JSON.stringify(questions));
   const net = questions.find(row => row.transaction_id === 'net-sale');
   assert.match(net.question,/credit\.pdf/); assert.match(net.question,/net-sale\.pdf/);
-  assert.match(net.question,/1631\.50/); assert.match(net.question,/2025-02-15/);
+  assert.match(net.question,/1631,50 EUR/); assert.match(net.question,/15\.2\.2025/);
   assert.equal(net.question.split('credit.pdf').length-1,1,'the same credit has one document identity');
   assert.deepEqual(net.request_payload.citable_local_evidence.map(row=>row.document_id).sort(),['credit','doc-net-sale']);
   const ap = questions.find(row => row.transaction_id === 'pension');
@@ -137,9 +137,9 @@ test('real PG: hosted processing heals disposition enrollment and mints grounded
     'an outgoing supplier payment cannot cite an unrelated customer credit');
   // H-3a: one held document is a confirmation; an invoice with its eligible
   // credit is still a choice between documents.
-  assert.match(net.question,/Please confirm which of these documents this payment settles/);
-  assert.match(ap.question,/Please confirm that this payment settles that document/);
-  assert.doesNotMatch(ap.question,/which of these/);
+  assert.match(net.question,/Kerro, mitä näistä tositteista tämä maksu koskee/);
+  assert.match(ap.question,/Vahvistathan, että tämä maksu koskee tätä tositetta/);
+  assert.doesNotMatch(ap.question,/mitä näistä tositteista/);
 
   for (const ask of questions) {
     assert.equal(ask.status,'draft'); assert.equal(ask.send_count,0); assert.equal(ask.first_sent_at,null);
@@ -263,9 +263,9 @@ test('real PG: hosted processing heals disposition enrollment and mints grounded
   assert.deepEqual(changedCreditAsk.request_payload.citable_local_evidence.map(row=>row.document_id),['doc-net-sale'],
     'current invoice-specific eligibility removes a formerly eligible credit from the same unanswered ask');
   assert.ok(!changedCreditAsk.question.includes('credit.pdf'));
-  assert.match(changedCreditAsk.question,/Please confirm that this payment settles that document/,
+  assert.match(changedCreditAsk.question,/Vahvistathan, että tämä maksu koskee tätä tositetta/,
     'a group narrowed to one document refreshes the unsent draft to the confirmation wording');
-  assert.doesNotMatch(changedCreditAsk.question,/which of these/);
+  assert.doesNotMatch(changedCreditAsk.question,/mitä näistä tositteista/);
   assert.equal(changedCreditAsk.id,net.id);
   // Exercise the portal's actual reply consumer on the exact minted question.
   for (const [key,stage] of Object.entries(FI_HOSTED_PILOT_STAGES)) await flag('pilot',key,stage,HOSTED_PILOT_VERSION);
@@ -537,9 +537,9 @@ test('real PG: a held match supersedes the coder\'s unsent source-document draft
   assert.equal(active[0].evidence_type,'business_purpose');
   assert.equal(active[0].request_payload.authority_basis,'persisted_match_requires_owner_confirmation');
   assert.match(active[0].question,/25 TyEL-lasku 01-2025 ilmarinen\.pdf/);
-  assert.match(active[0].question,/Please confirm that this payment settles that document/);
-  assert.doesNotMatch(active[0].question,/which of these/);
-  assert.match(active[0].question,/You do not need to upload it again/);
+  assert.match(active[0].question,/Vahvistathan, että tämä maksu koskee tätä tositetta/);
+  assert.doesNotMatch(active[0].question,/mitä näistä tositteista/);
+  assert.match(active[0].question,/Tiedostoa ei tarvitse lähettää uudelleen/);
   const receipt = (await pool.query(`select metadata from audit_events where action='evidence_request.superseded_by_held_match'
     and resource_id='ilmarinen'`)).rows;
   assert.equal(receipt.length,1);

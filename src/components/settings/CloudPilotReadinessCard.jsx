@@ -47,7 +47,10 @@ function PilotProcessingReview({firmId,clientId,sessionIdentity,onSessionChanged
 }
 
 // The receipted exit from internal-pilot send containment. Releasing sends
-// nothing: drafts still go through the existing Send and its checks.
+// nothing: drafts still go through the existing Send and its checks. It also
+// switches on email questions and reminders for this client, as the review
+// lists them (a channel already set for the client is left as it is).
+const CHANNEL_LABELS={OWNER_EMAIL_ASKS:'ownerEmail',ASK_REASK_CADENCE:'reminders'};
 function PilotSendRelease({firmId,clientId,sessionIdentity,onSessionChanged}) {
   const intl=useIntl(),m=(id,values)=>intl.formatMessage({id:`mounted.settings.cloudPilot.send.${id}`},values);
   const [review,setReview]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[confirmed,setConfirmed]=useState(false);
@@ -80,7 +83,11 @@ function PilotSendRelease({firmId,clientId,sessionIdentity,onSessionChanged}) {
       <p>{m('drafts',{count:review.draft_batches.length,questions:review.draft_owner_questions})}{review.draft_batches_truncated?` ${m('truncated')}`:''}</p>
       {review.draft_batches.length>0&&<ul>{review.draft_batches.map(batch=><li key={batch.id}>{batch.subject||batch.id} · {m('items',{count:batch.item_count+batch.document_ask_count})}</li>)}</ul>}
       <p>{m('effect')}</p>
-      <ul><li>{m('ownerEmail')}: {onOff(review.after_release.owner_email_asks)}</li><li>{m('autoSend')}: {onOff(review.after_release.firm_auto_send_client_asks)}</li></ul>
+      <ul>{(review.after_release.owner_channels||[]).map(channel=><li key={channel.flag_key}>
+        {m(CHANNEL_LABELS[channel.flag_key]||'ownerEmail')} (<code>{channel.flag_key}</code>): {channel.action==='stage'?m('willSwitchOn'):m('leftAsIs',{stage:channel.existing_stage})} · {onOff(channel.acts_after_release)}
+      </li>)}<li>{m('autoSend')}: {onOff(review.after_release.firm_auto_send_client_asks)}</li></ul>
+      {review.after_release.owner_email_recipient&&<p>{m('recipient',{email:review.after_release.owner_email_recipient})}</p>}
+      {review.after_release.owner_email_missing&&<p><strong>{m('noOwnerEmail')}</strong></p>}
       {review.contained&&<>
         <label style={{display:'block',margin:'12px 0'}}><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/> {m('confirm')}</label>
         <button type="button" style={btnPrimary} disabled={busy||!confirmed} onClick={()=>run('send-release')}>{m('release')}</button>

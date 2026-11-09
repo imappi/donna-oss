@@ -6,7 +6,7 @@
 
 import { toIsoDay } from '../dates.js';
 import { onReconciliationMatchConfirmed, onReconciliationMatchRejected } from '../loopsShadowProducers.js';
-import { delegatedAuthorityGrantId } from '../reconciliationLlmCore.js';
+import { delegatedAuthorityGrantId, delegationGateProof } from '../reconciliationLlmCore.js';
 import { suspendGrantAfterCorrection } from '../reconciliationAuthorityGrants.js';
 import { reverseCreditApplicationsForMatch, reverseReminderSettlementWithClient } from '../creditNoteApplications.js';
 import { recordAcceptedEntityNameWithClient } from '../crossEntityGuard.js';
@@ -990,6 +990,23 @@ export const updateReconciliationMatchInDb = async ({ firmId = DEFAULT_FIRM_ID, 
         payload.authorization = { ...(payload.authorization || {}), ...patch.authorization };
       }
       const prevStatus = match.status;
+      // A human confirm of a match held ONLY by the materiality ceiling is a
+      // one-time authorisation of THIS line: stamp the receipt on the match so
+      // the authority is reconstructable from the row. standing:false and no
+      // grant — confirming never implies anything about future lines; that is
+      // the separate, explicit "authorise future matches like this" grant.
+      if (nextStatus === 'confirmed' && prevStatus === 'suggested' && delegationGateProof(match.payload?.authorization)) {
+        payload.authorization = {
+          ...(payload.authorization || {}),
+          authority_receipt: {
+            kind: 'one_time_confirm',
+            standing: false,
+            grant_id: null,
+            confirmed_by: actorId || 'system',
+            confirmed_at: new Date().toISOString()
+          }
+        };
+      }
       // Late-bank-line guard detection (set by the confirm branch's cascade).
       let lateBankLineCascade = null;
 

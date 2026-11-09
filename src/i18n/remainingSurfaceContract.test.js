@@ -76,7 +76,7 @@ test('every reserved English message is valid ICU and reaches both runtime catal
     assert.equal(en[key], remainingSurfacesEn[key], `English catalog omitted ${key}`);
     assert.equal(typeof INTERFACE_CATALOGS['ar-XB'][key], 'string', `pseudo catalog omitted ${key}`);
   }
-  assert.equal(Object.keys(en).length, 1563 + Object.keys(mountedSurfacesEn).length); // includes 15 FI-05 customer-failure messages less 6 retired raw-reason tray labels, 40 pilot setup, 29 provider-failure receipt, 3 scoped-assessment, 3 refused-upload tray, 1 FI first-fill 15 working-phase/batch-summary and 8 direct processing-review messages
+  assert.equal(Object.keys(en).length, 1627 + Object.keys(mountedSurfacesEn).length); // includes 64 reconciliation-authority messages, 15 FI-05 customer-failure messages less 6 retired raw-reason tray labels, 40 pilot setup, 29 provider-failure receipt, 3 scoped-assessment, 3 refused-upload tray, 1 FI first-fill 15 working-phase/batch-summary and 8 direct processing-review messages
   assert.equal(
     Object.keys(getInterfaceCatalog('ar-AE')).length,
     Object.keys(en).length,

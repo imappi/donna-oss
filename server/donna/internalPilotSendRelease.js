@@ -1,13 +1,22 @@
 // The explicit, receipted exit from internal-pilot send containment, one client
-// at a time, by a firm member or a partner-and-up staff seat. It records a release; it never sends, never approves a draft and
-// never changes a delivery channel. After release the client's ask batches go
-// through the existing send writer and every gate it already applies (manual
-// Send or the firm's standing auto-send authorization, suppression/freshness,
-// each channel's own flag or binding, receipts).
+// at a time, by a firm member or a partner-and-up staff seat. It records a
+// release; it never sends and never approves a draft. After release the
+// client's ask batches go through the existing send writer and every gate it
+// already applies (manual Send or the firm's standing auto-send authorization,
+// suppression/freshness, each channel's own flag or binding, receipts).
+//
+// In the same act (owner decision 2026-11-09) it stages the two owner channels
+// a released client gets, for this client only: email questions
+// (OWNER_EMAIL_ASKS) and reminders (ASK_REASK_CADENCE, which escalates to the
+// firm when the owner cannot be reached). Both are shown in the review, covered
+// by its digest and receipted row by row. A flag that already resolves to a
+// row for this client — at any stage, from any layer — is an earlier explicit
+// choice and is left exactly as it is.
 import { withFirmDbClient, assertActionCapability } from './firmDb.js';
-import { readClientConfigSnapshot, clientFlagActs } from './clientConfig.js';
+import { readClientConfigSnapshot, clientFlagActs, setClientFlagStage } from './clientConfig.js';
 import { hostDigest } from './hostCertificateA.js';
 import { OWNER_EMAIL_ASKS_FLAG_KEY } from './db/channels.js';
+import { REASK_CADENCE_FLAG_KEY } from './askReaskCadence.js';
 import { readInternalPilotAccessWithClient, readInternalPilotSendContainmentWithClient,
   PILOT_SEND_RELEASE_ACTION, PILOT_SEND_RELEASE_VERSION, SG_HOSTED_REVIEW_VERSION, INTERNAL_PILOT_ACCESS_FLAG } from './internalPilotAccess.js';
 
@@ -15,6 +24,21 @@ const refuse = (code, message, statusCode = 409) => { throw Object.assign(new Er
 const DRAFT_BATCH_LIMIT = 50;
 
 export const PILOT_SEND_RELEASE_VERB = 'release_pilot_send_containment';
+
+// The owner channels a release switches on, at the stage that ACTS for one
+// client (clientFlagActs: canary | auto act; canary is the single-client stage
+// the hosted birth uses for its processing flags). No other flag is touched:
+// invoicing, dunning and payment automation stay as birth left them.
+export const PILOT_SEND_RELEASE_OWNER_CHANNELS = Object.freeze([
+  Object.freeze({ flag_key: OWNER_EMAIL_ASKS_FLAG_KEY, stage: 'canary', effect: 'email_questions_to_owner' }),
+  Object.freeze({ flag_key: REASK_CADENCE_FLAG_KEY, stage: 'canary', effect: 'remind_unanswered_questions_then_escalate_to_firm' })
+]);
+// The recipient OWNER_EMAIL_ASKS delivers to: the same profile ladder the
+// email channel reads (db/channels.js deliverEmailEvidenceAsksAfterSend).
+const ownerEmailOf = profile => {
+  const p = profile && typeof profile === 'object' ? profile : {};
+  return String(p.email || p.contact_email || p.owner_email || '').trim() || null;
+};
 const operatorRequired = () => refuse('PILOT_OPERATOR_REQUIRED',
   'An active firm member or a partner seat assigned to this client must release question sending.', 403);
 
@@ -58,8 +82,8 @@ const activeActor = async (client, { firmId, clientId, principal }, lock) => {
 const reviewWithClient = async (client, { firmId, clientId, principal }, { lock = false } = {}) => {
   const actor = await activeActor(client, { firmId, clientId, principal }, lock);
   const target = (await client.query(lock
-    ? 'select id, company_name, status from clients where firm_id=$1 and id=$2 for update'
-    : 'select id, company_name, status from clients where firm_id=$1 and id=$2', [firmId, clientId])).rows[0];
+    ? 'select id, company_name, status, profile from clients where firm_id=$1 and id=$2 for update'
+    : 'select id, company_name, status, profile from clients where firm_id=$1 and id=$2', [firmId, clientId])).rows[0];
   if (!target || target.status !== 'active') refuse('PILOT_CLIENT_REQUIRED', 'Select an active client of this firm.');
   // This declared profile has no send-release extension. Enrollment history
   // remains binding after access revocation; a country label is not authority.
@@ -80,6 +104,24 @@ const reviewWithClient = async (client, { firmId, clientId, principal }, { lock 
   const draftQuestions = (await client.query(`select count(*)::int as n from client_evidence_requests
     where firm_id=$1 and client_id=$2 and status='draft' and audience='client'`, [firmId, clientId])).rows[0].n;
   const snapshot = await readClientConfigSnapshot(client, { firmId, clientId });
+  // Which owner-channel rows already exist for this client (client-specific),
+  // read under the client row lock on apply. A row on any layer is honoured.
+  const ownedKeys = PILOT_SEND_RELEASE_OWNER_CHANNELS.map(row => row.flag_key);
+  const clientRows = new Map((await client.query(`select flag_key, stage, source, reason from client_capability_config
+    where firm_id=$1 and client_id=$2 and flag_key = any($3::text[]) and valid_to is null order by flag_key`,
+  [firmId, clientId, ownedKeys])).rows.map(row => [row.flag_key, row]));
+  const ownerChannels = PILOT_SEND_RELEASE_OWNER_CHANNELS.map(({ flag_key, stage, effect }) => {
+    const existing = snapshot[flag_key];
+    if (existing && typeof existing === 'object' && 'stage' in existing) {
+      return { flag_key, effect, action: 'left_as_is', existing_stage: existing.stage, existing_source: existing.source,
+        existing_scope: clientRows.has(flag_key) ? 'client' : 'firm_or_cohort',
+        acts_after_release: clientFlagActs({ flagKey: flag_key, snapshot, envFallback: () => false }) };
+    }
+    return { flag_key, effect, action: 'stage', stage, source: 'manual', reason: PILOT_SEND_RELEASE_VERSION,
+      acts_after_release: clientFlagActs({ flagKey: flag_key, snapshot: { [flag_key]: { stage, source: 'manual' } }, envFallback: () => false }) };
+  });
+  const actsAfter = key => ownerChannels.find(row => row.flag_key === key).acts_after_release;
+  const ownerEmail = ownerEmailOf(target.profile);
   const autoSend = (await client.query(`select metadata->'loops'->>'auto_send_client_asks' as value from firms where id=$1`,
     [firmId])).rows[0]?.value === 'true';
   const review = {
@@ -91,12 +133,19 @@ const reviewWithClient = async (client, { firmId, clientId, principal }, { lock 
       created_at: new Date(row.created_at).toISOString(), item_count: row.item_count, document_ask_count: row.document_ask_count })),
     draft_batches_truncated: batches.length > DRAFT_BATCH_LIMIT,
     draft_owner_questions: draftQuestions,
-    // Shown so the operator knows what a release does and does not turn on.
+    // Shown so the operator knows exactly what a release turns on, and for
+    // whom: the owner channels it stages (or leaves), and where email goes.
     after_release: {
       send_path: 'existing_ask_batch_send_writer',
       firm_auto_send_client_asks: autoSend,
-      owner_email_asks: clientFlagActs({ flagKey: OWNER_EMAIL_ASKS_FLAG_KEY, snapshot, envFallback: () => false }),
-      delivery_channels_changed: false
+      owner_email_asks: actsAfter(OWNER_EMAIL_ASKS_FLAG_KEY),
+      reask_reminders: actsAfter(REASK_CADENCE_FLAG_KEY),
+      owner_channels: ownerChannels,
+      owner_email_recipient: ownerEmail,
+      // Email questions would act but have nowhere to go. The release still
+      // proceeds: the re-ask sweep escalates an unreachable owner to the firm.
+      owner_email_missing: actsAfter(OWNER_EMAIL_ASKS_FLAG_KEY) && !ownerEmail,
+      delivery_channels_changed: ownerChannels.some(row => row.action === 'stage')
     }
   };
   return { ...review, review_digest: hostDigest(review) };
@@ -119,13 +168,24 @@ export const releaseInternalPilotSendContainment = async (scope, { reviewDigest,
       const review = await reviewWithClient(client, scope, { lock: true });
       if (review.review_digest !== reviewDigest) refuse('PILOT_SEND_RELEASE_REVIEW_STALE', 'This client changed after review. Refresh the review.');
       if (!review.contained) refuse('PILOT_SEND_NOT_CONTAINED', 'Question sending is not contained for this client.');
+      // Stage exactly the reviewed owner-channel rows, in this transaction,
+      // through the one config-plane writer (row history + its own audit).
+      const stagedRows = [];
+      for (const change of review.after_release.owner_channels.filter(row => row.action === 'stage')) {
+        const written = await setClientFlagStage(client, { firmId: scope.firmId, clientId: scope.clientId, flagKey: change.flag_key,
+          stage: change.stage, source: change.source, reason: change.reason, actorType: review.actor_type, actorId: review.actor_id });
+        stagedRows.push({ config_row_id: written.id, flag_key: change.flag_key, stage: change.stage, source: change.source, reason: change.reason });
+      }
       const receipt = { version: PILOT_SEND_RELEASE_VERSION, firm_id: scope.firmId, client_id: scope.clientId, actor_id: review.actor_id,
         actor_type: review.actor_type, ...(review.seat_role ? { seat_role: review.seat_role } : {}),
         review_digest: reviewDigest, retained_draft_batch_ids: review.draft_batches.map(batch => batch.id),
         retained_draft_batches_truncated: review.draft_batches_truncated, retained_draft_owner_questions: review.draft_owner_questions,
         review_access_live: review.review_access_live, after_release: review.after_release,
         authority_basis: review.actor_type === 'seat' ? 'partner_seat_confirmed_pilot_send_release' : 'active_member_confirmed_pilot_send_release',
-        sends_performed: false, drafts_approved: false, delivery_channels_changed: false };
+        owner_channel_stage_rows: stagedRows,
+        owner_channels_left_as_is: review.after_release.owner_channels.filter(row => row.action === 'left_as_is')
+          .map(({ flag_key, existing_stage, existing_source, existing_scope }) => ({ flag_key, existing_stage, existing_source, existing_scope })),
+        sends_performed: false, drafts_approved: false, delivery_channels_changed: stagedRows.length > 0 };
       const row = (await client.query(`insert into audit_events(firm_id,client_id,actor_type,actor_id,action,resource_type,resource_id,metadata)
         values($1,$2,$3,$4,$5,'client',$2,$6::jsonb) returning id, created_at`,
       [scope.firmId, scope.clientId, review.actor_type, review.actor_id, PILOT_SEND_RELEASE_ACTION, JSON.stringify(receipt)])).rows[0];

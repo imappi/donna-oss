@@ -113,3 +113,12 @@ test('owner reply is first read by Jev; confirmed cash settles through existing 
   assert.ok(JSON.stringify(evaluation.params).includes('0.36'));
   assert.ok(JSON.stringify(evaluation.params).includes('jev_first'));
 });
+
+test('the Jev reply reader offers "still unpaid" only on a lane that accepts it', () => {
+  const stillOpen = { meaning: 'the business has not paid this supplier bill yet', recheckDays: 30 };
+  const offered = jevDispositionPlans({ kind: 'document', amount: 100, materialityCeiling: 500, ownerReply: { answeredEvidenceType: 'payment_method', stillOpen } });
+  assert.equal(offered.acknowledge_still_open.semantic.disposition, 'obligation_open');
+  assert.match(offered.acknowledge_still_open.text, /the business has not paid this supplier bill yet/);
+  assert.equal(jevDispositionPlans({ kind: 'document', amount: 100, materialityCeiling: 500, ownerReply: { answeredEvidenceType: 'payment_method' } }).acknowledge_still_open, undefined);
+  assert.equal(jevDispositionPlans({ kind: 'document', amount: 100, materialityCeiling: 500 }).acknowledge_still_open, undefined);
+});

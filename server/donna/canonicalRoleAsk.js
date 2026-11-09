@@ -56,24 +56,61 @@ const OWNER_ROLE_PHRASES = {
   'equity.retained_earnings': 'retained earnings account'
 };
 
-export const ownerPhraseForRole = (role) =>
-  OWNER_ROLE_PHRASES[String(role || '')] || roleMeta(role)?.label || String(role || '');
+// The same roles in the words a Finnish owner uses for their own books
+// (everyday tilikartta names, nominative, so a sentence never inflects them).
+const FINNISH_OWNER_ROLE_PHRASES = {
+  'liability.sales_tax_payable': 'ALV-velkatili',
+  'liability.tax_payable': 'tuloverovelkatili',
+  'liability.accounts_payable': 'ostovelkatili',
+  'liability.payroll_payable': 'palkkavelkatili',
+  'liability.director_loan': 'osakaslainatili',
+  'asset.accounts_receivable': 'myyntisaamistili',
+  'asset.cash': 'pääpankkitili',
+  'asset.inventory': 'varastotili',
+  'asset.fixed': 'käyttöomaisuustili',
+  'revenue.operating': 'päämyyntitili',
+  'equity.share_capital': 'osakepääomatili',
+  'equity.retained_earnings': 'edellisten tilikausien voittovarojen tili'
+};
 
-const accountLabel = (candidate = {}) => {
+// `language` is the owner's (preferredOwnerTemplateLanguage). A role with no
+// owner phrase falls back to the ledger label in either language.
+export const ownerPhraseForRole = (role, language = 'en') =>
+  (language === 'fi' ? FINNISH_OWNER_ROLE_PHRASES : OWNER_ROLE_PHRASES)[String(role || '')]
+    || roleMeta(role)?.label || String(role || '');
+
+const accountLabel = (candidate = {}, language = 'en') => {
   const code = String(candidate.code ?? '').trim();
   const name = String(candidate.name ?? '').trim();
   if (code && name) return `${code} ${name}`;
-  return name || code || 'an unnamed account';
+  return name || code || (language === 'fi' ? 'nimetön tili' : 'an unnamed account');
 };
 
 // Voice rule (Kari, 2026-07-21): never an em or en dash. Comma, colon, or a new
 // sentence. Every string built here obeys it, which is why the lists below join
 // on ', ' and ' or ' rather than setting phrases off with dashes.
-const joinCandidates = (candidates = []) => {
-  const labels = candidates.map(accountLabel);
+const joinCandidates = (candidates = [], language = 'en') => {
+  const labels = candidates.map((candidate) => accountLabel(candidate, language));
   if (labels.length === 0) return '';
   if (labels.length === 1) return labels[0];
-  return `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]}`;
+  return language === 'fi'
+    ? `${labels.slice(0, -1).join(', ')} tai ${labels[labels.length - 1]}`
+    : `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]}`;
+};
+
+// The four questions in Finnish: the sinä form a small accounting firm uses
+// with its client, the same facts and the same "reply with the code" ask.
+const finnishRoleQuestion = ({ refusal, held, candidates, phrase }) => {
+  const list = joinCandidates(candidates, 'fi');
+  if (refusal === 'singleton_contended') {
+    return held
+      ? `Kirjanpidossasi on jo yksi ${phrase}, mutta ${candidates.length === 1 ? 'myös tämä tili voisi olla se' : 'myös nämä tilit voisivat olla se'}: ${list}. Mitä tiliä käytän? Vastaa tilin numerolla.`
+      : `Kirjanpidossasi on useampi tili, joka voisi olla ${phrase}: ${list}. En pysty nimistä päättelemään, mikä on mikä, enkä halua arvata verotukseen liittyvissä asioissa. Mitä tiliä käytän? Vastaa tilin numerolla.`;
+  }
+  if (candidates.length) {
+    return `Minun pitää tietää, mikä tileistäsi on ${phrase}, ennen kuin voin kirjata sille. Vaihtoehdot ovat: ${list}. Mitä tiliä käytän? Vastaa tilin numerolla, tai kerro, jos se ei ole mikään näistä.`;
+  }
+  return `En löydä kirjanpidostasi tiliä, joka voisi olla ${phrase}, ja tarvitsen sellaisen ennen kuin voin kirjata sille. Lisäänkö sellaisen, vai onko se kirjanpidossasi nimellä, jota en tunnistanut?`;
 };
 
 /**
@@ -81,12 +118,13 @@ const joinCandidates = (candidates = []) => {
  *
  * @param {object} params
  * @param {object} params.ask  one entry of the planner's `asks` array
+ * @param {'fi'|'en'} [params.language]  the owner's language (preferredOwnerTemplateLanguage)
  * @returns {{
  *   anchor: string, blocker_code: string, evidence_type: string,
  *   question: string, request_payload: object
  * }|null}  null when the ask is not one this module can express
  */
-export const buildCanonicalRoleAsk = ({ ask = {} } = {}) => {
+export const buildCanonicalRoleAsk = ({ ask = {}, language = 'en' } = {}) => {
   const role = String(ask.role || '').trim();
   const refusal = String(ask.refusal || '').trim();
   const blockerCode = CANONICAL_ROLE_BLOCKER_CODES[refusal];
@@ -96,11 +134,13 @@ export const buildCanonicalRoleAsk = ({ ask = {} } = {}) => {
   if (!role || !blockerCode || !roleMeta(role)) return null;
 
   const candidates = Array.isArray(ask.candidates) ? ask.candidates.filter(Boolean) : [];
-  const phrase = ownerPhraseForRole(role);
+  const phrase = ownerPhraseForRole(role, language);
   const anchor = buildCanonicalAnchor({ accountRole: role });
 
   let question;
-  if (refusal === 'singleton_contended') {
+  if (language === 'fi') {
+    question = finnishRoleQuestion({ refusal, held: Number(ask.held_count) > 0, candidates, phrase });
+  } else if (refusal === 'singleton_contended') {
     // The owner is choosing between accounts Donna can see and cannot separate.
     // Say plainly that she cannot tell, rather than implying she has a view she
     // is withholding.
@@ -146,8 +186,8 @@ export const buildCanonicalRoleAsk = ({ ask = {} } = {}) => {
  * Deterministically ordered by role so two runs over one chart produce the same
  * sequence of asks.
  */
-export const buildCanonicalRoleAsks = ({ plan = {} } = {}) =>
+export const buildCanonicalRoleAsks = ({ plan = {}, language = 'en' } = {}) =>
   (Array.isArray(plan.asks) ? plan.asks : [])
-    .map((ask) => buildCanonicalRoleAsk({ ask }))
+    .map((ask) => buildCanonicalRoleAsk({ ask, language }))
     .filter(Boolean)
     .sort((a, b) => String(a.anchor).localeCompare(String(b.anchor)));
