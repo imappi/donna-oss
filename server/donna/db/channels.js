@@ -1044,6 +1044,46 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
 // contact_email → owner_email).
 export const OWNER_EMAIL_ASKS_FLAG_KEY = 'OWNER_EMAIL_ASKS';
 
+// Owner-ask email copy, per language. Pure: no I/O. 'fi' is everyday Finnish in
+// the sinä form, the way a small accounting firm writes to its client; any
+// other language gets the English copy. "(ref X)" stays verbatim in every
+// language because extractAskRef anchors a reply on the literal word "ref".
+const OWNER_EMAIL_ASK_COPY = Object.freeze({
+  en: Object.freeze({
+    periodFallback: 'this period',
+    count: (n) => `${n} question${n === 1 ? '' : 's'}`,
+    subject: (count) => `${count} about your books`,
+    greeting: (name, firm) => `Hi — ${name} here${firm ? ` from ${firm}` : ''}.`,
+    need: (n) => `To keep your books current I need ${n === 1 ? 'one answer' : 'a few answers'} only you can give:`,
+    closing: 'Just reply to this email with the answers (or photos/receipts attached) and I will take it from there.'
+  }),
+  fi: Object.freeze({
+    periodFallback: 'tämä kausi',
+    count: (n) => `${n} ${n === 1 ? 'kysymys' : 'kysymystä'}`,
+    subject: (count) => `${count} kirjanpidostasi`,
+    greeting: (name, firm) => `Hei! Täällä ${name}${firm ? `, ${firm}` : ''}.`,
+    need: (n) => (n === 1
+      ? 'Jotta kirjanpitosi pysyy ajan tasalla, tarvitsen sinulta vastauksen yhteen kysymykseen:'
+      : 'Jotta kirjanpitosi pysyy ajan tasalla, tarvitsen sinulta vastauksia muutamaan kysymykseen:'),
+    closing: 'Vastaa vain tähän sähköpostiin (kuvat ja kuitit voit liittää mukaan), niin hoidan loput.'
+  })
+});
+
+const buildOwnerEmailAskMessage = ({ language = OWNER_TEMPLATE_FALLBACK_LANGUAGE, assistantName, firmName = null, clientName = '', items = [] } = {}) => {
+  const copy = OWNER_EMAIL_ASK_COPY[language] || OWNER_EMAIL_ASK_COPY[OWNER_TEMPLATE_FALLBACK_LANGUAGE];
+  const sender = firmName || assistantName;
+  const lines = items.map((item, i) => `${i + 1}. [${item.period || copy.periodFallback}] ${item.question} (ref ${item.askRef})`);
+  const subject = `${sender}: ${copy.subject(copy.count(items.length))}${clientName ? ` — ${clientName}` : ''}`;
+  const text = [
+    `${copy.greeting(assistantName, firmName)} ${copy.need(items.length)}`,
+    '',
+    ...lines,
+    '',
+    copy.closing
+  ].join('\n');
+  return { subject, text };
+};
+
 export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, clientId, evidenceRequestIds = [], deps = {} } = {}) => {
   const snapshot = await readClientConfigSnapshot(client, { firmId, clientId });
   if (!clientFlagActs({ flagKey: OWNER_EMAIL_ASKS_FLAG_KEY, snapshot, envFallback: () => false })) {
@@ -1065,19 +1105,23 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   if (!requests.length) return { sent: 0 };
 
   const clientName = String(clientRow?.company_name || '').trim();
-  const lines = requests.map((request, i) => {
-    const period = request.request_payload?.period || request.request_payload?.period_label || 'this period';
-    const question = String(request.question || '').replace(/\s+/g, ' ').trim();
-    return `${i + 1}. [${period}] ${question} (ref ${shortAskRef(request.id)})`;
+  // The owner is the FIRM's client and knows the firm, not the software: the
+  // assistant name comes from the one shared resolver (as on Telegram/SMS) and
+  // the firm is named as the one asking whenever firms.name is on file. The
+  // wrapper copy follows the owner's language; the questions pass through as
+  // the ask pipeline wrote them.
+  const language = preferredOwnerTemplateLanguage(profile);
+  const assistantName = resolveAssistantName(profile);
+  const firmName = await client.query('select name from firms where id = $1 limit 1', [firmId])
+    .then((res) => String(res.rows[0]?.name || '').trim() || null).catch(() => null);
+  const { subject, text } = buildOwnerEmailAskMessage({
+    language, assistantName, firmName, clientName,
+    items: requests.map((request) => ({
+      period: request.request_payload?.period || request.request_payload?.period_label || null,
+      question: String(request.question || '').replace(/\s+/g, ' ').trim(),
+      askRef: shortAskRef(request.id)
+    }))
   });
-  const subject = `Donna: ${requests.length} question${requests.length === 1 ? '' : 's'} about your books${clientName ? ` — ${clientName}` : ''}`;
-  const text = [
-    `Hi — Donna here. To keep your books current I need ${requests.length === 1 ? 'one answer' : 'a few answers'} only you can give:`,
-    '',
-    ...lines,
-    '',
-    'Just reply to this email with the answers (or photos/receipts attached) and I will take it from there.'
-  ].join('\n');
 
   const channelModule = deps.channelModule || await import('../channels/index.js');
   const deliverOwnerMessage = deps.deliverOwnerMessage || channelModule.deliverOwnerMessage;
@@ -1090,9 +1134,9 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   const at = new Date().toISOString();
   for (const request of requests) {
     if (result?.ok) {
-      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `${result.id || 'email'}_${request.id}`, channel: 'email', provider: 'resend', ask_id: request.id, client_id: clientId, template_name: 'donna_evidence_ask_email_v1', sent_at: at, provider_payload: { batch_message_id: result.id || null } } });
+      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `${result.id || 'email'}_${request.id}`, channel: 'email', provider: 'resend', ask_id: request.id, client_id: clientId, template_name: 'donna_evidence_ask_email_v1', sent_at: at, provider_payload: { batch_message_id: result.id || null, language } } });
     } else {
-      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `email_fallback_${request.id}`, channel: 'email', provider: 'resend', ask_id: request.id, client_id: clientId, template_name: 'donna_evidence_ask_email_v1', failed_at: at, failure_reason: failureReasonFor(result, 'EMAIL_SEND_FAILED'), fallback_triggered_at: at } });
+      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `email_fallback_${request.id}`, channel: 'email', provider: 'resend', ask_id: request.id, client_id: clientId, template_name: 'donna_evidence_ask_email_v1', failed_at: at, failure_reason: failureReasonFor(result, 'EMAIL_SEND_FAILED'), fallback_triggered_at: at, provider_payload: { language } } });
     }
   }
   if (result?.ok) {
