@@ -136,6 +136,8 @@ export const classifyRecognitionGap = ({
 
   for (const doc of documents) {
     if (doc.document_type && doc.document_type !== spec.documentType) continue;
+    const date = day(doc.document_date);
+    if (date && !inPeriod(date)) continue;
     const payload = obj(doc.payload);
     const reminder = obj(payload.reminder_obligation);
     // A reminder's principal is its original invoice; it is not a second sale.
@@ -143,8 +145,6 @@ export const classifyRecognitionGap = ({
       represented.push({ document_id: doc.id, by: 'reminder_of_invoice' });
       continue;
     }
-    const date = day(doc.document_date);
-    if (date && !inPeriod(date)) continue;
     const kind = String(doc.payment_status || '').trim().toLowerCase() === 'credit_note' ? 'credit_note' : 'invoice';
     const numbers = invoiceNumbersOf(doc);
     // The issued-invoice twin carries the revenue under its own journal.
