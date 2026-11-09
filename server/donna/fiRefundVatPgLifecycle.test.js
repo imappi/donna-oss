@@ -153,8 +153,13 @@ test('real PG: a refund matched to its purchase receipt reverses expense and inp
   await pool.query("insert into documents(id,firm_id,client_id,filename,document_type,parse_status,total_amount,tax_amount,currency,document_date,payload) values('doc-posted',$1,$2,'posted.pdf','receipt','completed',19.90,4.04,'EUR','2025-03-03','{}')", [firmId, clientId]);
   await pool.query("insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,payload) values('posted-refund',$1,$2,'2025-03-05','TOKMANNI',19.90,0,'EUR','needs_review','{}')", [firmId, clientId]);
   await pool.query("insert into reconciliation_matches(id,firm_id,client_id,bank_transaction_id,matched_object_type,matched_object_id,match_amount,match_confidence,status,created_by,payload) values('match-posted',$1,$2,'posted-refund','receipt','doc-posted',19.90,.6,'suggested','fixture','{}')", [firmId, clientId]);
-  await pool.query("update transactions set coding_state='applied',payload=$1 where id='posted-refund'", [{ ai_suggestion_status: 'auto_applied', ai_suggestion: { proposed_account: 'Other income', tax_treatment: 'ALV 25,5 %', posting_requirement: 'single_account', confidence: 'high' }, account_name: 'Other income', category: 'Other income', tax_treatment: 'ALV 25,5 %' }]);
+  // The writer now refuses this autonomous output ALV without a sales source,
+  // so the historical journal is minted under a reviewer receipt and the row
+  // is then returned to its hosted autonomous state.
+  const hosted = { ai_suggestion_status: 'auto_applied', ai_suggestion: { proposed_account: 'Other income', tax_treatment: 'ALV 25,5 %', posting_requirement: 'single_account', confidence: 'high' }, account_name: 'Other income', category: 'Other income', tax_treatment: 'ALV 25,5 %' };
+  await pool.query("update transactions set coding_state='applied',payload=$1 where id='posted-refund'", [{ ...hosted, reviewed_by: 'fixture-member' }]);
   await postLedgerTransactionInDb({ firmId, clientId, transactionId: 'posted-refund', dryRun: false, skipSnapshot: true });
+  await pool.query("update transactions set payload=payload-'reviewed_by' where id='posted-refund'");
   assert.ok((await lines('posted-refund')).some(([account]) => account === 'Other income'), 'fixture reproduces the pre-guard journal');
   await pool.query("update reconciliation_matches set status='auto_matched' where id='match-posted'");
   await recoverChangedCodingEvidenceInDb({ firmId });
