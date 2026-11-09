@@ -9,6 +9,7 @@ import { withCodingPolicyIncidentLock } from './codingPolicyRecovery.js';
 import { listStructuredOwnerReplyEvidenceTypes, supportsStructuredOwnerReply } from './statutoryRegistry.js';
 import { processStructuredOwnerReplyWithClient } from './structuredOwnerReply.js';
 import { documentOwnerReplyDocumentId, processDocumentOwnerReplyWithClient } from './documentOwnerReply.js';
+import { deliverOwnerFollowUpWithClient } from './ownerAskDelivery.js';
 
 export const OWNER_REPLY_MAX_ATTEMPTS = 3;
 // An answer exhausted on a PROVIDER outage (never a policy failure, never a
@@ -40,6 +41,35 @@ export const DISCOVER_OWNER_REPLIES_SQL = `
          or (r.response_payload->'reply_processing'->>'code' = '${OWNER_REPLY_OUTAGE_CODE}'
              and r.updated_at < now() - interval '${OWNER_REPLY_OUTAGE_COOLDOWN_MS} milliseconds'))
   order by r.updated_at, r.id limit $2`;
+
+// The ask an unclear answer left waiting on the owner, whichever consumer read
+// it: a structured (factual) reply reopens its own ask with the clarification
+// question; a document-only reply resolves the answered ask and mints one
+// bounded clarification ask; a bank-line reply under a native chart mints the
+// specific follow-up fact ask. (A bank-line reply outside a native chart mints
+// nothing here: the model's follow-up rides the next ask batch, whose first
+// send is the same gated fan-out.)
+export const clarificationFollowUpAskIds = (request, result) => {
+  if (!result || (result.applied === false && result.skipped)) return [];
+  return [...new Set([
+    result.needsClarification ? request?.id : null,
+    result.document_disposition?.clarification_request_id || null,
+    result.follow_up_request_id || null
+  ].filter(Boolean))];
+};
+
+// One delivery for all three: the gated fan-out, with the re-ask sweep's
+// precedent when nothing delivers (ownerAskDelivery.js). Runs after the
+// consumer committed, under this clock's lease and outside any transaction. A
+// delivery problem never turns a processed answer into a processing failure.
+const deliverClarificationFollowUp = async ({ client, firmId, clientId, request, result, deliverFollowUp = deliverOwnerFollowUpWithClient }) => {
+  const ids = clarificationFollowUpAskIds(request, result);
+  if (!ids.length) return result;
+  const followUpDelivery = await deliverFollowUp({
+    client, firmId, clientId, evidenceRequestIds: ids, surface: 'owner_reply_clarification'
+  }).catch((error) => ({ error: error?.message || 'follow_up_failed' }));
+  return { ...result, follow_up_delivery: followUpDelivery };
+};
 
 export const processOwnerReplyWithClient = async ({ client, firmId, clientId, evidenceRequestId,
   actorId = 'owner_reply_recovery', force = false, expectedReplyKey = null, expectedFailureId = null, recodeFn = __recodeTransactionAfterClientReplyWithClient } = {}) => {
@@ -86,19 +116,22 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
     if (!force && attempts >= OWNER_REPLY_MAX_ATTEMPTS && !previous.policy_failure) return { applied: false, skipped: 'reply_attempts_exhausted' };
     const tx = request.transaction_id ? (await client.query('select coding_state, transaction_date from transactions where firm_id = $1 and client_id = $2 and id = $3', [firmId, clientId, request.transaction_id])).rows[0] : null;
     if (request.transaction_id && (!tx || ['applied', 'held', 'posted', 'synced', 'closed'].includes(tx.coding_state))) return { applied: false, skipped: 'terminal_or_missing_transaction' };
+    let result;
     try {
       if (documentReply) {
-        return await processDocumentOwnerReplyWithClient({ client, firmId, request, expectedReplyKey: replyKey, attempts, actorId });
+        result = await processDocumentOwnerReplyWithClient({ client, firmId, request, expectedReplyKey: replyKey, attempts, actorId });
+        return await deliverClarificationFollowUp({ client, firmId, clientId, request, result });
       }
       if (!request.transaction_id) {
-        return await processStructuredOwnerReplyWithClient({ client, firmId, request, expectedReplyKey: replyKey, attempts });
+        result = await processStructuredOwnerReplyWithClient({ client, firmId, request, expectedReplyKey: replyKey, attempts });
+        return await deliverClarificationFollowUp({ client, firmId, clientId, request, result });
       }
       // Exhausted policy failures may inspect repaired configuration without
       // buying another model call or extending the bounded failure history.
       if (same && previous.policy_failure && attempts >= OWNER_REPLY_MAX_ATTEMPTS) {
         await resolveClientCodingPolicyWithClient({ client, firmId, clientId, businessDate: tx.transaction_date });
       }
-      const result = await recodeFn({ client, firmId, clientId, transactionId: request.transaction_id,
+      result = await recodeFn({ client, firmId, clientId, transactionId: request.transaction_id,
         evidenceRequest: request, reply: request.response_payload?.reply || '',
         replyDocumentIds: request.response_payload?.document_ids || [], actorId, expectedReplyKey: replyKey });
       if (result?.skipped === 'llm_unavailable') {
@@ -106,7 +139,7 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
         error.code = 'OWNER_REPLY_PROVIDER_UNAVAILABLE';
         throw error;
       }
-      return result;
+      return await deliverClarificationFollowUp({ client, firmId, clientId, request, result });
     } catch (error) {
       if (error?.code === 'OWNER_REPLY_SUPERSEDED') return { applied: false, skipped: 'reply_superseded' };
       const policyFailure = isCodingPolicyError(error);

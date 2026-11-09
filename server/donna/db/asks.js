@@ -30,9 +30,12 @@ import { distillAndStageFirmFactCandidates } from '../firmFacts.js';
 import { onAskBatchSent, onClientReplyReceived, onEvidenceRequestCreated } from '../loopsShadowProducers.js';
 import { validateAskAddressee } from '../askAudience.js';
 import { clientFlagActs, clientFlagObserves, readClientConfigSnapshot } from '../clientConfig.js';
-import { readInternalPilotAccessWithClient, readInternalPilotSendContainmentWithClient } from '../internalPilotAccess.js';
+import { readInternalPilotAccessWithClient } from '../internalPilotAccess.js';
 import { loadEligibleCreditNotes } from '../creditNoteApplications.js';
-import { checkEntityReadinessAdmissionWithClient, EntityReadinessAdmissionError, readRetainedProcessingScopeInDb } from '../runtimeReadinessAdmission.js';
+import { recordEntityReadinessBlockedWithClient, EntityReadinessAdmissionError, readRetainedProcessingScopeInDb } from '../runtimeReadinessAdmission.js';
+import {
+  deliverOwnerFollowUpWithClient, evaluateOwnerSendGateWithClient, gateOwnerSendWithClient, INTERNAL_PILOT_SEND_DISABLED
+} from '../ownerAskDelivery.js';
 // RT-16 — the ONE coding state (transactions.coding_state, migration 138):
 // the machine, the legacy-input mapping, the DTO projection, the writer.
 import { applyCodingTransition, applyCodingTransitionIfAllowed, codingStateFromReviewState, isDecidedCodingState, normalizeTransactionReviewState } from '../codingState.js';
@@ -57,6 +60,7 @@ import { linkReplyEvidenceMatchesInDb, loadMatchedDocumentsForTransactions } fro
 import { postLedgerTransactionInDb } from './ledger.js';
 import { getXeroAccountsForClient } from './xero.js';
 import { deliverEmailEvidenceAsksAfterSend, deliverSmsEvidenceAsksAfterSend, deliverTelegramEvidenceAsksAfterSend, deliverWhatsAppEvidenceAsksAfterSend } from './channels.js';
+import { preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
 import { getFirmSnapshotFromDb } from './snapshot.js';
 
 export const rowToClientEvidenceRequestPayload = (row = {}) => ({
@@ -1378,6 +1382,7 @@ const recodeTransactionAfterClientReplyWithClient = async ({
   const supportNote = String(suggestionPayload.support_note || '').trim()
     || (reply ? `Client reply: ${reply.slice(0, 200)}` : '');
 
+  let nativeFollowUp = null;
   await client.query('begin');
   try {
     const currentTransaction = (await client.query(
@@ -1603,7 +1608,7 @@ const recodeTransactionAfterClientReplyWithClient = async ({
       );
     }
 
-    await consumeNativeUnresolvedCodingWithClient({ client, firmId, clientId, transactionId, policy: currentPolicy,
+    nativeFollowUp = await consumeNativeUnresolvedCodingWithClient({ client, firmId, clientId, transactionId, policy: currentPolicy,
       suggestion: suggestionPayload, actorId, answeredRequestId: evidenceRequest.id });
     await client.query(
       `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
@@ -1707,6 +1712,10 @@ const recodeTransactionAfterClientReplyWithClient = async ({
   return {
     applied: applies,
     suggestion: suggestionPayload,
+    // The follow-up ask the answer left on the owner (a native unresolved
+    // coding mints one); the owner-reply clock delivers it through the gated
+    // fan-out (ownerReplyRecovery.js).
+    ...(nativeFollowUp?.id ? { follow_up_request_id: nativeFollowUp.id } : {}),
     // W1 (INV-04): the committed learning — candidates staged, never facts minted.
     learning: {
       rules_minted: [],
@@ -2478,6 +2487,23 @@ export const acceptClientEvidenceRequestInDb = async ({
   });
 };
 
+// The reject writer's own fallback follow-up, used only when the firm gave no
+// follow-up question and the ask carries none: in the owner's language
+// (preferredOwnerTemplateLanguage — the one resolver), English unchanged.
+export const REJECT_FOLLOW_UP_FALLBACK_QUESTION = Object.freeze({
+  en: 'Please upload supporting evidence.',
+  fi: 'Lähetäthän vielä tähän liittyvän tositteen.'
+});
+
+// The firm rejected what the owner sent: the ask goes back to 'open' with the
+// follow-up question, in one transaction with the queue/line/audit writes. The
+// follow-up then reaches the owner through the ONE gated fan-out
+// (deliverOwnerFollowUpWithClient, the re-ask sweep's precedent): only a
+// deliverer that genuinely sent moves send_count / last_sent_at; refused ⇒
+// nothing sent or counted and the ask stays open on the owner; undelivered ⇒
+// it stays with an owner who can see it in the portal, or is escalated to the
+// firm ('owner_unreachable') when nobody can. This writer never stamps a send
+// itself — that was a sent state with no delivery behind it (INV-14, 147).
 export const rejectClientEvidenceRequestInDb = async ({
   firmId = DEFAULT_FIRM_ID,
   evidenceRequestId,
@@ -2497,6 +2523,7 @@ export const rejectClientEvidenceRequestInDb = async ({
   }
 
   return withFirmDbClient(async (client) => {
+    let existingRow = null;
     await client.query('begin');
     try {
       const existing = await client.query(
@@ -2513,6 +2540,7 @@ export const rejectClientEvidenceRequestInDb = async ({
         error.code = 'EVIDENCE_REQUEST_NOT_FOUND';
         throw error;
       }
+      existingRow = row;
 
       const now = new Date().toISOString();
       const previousResponse = row.response_payload || {};
@@ -2520,15 +2548,19 @@ export const rejectClientEvidenceRequestInDb = async ({
         ...(Array.isArray(previousResponse.document_ids) ? previousResponse.document_ids : []),
         ...(Array.isArray(previousResponse.documents) ? previousResponse.documents.map((document) => document?.id || document) : [])
       ].filter(Boolean)));
-      const nextQuestion = cleanFollowUpQuestion || row.question || row.request_payload?.evidence_request?.question || 'Please upload supporting evidence.';
-      const nextSendCount = Number(row.send_count || 0) + 1;
+      let nextQuestion = cleanFollowUpQuestion || row.question || row.request_payload?.evidence_request?.question || '';
+      if (!nextQuestion) {
+        const profile = (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, row.client_id])).rows[0]?.profile;
+        nextQuestion = REJECT_FOLLOW_UP_FALLBACK_QUESTION[preferredOwnerTemplateLanguage(profile)]
+          || REJECT_FOLLOW_UP_FALLBACK_QUESTION.en;
+      }
+      // The envelope keeps its own (genuine) send stamps; the next ones are the
+      // deliverer's to write.
       const rejectedEvidencePayload = {
         ...(row.request_payload?.evidence_request || {}),
         id: row.id,
         status: 'open',
         question: nextQuestion,
-        sent_at: new Date(now).getTime(),
-        send_count: nextSendCount,
         rejected_at: new Date(now).getTime()
       };
       const nextRequestPayload = {
@@ -2552,9 +2584,7 @@ export const rejectClientEvidenceRequestInDb = async ({
              question = $3,
              request_payload = request_payload || $4::jsonb,
              response_payload = $5::jsonb,
-             last_sent_at = $6::timestamptz,
-             send_count = $7,
-             due_at = coalesce($8::timestamptz, due_at),
+             due_at = coalesce($6::timestamptz, due_at),
              resolved_at = null,
              resolved_by = null,
              updated_at = now()
@@ -2566,12 +2596,9 @@ export const rejectClientEvidenceRequestInDb = async ({
           nextQuestion,
           JSON.stringify(nextRequestPayload),
           JSON.stringify(nextResponsePayload),
-          now,
-          nextSendCount,
           dueAt ? new Date(dueAt).toISOString() : null
         ]
       );
-      const request = rowToClientEvidenceRequestPayload(updated.rows[0]);
 
       if (row.review_item_id) {
         await client.query(
@@ -2640,15 +2667,28 @@ export const rejectClientEvidenceRequestInDb = async ({
       );
 
       await client.query('commit');
-      const snapshot = await getFirmSnapshotFromDb({ firmId });
-      return {
-        evidence_request: request,
-        snapshot
-      };
     } catch (error) {
       await client.query('rollback');
       throw error;
     }
+
+    // Post-commit: the follow-up is a network side effect. A client-audience
+    // ask only — a seat/agent question has no owner delivery.
+    const followUpDelivery = ((existingRow.audience || 'client') === 'client')
+      ? await deliverOwnerFollowUpWithClient({
+        client, firmId, clientId: existingRow.client_id, evidenceRequestIds: [cleanRequestId], surface: 'evidence_rejection'
+      }).catch((error) => ({ error: error?.message || 'follow_up_failed' }))
+      : null;
+    const current = await client.query(
+      'select * from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
+      [firmId, cleanRequestId]
+    );
+    const snapshot = await getFirmSnapshotFromDb({ firmId });
+    return {
+      evidence_request: rowToClientEvidenceRequestPayload(current.rows[0]),
+      follow_up_delivery: followUpDelivery,
+      snapshot
+    };
   });
 };
 
@@ -3069,6 +3109,10 @@ export const amendClientEvidenceRequestInDb = async ({
 // this is replay protection, not cadence policy (askReaskCadence owns how often
 // an unanswered owner is nagged).
 //
+// The client-level gate is the fan-out's own (ownerAskDelivery.js): a
+// send-contained or readiness-refused client gets nothing from a resend, and
+// the operator sees `skipped_reason: 'send_refused'` with the refusal code.
+//
 // The audit is the gap this closes. The fan-out writes the
 // message_delivery_ledger, never audit_events, and the only resend-shaped
 // audit in the tree is the SYSTEM cadence's 'evidence_request.nudged'. An
@@ -3152,8 +3196,23 @@ export const resendClientEvidenceRequestInDb = async ({
     const priorSendCount = Number(row.send_count || 0);
     const deliver = deliverImpl || deliverEvidenceAsksOnAllChannels;
     const channelFanout = await deliver({
-      client, firmId, clientId: row.client_id, evidenceRequestIds: [row.id]
+      client, firmId, clientId: row.client_id, evidenceRequestIds: [row.id], surface: 'operator_resend'
     }).catch((error) => ({ error: error?.message || 'fanout_failed' }));
+    // The fan-out's client gate (send containment / readiness admission)
+    // refused: nothing left, nothing counted, and the refusal is already
+    // receipted ('evidence_request.send_refused'). Reported to the operator as
+    // the refusal it is, never as a resend.
+    if (channelFanout?.refused) {
+      return {
+        resent: false,
+        delivered: false,
+        evidence_request_id: row.id,
+        status: row.status,
+        send_count: priorSendCount,
+        skipped_reason: 'send_refused',
+        send_refused: channelFanout.refused
+      };
+    }
 
     const after = await client.query(
       'select send_count, last_sent_at from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
@@ -4561,7 +4620,14 @@ export const getAskBatchDraftsForFirmFromDb = async ({ firmId = DEFAULT_FIRM_ID 
 // per-channel results so a caller's receipt can say what actually left.
 // `deps` is passed through to every deliverer unchanged (their own transport
 // seam, e.g. deps.deliverOwnerMessage) so tests drive the real fan-out.
-export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], deps } = {}) => {
+//
+// The client-level gate (ownerAskDelivery.js: pilot send containment +
+// entity-readiness admission at 'ask_send') runs here, before any deliverer,
+// so EVERY caller of the fan-out is gated by the same decision. Refused ⇒ no
+// deliverer runs, nothing is counted, the refusal is receipted
+// ('evidence_request.send_refused', naming `surface`) and the result carries
+// `refused: <code>` so the caller can keep the ask on the owner.
+export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], surface = 'ask_send', deps } = {}) => {
   const results = {};
   // 122 — the OWNER-channel guard, enforced once for all four channels: only
   // client-audience asks may reach WhatsApp/SMS/Telegram/email. A seat/agent
@@ -4582,6 +4648,12 @@ export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientI
     }
   }
   const evidenceRequestIdsForChannels = clientAudienceIds;
+  if (evidenceRequestIdsForChannels.length) {
+    const gate = await gateOwnerSendWithClient({
+      client, firmId, clientId, surface, evidenceRequestIds: evidenceRequestIdsForChannels, deps: deps || {}
+    });
+    if (!gate.allowed) return { ...results, refused: gate.code };
+  }
   const attempt = async (channel, deliver) => {
     try {
       return await deliver();
@@ -5032,21 +5104,21 @@ export const __sendClientAskBatchWithClient = async ({
     // Check the persisted batch's client under its send lock, covering both
     // the scheduled producer and manual Send. A release only removes this
     // hold; every gate below and every channel's own gate still apply.
-    if ((await readInternalPilotSendContainmentWithClient(client, { firmId, clientId: batchRow.client_id })).contained) {
+    // The ONE owner-send gate (ownerAskDelivery.js), shared with the fan-out,
+    // the re-ask and evidence-topic sweeps and the operator resend.
+    const sendGate = await evaluateOwnerSendGateWithClient({ client, firmId, clientId: batchRow.client_id, lock: true });
+    if (sendGate.error) throw sendGate.error;
+    if (sendGate.code === INTERNAL_PILOT_SEND_DISABLED) {
       throw Object.assign(new Error('Internal pilot questions remain drafts until an operator releases question sending for this client.'), {
-        statusCode: 409, code: 'INTERNAL_PILOT_SEND_DISABLED'
+        statusCode: 409, code: INTERNAL_PILOT_SEND_DISABLED
       });
     }
-
-    const admission = await checkEntityReadinessAdmissionWithClient({
-      client,
-      firmId,
-      clientId: batchRow.client_id,
-      boundary: 'ask_send',
-      resourceType: 'client_ask_batch',
-      resourceId: cleanBatchId
-    });
-    if (!admission.allowed) {
+    if (sendGate.admission) {
+      const admission = sendGate.admission;
+      await recordEntityReadinessBlockedWithClient({
+        client, firmId, clientId: batchRow.client_id, boundary: 'ask_send', decision: admission,
+        resourceType: 'client_ask_batch', resourceId: cleanBatchId
+      });
       await client.query('commit');
       const error = new EntityReadinessAdmissionError(admission);
       error.transactionCommitted = true;
