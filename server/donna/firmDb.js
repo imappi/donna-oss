@@ -237,7 +237,8 @@ export {
   postSupplierBillJournalFromDb,
   postSupplierBillJournalWithClient,
   seedPackPaletteChartWithClient,
-  upsertLedgerAccountForJournal
+  upsertLedgerAccountForJournal,
+  findLedgerAccountByNameOrAlias
 } from './db/ledger.js';
 
 // db/close.js — plane S — close: diagnostics, exceptions, the period preview, financial reports, the close archive, fiscal years and periods, close checks and the period lock

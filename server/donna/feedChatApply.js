@@ -33,6 +33,7 @@ import {
 } from './firmDb.js';
 import { readRetainedProcessingScopeInDb } from './runtimeReadinessAdmission.js';
 import { validateCodingPolicyForChatActionInDb } from './db/coding.js';
+import { findLedgerAccountByNameOrAlias } from './db/ledger.js';
 import { legacyReviewStateFor } from './codingState.js';
 import { attemptLedgerReclass } from './ledgerReclass.js';
 import { getAccountingSystemAdapter } from './accountingSystems/index.js';
@@ -159,14 +160,9 @@ const applyCategoryBatch = async ({ firmId, clientId, action, actorId, messageId
   // the set gets the same account by definition of the command.
   let accountCode = action.account_code || null;
   if (!accountCode) {
-    const acctLookup = await d.queryFirmDb(
-      `select code from ledger_accounts
-        where firm_id = $1 and client_id = $2
-          and lower(name) = lower($3) and status = 'active'
-        limit 1`,
-      [firmId, clientId, action.account_name]
-    );
-    accountCode = acctLookup.rows[0]?.code || null;
+    accountCode = (await findLedgerAccountByNameOrAlias({
+      query: d.queryFirmDb, firmId, clientId, name: action.account_name
+    }))?.code || null;
   }
   const accountingSystem = String(
     (await d.getClientAccountingSystemFromDb({ firmId, clientId }).catch(() => 'none')) || 'none'
