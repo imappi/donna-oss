@@ -49,13 +49,13 @@ const COPY = {
     signIn: 'Kirjaudu sisään', signUp: 'Luo tunnus', google: 'Jatka Google-tilillä',
     toSignUp: 'Eikö sinulla ole vielä tunnusta? Luo tunnus', toSignIn: 'Onko sinulla jo tunnus? Kirjaudu sisään',
     confirm: 'Vahvista sähköpostiosoitteesi viestistä, jonka lähetimme sinulle. Avaa sen jälkeen kutsulinkki uudelleen.',
-    accepting: 'Avataan yrityksesi näkymää…',
+    accepting: 'Avataan yrityksesi asiakasportaalia…',
     signOut: 'Kirjaudu ulos', retry: 'Yritä uudelleen',
     errors: {
-      CLIENT_OWNER_INVITE_INVALID: 'Tämä kutsulinkki ei ole enää voimassa. Pyydä kirjanpitäjältäsi uusi kutsu.',
+      CLIENT_OWNER_INVITE_INVALID: 'Tämä kutsulinkki ei ole enää voimassa. Pyydä tilitoimistoltasi uusi kutsu.',
       CLIENT_OWNER_INVITE_EMAIL_MISMATCH: 'Kutsu lähetettiin toiseen sähköpostiosoitteeseen. Kirjaudu ulos ja kirjaudu sisään sillä osoitteella, johon kutsu tuli.',
       CLIENT_OWNER_INVITE_EMAIL_UNVERIFIED: 'Vahvista ensin sähköpostiosoitteesi ja avaa sitten kutsulinkki uudelleen.',
-      CLIENT_OWNER_INVITE_ACCOUNT_IN_USE: 'Tämä tunnus on jo käytössä toisessa Donna-työtilassa, joten sitä ei voi liittää tämän yrityksen näkymään. Kirjaudu toisella sähköpostiosoitteella tai kysy kirjanpitäjältäsi.',
+      CLIENT_OWNER_INVITE_ACCOUNT_IN_USE: 'Tämä tunnus on jo käytössä toisessa Donna-työtilassa, joten sitä ei voi liittää tämän yrityksen asiakasportaaliin. Kirjaudu toisella sähköpostiosoitteella tai kysy tilitoimistoltasi.',
       generic: 'Jokin meni pieleen. Yritä hetken päästä uudelleen.'
     }
   }

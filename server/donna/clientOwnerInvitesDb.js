@@ -515,7 +515,7 @@ export const buildClientOwnerInviteEmail = ({ firmName, companyName, ownerName, 
       subject: `${firmName} kutsuu sinut Donnaan`,
       html: [
         `<p>Hei ${name},</p>`,
-        `<p>${firm} hoitaa ${company ? `yrityksen <strong>${company}</strong>` : 'yrityksesi'} kirjanpitoa Donnassa ja kutsuu sinut mukaan. Donnassa voit lähettää kuitit ja muut tositteet suoraan kirjanpitäjällesi ja vastata hänen kysymyksiinsä.</p>`,
+        `<p>${firm} hoitaa ${company ? `yrityksen <strong>${company}</strong>` : 'yrityksesi'} kirjanpitoa Donnassa ja kutsuu sinut yrityksen asiakasportaaliin. Siellä voit lähettää kuitit ja muut tositteet suoraan tilitoimistolle ja vastata sen kysymyksiin.</p>`,
         `<p><a href="${href}">Avaa kutsu</a></p>`,
         `<p>Kirjaudu sisään tai luo tunnus tällä samalla sähköpostiosoitteella (<strong>${address}</strong>). Linkki toimii vain kerran ja on voimassa ${until} asti.</p>`,
         '<p>Jos et odottanut tätä viestiä, voit jättää sen huomiotta.</p>'
