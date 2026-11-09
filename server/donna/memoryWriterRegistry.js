@@ -184,7 +184,11 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     // doc-anchored ask primitive (salesRecognitionGap.js). Client evidence
     // request only; this locked transaction SELECT and every write target are
     // unchanged. No memory target.
-    ["runJevReconciliationForDocument","dynamic_sql","e6a38955fd40525e9226d8b559280003db1001ab12346fb7be3fdb9040b9ad9d",1,[]],
+    // 2026-11-09: re-pinned. The same hand-off now also covers an accrual
+    // supplier bill (one lane per no-settlement obligation type, the same
+    // canonical ask primitive). Client evidence request only; this locked
+    // transaction SELECT and every write target are unchanged. No memory target.
+    ["runJevReconciliationForDocument","dynamic_sql","2b69f13418a6056d91810e50ea9c463641eaec11406dd7b92e4a645dedc3023a",1,[]],
     // 2026-09-24 (HELMIKUU S7): the owner-confirmed completion owner locks the
     // plan's bank lines with this same scoped SELECT FOR UPDATE and eligibility
     // predicate, then writes only through the existing reconciliation writer,
