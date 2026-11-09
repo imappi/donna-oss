@@ -73,14 +73,27 @@ export const LocaleProvider = ({
   initialPreferences = null,
   storage = undefined
 }) => {
-  const [preferences, setPreferences] = useState(() => (
+  const [savedPreferences, setPreferences] = useState(() => (
     initialPreferences
       ? {
           ...resolveInterfaceLocale(initialPreferences.locale, { allowTestLocale, allowBuildingLocale }),
-          numberStyle: normalizeNumberStyle(initialPreferences.numberStyle)
+          numberStyle: normalizeNumberStyle(initialPreferences.numberStyle),
+          saved: true
         }
       : readInterfacePreferences({ storage, allowTestLocale, allowBuildingLocale })
   ));
+
+  // A mounted surface may propose a default language for a person who has not
+  // chosen one on this device (the client portal proposes its owner's
+  // language). It is never persisted and never overrides a saved choice: the
+  // moment the person picks a language or number style, that is saved and wins.
+  const [surfaceDefaultLocale, setSurfaceDefaultLocale] = useState(null);
+  const preferences = useMemo(() => {
+    if (savedPreferences.saved || !surfaceDefaultLocale) return savedPreferences;
+    const proposed = resolveInterfaceLocale(surfaceDefaultLocale);
+    if (proposed.fallbackReason || proposed.locale === savedPreferences.locale) return savedPreferences;
+    return { ...savedPreferences, ...proposed, surfaceDefault: true };
+  }, [savedPreferences, surfaceDefaultLocale]);
 
   useLayoutEffect(() => {
     if (typeof document !== 'undefined') applyDocumentLocale(document, preferences);
@@ -112,6 +125,7 @@ export const LocaleProvider = ({
     localeLabEnabled: allowTestLocale,
     setInterfaceLocale,
     setNumberStyle,
+    setSurfaceInterfaceLocaleDefault: setSurfaceDefaultLocale,
     formatAmount: (amount, options = {}) => formatAccountingAmount(amount, {
       locale: preferences.locale,
       numberStyle: preferences.numberStyle,
@@ -166,4 +180,23 @@ export const useInterfaceLocale = () => {
   const context = useContext(InterfaceLocaleContext);
   if (!context) throw new Error('useInterfaceLocale must run inside LocaleProvider.');
   return context;
+};
+
+// Proposes `locale` as the interface language while the calling surface is
+// mounted, for a person with no saved choice on this device. A layout effect,
+// so the surface's first paint is already in the proposed language; the
+// proposal is withdrawn on unmount, so other surfaces keep today's default.
+export const useSurfaceInterfaceLocaleDefault = (locale) => {
+  const context = useContext(InterfaceLocaleContext);
+  if (!context) throw new Error('useSurfaceInterfaceLocaleDefault must run inside LocaleProvider.');
+  const { setSurfaceInterfaceLocaleDefault } = context;
+  useLayoutEffect(() => {
+    setSurfaceInterfaceLocaleDefault(locale || null);
+    return () => setSurfaceInterfaceLocaleDefault(null);
+  }, [locale, setSurfaceInterfaceLocaleDefault]);
+};
+
+export const SurfaceInterfaceLocaleDefault = ({ locale, children }) => {
+  useSurfaceInterfaceLocaleDefault(locale);
+  return children;
 };

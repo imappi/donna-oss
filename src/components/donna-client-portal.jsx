@@ -14,6 +14,7 @@ import { useIntl } from 'react-intl';
 
 import { BidiText, FormattedValue, IdentifierText } from '../i18n/BidiText.jsx';
 import { useInterfaceLocale } from '../i18n/LocaleProvider.jsx';
+import { PRODUCTION_INTERFACE_LOCALES } from '../i18n/localeRegistry.js';
 import {
   PORTAL_DOCUMENT_TYPE_MESSAGE_IDS,
   PORTAL_LEGAL_FORM_MESSAGE_IDS
@@ -1238,7 +1239,14 @@ export default function DonnaClientPortal({
   previewState = null
 } = {}) {
   const intl = useIntl();
-  const { direction, formatAmount, formatDate, formatTimestamp } = useInterfaceLocale();
+  const {
+    direction,
+    formatAmount,
+    formatDate,
+    formatTimestamp,
+    locale: interfaceLocale,
+    setInterfaceLocale
+  } = useInterfaceLocale();
   const message = (id, values) => intl.formatMessage({ id }, values);
   const previewMode = Boolean(previewState);
   const liveDatabaseMode = firmDataSource === 'database' && !previewMode;
@@ -2613,6 +2621,37 @@ export default function DonnaClientPortal({
             <span aria-hidden="true">·</span>
             <span>{intl.formatMessage({ id: 'portal.documentsIntake' })}</span>
           </span>
+          <span style={{ display: 'inline-flex', alignItems: 'baseline', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '0.5rem 1.25rem' }}>
+          {/* Interface language — the owner's own choice, saved on this device;
+              once made it wins over the portal's default (the owner's language,
+              src/i18n/portalInterfaceLocale.js). Labels come from the registry:
+              each ready locale's production label, alpha status included. */}
+          <select
+            value={interfaceLocale}
+            onChange={(event) => setInterfaceLocale(event.target.value)}
+            aria-label={message('settings.language.interface.label')}
+            data-portal-language
+            style={{
+              appearance: 'none',
+              background: 'none',
+              border: 'none',
+              borderBottom: `1px solid ${D.rule}`,
+              borderRadius: 0,
+              padding: 0,
+              maxWidth: '100%',
+              cursor: 'pointer',
+              fontFamily: D.mono,
+              fontSize: 11,
+              letterSpacing: D.tracking.mono,
+              color: D.inkSoft
+            }}
+          >
+            {PRODUCTION_INTERFACE_LOCALES.map((entry) => (
+              <option key={entry.tag} value={entry.tag} lang={entry.tag}>
+                {entry.productionLabel}
+              </option>
+            ))}
+          </select>
           {/* Sign out — clears the stored Supabase session + any Donna access
               token, then returns to the public landing. The owner's only exit
               from the portal; without it a shared/owned device stays logged in. */}
@@ -2638,6 +2677,7 @@ export default function DonnaClientPortal({
           >
             {intl.formatMessage({ id: 'portal.logOut' })}
           </button>
+          </span>
         </header>
 
         {/* Hierarchy pivot — task leads, identity becomes context.

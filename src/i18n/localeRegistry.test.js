@@ -32,7 +32,7 @@ test('the registry exposes only ready interface locales in production', () => {
   assert.equal(INTERFACE_LOCALES['ar-XB'].status, 'test_only');
   assert.equal(INTERFACE_LOCALES['ar-AE'].direction, 'rtl');
   assert.equal(INTERFACE_LOCALES['ar-AE'].maturity, 'alpha');
-  assert.deepEqual(PRODUCTION_INTERFACE_LOCALES.map((entry) => entry.tag), ['en', 'ar-AE']);
+  assert.deepEqual(PRODUCTION_INTERFACE_LOCALES.map((entry) => entry.tag), ['en', 'ar-AE', 'fi']);
   assert.equal(PRODUCTION_INTERFACE_LOCALES[1].productionLabel, 'العربية — إصدار تجريبي');
 
   assert.equal(resolveInterfaceLocale('en').locale, 'en');
