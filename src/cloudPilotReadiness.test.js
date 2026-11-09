@@ -128,7 +128,10 @@ const sendPanel = () => document.querySelector('section[aria-label="Owner questi
 const sendButton = label => [...sendPanel().querySelectorAll('button')].find(node => node.textContent === label);
 const sendReview = (id='a', extra={}) => ({firm_id:'f',client_id:id,actor_id:'member',review_digest:'d'.repeat(64),enrolled:true,contained:true,release:null,
   draft_batches:[{id:'batch-1',subject:'Questions about February',created_at:'2026-09-20T10:00:00.000Z',item_count:2,document_ask_count:1}],
-  draft_batches_truncated:false,draft_owner_questions:4,after_release:{owner_email_asks:false,firm_auto_send_client_asks:false,delivery_channels_changed:false},...extra});
+  draft_batches_truncated:false,draft_owner_questions:4,after_release:{owner_email_asks:true,reask_reminders:true,firm_auto_send_client_asks:false,
+    owner_channels:[{flag_key:'OWNER_EMAIL_ASKS',effect:'email_questions_to_owner',action:'stage',stage:'canary',source:'manual',acts_after_release:true},
+      {flag_key:'ASK_REASK_CADENCE',effect:'remind_unanswered_questions_then_escalate_to_firm',action:'stage',stage:'canary',source:'manual',acts_after_release:true}],
+    owner_email_recipient:'owner@example.invalid',owner_email_missing:false,delivery_channels_changed:true},...extra});
 test('mounted send release shows held drafts, requires consent and validates the receipt',async()=>{
  responder=async(url,init)=>response(url.includes('/send-release')
    ? {firm_id:'f',client_id:'a',actor_id:'member',receipt_id:41,contained:false,sends_performed:false}
@@ -138,7 +141,10 @@ test('mounted send release shows held drafts, requires consent and validates the
  assert.match(sendPanel().textContent,/held as drafts/);
  assert.match(sendPanel().textContent,/Drafted question messages: 1\. Owner questions not yet sent: 4\./);
  assert.match(sendPanel().textContent,/Questions about February · 3 questions/);
- assert.match(sendPanel().textContent,/Email questions to the owner: off/);
+ assert.match(sendPanel().textContent,/Email questions to the owner \(OWNER_EMAIL_ASKS\): switched on by this release · on/);
+ assert.match(sendPanel().textContent,/Remind the owner about unanswered questions, then pass them to the firm \(ASK_REASK_CADENCE\): switched on by this release · on/);
+ assert.match(sendPanel().textContent,/Question emails go to owner@example\.invalid\./);
+ assert.doesNotMatch(sendPanel().textContent,/No owner email/);
  assert.equal(sendButton('Release question sending').disabled,true);
  await act(async()=>sendPanel().querySelector('[type="checkbox"]').click());
  await act(async()=>sendButton('Release question sending').click());await flush();
@@ -147,6 +153,22 @@ test('mounted send release shows held drafts, requires consent and validates the
  assert.deepEqual(JSON.parse(post.body),{firm_id:'f',review_digest:'d'.repeat(64),confirmed:true});
  assert.match(sendPanel().textContent,/Question sending released\. Receipt 41\./);
  assert.equal(sendButton('Release question sending'),undefined);
+});
+test('mounted send release names a channel left as it is and an owner with no email',async()=>{
+ const base=sendReview();
+ responder=async()=>response(sendReview('a',{after_release:{...base.after_release,owner_email_asks:false,owner_email_recipient:null,owner_email_missing:false,
+   owner_channels:[{flag_key:'OWNER_EMAIL_ASKS',effect:'email_questions_to_owner',action:'left_as_is',existing_stage:'off',existing_source:'manual',existing_scope:'client',acts_after_release:false},
+     base.after_release.owner_channels[1]]}}));
+ await mount();await selectClient('a');
+ await act(async()=>sendButton('Review question sending').click());await flush();
+ assert.match(sendPanel().textContent,/Email questions to the owner \(OWNER_EMAIL_ASKS\): already set to off for this client, left as it is · off/);
+ assert.doesNotMatch(sendPanel().textContent,/Question emails go to/);
+ responder=async()=>response(sendReview('a',{after_release:{...base.after_release,owner_email_recipient:null,owner_email_missing:true}}));
+ await act(async()=>sendButton('Review question sending').click());await flush();
+ assert.match(sendPanel().textContent,/No owner email is on this client’s profile, so question emails have nowhere to go\. You can still release/);
+ assert.equal(sendButton('Release question sending').disabled,true,'still releasable once confirmed');
+ await act(async()=>sendPanel().querySelector('[type="checkbox"]').click());
+ assert.equal(sendButton('Release question sending').disabled,false);
 });
 test('mounted send release rejects a receipt that does not prove release',async()=>{
  responder=async(url)=>response(url.includes('/send-release')?{firm_id:'f',client_id:'a',actor_id:'member',contained:true}:sendReview());

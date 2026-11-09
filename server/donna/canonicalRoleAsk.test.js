@@ -173,3 +173,55 @@ await test('one standing question, one anchor: the same role asked twice is the 
   assert.equal(first.anchor, second.anchor);
   assert.equal(first.blocker_code, second.blocker_code);
 });
+
+// Owner language: the four role questions are written in the owner's language;
+// English stays byte-identical.
+const FI_CHART = [
+  { id: 'f-2939', code: '2939', name: 'ALV-velka', account_type: 'liability', normal_balance: 'credit', canonical_role: null },
+  { id: 'f-2940', code: '2940', name: 'Muut lyhytaikaiset velat', account_type: 'liability', normal_balance: 'credit', canonical_role: null },
+  { id: 'f-3000', code: '3000', name: 'Myynti', account_type: 'revenue', normal_balance: 'credit', canonical_role: null }
+];
+const contendedPlan = (accounts = FI_CHART) => planCanonicalRoleResolution({
+  accounts,
+  proposals: [
+    { account_id: accounts[0].id, role: 'liability.sales_tax_payable', confidence: 0.9 },
+    { account_id: accounts[1].id, role: 'liability.sales_tax_payable', confidence: 0.9 }
+  ]
+});
+
+await test('owner language — English role questions are byte-identical', () => {
+  assert.equal(buildCanonicalRoleAsks({ plan: contendedPlan(GB_CHART) })[0].question,
+    'More than one account in your books could be your VAT or sales tax account: 2220 VAT control, or 2230 Corporation tax payable. I cannot tell which is which from the names, and I do not want to guess on tax. Which one should I use? Reply with the code.');
+  assert.equal(buildCanonicalRoleAsks({ plan: contendedPlan(GB_CHART), language: 'en' })[0].question,
+    buildCanonicalRoleAsks({ plan: contendedPlan(GB_CHART) })[0].question);
+  const [missing] = buildCanonicalRoleAsks({ plan: planCanonicalRoleResolution({ accounts: GB_CHART, requiredRoles: ['liability.sales_tax_payable'] }) });
+  assert.equal(missing.question,
+    'I need to know which account is your VAT or sales tax account before I can post to it. These are the ones it could be: 2220 VAT control, or 2230 Corporation tax payable. Which should I use? Reply with the code, or tell me if it is not one of these.');
+});
+
+await test('owner language — the four role questions in Finnish, sinä form, same facts', () => {
+  const [contended] = buildCanonicalRoleAsks({ plan: contendedPlan(), language: 'fi' });
+  assert.equal(contended.question,
+    'Kirjanpidossasi on useampi tili, joka voisi olla ALV-velkatili: 2939 ALV-velka tai 2940 Muut lyhytaikaiset velat. En pysty nimistä päättelemään, mikä on mikä, enkä halua arvata verotukseen liittyvissä asioissa. Mitä tiliä käytän? Vastaa tilin numerolla.');
+  assert.equal(contended.anchor, 'account_role:liability.sales_tax_payable', 'identity does not change with the language');
+  assert.equal(contended.request_payload.owner_phrase, 'ALV-velkatili');
+  assert.deepEqual(contended.request_payload.candidates.map((c) => c.code), ['2939', '2940']);
+
+  const [held] = buildCanonicalRoleAsks({ language: 'fi', plan: planCanonicalRoleResolution({
+    accounts: [{ ...FI_CHART[0], canonical_role: 'liability.sales_tax_payable' }, FI_CHART[1]],
+    proposals: [{ account_id: 'f-2940', role: 'liability.sales_tax_payable', confidence: 0.99 }]
+  }) });
+  assert.equal(held.question,
+    'Kirjanpidossasi on jo yksi ALV-velkatili, mutta myös tämä tili voisi olla se: 2940 Muut lyhytaikaiset velat. Mitä tiliä käytän? Vastaa tilin numerolla.');
+
+  const [menu] = buildCanonicalRoleAsks({ language: 'fi', plan: planCanonicalRoleResolution({ accounts: FI_CHART, requiredRoles: ['liability.sales_tax_payable'] }) });
+  assert.equal(menu.question,
+    'Minun pitää tietää, mikä tileistäsi on ALV-velkatili, ennen kuin voin kirjata sille. Vaihtoehdot ovat: 2939 ALV-velka tai 2940 Muut lyhytaikaiset velat. Mitä tiliä käytän? Vastaa tilin numerolla, tai kerro, jos se ei ole mikään näistä.');
+
+  const [none] = buildCanonicalRoleAsks({ language: 'fi', plan: planCanonicalRoleResolution({ accounts: [FI_CHART[2]], requiredRoles: ['liability.sales_tax_payable'] }) });
+  assert.equal(none.question,
+    'En löydä kirjanpidostasi tiliä, joka voisi olla ALV-velkatili, ja tarvitsen sellaisen ennen kuin voin kirjata sille. Lisäänkö sellaisen, vai onko se kirjanpidossasi nimellä, jota en tunnistanut?');
+  for (const ask of [contended, held, menu, none]) assertVoice(ask.question);
+  assert.equal(ownerPhraseForRole('liability.director_loan', 'fi'), 'osakaslainatili');
+  assert.equal(ownerPhraseForRole('liability.director_loan'), "director's loan account");
+});

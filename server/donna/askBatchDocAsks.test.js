@@ -509,3 +509,52 @@ await test('a doc ask counts toward auto-send; explained-doc FYIs alone do not (
   const skipOnly = { draft: { items: [], statement_requests: [], document_asks: [{ document_id: 'd1', disposition: 'skip', question: '', evidence_type: 'payment_method', skip_reason: 'covered' }] } };
   assert.equal(draftAskCount(skipOnly), 0, 'doc skips never count');
 });
+
+// ── owner language: the deterministic "Already handled" section ─────────────
+// It is appended to the drafted message, so it follows the language the draft
+// was written in (the drafter's receipt); English stays byte-identical.
+const runRetractionDraft = async ({ language, clientRow = CLIENT_ROW }) => {
+  const client = makeMockClient([
+    cannedClient([clientRow]),
+    cannedConfig([{ flag_key: 'RECONCILE_RETRACTION_AUTOSEND', stage: 'canary', source: 'manual', client_id: 'client-1' }]),
+    { match: 'retracted_by_auto_explain', rows: [
+      { request_id: 'ask-r1', transaction_id: 'tx-r1', retracted_by_auto_explain: false, transaction_date: '2026-06-02', description: 'MAANVUOKRA ESIMERKKI', money_out: 831.35, money_in: 0, currency: 'EUR' },
+      { request_id: 'ask-r2', transaction_id: 'tx-r2', retracted_by_auto_explain: true, transaction_date: '2026-06-09', description: 'PYSÄKÖINTI ESIMERKKI', money_out: 4.5, money_in: 0, currency: 'EUR' }
+    ] },
+    cannedEvalMax([{ last_evaluated_at: '2026-07-05T08:00:00Z' }]),
+    cannedBatchInsert([{ id: 'ask-batch-retraction', status: 'draft', payload: {} }])
+  ]);
+  let drafted = null;
+  await __draftClientAskBatchWithClient({
+    client, firmId: 'firm-1', clientId: 'client-1',
+    draftFn: async () => {
+      drafted = { subject: 'All clear', message_markdown: 'All clear.', summary: '', items: [], statement_requests: [], document_asks: [], counts: { ask: 0, notify: 0, skip: 0, statement_requests: 0 } };
+      return { draft: drafted, model: 'gpt-5.4', response_id: '', ...(language ? { language } : {}) };
+    }
+  });
+  return drafted.message_markdown;
+};
+
+await test('owner language — the "Already handled" section is byte-identical English and Finnish for a Finnish draft', async () => {
+  assert.equal(await runRetractionDraft({ language: 'en' }), [
+    'All clear.',
+    '**Already handled — you can ignore these**',
+    "We've since found the supporting material for the following, so there's no need to send that material again:",
+    '- 2026-06-02 — EUR 831.35 — MAANVUOKRA ESIMERKKI',
+    "We've since settled the following ourselves — small, recurring and clearly business, so no receipt or explanation is needed:",
+    '- 2026-06-09 — EUR 4.50 — PYSÄKÖINTI ESIMERKKI',
+    ''
+  ].join('\n'));
+  const finnish = [
+    'All clear.',
+    '**Nämä on jo hoidettu, voit jättää ne huomiotta**',
+    'Löysimme sittemmin tositteet seuraaviin, joten niitä ei tarvitse enää lähettää:',
+    '- 2.6.2026, 831,35 EUR, MAANVUOKRA ESIMERKKI',
+    'Kirjasimme seuraavat itse: ne ovat pieniä, toistuvia ja selvästi liiketoimintaan liittyviä, joten kuittia tai selitystä ei tarvita:',
+    '- 9.6.2026, 4,50 EUR, PYSÄKÖINTI ESIMERKKI',
+    ''
+  ].join('\n');
+  assert.equal(await runRetractionDraft({ language: 'fi' }), finnish);
+  // A drafter that reports no language: the one resolver on the client profile.
+  assert.equal(await runRetractionDraft({ clientRow: { ...CLIENT_ROW, jurisdiction: 'FI', profile: { jurisdiction: 'FI' } } }), finnish);
+});

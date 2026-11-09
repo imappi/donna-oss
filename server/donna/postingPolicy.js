@@ -29,6 +29,10 @@ const refuse = (code, jurisdiction, reason, details = {}) => {
   throw new PostingPolicyError(code, { jurisdiction, details: { reason, ...details } });
 };
 const nonemptyString = (value) => typeof value === 'string' && value.trim() === value && value.length > 0;
+// Optional country-owned source-evidence rule (taxSourceEvidence.js runs it).
+const validTaxEvidence = (rule) => Boolean(rule) && typeof rule === 'object' && nonemptyString(rule.refusalCode)
+  && typeof rule.inputRuleCoversAcceptedCoding === 'boolean'
+  && ['resolveEntry', 'deductibleInput', 'taxedOutput'].every((key) => typeof rule[key] === 'function');
 const stringList = (value) => Array.isArray(value) && value.every(nonemptyString) && new Set(value).size === value.length;
 
 // Validate the selected declaration and its exact explicit capabilities. A malformed
@@ -45,6 +49,7 @@ const validateDefinition = (definition, country) => {
       || typeof definition.supplierBillNeedsChart !== 'boolean'
       || !(definition.salesTaxControlRole === null || nonemptyString(definition.salesTaxControlRole))
       || (Object.hasOwn(definition, 'taxFactAutomation') && typeof definition.taxFactAutomation !== 'function')
+      || (Object.hasOwn(definition, 'taxEvidence') && !validTaxEvidence(definition.taxEvidence))
       || !definition.capabilities || typeof definition.capabilities !== 'object'
       || Object.keys(definition.capabilities).some((key) => !POSTING_POLICY_OPERATIONS.includes(key))) {
     refuse('posting_policy_invalid', country, 'definition_invalid');
@@ -103,6 +108,7 @@ export const resolvePostingPolicy = ({ jurisdiction, codingPolicy = null, regist
     supplierBillAdmissionFlagKey: definition.supplierBillAdmissionFlagKey, supplierBillNeedsChart: definition.supplierBillNeedsChart,
     arSettlementFlagKey: definition.arSettlementFlagKey,
     salesInvoiceChannels: Object.freeze([...definition.salesInvoiceChannels]), salesTaxControlRole: definition.salesTaxControlRole,
+    taxEvidence: definition.taxEvidence || null,
     nativeTaxCodeOwnership };
   policy.adapter = Object.freeze(Object.fromEntries(POSTING_POLICY_OPERATIONS.map((operation) => [operation, (input = {}) => {
     if (!policy.capabilities[operation]) refuse('posting_operation_unsupported', country, 'operation_not_supported', { operation });

@@ -281,3 +281,67 @@ test('FI: output ALV on money received needs the settled sales source; evidenced
   assert.deepEqual(post(interest), interest);
   assert.deepEqual(post(sale, { autonomousCoding: false }), sale);
 });
+
+test('GB: the shared source-evidence rule, as UK law and practice allow it (synthetic data)', () => {
+  const gb = resolvePostingPolicy({ jurisdiction: 'gb' });
+  const fi = resolvePostingPolicy({ jurisdiction: 'fi' });
+  // One rule shape, declared per market; only VAT markets with a bank-line rule declare one.
+  assert.equal(gb.taxEvidence.refusalCode, 'TRANSACTION_GB_VAT_EVIDENCE_REQUIRED');
+  assert.equal(fi.taxEvidence.refusalCode, 'TRANSACTION_ALV_EVIDENCE_REQUIRED');
+  for (const jurisdiction of ['sg', 'us', 'au', 'ae']) assert.equal(resolvePostingPolicy({ jurisdiction }).taxEvidence, null, jurisdiction);
+  const refusal = { code: 'TRANSACTION_GB_VAT_EVIDENCE_REQUIRED' };
+  const spent = { money_in: 0, money_out: 36 };
+  const received = { money_in: 47.88, money_out: 0 };
+  const invoice = { document_type: 'supplier_bill', match_status: 'confirmed', total_amount: 36, tax_amount: 6 };
+  const sales = { document_type: 'sales_invoice', match_status: 'auto_matched', total_amount: 47.88, tax_amount: 7.98 };
+  const post = (coding, extra = {}) => gb.adapter.assertPostableTaxCoding({ coding, transaction: spent, taxCodingEnabled: true, autonomousCoding: true, ...extra });
+  const software = (tax) => ({ proposed_account: 'Software subscriptions', account_type: 'expense', ...tax });
+  // Input: the machine's deduction needs the settled source; a bank descriptor is not one.
+  assert.throws(() => post(software({ tax_type: 'VAT_SR_20_INPUT' })), refusal);
+  assert.throws(() => post(software({ tax_treatment: 'VAT 20%' })), refusal);
+  assert.throws(() => post(software({ tax_type: 'VAT_RR_5_INPUT' }), { matchedDocument: { ...invoice, match_status: 'suggested' } }), refusal);
+  // Reverse charge and EU acquisitions claim Box 4: the conservative choice asks for the source.
+  assert.throws(() => post(software({ tax_type: 'VAT_REVERSE_CHARGE_20_INPUT' })), refusal);
+  assert.throws(() => post(software({ tax_type: 'VAT_EU_ACQUISITION_20_INPUT' })), refusal);
+  assert.deepEqual(post(software({ tax_type: 'VAT_SR_20_INPUT' }), { matchedDocument: invoice }), software({ tax_type: 'VAT_SR_20_INPUT' }));
+  // Kept UK exceptions: no deduction is claimed (blocked, zero, exempt, outside
+  // scope), or a person's accepted decision carries the claim (the small-purchase
+  // concession and alternative evidence are a person's judgement).
+  for (const tax_type of ['VAT_BLOCKED_INPUT', 'VAT_ZR_INPUT', 'VAT_EXEMPT_INPUT', 'VAT_OUTSIDE_SCOPE_INPUT', 'NONE']) {
+    assert.deepEqual(post(software({ tax_type })), software({ tax_type }), tax_type);
+  }
+  assert.deepEqual(post(software({ tax_type: 'VAT_SR_20_INPUT' }), { autonomousCoding: false }), software({ tax_type: 'VAT_SR_20_INPUT' }));
+  // Finland keeps its stricter input rule for a person's decision too.
+  assert.throws(() => fi.adapter.assertPostableTaxCoding({ coding: { proposed_account: 'Operating supplies', account_type: 'expense', tax_type: 'ALV_25_5_INPUT' },
+    transaction: spent, taxCodingEnabled: true, autonomousCoding: false }), { code: 'TRANSACTION_ALV_EVIDENCE_REQUIRED' });
+  // Output: money received at a positive rate needs a settled sales source for the machine.
+  const other = (tax) => ({ proposed_account: 'Other income', account_type: 'revenue', ...tax });
+  assert.throws(() => post(other({ tax_treatment: 'VAT 20%' }), { transaction: received }), refusal);
+  assert.throws(() => post(other({ tax_type: 'VAT_RR_5_OUTPUT' }), { transaction: received, matchedDocument: { ...sales, document_type: 'deposit_slip' } }), refusal);
+  assert.deepEqual(post(other({ tax_type: 'VAT_SR_20_OUTPUT' }), { transaction: received, matchedDocument: sales }), other({ tax_type: 'VAT_SR_20_OUTPUT' }));
+  assert.deepEqual(post(other({ tax_type: 'VAT_SR_20_OUTPUT' }), { transaction: received, matchedDocument: { ...sales, document_type: 'payout_statement' } }), other({ tax_type: 'VAT_SR_20_OUTPUT' }));
+  assert.deepEqual(post(other({ tax_type: 'VAT_SR_20_OUTPUT' }), { transaction: received, autonomousCoding: false }), other({ tax_type: 'VAT_SR_20_OUTPUT' }));
+  for (const tax_type of ['VAT_ZR_OUTPUT', 'VAT_EXEMPT_OUTPUT', 'VAT_OUTSIDE_SCOPE_OUTPUT', 'VAT_EU_SUPPLY_OUTPUT']) {
+    assert.deepEqual(post(other({ tax_type }), { transaction: received }), other({ tax_type }), tax_type);
+  }
+  // Tax coding off: no VAT rule runs at all.
+  assert.deepEqual(post(other({ tax_treatment: 'VAT 20%' }), { transaction: received, taxCodingEnabled: false }), other({ tax_treatment: 'VAT 20%' }));
+});
+
+test('GB: the VAT side follows the account class, so a supplier refund to its expense reverses input VAT', () => {
+  const control = gbVatControlAccountFromChart(chart, 'liability.sales_tax_payable');
+  const refund = { id: 'fixture-refund', date: '2026-06-02', currency: 'GBP', money_in: 47.88, money_out: 0 };
+  const coded = applyGbVatCodingToCoding({ coding: { proposed_account: 'Operating supplies', account_type: 'expense', tax_treatment: 'VAT 20%' }, transaction: refund, controlAccount: control });
+  assert.equal(coded.tax_type, 'VAT_SR_20_INPUT');
+  const split = resolveGbVatSplitForPosting({ coding: coded, transaction: refund });
+  assert.deepEqual([split.net, split.vat, split.role], [39.9, 7.98, 'vat_input_deductible']);
+  const journal = buildLedgerJournalForTransaction({ transaction: refund, coding: coded, bankAccount, alvSplit: split });
+  // Money in credits the expense net and the VAT control: the reclaim is reversed, no sale is made.
+  assert.deepEqual(journal.lines.map(l => [l.account.name, l.debit, l.credit, l.account.tax_type, l.account.role]),
+    [['Entity bank', 47.88, 0, 'NONE', 'bank'], ['Operating supplies', 0, 39.9, 'VAT_SR_20_INPUT', 'counterparty'], ['My tax account', 0, 7.98, 'NONE', 'vat_input_deductible']]);
+  // An account of unknown class keeps the cash-direction fallback (money in is a supply).
+  assert.equal(applyGbVatCodingToCoding({ coding: { proposed_account: 'Synthetic custom account', tax_treatment: 'VAT 20%' }, transaction: refund, controlAccount: control }).tax_type, 'VAT_SR_20_OUTPUT');
+  // Revenue keeps the supply side; a purchase keeps the input side.
+  assert.equal(applyGbVatCodingToCoding({ coding: { proposed_account: 'Sales', account_type: 'revenue', tax_treatment: 'VAT 20%' }, transaction: refund, controlAccount: control }).tax_type, 'VAT_SR_20_OUTPUT');
+  assert.equal(applyGbVatCodingToCoding({ coding: { proposed_account: 'Operating supplies', account_type: 'expense', tax_treatment: 'VAT 20%' }, transaction: { money_out: 36 }, controlAccount: control }).tax_type, 'VAT_SR_20_INPUT');
+});

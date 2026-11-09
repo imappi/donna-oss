@@ -7,6 +7,9 @@
 //   review    → explanation + chat available
 //   uncertain → "Ask client" visible + LLM-generated reasoning
 
+import { toIsoDay } from './dates.js';
+import { amountText, dayText } from './salesRecognitionGap.js';
+
 // Mirrors the FE transactionMatchHero.isMeaningfulMatch — a positive
 // (non-rejected) document-side match. When one exists the transaction
 // already has document evidence, so the categorization pipeline's
@@ -139,7 +142,7 @@ const confidenceLevelForUnmatched = (reviewItem) => {
   return 'review';
 };
 
-const buildProactiveAskClient = ({ transaction, confidence }) => {
+const buildProactiveAskClient = ({ transaction, confidence, language = 'en' }) => {
   if (confidence === 'confident') return null;
   const desc = String(transaction?.description || transaction?.raw_description || '').trim();
   const merchantHint = desc
@@ -160,11 +163,32 @@ const buildProactiveAskClient = ({ transaction, confidence }) => {
   // (returns a copy) and ISO strings, and we validate before formatting.
   const datePart = transaction?.transaction_date || transaction?.date || null;
   let dateStr = '';
+  let parsedDate = null;
   if (datePart) {
     const parsed = datePart instanceof Date ? datePart : new Date(datePart);
     if (!Number.isNaN(parsed.getTime())) {
+      parsedDate = parsed;
       dateStr = parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     }
+  }
+  const reason = confidence === 'uncertain'
+    ? 'No matching vendor pattern or supporting document — client confirmation recommended.'
+    : 'Category suggestion has limited confidence — client confirmation recommended.';
+
+  // The question goes to the owner, so it is worded in the owner's language;
+  // `reason` is the firm's own note and stays English. Finnish names the
+  // transaction after a colon so the bank text is never inflected:
+  // "Hei! Pikainen tarkistus tapahtumasta: SHOPIFY INC, 16.6.2025, 3683,67 EUR."
+  if (language === 'fi') {
+    const facts = [merchantHint, parsedDate ? dayText(toIsoDay(parsedDate), 'fi') : '', amount > 0 ? amountText(amount, currency, 'fi') : '']
+      .filter(Boolean);
+    const subject = facts.length ? `tapahtumasta: ${facts.join(', ')}.` : 'tästä tapahtumasta.';
+    const purposeFi = amountIn > 0 ? 'yrityksen tuloa' : 'yrityksen kulu';
+    return {
+      question: `Hei! Pikainen tarkistus ${subject} Kertoisitko, mitä se koski, ja onko se ${purposeFi}? Kiitos!`,
+      evidence_type: 'business_purpose',
+      reason
+    };
   }
 
   const parts = [];
@@ -180,9 +204,7 @@ const buildProactiveAskClient = ({ transaction, confidence }) => {
   return {
     question,
     evidence_type: 'business_purpose',
-    reason: confidence === 'uncertain'
-      ? 'No matching vendor pattern or supporting document — client confirmation recommended.'
-      : 'Category suggestion has limited confidence — client confirmation recommended.'
+    reason
   };
 };
 
@@ -239,7 +261,10 @@ export const generateMatchExplanation = ({
   transaction,
   match,
   document,
-  reviewItem
+  reviewItem,
+  // The owner's language (preferredOwnerTemplateLanguage) for the proactive
+  // ask-client question only; every other field is the firm's English view.
+  language = 'en'
 } = {}) => {
   const payload = reviewItem?.payload || {};
   const category = payload.category || payload.proposed_account || transaction?.category || null;
@@ -335,7 +360,7 @@ export const generateMatchExplanation = ({
       // can still choose to ask; it's the proactive CARD we suppress.
       proactive_ask_client: (isMeaningfulMatch(match) || firmDecided)
         ? null
-        : buildProactiveAskClient({ transaction, confidence })
+        : buildProactiveAskClient({ transaction, confidence, language })
     };
   }
 
@@ -375,8 +400,8 @@ export const generateMatchExplanation = ({
   const unmatchedAskClient = firmDecided
     ? null
     : verdict
-      ? (verdict.wantsClientInput ? buildProactiveAskClient({ transaction, confidence }) : null)
-      : buildProactiveAskClient({ transaction, confidence });
+      ? (verdict.wantsClientInput ? buildProactiveAskClient({ transaction, confidence, language }) : null)
+      : buildProactiveAskClient({ transaction, confidence, language });
 
   // A normal verdict renders ITS OWN narrative — the account and the
   // model's reasoning. #315 routed confidence and the ask-card through
@@ -464,6 +489,6 @@ export const generateMatchExplanation = ({
     missing_account: null,
     proactive_ask_client: firmDecided
       ? null
-      : buildProactiveAskClient({ transaction, confidence: 'uncertain' })
+      : buildProactiveAskClient({ transaction, confidence: 'uncertain', language })
   };
 };
