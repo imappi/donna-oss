@@ -34,6 +34,8 @@
 // for SG). A network-open session should do the primary read — the same
 // outstanding pass as GB's £90k/£88k registration thresholds.
 
+import { taxSideForCoding } from '../taxSourceEvidence.js';
+
 export const GB_VAT_STANDARD_RATE = 20;
 export const GB_VAT_REDUCED_RATE = 5;
 
@@ -156,15 +158,14 @@ export const gbVatInputCodeForRate = (rate) => {
 // ---------------------------------------------------------------------------------
 const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
-// gbVatDirectionForTransaction(transaction) — the plain accounting direction of
-// a bank transaction for VAT purposes: money IN is a supply ('out' in this
-// module's convention), money OUT is a purchase ('in'). Same convention as
-// alvDirectionForTransaction / gstDirectionForTransaction.
-export const gbVatDirectionForTransaction = (transaction = {}) => {
-  if (Number(transaction?.money_in || 0) > 0) return 'out';
-  if (Number(transaction?.money_out || 0) > 0) return 'in';
-  return '';
-};
+// gbVatDirectionForTransaction(transaction, coding) — the VAT side of a bank
+// line: 'in' (purchase) or 'out' (supply). The FI twin's rule, shared
+// (taxSourceEvidence.js): the resolved account's class decides — an expense
+// gives the purchase side, revenue the supply side — and the cash direction
+// (money in = supply, money out = purchase) only when the class is unknown.
+// So a supplier refund coded to its expense account reverses input VAT; it
+// never becomes a standard-rated sale.
+export const gbVatDirectionForTransaction = (transaction = {}, coding = {}) => taxSideForCoding(transaction, coding);
 
 // resolveGbVatCodeForCoding({ taxType, taxTreatment, direction }) — render a
 // coder verdict (a GB machine code, or a GB_VAT_TAX_TREATMENT_OPTIONS label)
@@ -272,7 +273,7 @@ export const applyGbVatCodingToCoding = ({ coding = {}, transaction = {}, contro
   const code = resolveGbVatCodeForCoding({
     taxType: coding.tax_type || coding.xero_tax_type || '',
     taxTreatment: coding.tax_treatment || '',
-    direction: gbVatDirectionForTransaction(transaction)
+    direction: gbVatDirectionForTransaction(transaction, coding)
   });
   if (!code) return coding;
   const entry = resolveGbVatCode(code);
@@ -324,9 +325,11 @@ export const resolveGbVatSplitForPosting = ({ coding = {}, transaction = {} } = 
   if (!entry) return null;
   const control = coding.gb_vat_control;
   if (!control || !String(control.code || '').trim()) return null;
-  const direction = gbVatDirectionForTransaction(transaction);
+  const direction = gbVatDirectionForTransaction(transaction, coding);
   if (!direction || entry.direction !== direction) return null;
-  const gross = direction === 'in' ? transaction.money_out : transaction.money_in;
+  // The gross is the bank movement, whichever way it ran: a refund on the
+  // purchase side splits its money in into the reversed net and input VAT.
+  const gross = Number(transaction.money_in || 0) > 0 ? transaction.money_in : transaction.money_out;
   const split = splitGbVatGross({ gross: Math.abs(Number(gross || 0)), code });
   if (!split) return null;
   return {
