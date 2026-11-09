@@ -71,13 +71,22 @@ test('real PG + real HTTP: a firm grants, uses, suspends, re-activates, revokes 
   };
   const previous = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
   Object.assign(process.env, env);
+  // A forced drop at teardown ends this pool's idle sessions; handled here so
+  // that expected disconnect is never an uncaught exception.
+  pool.on('error', () => {});
   t.after(async () => {
+    // Post-response reads may still be in flight. Keep THIS pool installed
+    // (so nothing lazily opens a second pool from DATABASE_URL) until every
+    // client is back and idle, drop the scratch database, then release it.
+    for (let i = 0; i < 100 && pool.totalCount !== pool.idleCount; i += 1) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await admin.query(`drop database if exists "${name}" with (force)`);
+    await pool.end().catch(() => {});
     __resetFirmDbPoolForTests();
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
-    await pool.end();
-    await admin.query(`drop database if exists "${name}" with (force)`);
     await admin.end();
   });
 
