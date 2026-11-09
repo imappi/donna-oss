@@ -10,6 +10,9 @@ const formatLocaleFor = (locale) =>
   INTERFACE_LOCALES[locale]?.formatLocale
   || INTERFACE_LOCALES[DEFAULT_INTERFACE_LOCALE].formatLocale;
 
+const localeEntryFor = (locale) =>
+  INTERFACE_LOCALES[locale] || INTERFACE_LOCALES[DEFAULT_INTERFACE_LOCALE];
+
 const numberingSystemFor = (numberStyle) =>
   NUMBER_STYLES[normalizeNumberStyle(numberStyle)]?.numberingSystem || undefined;
 
@@ -19,14 +22,15 @@ export const createAccountingNumberFormatter = ({
   currency = 'AED',
   minimumFractionDigits = 2,
   maximumFractionDigits = 2,
-  signDisplay = 'auto'
+  signDisplay = 'auto',
+  currencyDisplay = localeEntryFor(locale).currencyDisplay || 'code'
 } = {}) => {
   const currencyCode = String(currency || '').trim();
   return new Intl.NumberFormat(formatLocaleFor(locale), {
     style: currencyCode ? 'currency' : 'decimal',
     ...(currencyCode ? {
       currency: currencyCode,
-      currencyDisplay: 'code',
+      currencyDisplay,
       currencySign: 'accounting'
     } : {}),
     minimumFractionDigits,
@@ -40,7 +44,10 @@ export const formatAccountingAmount = (value, options = {}) => {
   const amount = Number(value);
   if (!Number.isFinite(amount)) throw new TypeError('Accounting amount must be finite.');
   const formatter = createAccountingNumberFormatter(options);
-  if (amount < 0 && options.negativeStyle !== 'minus') {
+  const negativeStyle = options.negativeStyle
+    || localeEntryFor(options.locale || DEFAULT_INTERFACE_LOCALE).negativeStyle
+    || 'parentheses';
+  if (amount < 0 && negativeStyle !== 'minus') {
     return `(${formatter.format(Math.abs(amount))})`;
   }
   return formatter.format(amount);
