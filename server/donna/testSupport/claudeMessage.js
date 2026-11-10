@@ -5,7 +5,11 @@
 // output request, the one `structured_answer` tool call for a request over
 // the grammar limits (structuredRequest.js schemaDeliveryFor). Synthetic.
 
-export const ANTHROPIC_MESSAGES_TEST_URL = 'https://api.anthropic.com/v1/messages';
+// The endpoint comes from the host registry, so this support module names no
+// provider host itself (the llmCall / lane census ratchets stay blind to it).
+import { ANTHROPIC_MESSAGES_URL } from '../providerEndpoints.js';
+
+export const ANTHROPIC_MESSAGES_TEST_URL = ANTHROPIC_MESSAGES_URL;
 
 export const claudeMessageBody = (answer, { request = null, model = 'claude-opus-5-5', id = 'msg_fixture' } = {}) => {
   const toolDelivery = Array.isArray(request?.tools) && request.tools.some((tool) => tool?.name === 'structured_answer');
