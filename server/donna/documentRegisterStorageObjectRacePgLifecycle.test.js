@@ -14,7 +14,8 @@
 // on `audit_events`, so the first registration inserts its document row and
 // then waits, uncommitted, at its receipt. The second registration is started
 // only once the first is parked there, and the gate is released only once the
-// second is waiting on the first's row in the unique index.
+// second is waiting on the first: on its row in the unique index, or (same
+// document id) on the writer's per-document lock, before its Layer 1 read.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -107,9 +108,12 @@ test(
           const parkedA = await waitFor(async () => (await backends())
             .find((row) => row.locktype === 'relation' && /insert into audit_events/i.test(row.query)), 'the first registration to park at its receipt');
           const b = second();
+          // Under another id it runs into the first one's row in the unique
+          // index; under the same id it waits for the first before it reads.
           await waitFor(async () => (await backends())
-            .find((row) => row.pid !== parkedA.pid && row.locktype === 'transactionid' && /insert into documents/i.test(row.query)),
-          'the second registration to wait on the first one\'s row');
+            .find((row) => row.pid !== parkedA.pid && ((row.locktype === 'transactionid' && /insert into documents/i.test(row.query))
+              || row.locktype === 'advisory')),
+          'the second registration to wait on the first one');
           await gate.query('rollback');
           return await Promise.all([a, b]);
         } finally {
@@ -189,6 +193,107 @@ test(
         assert.deepEqual(await receiptsFor([winnerId, loserId]), [{ resource_id: winnerId, action: 'document.duplicate.auto_collapsed' }],
           'one collapse receipt; the loser writes none');
         assert.equal((await parseJobsFor(winnerId)).length + (await parseJobsFor(loserId)).length, 0);
+      });
+
+      // The deadlock the phone's retry found (one 500 in forty trials on a
+      // loaded machine), forced. PostgreSQL's report named both sides:
+      //   the winner's commit-time convergence settle
+      //     (`update documents set convergence_state … where id = X`; never a
+      //     HOT update, convergence_state is indexed) adds a documents_pkey
+      //     entry for X and waits on the retry's speculative token;
+      //   the retry's `insert … on conflict (id) do nothing` passed its id
+      //     check before the winner's row existed, holds a speculative
+      //     documents_pkey entry for X, and waits on the winner's transaction
+      //     in documents_storage_object_unique.
+      // The settle only changes convergence_as_of on a new document, so it is
+      // a HOT update (no index entry, no wait) unless the row's heap page is
+      // full: that, and the timing, is why it was one trial in forty. Forced:
+      //   - a gate holds the documents TOAST table (REINDEX inside a
+      //     transaction); the retry carries a field too large to store inline,
+      //     so it parks there having checked the id;
+      //   - the original (small, inline) inserts its row and parks at its
+      //     receipt behind the audit gate;
+      //   - a filler session fills the rest of that heap page with
+      //     uncommitted rows, so the settle's new row version must go to
+      //     another page and enter documents_pkey;
+      //   - the toast gate opens: the retry runs into the original's row; then
+      //     the audit gate opens and the original commits.
+      await t.test('a retry that checked the id before the first row existed, forced: the first one\'s commit does not deadlock with it', async () => {
+        const stored = await storeObject('settle-deadlock');
+        const id = `${clientId}-race-settle`;
+        const toast = (await appliance.query(
+          "select reltoastrelid::regclass::text as name from pg_class where oid = 'documents'::regclass"
+        )).rows[0].name;
+        const registerWith = (extra) => appliance.api.request({
+          method: 'POST', path: '/api/donna/firms/documents/register', auth: true,
+          body: {
+            firm_id: firmId,
+            documents: [{
+              id, client_id: clientId, filename: `${stored.tag}.pdf`, document_type: 'receipt', source: 'firm_intake',
+              storage_bucket: stored.bucket, storage_object_key: stored.key, checksum_sha256: stored.checksum,
+              file_storage: {
+                mode: 'object_storage', provider: stored.provider, bucket: stored.bucket, key: stored.key,
+                checksum_sha256: stored.checksum, filename: `${stored.tag}.pdf`, mime_type: 'application/pdf', size: stored.bytes.length
+              },
+              ...extra
+            }]
+          }
+        });
+        const waiting = async (pid) => (await backends()).filter((row) => pid == null || row.pid === pid);
+        const toastGate = new pg.Client({ connectionString: appliance.databaseUrl });
+        const auditGate = new pg.Client({ connectionString: appliance.databaseUrl });
+        const filler = new pg.Client({ connectionString: appliance.databaseUrl });
+        await toastGate.connect();
+        await auditGate.connect();
+        await filler.connect();
+        try {
+          await auditGate.query('begin');
+          await auditGate.query('lock table audit_events in share mode');
+          await toastGate.query('begin');
+          await toastGate.query(`reindex table ${toast}`);
+
+          // The retry: past its id check, parked storing its large payload.
+          const retry = registerWith({ client_note: Array.from({ length: 300 }, (_, i) => createHash('sha256').update(`settle-${i}`).digest('hex')).join('') });
+          const retryPark = await waitFor(async () => (await waiting())
+            .find((row) => row.locktype === 'relation' && /insert into documents/i.test(row.query)), 'the retry to park after its id check');
+          // The original: inserts its row and parks at its receipt (or, once
+          // registrations of one document are serialised, waits for the retry).
+          const original = registerWith({});
+          const originalPark = await waitFor(async () => (await waiting())
+            .find((row) => row.pid !== retryPark.pid && (row.locktype === 'advisory'
+              || (row.locktype === 'relation' && /insert into audit_events/i.test(row.query)))), 'the original to park');
+          // Fill the last heap page (where the original's row went) with
+          // small uncommitted rows until one lands on another page.
+          await filler.query('begin');
+          let firstBlock = null;
+          for (let i = 0; i < 400; i += 1) {
+            const placed = (await filler.query(
+              "insert into documents (id, firm_id, client_id, filename) values ($1, $2, $3, 'f') returning (ctid::text::point)[0]::int as block",
+              [`${id}-filler-${i}`, firmId, clientId]
+            )).rows[0].block;
+            if (firstBlock == null) firstBlock = placed;
+            else if (placed !== firstBlock) break;
+          }
+          await toastGate.query('rollback');
+          // The retry runs into the original's row (or, serialised, reaches its own receipt).
+          await waitFor(async () => (await waiting(retryPark.pid))
+            .find((row) => row.locktype === 'transactionid'
+              || (row.locktype === 'relation' && /insert into audit_events/i.test(row.query))), 'the retry to reach the original\'s row or its receipt');
+          await auditGate.query('rollback');
+          const [r, o] = await Promise.all([retry, original]);
+          assert.equal(r.status, 200, `the retry is answered, not a 500: ${JSON.stringify(r.json)}`);
+          assert.equal(o.status, 200, `the original is answered, not a 500: ${JSON.stringify(o.json)}`);
+          assert.equal(originalPark.locktype, 'advisory', 'the second registration of a document waits for the first, before it reads');
+          assert.equal(r.json.documents[0].id, id);
+          assert.equal(o.json.documents[0].id, id);
+          assert.equal(o.json.documents[0].parse_run_id, r.json.documents[0].parse_run_id, 'the same parse run');
+          assert.deepEqual((await documentsAt(stored.key)).map((row) => row.id), [id], 'one document');
+          assert.deepEqual(await receiptsFor([id]), [{ resource_id: id, action: 'document.parse.queued' }], 'one receipt');
+          assert.equal((await parseJobsFor(id)).length, 1, 'one parse job');
+        } finally {
+          for (const gate of [toastGate, auditGate, filler]) await gate.query('rollback').catch(() => {});
+          for (const gate of [toastGate, auditGate, filler]) await gate.end().catch(() => {});
+        }
       });
 
       await t.test(`${STRESS_TRIALS} trials of ${STRESS_CONCURRENT} simultaneous identical registrations (the phone's shape): all 200, one document each`, async () => {
