@@ -33,7 +33,7 @@ import { monthKeyLabel, snapshotDayString, snapshotMonthKey } from '../shared/sn
 import { feedTitle, reasonShorthand } from '../shared/feed-list.jsx';
 import LedgerAuditDrawer from './donna-ledger-audit-drawer.jsx';
 import { buildDocumentArtifactData } from './financials-view.jsx';
-import { bankLineDispositionChip, selectMaterialOpenDocumentRows } from '../../lib/documentsInbox.js';
+import { bankLineDispositionChip, providerWaitOf, selectMaterialOpenDocumentRows } from '../../lib/documentsInbox.js';
 import { DocumentContextMenu, DocumentDeleteConfirmation } from '../documents/document-context-menu.jsx';
 import AgingPanel from './aging-panel.jsx';
 import { displayBankLineDescription } from '../../lib/bankLineDisplay.js';
@@ -2958,6 +2958,8 @@ function GroupChip({ g, active, onClick }) {
 // carry no transaction / reviewItemId, so none of the tx-side
 // apply / accept / sync handlers can touch them — activation opens the same
 // read-only document artifact the row's matched siblings open.
+const PROVIDER_DISPLAY_NAMES = Object.freeze({ openai: 'OpenAI', anthropic: 'Anthropic' });
+
 function DocFeedRow({ row, active = false, deleting = false, onOpen, onContextMenu = null, onMenu = null }) {
   const intl = useIntl();
   const { formatAmount, formatDate } = useInterfaceLocale();
@@ -2969,14 +2971,22 @@ function DocFeedRow({ row, active = false, deleting = false, onOpen, onContextMe
     ? row.document?.filename || intl.formatMessage({ id: 'mounted.financial.bankStatement' })
     : row.vendorDisplay || row.document?.filename || intl.formatMessage({ id: 'mounted.financial.document' });
   const scopedNoSettlement = streamEntryState('document', row) === 'no_settlement';
-  const statusLabel = intl.formatMessage({
+  // The persisted provider wait (payload.parse_hold): the stored reason is the
+  // status, named on the row itself — never a bare Stalled.
+  const providerWait = providerWaitOf(row.document || row);
+  const providerWaitLabel = providerWait
+    ? (providerWait.reason_code === 'provider_not_configured' && providerWait.key_name
+      ? intl.formatMessage({ id: 'mounted.financial.waitingProviderKey' }, { key: providerWait.key_name })
+      : intl.formatMessage({ id: 'mounted.financial.waitingProvider' }, { provider: PROVIDER_DISPLAY_NAMES[providerWait.provider] || providerWait.provider || 'the model provider' }))
+    : null;
+  const statusLabel = providerWaitLabel || intl.formatMessage({
     id: scopedNoSettlement ? 'lifecycle.noSettlementInScope' : row.materialSourceState === 'processing'
       ? 'mounted.financial.readingStatement'
       : row.materialSourceState === 'blocked'
         ? 'mounted.financial.statementNeedsRepair'
         : 'mounted.financial.noBankLine'
   });
-  const dotStatus = row.materialSourceState === 'blocked'
+  const dotStatus = row.materialSourceState === 'blocked' || providerWait
     ? 'source'
     : row.materialSourceState === 'processing'
       ? 'reading'
@@ -3038,6 +3048,9 @@ function DocFeedRow({ row, active = false, deleting = false, onOpen, onContextMe
           <BidiText direction="auto">{desc}</BidiText>
           {scopedNoSettlement && <span style={{ display: 'block', fontSize: 11, color: T.muted }}>
             {intl.formatMessage({ id: 'lifecycle.accountingIncomplete' })}
+          </span>}
+          {providerWaitLabel && <span data-testid="doc-provider-wait" style={{ display: 'block', fontSize: 11, color: T.muted, whiteSpace: 'normal' }}>
+            <BidiText direction="auto">{providerWaitLabel}</BidiText>
           </span>}
         </span>
         <span style={{ ...BANK_FEED_AMOUNT_STYLE, color: T.ink }}>

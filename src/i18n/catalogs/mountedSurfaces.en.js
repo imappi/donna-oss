@@ -1040,6 +1040,8 @@ export const MOUNTED_SURFACE_MESSAGES = Object.freeze({
   'mounted.financial.document': 'Document',
   'mounted.financial.readingStatement': 'Reading statement',
   'mounted.financial.statementNeedsRepair': 'Statement needs repair',
+  'mounted.financial.waitingProviderKey': 'Not read yet: this installation has no {key}. It is read once the key is added.',
+  'mounted.financial.waitingProvider': 'Not read yet: {provider} could not be reached. It is read once it answers.',
   'mounted.financial.noBankLine': 'No bank line yet',
   'mounted.financial.openDocument': 'Open document {document} — {status}',
   'mounted.financial.amountPending': 'Amount pending',

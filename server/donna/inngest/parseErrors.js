@@ -225,6 +225,99 @@ export const parseRetriesExhaustedEnvelope = (envelope = {}, { attempts, maxAtte
   };
 };
 
+// ── Provider waits (a fault in the installation, not in the document) ──────
+//
+// A retryable parse failure whose stored reason says the model provider was
+// never asked — no key on this installation — or could not be reached at all
+// is not a fact about the document. It must not spend the document's
+// automatic attempts (decision D7), and it must not rest the row terminal: once
+// the provider answers again the document is read, with no new upload.
+//
+// The reasons are the ones the extractors already persist on their failure
+// unions (receipt / supplier bill / sales invoice / payout / contract / generic
+// / receiptClassifier: `openai_not_configured`; the unified extractor:
+// `no_provider_key`; providerTransport.providerKeyMissing: `no_api_key`;
+// the transport-level throw every extractor maps to `network_error`). A 429,
+// a 5xx and a timeout are NOT here: a slow or large document can cause them,
+// so they stay document attempts.
+export const PROVIDER_WAIT_REASON_CODES = Object.freeze({
+  NOT_CONFIGURED: 'provider_not_configured',
+  UNREACHABLE: 'provider_unreachable'
+});
+const NOT_CONFIGURED_REASONS = new Set(['openai_not_configured', 'no_provider_key', 'no_api_key', 'api_key_missing']);
+const UNREACHABLE_REASONS = new Set(['network_error']);
+const PROVIDER_KEY_NAMES = Object.freeze({
+  openai: 'OPENAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY'
+});
+// A provider that answers nothing at all is an outage; a connection the same
+// request resets every time is more likely the request. Each unreachable wait
+// re-sends the request, so the waits are bounded: past this many (about two
+// hours at the 300s recheck cap) the failure counts as a document attempt
+// again and the ordinary budget decides. A missing key makes no request, costs
+// nothing, and waits without a bound until the key is added.
+export const PROVIDER_UNREACHABLE_MAX_WAITS = 24;
+
+const providerOfReason = (reason, provider) => {
+  if (provider && provider !== 'internal' && provider !== 'unified') return provider;
+  const head = String(reason || '').split('_')[0];
+  return PROVIDER_KEY_NAMES[head] ? head : null;
+};
+
+// `categorized` is categorizeError's envelope. Returns the wait's kind, or
+// null when the failure is the document's own (or terminal).
+export const providerWaitFor = (categorized = {}) => {
+  if (!categorized || categorized.retryable !== true) return null;
+  const reason = String(categorized.reason || '');
+  const kind = NOT_CONFIGURED_REASONS.has(reason)
+    ? PROVIDER_WAIT_REASON_CODES.NOT_CONFIGURED
+    : UNREACHABLE_REASONS.has(reason) ? PROVIDER_WAIT_REASON_CODES.UNREACHABLE : null;
+  if (!kind) return null;
+  const provider = providerOfReason(reason, categorized.provider);
+  return {
+    reason_code: kind,
+    provider,
+    key_name: kind === PROVIDER_WAIT_REASON_CODES.NOT_CONFIGURED ? (PROVIDER_KEY_NAMES[provider] || null) : null
+  };
+};
+
+// The persisted receipt (documents.payload.parse_hold, the RT-02 key the
+// tray, the parse-status projection, the drain and the convergence verdict
+// already read). `prior` is the hold the row carried before this claim; the
+// wait count and `since` accumulate only while the reason is unchanged.
+// `waits` counts configuration waits; the document's own attempts stay on
+// parse_attempts / local_jobs.attempt_count, which a wait hands back.
+export const buildProviderWaitHold = ({ wait, categorized = {}, prior = null, parseRunId = null, now = new Date().toISOString() } = {}) => {
+  if (!wait) return null;
+  const same = Boolean(prior && prior.reason_code === wait.reason_code && (prior.provider || null) === (wait.provider || null));
+  return {
+    reason_code: wait.reason_code,
+    responsible_system: 'operator',
+    boundary: 'parse_extract',
+    provider: wait.provider || null,
+    key_name: wait.key_name || null,
+    code: categorized.code || null,
+    reason: categorized.reason || null,
+    ...(categorized.model ? { model: categorized.model } : {}),
+    parse_run_id: parseRunId,
+    since: same && prior.since ? prior.since : now,
+    checked_at: now,
+    waits: (same ? Number(prior.waits) || 0 : 0) + 1
+  };
+};
+
+export const isProviderWaitHold = (hold) =>
+  Boolean(hold && typeof hold === 'object' && Object.values(PROVIDER_WAIT_REASON_CODES).includes(hold.reason_code));
+
+// Whether this failure may wait instead of spending an attempt, given the
+// hold the row carried before the claim.
+export const providerWaitAllowed = ({ wait, prior = null } = {}) => {
+  if (!wait) return false;
+  if (wait.reason_code !== PROVIDER_WAIT_REASON_CODES.UNREACHABLE) return true;
+  const priorWaits = prior && prior.reason_code === wait.reason_code ? Number(prior.waits) || 0 : 0;
+  return priorWaits < PROVIDER_UNREACHABLE_MAX_WAITS;
+};
+
 export const isRetryableCode = (code) => RETRYABLE_CODES.has(code);
 export const isTerminalCode = (code) => TERMINAL_CODES.has(code);
 

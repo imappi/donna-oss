@@ -1386,6 +1386,14 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
       };
     }
   }
+  // No text layer, no local OCR, and no cloud OCR key on this installation:
+  // the statement was never read, so this is not "no transactions". Say so
+  // the same way the size and timeout guardrails do; the parse worker turns
+  // it into a provider wait (parseErrors.providerWaitFor) instead of a
+  // terminal skip.
+  if (bestTextLayer.lineCount === 0 && safeOcrCandidate.lineCount === 0 && !isOpenAiVisionConfigured()) {
+    return { ...bestTextLayer, vision_skipped: 'not_configured', vision_skipped_details: { reason: 'openai_not_configured' } };
+  }
   return bestTextLayer;
 };
 
@@ -1844,6 +1852,8 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
     warnings.push(
       `PDF is ${sizeMb} MB, which exceeds the ${limitMb} MB cloud OCR limit. Re-upload as a smaller file (e.g. split by month) or paste the statement text directly.`
     );
+  } else if (extraction.vision_skipped === 'not_configured') {
+    warnings.push('Cloud OCR is not configured on this installation (no OpenAI API key), so this scanned statement has not been read yet.');
   } else if (extraction.vision_skipped === 'timeout') {
     // The structured vision call hit its per-chunk AbortController and
     // surfaced an AbortError. Without this branch the caller would fall

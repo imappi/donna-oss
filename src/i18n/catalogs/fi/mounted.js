@@ -1018,6 +1018,8 @@ const mounted = Object.freeze({
   "mounted.financial.document": "Tosite",
   "mounted.financial.readingStatement": "Luetaan tiliotetta",
   "mounted.financial.statementNeedsRepair": "Tiliote pitää korjata",
+  "mounted.financial.waitingProviderKey": "Ei vielä luettu: tästä asennuksesta puuttuu {key}. Asiakirja luetaan, kun avain lisätään.",
+  "mounted.financial.waitingProvider": "Ei vielä luettu: palveluun {provider} ei saatu yhteyttä. Asiakirja luetaan, kun se vastaa.",
   "mounted.financial.noBankLine": "Ei vielä tiliotteen riviä",
   "mounted.financial.openDocument": "Avaa tosite {document} — {status}",
   "mounted.financial.amountPending": "Summa odottaa",
