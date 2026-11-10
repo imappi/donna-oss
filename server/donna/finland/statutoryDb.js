@@ -1801,7 +1801,106 @@ const alvReturnOverlapRefusal = ({ period, live = [] }) => {
   refusal.code = 'ALV_RETURN_PERIOD_OVERLAP';
   refusal.details = {
     period: { key: period.key, type: period.type, starts_on: period.starts_on, ends_on: period.ends_on },
-    overlapping: live.map((row) => ({ id: row.id, period_key: row.period_key, period_type: row.period_type, starts_on: row.starts_on, ends_on: row.ends_on, status: row.status }))
+    overlapping: live.map(overlappingSummary)
+  };
+  return refusal;
+};
+
+// The one overlap rule, shared by the draft writer, the start motion's early
+// check, the filing check and the period read: a client's LIVE returns
+// (draft_pending_confirmation | filed — cancelled frees its dates, as in 066)
+// whose dates touch [startsOn, endsOn]. `excludeId` leaves a return out of its
+// own check.
+const readLiveAlvReturnsOverlapping = async (client, { firmId, clientId, startsOn, endsOn, excludeId = null }) => {
+  const result = await client.query(
+    `select id, period_key, period_type, starts_on::text as starts_on, ends_on::text as ends_on, status
+       from alv_returns
+      where firm_id = $1 and client_id = $2
+        and status in ('draft_pending_confirmation', 'filed')
+        and starts_on <= $4::date and ends_on >= $3::date
+        and ($5::text is null or id <> $5::text)
+      order by starts_on, period_key`,
+    [firmId, clientId, startsOn, endsOn, excludeId]
+  );
+  return result.rows;
+};
+
+// The per-client, transaction-scoped lock migration 172's trigger also takes.
+const lockAlvReturnPeriods = (client, { firmId, clientId }) =>
+  client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [`alv-return-periods:${firmId}:${clientId}`]);
+
+const overlappingSummary = (row) => ({
+  id: row.id, period_key: row.period_key, period_type: row.period_type, starts_on: row.starts_on, ends_on: row.ends_on, status: row.status
+});
+
+// Read-only: the live returns of a client that already cover any date of
+// `period` (a resolved period or a key). The start motion asks this BEFORE it
+// computes anything; the writer repeats the check under the lock.
+export const findLiveAlvReturnsOverlappingInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId, period } = {}) => {
+  const resolved = typeof period === 'string' ? resolveAlvPeriod(period) : period;
+  return withFirmDbClient((client) => readLiveAlvReturnsOverlapping(client, {
+    firmId, clientId, startsOn: resolved.starts_on, endsOn: resolved.ends_on
+  }));
+};
+
+// assertAlvReturnFileableInDb — the confirm path's check BEFORE anything is
+// transmitted. Migration 172 stops new overlapping claims, but returns that
+// overlapped before it existed can both be live; a status change pending →
+// filed is not a new claim, so neither the writer nor the trigger sees it.
+//
+// Which of two overlapping returns may proceed: NEITHER, while the other is
+// live. A filed return already reported those dates, so a pending one over
+// them never transmits. Two pending ones over the same dates both refuse
+// until the owner cancels one ("ei"); then the other files normally. Nothing
+// here picks a winner, and nothing alters or deletes any return.
+//
+// The check takes the same per-client lock as the writer, so a draft being
+// created at the same moment is seen. The lock is released before the
+// transmit (no transaction is held open across the filing channel); that is
+// safe because the rule is symmetric: while two overlapping returns are both
+// live, each one's check sees the other, and no new overlapping live return
+// can be created (writer + migration 172).
+export const assertAlvReturnFileableInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId, alvReturnId } = {}) => {
+  return withFirmDbClient(async (client) => {
+    await client.query('begin');
+    try {
+      await lockAlvReturnPeriods(client, { firmId, clientId });
+      const own = await client.query(
+        `select *, starts_on::text as starts_on_day, ends_on::text as ends_on_day
+           from alv_returns where firm_id = $1 and client_id = $2 and id = $3 limit 1`,
+        [firmId, clientId, alvReturnId]
+      );
+      const row = own.rows[0];
+      if (!row || row.status !== 'draft_pending_confirmation') throw alvReturnTransitionRefusal();
+      const live = await readLiveAlvReturnsOverlapping(client, {
+        firmId, clientId, startsOn: row.starts_on_day, endsOn: row.ends_on_day, excludeId: row.id
+      });
+      await client.query('commit');
+      if (live.length) throw alvReturnFilingOverlapRefusal({ row, live });
+      return rowToAlvReturnPayload(row);
+    } catch (error) {
+      await client.query('rollback').catch(() => {});
+      throw error;
+    }
+  });
+};
+
+const alvReturnFilingOverlapRefusal = ({ row, live }) => {
+  const named = live.map((other) => `${other.period_key} (${other.starts_on} – ${other.ends_on}, ${ALV_RETURN_STATUS_WORDS[other.status] || other.status})`);
+  const anyFiled = live.some((other) => other.status === 'filed');
+  const refusal = new Error(
+    `ALV return ${row.period_key} (${row.starts_on_day} – ${row.ends_on_day}) was not sent: `
+    + `the return ${named.join(', ')} already covers some of these dates for this client. `
+    + 'The same sales and purchases cannot be reported twice. '
+    + (anyFiled
+      ? 'A filed return stays as filed; this return can be cancelled.'
+      : 'Neither return is sent while both are waiting; cancel one of them first.')
+  );
+  refusal.statusCode = 409;
+  refusal.code = 'ALV_RETURN_FILING_OVERLAP';
+  refusal.details = {
+    alv_return: { id: row.id, period_key: row.period_key, starts_on: row.starts_on_day, ends_on: row.ends_on_day },
+    overlapping: live.map(overlappingSummary)
   };
   return refusal;
 };
@@ -1838,17 +1937,9 @@ export const __createAlvReturnDraftWithClient = async ({
   // (the same key migration 172's trigger takes), so two overlapping drafts
   // started together serialise and the second sees the first. A cancelled
   // return frees its dates. Nothing here changes an existing return.
-  await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [`alv-return-periods:${firmId}:${clientId}`]);
-  const live = await client.query(
-    `select id, period_key, period_type, starts_on::text as starts_on, ends_on::text as ends_on, status
-       from alv_returns
-      where firm_id = $1 and client_id = $2
-        and status in ('draft_pending_confirmation', 'filed')
-        and starts_on <= $4::date and ends_on >= $3::date
-      order by starts_on, period_key`,
-    [firmId, clientId, period.starts_on, period.ends_on]
-  );
-  if (live.rows.length) throw alvReturnOverlapRefusal({ period, live: live.rows });
+  await lockAlvReturnPeriods(client, { firmId, clientId });
+  const live = await readLiveAlvReturnsOverlapping(client, { firmId, clientId, startsOn: period.starts_on, endsOn: period.ends_on });
+  if (live.length) throw alvReturnOverlapRefusal({ period, live });
   const id = `alv-return-${firmId}-${clientId}-${period.key.toLowerCase()}-${shortHash(`${Date.now()}`)}`;
   let inserted;
   try {
@@ -2019,20 +2110,35 @@ export const getAlvReturnByIdInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId,
 };
 
 
-// The latest lifecycle row for a period — the read surface renders it beside
-// the compute envelope (render-the-persisted-verdict: a filed/pending/cancelled
-// state comes from THIS row, never inferred client-side). Latest-first so a
-// cancel followed by a re-mint shows the live row.
+// The period read: the latest lifecycle row for the exact period key (the
+// read surface renders it beside the compute envelope; latest-first so a
+// cancel followed by a re-mint shows the live row), and `covered_by`: the
+// client's OTHER live returns whose dates overlap the period's (the same rule
+// the writer refuses on). Looking at 2026-09 shows that a filed 2026-Q3
+// already covers it. One query; nothing inferred client-side.
 export const getAlvReturnForPeriodInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId, periodKey } = {}) => {
-  if (!clientId || !periodKey) return null;
+  if (!clientId || !periodKey) return { lifecycle: null, covered_by: [] };
+  const period = resolveAlvPeriod(periodKey);
   return withFirmDbClient(async (client) => {
     const result = await client.query(
-      `select * from alv_returns
-        where firm_id = $1 and client_id = $2 and period_key = $3
-        order by created_at desc limit 1`,
-      [firmId, clientId, String(periodKey).toUpperCase()]
+      `select *, starts_on::text as starts_on_day, ends_on::text as ends_on_day
+         from alv_returns
+        where firm_id = $1 and client_id = $2
+          and (period_key = $3
+               or (status in ('draft_pending_confirmation', 'filed')
+                   and starts_on <= $5::date and ends_on >= $4::date))
+        order by created_at desc`,
+      [firmId, clientId, period.key, period.starts_on, period.ends_on]
     );
-    return rowToAlvReturnPayload(result.rows[0]);
+    const lifecycle = result.rows.find((row) => row.period_key === period.key) || null;
+    const coveredBy = result.rows
+      .filter((row) => row.period_key !== period.key)
+      .map((row) => ({
+        ...overlappingSummary({ ...row, starts_on: row.starts_on_day, ends_on: row.ends_on_day }),
+        filed_at: row.filed_at || null
+      }))
+      .sort((a, b) => a.starts_on.localeCompare(b.starts_on) || a.period_key.localeCompare(b.period_key));
+    return { lifecycle: rowToAlvReturnPayload(lifecycle), covered_by: coveredBy };
   });
 };
 
@@ -2241,7 +2347,8 @@ export const startFinlandAlvReturnFilingInDb = async ({
   flagActsImpl = null,
   createDraftImpl = null,
   createAskImpl = null,
-  scopeDriftImpl = null
+  scopeDriftImpl = null,
+  liveOverlapImpl = null
 } = {}) => {
   if (!clientId) {
     const error = new Error('Client id is required to start an ALV return filing.');
@@ -2256,6 +2363,13 @@ export const startFinlandAlvReturnFilingInDb = async ({
     error.code = 'FINLAND_ALV_FILING_DISABLED';
     throw error;
   }
+  // The overlap rule first: a period another live return already covers (or
+  // its own key, already live) cannot be created, so nothing is computed and
+  // nobody is asked about it. The writer repeats the check under the lock.
+  const requestedPeriod = resolveAlvPeriod(period);
+  const coveringFn = liveOverlapImpl || findLiveAlvReturnsOverlappingInDb;
+  const covering = await coveringFn({ firmId, clientId, period: requestedPeriod });
+  if (covering.length) throw alvReturnOverlapRefusal({ period: requestedPeriod, live: covering });
   const compute = computeImpl || getFinlandAlvReturnFromDb;
   const computed = await compute({ firmId, clientId, period });
 
