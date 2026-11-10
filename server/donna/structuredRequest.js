@@ -26,10 +26,12 @@
 //    alike. Forced tool use (`tool_choice: {type:'tool'}`, the older Claude
 //    lanes' idiom) is rejected on claude-opus-5-5 and is not used here.
 //    Keywords the structured-output grammar does not accept (string length,
-//    numeric bounds, array bounds) are left off the WIRE copy only; the
-//    parsed answer is validated against the lane's FULL schema
-//    (`validateLaneSchema`) before the lane sees it, so nothing the schema
-//    says is weakened.
+//    numeric bounds, array bounds) are left off the WIRE copy only and are
+//    checked on the parsed answer (`validateDroppedConstraints`); the rest of
+//    the schema the grammar holds, as strict mode does on OpenAI. Over the
+//    grammar's limits the answer comes as one non-strict tool call and is
+//    checked against the lane's FULL schema (`validateLaneSchema`). Nothing
+//    the schema says is weakened.
 //  - Thinking is adaptive (it cannot be switched off on claude-opus-5-5) and
 //    depth is set explicitly per lane through `output_config.effort`. No
 //    assistant prefill; no sampling parameters.
@@ -199,6 +201,44 @@ export const validateLaneSchema = (schema, value, path = '$', out = []) => {
   return out;
 };
 
+// On the `output_config.format` path the API's grammar already holds the
+// answer to the wire schema — structure, types, enums, required keys,
+// additionalProperties — exactly as OpenAI strict mode does on the OpenAI
+// path, and the lane's sanitizer reads the result as it always has. What the
+// grammar did NOT hold is what the wire copy left off (string lengths,
+// numeric and array bounds, patterns): those are checked here, wherever the
+// answer carries a value they constrain.
+export const validateDroppedConstraints = (schema, value, path = '$', out = []) => {
+  if (!schema || typeof schema !== 'object' || value === null || value === undefined) return out;
+  if (Array.isArray(schema.anyOf)) {
+    const fits = schema.anyOf.filter((branch) => validateLaneSchema(branch, value, path, []).length === 0);
+    if (fits.length) return out;
+    for (const branch of schema.anyOf) validateDroppedConstraints(branch, value, path, out);
+    return out;
+  }
+  if (typeof value === 'string') {
+    if (Number.isFinite(schema.minLength) && value.length < schema.minLength) out.push(`${path}: shorter than ${schema.minLength}`);
+    if (Number.isFinite(schema.maxLength) && value.length > schema.maxLength) out.push(`${path}: longer than ${schema.maxLength}`);
+    if (typeof schema.pattern === 'string') {
+      try { if (!new RegExp(schema.pattern, 'u').test(value)) out.push(`${path}: does not match its pattern`); } catch { /* an unusable pattern constrains nothing */ }
+    }
+  }
+  if (typeof value === 'number') {
+    if (Number.isFinite(schema.minimum) && value < schema.minimum) out.push(`${path}: below ${schema.minimum}`);
+    if (Number.isFinite(schema.maximum) && value > schema.maximum) out.push(`${path}: above ${schema.maximum}`);
+  }
+  if (Array.isArray(value)) {
+    if (Number.isFinite(schema.minItems) && value.length < schema.minItems) out.push(`${path}: fewer than ${schema.minItems} items`);
+    if (Number.isFinite(schema.maxItems) && value.length > schema.maxItems) out.push(`${path}: more than ${schema.maxItems} items`);
+    if (schema.items) value.forEach((item, index) => validateDroppedConstraints(schema.items, item, `${path}[${index}]`, out));
+  } else if (typeof value === 'object' && schema.properties) {
+    for (const [key, child] of Object.entries(value)) {
+      if (schema.properties[key]) validateDroppedConstraints(schema.properties[key], child, `${path}.${key}`, out);
+    }
+  }
+  return out;
+};
+
 // ── reading an Anthropic answer ───────────────────────────────────────────
 const servedModelOf = (payload) => (typeof payload?.model === 'string' && payload.model ? payload.model : null);
 
@@ -268,7 +308,7 @@ export const readAnthropicStructured = ({ schema, maxTokens = null, requestedMod
     }
   }
   if (schema) {
-    const violations = validateLaneSchema(schema, parsed);
+    const violations = validateDroppedConstraints(schema, parsed);
     if (violations.length) {
       throw providerInvalidOutput('anthropic', {
         detail: `the structured answer broke its schema: ${violations.slice(0, 3).join('; ')}`,

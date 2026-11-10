@@ -216,7 +216,7 @@ test('the Anthropic request: structured output, adaptive thinking, explicit effo
   assert.throws(() => anthropicStructuredRequest({ apiKey: 'k', model: 'm', system: 's', user: 'u', schema: SCHEMA }), /explicit effort/);
 });
 
-test('stop_reason is read before content: refusal and max_tokens are named failures; the full schema is checked', () => {
+test('stop_reason is read before content: refusal and max_tokens are named failures; constraints the wire copy dropped are checked', () => {
   const read = readAnthropicStructured({ schema: SCHEMA, maxTokens: 16000, requestedModel: 'claude-opus-5-5' });
   const ok = read(claudeMessage({ answer: 'yes', note: null, items: ['a'] }));
   assert.deepEqual(ok.parsed, { answer: 'yes', note: null, items: ['a'] });
@@ -227,8 +227,9 @@ test('stop_reason is read before content: refusal and max_tokens are named failu
     (error) => error.code === PROVIDER_FAILURE_CODES.OUTPUT_LIMIT && error.reason === 'max_tokens');
   assert.throws(() => read(claudeMessage({ answer: 'yes', note: null, items: [''] })),
     (error) => error.code === PROVIDER_FAILURE_CODES.INVALID_OUTPUT && /shorter than 1/.test(error.message), 'minLength still holds after parse');
-  assert.throws(() => read(claudeMessage({ answer: 'maybe', note: null, items: [] })),
-    (error) => error.code === PROVIDER_FAILURE_CODES.INVALID_OUTPUT);
+  // Structure, types and enums are the grammar's on this path (as strict
+  // mode's on OpenAI); the lane's sanitizer reads the rest as it always did.
+  assert.equal(read(claudeMessage({ answer: 'maybe', note: null, items: [] })).parsed.answer, 'maybe');
   assert.throws(() => read(claudeMessage('not json')), (error) => error.code === PROVIDER_FAILURE_CODES.INVALID_OUTPUT);
   assert.throws(() => read(claudeMessage({ answer: 'yes', note: null, items: [] }, { stopReason: 'pause_turn' })),
     (error) => error.code === PROVIDER_FAILURE_CODES.INVALID_OUTPUT && /pause_turn/.test(error.message));

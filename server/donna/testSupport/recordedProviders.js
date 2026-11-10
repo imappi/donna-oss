@@ -252,6 +252,46 @@ const normalizeStep = (lane, step) => {
   };
 };
 
+// ── a text-lane recording served to the other provider (2026-11-10) ──────
+// The text lanes run on Anthropic whenever its key is present; most
+// committed recordings for them were captured as OpenAI Responses bodies.
+// When such a body answers an Anthropic Messages request, the stub serves
+// the SAME answer in the Messages shape the request expects: a text block
+// (structured output) or the one `structured_answer` tool call (tool
+// delivery, structuredRequest.js). The served model is the one the request
+// named — a recording of another provider's model never appears on a Claude
+// receipt — and the journal marks the call `adapted`. Error steps pass as
+// scripted.
+const isResponsesBody = (body) => Boolean(body && typeof body === 'object'
+  && (typeof body.output_text === 'string' || Array.isArray(body.output)) && !Array.isArray(body.content));
+
+const responsesText = (body) => {
+  if (typeof body.output_text === 'string' && body.output_text) return body.output_text;
+  return (body.output || []).flatMap((item) => item?.content || [])
+    .map((part) => (typeof part?.text === 'string' ? part.text : '')).join('');
+};
+
+export const responsesBodyAsMessage = (body, request = {}) => {
+  const text = responsesText(body);
+  const toolDelivery = Array.isArray(request?.tools) && request.tools.some((tool) => tool?.name === 'structured_answer');
+  let input = null;
+  if (toolDelivery) {
+    try { input = JSON.parse(text); } catch { input = null; }
+  }
+  return {
+    id: typeof body.id === 'string' ? body.id : 'msg_recorded',
+    type: 'message',
+    role: 'assistant',
+    model: typeof request?.model === 'string' && request.model ? request.model : body.model,
+    content: input && typeof input === 'object'
+      ? [{ type: 'tool_use', id: 'toolu_recorded', name: 'structured_answer', input }]
+      : [{ type: 'text', text }],
+    stop_reason: input && typeof input === 'object' ? 'tool_use' : 'end_turn',
+    stop_details: null,
+    usage: { input_tokens: body.usage?.input_tokens ?? 0, output_tokens: body.usage?.output_tokens ?? 0 }
+  };
+};
+
 // Install the stub on globalThis.fetch (or on the `target` object given).
 // Returns the controller; call `restore()` in the test's finally.
 export const installRecordedProviders = ({
@@ -299,16 +339,19 @@ export const installRecordedProviders = ({
         }
       });
     }
+    const adapt = classified.endpoint_class === 'anthropic' && step.status >= 200 && step.status < 300 && isResponsesBody(step.body);
+    const served = adapt ? responsesBodyAsMessage(step.body, parseBody(init) || {}) : step.body;
     calls.push({
       seq,
       at,
       ...classified,
       status: step.status,
-      model_served: modelServedOf(step.body),
+      model_served: modelServedOf(served),
       recording: step.recording,
+      ...(adapt ? { adapted: 'openai_responses_to_anthropic_messages' } : {}),
       refused: false
     });
-    return jsonResponse(step.status, step.body, step.headers);
+    return jsonResponse(step.status, served, step.headers);
   };
 
   target.fetch = stub;
