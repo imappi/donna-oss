@@ -211,6 +211,29 @@ export const alvPeriodOptions = (now = new Date(), cadence = 'month') => {
   return [lead, ...rest].flatMap((c) => groups[c]);
 };
 
+// The server's verokausi_basis → one owner-honest sentence, or null. Finnish,
+// like the other notes in this view model. Two recorded VAT periods that
+// differ, or a monthly default with nothing recorded, are shown here — the
+// view never picks between them.
+const CADENCE_WORDS = { month: 'kuukausi', quarter: 'neljännesvuosi', year: 'kalenterivuosi' };
+const cadenceNoticeFor = (basis) => {
+  if (!basis || typeof basis !== 'object') return null;
+  const inUse = CADENCE_WORDS[normaliseCadence(basis.cadence)];
+  const taxPeriod = CADENCE_WORDS[basis.recorded?.alv_registration_tax_period] || null;
+  if (basis.disagreement && taxPeriod) {
+    return {
+      kind: 'disagreement',
+      text: basis.defaulted
+        ? `Yrityksen tiedoissa ei ole verokautta, joten luvut lasketaan oletuksella (${inUse}), mutta ALV-rekisteröinnissä verokausi on: ${taxPeriod}. Kirjaa verokausi yrityksen tietoihin, niin ristiriita poistuu.`
+        : `Verokausi on kirjattu kahteen paikkaan eri tavoin – yrityksen tiedoissa: ${inUse}, ALV-rekisteröinnissä: ${taxPeriod}. Luvut lasketaan yrityksen tietojen verokaudella, kunnes toinen korjataan.`
+    };
+  }
+  if (basis.defaulted) {
+    return { kind: 'defaulted', text: `Yritykselle ei ole kirjattu verokautta, joten luvut lasketaan oletuksella (${inUse}).` };
+  }
+  return null;
+};
+
 // buildAlvReturnViewModel(envelope) → everything the panel renders, or null for
 // a shape that is not an ALV-return envelope (callers hide the surface).
 export const buildAlvReturnViewModel = (envelope) => {
@@ -275,6 +298,10 @@ export const buildAlvReturnViewModel = (envelope) => {
       ? `${formatEur(Math.abs(num(review.controlCheck.unmarkedControlMovement)))} liikettä ALV-velkatileillä ilman ALV-roolimerkintää (esim. OmaVero-maksu tai käsin tehty vienti) — ei estä ilmoitusta.`
       : null,
     // The D-FI3-A2 assumption, surfaced verbatim — never silently assumed away.
+    // Where the cadence came from (server verokausi_basis). Two recorded VAT
+    // periods that differ, or a monthly default with nothing recorded, are
+    // shown — never resolved silently here.
+    cadenceNotice: cadenceNoticeFor(envelope.verokausi_basis),
     selfAssessedNote: alvReturn.selfAssessedFullyDeductible === true && num(boxes['307']) !== 0
       ? 'Käännetyn verovelvollisuuden ja maahantuonnin vero on vähennetty täysimääräisesti (oletus: vain vähennyskelpoista liiketoimintakäyttöä).'
       : null,

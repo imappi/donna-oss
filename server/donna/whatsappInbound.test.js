@@ -284,3 +284,36 @@ test('an owner-invoice question answered with a photo is refused in the owner la
   assert.equal(result.reason, 'owner_invoice_text_required');
   assert.equal(calls.texts.at(-1).text, 'Vastaa tekstinä ja kerro laskun tiedot, joita kysyin. Tämä laskua koskeva kysymys on yhä auki. Liitteet ja ääniviestit eivät vielä käy vastaukseksi.');
 });
+
+test('the FI and GB opening-balance lanes are handed the owner language (English when no Finnish owner)', async () => {
+  const seen = [];
+  const lane = (language, evidenceType) => makeDeps({
+    deliveries: { 'wamid.ob': { ask_id: 'ask-ob', client_id: 'client-1' } },
+    asksById: { 'ask-ob': { id: 'ask-ob', client_id: 'client-1', evidence_type: evidenceType, request_payload: { kind: evidenceType } } },
+    deps: {
+      ...(language ? { getOwnerLanguage: async () => language } : {}),
+      openingBalanceFlagActs: async () => true,
+      gbOpeningBalanceFlagActs: async () => true,
+      getClientEntityType: async () => 'oy',
+      resolveOpeningBalanceInbound: async (args) => { seen.push(['fi_lane', args.language]); return { action: 'nudge' }; },
+      resolveGbOpeningBalanceInbound: async (args) => { seen.push(['gb_lane', args.language]); return { action: 'nudge' }; }
+    }
+  });
+  let n = 0;
+  for (const [language, kind] of [['fi', 'opening_balance'], [null, 'opening_balance'], ['fi', 'gb_opening_balance'], [null, 'gb_opening_balance']]) {
+    const { deps } = lane(language, kind);
+    n += 1;
+    await processWhatsAppInboundMessage({ from: '+447700900123', firmId: 'firm', env: envOn, deps, message: { id: `wamid.ob-${n}`, type: 'text', text: { body: 'luvut' }, context: { id: 'wamid.ob' } } });
+  }
+  assert.deepEqual(seen, [['fi_lane', 'fi'], ['fi_lane', 'en'], ['gb_lane', 'fi'], ['gb_lane', 'en']]);
+});
+
+test('WhatsApp texts sent before a client is known are bilingual; the connected line follows the redeemed client', async () => {
+  const { whatsappWebhookText, buildWhatsAppInboundCopy } = await import('./channels/whatsappInbound.js');
+  assert.equal(WHATSAPP_INBOUND_COPY.unbound, "Yhdistä WhatsApp ensin Donna-portaalistasi, niin hoidan tämän. / Connect WhatsApp from your Donna portal first, then I'll pick this up.");
+  assert.equal(buildWhatsAppInboundCopy({ language: 'fi' }).unbound, WHATSAPP_INBOUND_COPY.unbound);
+  assert.equal(whatsappWebhookText('connectFirst'), 'Yhdistä WhatsApp ensin Donna-portaalistasi. / Please connect WhatsApp from your Donna portal first.');
+  assert.equal(whatsappWebhookText('connected', 'en'), 'Got it. WhatsApp is connected.');
+  assert.equal(whatsappWebhookText('connected', 'fi'), 'Selvä, WhatsApp on nyt yhdistetty.');
+  assert.equal(whatsappWebhookText('connected'), 'Selvä, WhatsApp on nyt yhdistetty. / Got it. WhatsApp is connected.');
+});

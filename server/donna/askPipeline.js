@@ -359,8 +359,9 @@ export const buildAskDraftInput = ({
     accounting_currency:
       clientProfile.accountingCurrency || clientProfile.baseCurrency || clientProfile.defaultCurrency || '',
     // The language the owner reads ('fi' | 'en'). The prompt tells the model
-    // to write every owner-facing word in it; nothing translates in code.
-    language: preferredOwnerTemplateLanguage(clientProfile)
+    // to write every owner-facing word in it; nothing translates in code. The
+    // client's country is its jurisdiction column (persisted_identity).
+    language: preferredOwnerTemplateLanguage(clientProfile, clientProfile.persisted_identity)
   },
   period: { start: periodStart || null, end: periodEnd || null },
   coding_items: (() => {

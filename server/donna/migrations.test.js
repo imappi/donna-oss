@@ -1940,6 +1940,18 @@ const runTests = async () => {
     assert.match(sql, /references\s+clients\(id\)\s+on\s+delete\s+cascade/i, 'client FK cascades (firm-memory-dies-with-its-client)');
   });
 
+  await test('172 refuses a NEW live ALV return over dates another live return covers, without touching existing rows', () => {
+    const sql = readMigration('172_alv_returns_live_period_overlap.sql');
+    assert.match(sql, /create\s+or\s+replace\s+function\s+alv_returns_live_period_overlap_guard\(\)/i, 'defines the guard');
+    assert.match(sql, /before\s+insert\s+or\s+update\s+of\s+status,\s*starts_on,\s*ends_on,\s*firm_id,\s*client_id\s+on\s+alv_returns/i, 'guards inserts and date/status/owner changes');
+    assert.match(sql, /status\s+in\s*\(\s*'draft_pending_confirmation'\s*,\s*'filed'\s*\)/i, 'live states match 066 (cancelled frees its dates)');
+    assert.match(sql, /starts_on\s*<=\s*new\.ends_on[\s\S]+ends_on\s*>=\s*new\.starts_on/i, 'date-range overlap, not period key');
+    assert.match(sql, /pg_advisory_xact_lock\(hashtextextended\('alv-return-periods:'/i, 'the same per-client lock key as the draft writer');
+    assert.match(sql, /errcode\s*=\s*'exclusion_violation'/i, 'raises 23P01, which the writer maps to ALV_RETURN_PERIOD_OVERLAP');
+    const code = sql.replace(/--[^\n]*/g, '');
+    assert.doesNotMatch(code, /\b(delete\s+from|update\s+alv_returns|alter\s+table\s+alv_returns|exclude\s+using)\b/i, 'no existing return is altered or deleted; no constraint that validates old rows');
+  });
+
   await test('067 creates the G-3 Suomi.fi mandate store with the closed status enum + one-active-grant uniqueness', () => {
     const sql = readMigration('067_finland_suomifi_mandates.sql');
     assert.match(sql, /create\s+table\s+if\s+not\s+exists\s+suomifi_mandates\b/i, 'creates suomifi_mandates');

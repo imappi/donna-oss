@@ -35,15 +35,37 @@ const amountFromText = (text) => {
 const isBankOnlyText = (text) => /(bank|pankki|pankkisaldo|saldo|cash|käteinen|kateinen)/iu.test(lower(text));
 const confirmsCashOnly = (text) => /(only|just|sole|pelkk[aä]|pelk[aä]ll[aä]|vain|ainoastaan|ei muuta)/iu.test(lower(text));
 
-const lineAmount = (line = {}) => Number(line.debit || line.credit || line.amount || 0) || 0;
-const lineLabel = (line = {}) => [line.account_code || line.code, line.account_name || line.name].filter(Boolean).join(' ') || 'Opening line';
+// The route's own owner lines, per owner language (preferredOwnerTemplateLanguage,
+// passed in as `language`). English is the historical copy, unchanged; anything
+// but 'fi' gets it. Lines that were already Finnish-only stay as they are.
+const OPENING_ROUTE_COPY = Object.freeze({
+  en: Object.freeze({
+    openingLine: 'Opening line',
+    summaryLine: (label, amount, currency) => `• ${label} — ${amount.toFixed(2)} ${currency}`,
+    total: (total, currency) => `Total: ${total.toFixed(2)} ${currency}`,
+    nudge: 'Please reply “kyllä” or “yes” if you want me to post this opening balance. If anything is wrong, send the corrected figures instead.',
+    clarify: 'Could you clarify your opening balance figures?'
+  }),
+  fi: Object.freeze({
+    openingLine: 'Avaava erä',
+    summaryLine: (label, amount, currency) => `• ${label}: ${amount.toFixed(2).replace('.', ',')} ${currency}`,
+    total: (total, currency) => `Yhteensä: ${total.toFixed(2).replace('.', ',')} ${currency}`,
+    nudge: 'Vastaa “kyllä”, jos haluat, että kirjaan tämän avaavan taseen. Jos jokin on väärin, lähetä korjatut luvut.',
+    clarify: 'Voisitko tarkentaa avaavan taseen lukuja?'
+  })
+});
+const routeCopyFor = (language) => OPENING_ROUTE_COPY[language] || OPENING_ROUTE_COPY.en;
 
-export const summarizeOpeningBalanceProposal = (verdict = {}) => {
+const lineAmount = (line = {}) => Number(line.debit || line.credit || line.amount || 0) || 0;
+const lineLabel = (line = {}, language = 'en') => [line.account_code || line.code, line.account_name || line.name].filter(Boolean).join(' ') || routeCopyFor(language).openingLine;
+
+export const summarizeOpeningBalanceProposal = (verdict = {}, { language = 'en' } = {}) => {
+  const copy = routeCopyFor(language);
   const proposal = verdict.proposal || {};
   const currency = proposal.currency || 'EUR';
   const lines = Array.isArray(proposal.openingLines) ? proposal.openingLines : [];
-  const rendered = lines.map((line) => `• ${lineLabel(line)} — ${lineAmount(line).toFixed(2)} ${currency}`);
-  rendered.push(`Total: ${(Number(proposal.total) || 0).toFixed(2)} ${currency}`);
+  const rendered = lines.map((line) => copy.summaryLine(lineLabel(line, language), lineAmount(line), currency));
+  rendered.push(copy.total(Number(proposal.total) || 0, currency));
   return rendered.join('\n');
 };
 
@@ -107,9 +129,12 @@ export const resolveOpeningBalanceInbound = async ({
   createAsk,
   sendText,
   resolveAsk,
-  postImpl
+  postImpl,
+  // The owner's language (preferredOwnerTemplateLanguage); absent ⇒ English.
+  language = 'en'
 } = {}) => {
   if (!flagActs) return { action: 'skipped', reason: 'flag_off' };
+  const copy = routeCopyFor(language);
 
   const state = stateFromAsk({ ask });
   const phase = state.phase || state.kind || 'intake';
@@ -129,7 +154,7 @@ export const resolveOpeningBalanceInbound = async ({
 
   if (phase === 'confirm_request') {
     if (!isAffirmative(text)) {
-      const nudgeText = 'Please reply “kyllä” or “yes” if you want me to post this opening balance. If anything is wrong, send the corrected figures instead.';
+      const nudgeText = copy.nudge;
       if (typeof sendText === 'function') await sendText({ text: nudgeText });
       return { action: 'nudge', reason: 'ambiguous_confirmation', ask, text: nudgeText };
     }
@@ -157,7 +182,8 @@ export const resolveOpeningBalanceInbound = async ({
       ownerMessage: text,
       entityType,
       currency,
-      memo: 'Owner-provided bank-only opening balance'
+      memo: 'Owner-provided bank-only opening balance',
+      language
     });
   } else {
     verdict = await runTrialBalanceIntakeImpl({
@@ -167,12 +193,13 @@ export const resolveOpeningBalanceInbound = async ({
       currency,
       apiKey,
       fetchImpl,
-      memo: state.clarification ? `Owner clarification: ${text}` : null
+      memo: state.clarification ? `Owner clarification: ${text}` : null,
+      language
     });
   }
 
   if (verdict?.terminal === 'proposal') {
-    const summary = summarizeOpeningBalanceProposal(verdict);
+    const summary = summarizeOpeningBalanceProposal(verdict, { language });
     const question = `${summary}\n\nVahvista vastaamalla “kyllä”, niin kirjaan avaavan taseen.`;
     const confirmationAsk = await createOpeningAsk({
       createAsk,
@@ -189,7 +216,7 @@ export const resolveOpeningBalanceInbound = async ({
     return { action: 'request_confirmation', ask: { ...confirmationAsk, summary, question }, verdict };
   }
 
-  const escalation = verdict?.escalation || { question: 'Could you clarify your opening balance figures?', reason: 'unknown' };
+  const escalation = verdict?.escalation || { question: copy.clarify, reason: 'unknown' };
   const escalationAsk = await createOpeningAsk({
     createAsk,
     firmId,

@@ -62,6 +62,8 @@ await test('FI ALV return route preserves its complete current envelope byte-for
       }
     },
     verokausi: 'quarter',
+    // Additive: where the cadence came from (recorded here, nothing to disagree with).
+    verokausi_basis: { cadence: 'quarter', defaulted: false, recorded: { verokausi: 'quarter', alv_registration_tax_period: null }, disagreement: false },
     provenance: {
       source: 'ledger_read_model', readAt: '2026-08-01T12:00:00.000Z', deterministic: true,
       boxMap: {
@@ -101,4 +103,41 @@ await test('FI ALV threshold route preserves its complete current envelope byte-
   assert.equal(pool.matching(/from client_capability_config/).length, 1);
   assert.equal(pool.matching(/select extract\(year from lj\.journal_date\)/).length, 1);
   assert.equal(pool.matching(/from client_evidence_requests where id/).length, 1);
+});
+
+await test('FI ALV start route: dates already covered by a live return answer 409 with the code, the plain reason and the covering return — no ask is written', async () => {
+  // This file's test.after can restore the env before a later top-level test
+  // runs, so this test holds its own token + database setting.
+  const held = { token: process.env.DONNA_ACCESS_TOKEN, db: process.env.DATABASE_URL };
+  process.env.DONNA_ACCESS_TOKEN = TOKEN; process.env.DATABASE_URL = 'postgres://seam.invalid/donna';
+  try {
+    const pool = createApiSeamPool([
+      [/select id from clients where firm_id/, { rows: [{ id: 'fi-1' }], rowCount: 1 }],
+      [/from client_capability_config/, { rows: [
+        { flag_key: 'FINLAND_ALV_RETURN', stage: 'auto', source: 'test', client_id: 'fi-1' },
+        { flag_key: 'FINLAND_ALV_FILING', stage: 'auto', source: 'test', client_id: 'fi-1' }
+      ] }],
+      [/from cohort_capability_config/, { rows: [] }],
+      [/select profile from clients/, { rows: [{ profile: { verokausi: 'month' } }] }],
+      [/select ll\.\*, la\.account_type/, { rows: [] }],
+      [/from documents/, { rows: [] }],
+      [/pg_advisory_xact_lock/, { rows: [{}] }],
+      [/from alv_returns[\s\S]+starts_on <=/, { rows: [{ id: 'alv-q3', period_key: '2026-Q3', period_type: 'quarter', starts_on: '2026-07-01', ends_on: '2026-09-30', status: 'filed' }] }],
+      [/^\s*(begin|commit|rollback)\s*$/i, { rows: [] }]
+    ]);
+    const response = await requestDonnaApi({
+      method: 'POST', url: '/api/donna/firms/finland/alv-returns/start', headers: auth, pool,
+      body: { firm_id: 'firm-1', client_id: 'fi-1', period: '2026-09' }
+    });
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(response.json.code, 'ALV_RETURN_PERIOD_OVERLAP');
+    assert.match(response.json.error, /^ALV return 2026-09 \(2026-09-01 – 2026-09-30\) was not created: the return 2026-Q3 \(2026-07-01 – 2026-09-30, filed\) already covers/);
+    assert.deepEqual(response.json.details.overlapping.map((row) => row.id), ['alv-q3']);
+    assert.equal(pool.matching(/insert into alv_returns/).length, 0);
+    assert.equal(pool.matching(/insert into client_evidence_requests/).length, 0, 'the owner is not asked to confirm');
+    assert.equal(pool.matching(/^\s*rollback\s*$/i).length, 1, 'the writer transaction rolls back');
+  } finally {
+    if (held.token === undefined) delete process.env.DONNA_ACCESS_TOKEN; else process.env.DONNA_ACCESS_TOKEN = held.token;
+    if (held.db === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = held.db;
+  }
 });

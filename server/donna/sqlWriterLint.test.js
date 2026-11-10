@@ -336,6 +336,13 @@ await test('integration: every writer in server/donna issues only valid SQL', ()
       files.push(resolvePath(repoRoot, 'server', 'donna', 'taxAuthorities', f));
     }
   }
+  // Mobile API: the phone app's owner-scoped modules read and write client,
+  // settings and registration tables directly.
+  for (const f of readdirSync(resolvePath(repoRoot, 'server', 'donna', 'mobile'))) {
+    if (f.endsWith('.js') && !f.endsWith('.test.js')) {
+      files.push(resolvePath(repoRoot, 'server', 'donna', 'mobile', f));
+    }
+  }
 
   const allViolations = [];
   for (const file of files) {
