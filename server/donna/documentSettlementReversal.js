@@ -94,6 +94,8 @@ const ZERO_STATS = () => ({
   post_failures: 0,
   needs_person: 0,
   needs_person_document_ids: [],
+  person_asks_minted: 0,
+  person_unaddressed: 0,
   reversed_document_ids: [],
   mode: 'shadow',
   disabled: false,
@@ -124,12 +126,17 @@ const GATHER_SQL = `
      and coalesce(d.payload->'settlement_entry'->>'journal_id', '') <> ''
      and d.payload->'settlement_entry'->'reversal' is null
      -- A refusal only a person can resolve leaves the sweep until a reversal
-     -- of the settlement journal exists (then the self-heal below merges it).
+     -- of the settlement journal exists (then the self-heal below merges it),
+     -- or while no firm member has been asked about it yet (a refusal recorded
+     -- before the ask existed, or while the firm had no member to ask).
      and (d.payload->'settlement_entry'->'reversal_refusal' is null
+       or coalesce(d.payload->'settlement_entry'->'reversal_refusal'->>'person_ask_id', '') = ''
        or exists (select 1 from ledger_journals j where j.firm_id = d.firm_id and j.client_id = d.client_id
          and j.reversal_of_journal_id = d.payload->'settlement_entry'->>'journal_id' and j.status in ('posted', 'closed')))
      and ($3::text[] is null or d.id = any($3::text[]))
-   order by d.document_date nulls last, d.id
+   -- Unrecorded candidates first, so refusals still waiting for a member to
+   -- ask never crowd them out of the bounded sweep.
+   order by (d.payload->'settlement_entry'->'reversal_refusal' is not null), d.document_date nulls last, d.id
    limit ${REVERSAL_SWEEP_LIMIT}`;
 
 // The adjustment writer's refusals that only a person can resolve: the
@@ -146,7 +153,116 @@ export const SETTLEMENT_REVERSAL_PERSON_REQUIRED_CODES = Object.freeze([
   'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN'
 ]);
 
-const recordPersonRequiredRefusal = async ({ client, firmId, clientId, document, settlementEntry, proposalId, error }) => {
+// THE PERSON IT RESTS ON. The refusal is a question to a named firm member
+// through the one ask primitive (audience 'seat', askAudience.js): it lists in
+// that member's Mentions lane (mentions/notificationsDb.js
+// listOpenSeatAsksForPrincipal, the Actions tab), and the bank line it is
+// anchored on reads on_owner / open_seat_ask in the persisted convergence
+// state (a matched document's verdict lives on its bank line). The addressee
+// is a firm member because only an identified firm member may acknowledge an
+// adjustment that restates a filed return (the /ledger/adjustment route):
+// among the members the mention roster lists as eligible on this client
+// (listEligibleHumanPrincipals), one assigned to the client first, then by
+// name and id. The ask is answered only by the reversal journal: the self-heal
+// resolves it by id in the transaction that merges the reversal marker.
+const resolveLedgerAdjustmentAddressee = async ({ client, firmId, clientId }) => {
+  const { listEligibleHumanPrincipals } = await import('./mentions/mentionRosterDb.js');
+  const members = (await listEligibleHumanPrincipals({ firmId, clientId, dbClient: client }))
+    .filter((row) => row.principal_type === 'firm_member');
+  if (!members.length) return null;
+  const assigned = new Set((await client.query(
+    `select principal_id from client_assignments
+      where firm_id = $1 and client_id = $2 and principal_type = 'firm_member'
+        and (starts_at is null or starts_at <= now()) and (ends_at is null or ends_at > now())`,
+    [firmId, clientId]
+  )).rows.map((row) => String(row.principal_id)));
+  const rank = (row) => [assigned.has(String(row.principal_id)) ? 0 : 1, String(row.display || ''), String(row.principal_id)];
+  const [first] = [...members].sort((a, b) => {
+    const [x, y] = [rank(a), rank(b)];
+    return x[0] - y[0] || x[1].localeCompare(y[1]) || x[2].localeCompare(y[2]);
+  });
+  return { principalType: 'firm_member', principalId: String(first.principal_id), display: first.display || null };
+};
+
+const ledgerMovementText = (rows = []) => (Array.isArray(rows) ? rows : [])
+  .map((row) => `${row.key} ${Number(row.amount || 0).toFixed(2)} ${row.currency || ''}`.trim()).join(', ');
+
+// The stored question is the record of what was asked (server-built text is
+// outside the interface catalogs); the Mentions lane renders the structured
+// request_payload.ledger_adjustment through the catalog messages
+// mounted.financial.ledgerAdjustmentAsk.* (src/lib/ledgerAdjustmentAskView.js).
+const settlementReversalQuestion = (subject) => {
+  const filed = subject.filed_return_period || subject.filed_return_id || 'a filed VAT return';
+  const why = subject.refusal_code === 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN'
+    ? `the reversal would be dated inside the filed VAT return ${filed} and change what it reads`
+    : `the entry is in the filed VAT return ${filed} and its reversal changes what that return reads`;
+  return `Reverse the paid-from-own-funds entry ${subject.settlement_journal_id} for ${subject.document_label} `
+    + `(${Number(subject.amount || 0).toFixed(2)} ${subject.currency || ''}): bank line ${subject.bank_line_date || ''} `
+    + `${subject.bank_line_description || subject.bank_transaction_id} also paid it. Donna did not post the reversal because ${why}`
+    + `${subject.tax_moved?.length ? ` (${ledgerMovementText(subject.tax_moved)})` : ''}. `
+    + 'Post the reversal through the ledger adjustment and acknowledge the filed return change; this question closes when the reversal is posted.';
+};
+
+const ensurePersonAsk = async ({ client, firmId, clientId, document, settlementEntry, refusal, bankTransactionId }) => {
+  const addressee = await resolveLedgerAdjustmentAddressee({ client, firmId, clientId });
+  if (!addressee || !bankTransactionId) return null;
+  const line = (await client.query(
+    `select id, transaction_date::text as transaction_date, description from transactions
+      where firm_id = $1 and client_id = $2 and id = $3`,
+    [firmId, clientId, bankTransactionId]
+  )).rows[0];
+  if (!line) return null;
+  const details = refusal?.details || {};
+  const subject = {
+    kind: 'settlement_reversal',
+    refusal_code: refusal?.code || null,
+    document_id: String(document.id),
+    document_label: document.vendor_name || document.customer_name || document.filename || String(document.id),
+    document_date: document.document_date ? String(document.document_date instanceof Date
+      ? document.document_date.toISOString() : document.document_date).slice(0, 10) : null,
+    amount: Number(document.total_amount ?? settlementEntry?.amount ?? 0),
+    currency: document.currency || settlementEntry?.currency || null,
+    bank_transaction_id: String(line.id),
+    bank_line_date: line.transaction_date ? String(line.transaction_date).slice(0, 10) : null,
+    bank_line_description: line.description || null,
+    settlement_journal_id: settlementEntry?.journal_id || null,
+    original_journal_date: details.original_journal_date || null,
+    filed_return_id: details.filed_return_id || null,
+    filed_return_period: details.filed_return_period || null,
+    tax_moved: Array.isArray(details.tax_moved) ? details.tax_moved : [],
+    acknowledgement_digest: details.acknowledgement_digest || null,
+    refused_at: refusal?.refused_at || null
+  };
+  const { __createClientEvidenceRequestWithClient, LEDGER_ADJUSTMENT_ASK_EVIDENCE_TYPE } = await import('./db/asks.js');
+  const ask = await __createClientEvidenceRequestWithClient({
+    client, firmId, clientId,
+    transactionId: subject.bank_transaction_id,
+    documentId: subject.document_id,
+    question: settlementReversalQuestion(subject),
+    evidenceType: LEDGER_ADJUSTMENT_ASK_EVIDENCE_TYPE,
+    audience: 'seat',
+    addresseePrincipalType: addressee.principalType,
+    addresseePrincipalId: addressee.principalId,
+    markTransactionNeedsClient: false,
+    actorId: 'system',
+    requestContext: { task_surface: 'ledger_adjustment', ledger_adjustment: subject }
+  });
+  const askId = ask?.id || null;
+  if (!askId) return null;
+  await client.query(
+    `update documents
+        set payload = jsonb_set(payload, '{settlement_entry,reversal_refusal}',
+              payload->'settlement_entry'->'reversal_refusal' || $4::jsonb, true),
+            updated_at = now()
+      where id = $1 and firm_id = $2 and client_id = $3
+        and payload->'settlement_entry'->'reversal_refusal' is not null`,
+    [document.id, firmId, clientId, JSON.stringify({ person_ask_id: askId, person_ask_addressee: {
+      principal_type: addressee.principalType, principal_id: addressee.principalId } })]
+  );
+  return { askId, addressee };
+};
+
+const recordPersonRequiredRefusal = async ({ client, firmId, clientId, document, settlementEntry, proposalId, error, bankTransactionId }) => {
   const refusal = { code: error.code, message: error.message || null, details: error.details || null,
     refused_at: new Date().toISOString() };
   const updated = await client.query(
@@ -199,7 +315,8 @@ const recordPersonRequiredRefusal = async ({ client, firmId, clientId, document,
       operator_words: null
     }
   });
-  return { recorded: true };
+  const asked = await ensurePersonAsk({ client, firmId, clientId, document, settlementEntry, refusal, bankTransactionId });
+  return { recorded: true, askId: asked?.askId || null };
 };
 
 // The entry being reversed, as its own receipt names it: paid from the
@@ -331,6 +448,22 @@ const mergeReversalMarker = async ({
     ]
   );
   if (!updated.rows.length) return { auditEventId: null, merged: false };
+  // The firm member's question is answered by this reversal journal: closed by
+  // id, with the journal on it, in the transaction that merges the marker.
+  const personAskId = settlementEntry?.reversal_refusal?.person_ask_id || null;
+  let resolvedAskIds = [];
+  if (personAskId && match?.bank_transaction_id) {
+    const { resolveOpenEvidenceRequestsForTransaction } = await import('./db/asks.js');
+    resolvedAskIds = await resolveOpenEvidenceRequestsForTransaction({
+      client, firmId, clientId,
+      transactionId: match.bank_transaction_id,
+      evidenceRequestIds: [personAskId],
+      actorId: 'system',
+      note: `Answered by the reversal journal ${reversalJournalId}.`,
+      auditAction: 'evidence_request.answered_by_ledger_adjustment',
+      responsePayload: { ledger_adjustment_journal_id: reversalJournalId }
+    });
+  }
   const audit = await client.query(
     `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
      values ($1, $2, 'system', 'ledger.reverse_document_settlement', 'document', $3, $4::jsonb)
@@ -342,6 +475,7 @@ const mergeReversalMarker = async ({
       bank_transaction_id: match?.bank_transaction_id || null,
       authority_basis: SETTLEMENT_REVERSAL_AUTHORITY_BASIS,
       self_healed: selfHealed,
+      resolved_person_ask_ids: resolvedAskIds,
       reason,
       before_state: { settlement_entry: settlementEntry || null }
     })]
@@ -486,7 +620,25 @@ export const runDocumentSettlementReversalsForClient = async ({
 
         if (stats.mode !== 'act') continue;
         // A recorded person-required refusal: a person posts this reversal.
+        // One recorded before its firm member was asked is asked now.
         if (SETTLEMENT_REVERSAL_PERSON_REQUIRED_CODES.includes(settlementEntry.reversal_refusal?.code)) {
+          if (!settlementEntry.reversal_refusal.person_ask_id) {
+            await client.query('begin');
+            try {
+              const asked = await ensurePersonAsk({ client, firmId, clientId, document, settlementEntry,
+                refusal: settlementEntry.reversal_refusal, bankTransactionId: match.bank_transaction_id });
+              await client.query('commit');
+              if (asked) stats.person_asks_minted += 1;
+              else stats.person_unaddressed += 1;
+            } catch (askError) {
+              await client.query('rollback');
+              stats.post_failures += 1;
+              console.warn(`[${LOG_TAG}] person ask for a recorded refusal failed`, {
+                document_id: document.id,
+                error: askError?.message || String(askError)
+              });
+            }
+          }
           stats.needs_person += 1;
           stats.needs_person_document_ids.push(String(document.id));
           continue;
@@ -515,8 +667,11 @@ export const runDocumentSettlementReversalsForClient = async ({
           if (SETTLEMENT_REVERSAL_PERSON_REQUIRED_CODES.includes(error?.code)) {
             await client.query('begin');
             try {
-              await recordPersonRequiredRefusal({ client, firmId, clientId, document, settlementEntry, proposalId, error });
+              const recorded = await recordPersonRequiredRefusal({ client, firmId, clientId, document, settlementEntry, proposalId, error,
+                bankTransactionId: match.bank_transaction_id });
               await client.query('commit');
+              if (recorded.askId) stats.person_asks_minted += 1;
+              else if (recorded.recorded) stats.person_unaddressed += 1;
               stats.needs_person += 1;
               stats.needs_person_document_ids.push(String(document.id));
             } catch (recordError) {
