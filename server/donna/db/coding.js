@@ -1364,7 +1364,7 @@ export const batchSuggestTransactionCodingInDb = async ({
            and (t.coding_state is null or t.coding_state not in ('applied', 'held', 'posted', 'synced', 'closed'))
            and not (${BATCH_OWNER_WAIT_SQL})
            and not ${REFUSED_CROSS_WINDOW_GROUP_SQL}
-         order by q.priority desc, q.created_at asc
+         order by q.priority desc, q.created_at asc, q.id asc
          limit $3`,
         [firmId, clientId, batchLimit]
       );

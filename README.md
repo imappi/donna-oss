@@ -50,6 +50,64 @@ It is the headless form of the desktop appliance (`scripts/desktop-boot.mjs`).
 The demo company is synthetic: Kampaamo Kultalanka Oy, a Finnish
 hairdresser, from the test pack in `data/evals/fixtures/fi-kultalanka-2025-02`.
 
+### The zero-key demo
+
+One command, no provider key, no network call:
+
+```bash
+git clone https://github.com/imappi/donna-oss.git
+cd donna-oss
+npm ci
+npm run build
+npm run demo:fi
+```
+
+It starts its own PostgreSQL in `~/.donna-demo` (never the book of
+`npm run local:runtime`), the runtime and the web app, creates the demo
+firm and company with its ALV registration, uploads the month's 26
+documents, runs the scheduler's work to rest, gives the owner's answers
+(`scripts/fixtures/fi_kultalanka_month_facts.json`) and runs to rest
+again. On a laptop that takes under a minute. It ends with a summary read
+from the stored rows, then keeps the book up:
+
+```text
+[demo] replay at rest in 36 s
+[demo] journals: posted 19
+[demo] bank lines (coding/convergence): … posted/auto_reconciled 19 …
+[demo] posted lines by tax code: ALV_25_5_INPUT 4, ALV_25_5_OUTPUT 4, ALV_EU_ACQUISITION 1, …
+[demo] sign in at http://127.0.0.1:5173/firms with the access key …
+```
+
+Open the address, paste the printed access key, and choose Kampaamo
+Kultalanka Oy. Every screen says **Demo: recorded model outputs**.
+Ctrl-C stops it; `rm -rf ~/.donna-demo` starts it again from nothing.
+
+**The model answers are recorded, not live.** They were made once from a
+real run of this month and are committed in
+`data/demo-replay/fi-kultalanka-2025-02.json`: reading the receipts and
+invoices, matching them to bank lines and triaging bank lines by
+Anthropic `claude-opus-4-8`; document routing, statement reading, coding
+and ask drafting are, in this recording, scripted stand-ins written from
+the pack in the OpenAI response format (`gpt-5.4`), marked
+`scripted_stand_in` in the file and on screen. Every model call leaves the
+process through one seam (`server/donna/providerReplay.js`); the demo
+answers it from the recordings, so every parser, schema check, VAT rule
+and posting check runs on the recorded answer as on a live one. A request
+the recordings do not hold stops with `PROVIDER_REPLAY_UNRECORDED`, naming
+the lane, the model and where it differs; it never goes to the network.
+Each receipt names the recorded model with `+replayed` after it, and the
+runtime's `model lanes:` line says `REPLAY`.
+
+The demo serves only its own company: it refuses to start on a book that
+holds any other firm or company, and stops answering if one appears.
+To re-record (needs `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in `.env`,
+an empty book, and about 15 USD of model calls): `npm run demo:fi:record`.
+
+### Run it with your own keys
+
+The rest of this section runs the same book on live providers, with your
+own keys and your own data.
+
 ### What you need
 
 - Linux or macOS. The local database listens on a Unix socket only.
@@ -148,7 +206,7 @@ npm run local:web
 **5. Load the demo company.** In a third terminal:
 
 ```bash
-npm run demo:fi
+npm run demo:fi:load
 ```
 
 ```text

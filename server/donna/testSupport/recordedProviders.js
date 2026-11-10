@@ -53,7 +53,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { KNOWN_PROVIDER_HOSTS } from '../providerEndpoints.js';
+import { classifyProviderRequest, parseRequestBody } from '../providerReplay.js';
 
 export const RECORDINGS_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -62,116 +62,18 @@ export const RECORDINGS_DIR = path.resolve(
   'recordings'
 );
 
-// OpenAI Responses / chat-completions strict-schema names → lane id. The
-// left-hand side is what the production module puts in
-// `text.format.name`; the right-hand side is the lane a test scripts.
-export const OPENAI_SCHEMA_LANES = Object.freeze({
-  document_routing: 'document_routing',
-  // RT-12: the unified extractor on its OpenAI transport names its strict
-  // schema `unified_extraction`; on Anthropic the same lane is recognised by
-  // its system-prompt prefix below. One lane id either way.
-  unified_extraction: 'unified_extraction',
-  supplier_bill_extraction: 'supplier_bill_extraction',
-  receipt_extraction: 'receipt_extraction',
-  sales_invoice_extraction: 'sales_invoice_extraction',
-  // RT-18: the payout / deposit-slip extractor (payoutStatement.js).
-  payout_statement_extraction: 'payout_statement_extraction',
-  contract_extraction: 'contract_extraction',
-  generic_document_extraction: 'generic_document_extraction',
-  bank_statement_extraction: 'bank_statement_extraction',
-  transaction_coding_batch_suggestion: 'transaction_coding',
-  transaction_coding_suggestion: 'transaction_coding',
-  client_ask_message_draft: 'ask_drafting',
-  receipt_semantic_classifier: 'receipt_classification',
-  parser_repair: 'parser_repair',
-  firm_fact_distillation: 'memory_extraction',
-  document_chat_response: 'document_chat'
-});
-
-// Anthropic lanes open their system prompt with a fixed sentence; the
-// prefix is the signature. Order matters only for readability — the
-// prefixes are disjoint.
-export const ANTHROPIC_SYSTEM_LANES = Object.freeze([
-  Object.freeze({ lane: 'ae_vat_facts', prefix: 'Assess the exact settled invoice' }),
-  Object.freeze({ lane: 'owner_reply', prefix: 'Read the persisted ask and exact owner reply' }),
-  Object.freeze({ lane: 'chat_engine', prefix: 'You are Donna, the bookkeeper for the business named in the client block' }),
-  Object.freeze({ lane: 'reconciliation_reasoning', prefix: 'You match a parsed ' }),
-  Object.freeze({ lane: 'bank_line_disposition', prefix: 'You triage a single unmatched bank ' }),
-  Object.freeze({ lane: 'document_disposition', prefix: 'You triage a single parsed evidence DOCUMENT' }),
-  Object.freeze({ lane: 'reconciliation_triage', prefix: 'You evaluate low-confidence ' }),
-  Object.freeze({ lane: 'unified_extraction', prefix: 'You are extracting fields from one financial document' })
-]);
+// The lane table and the classifier moved to providerReplay.js (the demo's
+// record / replay seam is production code and owns them now); they are
+// re-exported here unchanged so every fixture keeps its import.
+export {
+  OPENAI_SCHEMA_LANES,
+  ANTHROPIC_SYSTEM_LANES,
+  classifyProviderRequest
+} from '../providerReplay.js';
 
 export const UNSCRIPTED_STATUS = 418;
 
-const hostRegistry = () => new Map(KNOWN_PROVIDER_HOSTS.map(({ host, endpointClass }) => [host, endpointClass]));
-
-const systemTextOf = (body) => {
-  if (typeof body?.system === 'string') return body.system;
-  if (Array.isArray(body?.system)) {
-    return body.system.map((block) => (typeof block?.text === 'string' ? block.text : '')).join('\n');
-  }
-  if (Array.isArray(body?.messages)) {
-    const system = body.messages.find((message) => message?.role === 'system');
-    if (typeof system?.content === 'string') return system.content;
-  }
-  return '';
-};
-
-const schemaNameOf = (body) =>
-  body?.text?.format?.name
-  || body?.response_format?.json_schema?.name
-  || null;
-
-const parseBody = (init) => {
-  const raw = init?.body;
-  if (raw == null) return null;
-  try {
-    return JSON.parse(typeof raw === 'string' ? raw : Buffer.from(raw).toString('utf8'));
-  } catch {
-    return null;
-  }
-};
-
-// Pure: what lane does this outbound request belong to? Returns null for a
-// non-provider host (the caller passes the request through). Exported so the
-// classification itself is testable without a fetch.
-export const classifyProviderRequest = ({ url, init = {} } = {}) => {
-  let parsed;
-  try {
-    parsed = new URL(typeof url === 'string' ? url : url?.url || String(url));
-  } catch {
-    return null;
-  }
-  const endpointClass = hostRegistry().get(parsed.host) || null;
-  if (!endpointClass) return null;
-  const body = parseBody(init);
-  const schemaName = schemaNameOf(body);
-  const systemText = systemTextOf(body);
-  let lane = null;
-  if (schemaName && OPENAI_SCHEMA_LANES[schemaName]) {
-    lane = OPENAI_SCHEMA_LANES[schemaName];
-  } else if (systemText) {
-    lane = ANTHROPIC_SYSTEM_LANES.find(({ prefix }) => systemText.startsWith(prefix))?.lane || null;
-  }
-  if (!lane) {
-    // Unknown lane: still refused, still journaled — but named by what the
-    // wire carried so the test author sees what to add.
-    lane = `${endpointClass}:${schemaName || (systemText ? systemText.slice(0, 40).trim() : parsed.pathname)}`;
-  }
-  return {
-    lane,
-    host: parsed.host,
-    endpoint_class: endpointClass,
-    pathname: parsed.pathname,
-    method: String(init?.method || 'GET').toUpperCase(),
-    schema_name: schemaName,
-    system_prefix: systemText ? systemText.slice(0, 60) : null,
-    model_requested: typeof body?.model === 'string' ? body.model : null,
-    // Sizes only — never the payload (a Responses body carries the document).
-    body_bytes: init?.body == null ? 0 : Buffer.byteLength(typeof init.body === 'string' ? init.body : Buffer.from(init.body))
-  };
-};
+const parseBody = parseRequestBody;
 
 export const recordingPath = (name) => path.join(RECORDINGS_DIR, `${String(name).replace(/\.json$/, '')}.json`);
 

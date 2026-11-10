@@ -129,6 +129,12 @@ export const loadFinnishDemo = async ({
   client,
   packDir = DEMO_PACK_DIR,
   allDocuments = false,
+  // File names to leave out (the replay demo holds one receipt back for the
+  // person to upload themselves; scripts/demo_fi.mjs --hold).
+  exclude = [],
+  // Called once the company exists and before any document is uploaded
+  // (the replay demo records the company's ALV registration here).
+  beforeDocuments = null,
   readFile = readFileSync,
   readDir = readdirSync,
   log = console.log
@@ -170,6 +176,8 @@ export const loadFinnishDemo = async ({
     log(`[demo] company created: ${profile.companyName} (${profile.uen}, ${profile.entityType})`);
   }
 
+  if (beforeDocuments) await beforeDocuments({ firmId, clientId: DEMO_CLIENT_ID });
+
   // 3. The documents.
   const snapshot = await client.get('/api/donna/firms/snapshot');
   if (snapshot.status !== 200) throw fail('Reading the firm', snapshot);
@@ -178,7 +186,8 @@ export const loadFinnishDemo = async ({
       .filter((doc) => doc.client_id === DEMO_CLIENT_ID)
       .map((doc) => doc.filename)
   );
-  const files = listDemoDocuments(readDir(path.join(packDir, 'sources')), { all: allDocuments });
+  const files = listDemoDocuments(readDir(path.join(packDir, 'sources')), { all: allDocuments })
+    .filter((name) => !exclude.includes(name));
   const uploaded = [];
   for (const filename of files) {
     if (existingNames.has(filename)) {

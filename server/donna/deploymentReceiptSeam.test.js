@@ -50,8 +50,11 @@ await test('public /health names the deployment, repository and branch behind th
     assert.equal(response.json.git_ref, 'main');
     assert.deepEqual(Object.keys(response.json).sort(), [
       'commit_sha', 'database_configured', 'deployment_id', 'deployment_url',
-      'git_provider', 'git_ref', 'git_repo', 'model_lanes', 'vercel_env'
+      'git_provider', 'git_ref', 'git_repo', 'model_lanes', 'provider_replay', 'vercel_env'
     ]);
+    // No replay demo on this host: no stored replay record, no replay lane.
+    assert.equal(response.json.provider_replay, null);
+    assert.equal(response.json.model_lanes.replay, false);
     // Coordinates only: a configured lane shows as presence, never as its value.
     const serialized = JSON.stringify(response.json);
     assert.ok(!serialized.includes(SEAM_KEY), 'receipt must carry lane presence, never a key value');

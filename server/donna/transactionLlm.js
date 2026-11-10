@@ -1435,7 +1435,10 @@ export const suggestTransactionCodingBatch = async ({
       };
     }
     parsed = call.parsed;
-    receipt = { source: 'openai_batch', model: config.model, response_id: call.payload.id || '', extra: {} };
+    // The model id is the one the response names (llmCall.js rail 5), as
+    // the single-line coder below already records it; the configured id only
+    // when the response names none.
+    receipt = { source: 'openai_batch', model: call.payload?.model || config.model, response_id: call.payload.id || '', extra: {} };
   }
 
   const transactionsById = new Map(enrichedTransactions.map((transaction) => [transaction.id, transaction]));

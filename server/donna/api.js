@@ -228,6 +228,7 @@ import {
   startFinlandAlvReturnFilingInDb
 } from './statutoryRegistry.js';
 import { buildModelLaneReceipt } from './desktop/capabilityReceipt.js';
+import { readLatestProviderReplaySession } from './providerReplaySession.js';
 import { isDesktopHostEnv, seedDesktopFirmMetadataWithClient } from './desktop/hostPlaneSeed.js';
 import { mintFirstRunFirm, normalizeFirstRunInput } from './desktop/firstRunFirmMint.js';
 import { runtimeLivenessProbe } from './desktop/runtimeLiveness.js';
@@ -2124,15 +2125,26 @@ const donnaFirmsApiHandler = async (req, res) => {
       // the sha alone could not tell a git-integration build of main from a
       // CLI push of another checkout or a stale promotion. Same owner as the
       // diagnostics block (resolveDeploymentReceipt); coordinates only.
+      // Replay demo (scripts/demo_fi.mjs): `provider_replay` is the stored
+      // record that this book was given recorded model outputs (migration
+      // 205), read from the database — the web app's "Demo: recorded model
+      // outputs" notice shows while one exists. `model_lanes.replay` says
+      // whether THIS process serves recordings now. A normal book has
+      // neither (null / false).
       const laneReceipt = buildModelLaneReceipt(process.env);
+      const replaySession = isFirmDatabaseConfigured()
+        ? await readLatestProviderReplaySession({ queryFn: (sql) => queryFirmDb(sql) })
+        : null;
       res.end(JSON.stringify({
         database_configured: isFirmDatabaseConfigured(),
         ...resolveDeploymentReceipt(process.env),
         model_lanes: {
           openai: laneReceipt.openai,
           anthropic: laneReceipt.anthropic,
-          openai_compatible: laneReceipt.openai_compatible
-        }
+          openai_compatible: laneReceipt.openai_compatible,
+          replay: Boolean(laneReceipt.replay)
+        },
+        provider_replay: replaySession
       }));
       return;
     }
