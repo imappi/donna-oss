@@ -42,7 +42,7 @@
 // back for the worker's own receipts; default 15s).
 
 import { currentExecutionBudget, remainingExecutionBudgetMs } from './executionBudget.js';
-import { assembleAnthropicStream, streamErrorStatus } from './anthropicStream.js';
+import { assembleAnthropicEventStream, statusForStreamError } from './anthropicEventStream.js';
 
 export const PROVIDER_FAILURE_CODES = Object.freeze({
   KEY_MISSING: 'PROVIDER_KEY_MISSING',
@@ -53,7 +53,13 @@ export const PROVIDER_FAILURE_CODES = Object.freeze({
   TIMEOUT: 'PROVIDER_TIMEOUT',
   NETWORK: 'PROVIDER_NETWORK',
   INVALID_OUTPUT: 'PROVIDER_INVALID_OUTPUT',
-  SPEND_LIMIT: 'PROVIDER_SPEND_LIMIT'
+  SPEND_LIMIT: 'PROVIDER_SPEND_LIMIT',
+  // 2026-11-10 (the Claude-only text lanes): an HTTP 200 that carries no
+  // answer the lane may read. The Messages API names why it stopped
+  // (`stop_reason`); a refusal and a cut-off at max_tokens are each a
+  // provider fact with its own receipt, never a parse error or a verdict.
+  REFUSED: 'PROVIDER_REFUSED',
+  OUTPUT_LIMIT: 'PROVIDER_OUTPUT_LIMIT'
 });
 
 export const PROVIDER_FAILURE_OWNERS = Object.freeze(['operator', 'queue']);
@@ -159,6 +165,33 @@ export const providerInvalidOutput = (provider, { detail = null, status = 200, m
     status,
     reason: 'invalid_output',
     message: `${model || providerLabel(provider)} returned an unreadable response${detail ? ` (${detail})` : ''}.`,
+    retryable: true,
+    owner: 'queue'
+  });
+
+// The model declined the request (Messages API `stop_reason: "refusal"`).
+// Not retryable as the same request; no verdict exists. `category` is the
+// provider's stop_details category when it gave one (never content).
+export const providerRefused = (provider, { model = null, category = null } = {}) =>
+  new ProviderFailureError({
+    code: PROVIDER_FAILURE_CODES.REFUSED,
+    provider,
+    status: 200,
+    reason: category ? `refusal:${String(category).slice(0, 60)}` : 'refusal',
+    message: `${model || providerLabel(provider)} declined the request${category ? ` (${category})` : ''}.`,
+    retryable: false,
+    owner: 'operator'
+  });
+
+// The answer stopped at the request's max_tokens: whatever text exists is
+// incomplete and is not read. Retryable (the queue may re-ask).
+export const providerOutputLimit = (provider, { model = null, maxTokens = null } = {}) =>
+  new ProviderFailureError({
+    code: PROVIDER_FAILURE_CODES.OUTPUT_LIMIT,
+    provider,
+    status: 200,
+    reason: 'max_tokens',
+    message: `${model || providerLabel(provider)} stopped at the output limit${Number.isFinite(Number(maxTokens)) && maxTokens ? ` (${maxTokens} tokens)` : ''}; the answer is incomplete.`,
     retryable: true,
     owner: 'queue'
   });
@@ -417,9 +450,17 @@ const readJsonBody = async (response) => {
       if (isAbortLike(error) || isProviderFailure(error) || (response.ok && isNetworkLike(error))) throw error;
       return null;
     }
-    const { payload, streamError } = assembleAnthropicStream(raw);
-    if (streamError) payload.stream_error_status = streamErrorStatus(streamError);
-    return payload;
+    // One reassembly module (anthropicEventStream.js), the envelope's too.
+    // A stream error event, or a stream that ended before message_stop, is a
+    // failed call with the status its type stands for.
+    const { payload, error, complete } = assembleAnthropicEventStream(raw);
+    const streamError = error || (complete ? null : { type: 'api_error', message: 'the event stream ended before message_stop' });
+    const out = payload || {};
+    if (streamError) {
+      out.error = streamError;
+      out.stream_error_status = statusForStreamError(streamError.type);
+    }
+    return out;
   }
   if (typeof response.json === 'function') {
     try {

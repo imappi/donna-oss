@@ -29,7 +29,10 @@ test(`FI real HTTP and PG (${browserDefaultScope ? 'browser omitted firm_id' : '
   const env = {
     DATABASE_URL: url.toString(), DONNA_ACCESS_TOKEN: 'not-the-owner-token',
     SUPABASE_URL: 'https://currency-auth.invalid', SUPABASE_ANON_KEY: 'test-key',
-    DONNA_AUTH_ALLOWED_EMAILS: 'owner@currency.example,seat@currency.example', OPENAI_API_KEY: 'test-only-no-network', ANTHROPIC_API_KEY: 'test-only-no-network'
+    DONNA_AUTH_ALLOWED_EMAILS: 'owner@currency.example,seat@currency.example', OPENAI_API_KEY: 'test-only-no-network', ANTHROPIC_API_KEY: 'test-only-no-network',
+    // 2026-11-10: with both keys the text lanes run on Claude; this file's
+    // stub answers the OpenAI coder, so it pins the text lanes to OpenAI.
+    OPENAI_MODEL: 'gpt-5.4'
   };
   const previous = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
   Object.assign(process.env, env);

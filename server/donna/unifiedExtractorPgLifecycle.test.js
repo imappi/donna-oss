@@ -153,7 +153,7 @@ test(
       assert.ok(!modelRoutes.detail.dark_lanes.includes('unified_extraction'));
 
       const { clientId } = await appliance.createClient();
-      appliance.providers.script('document_routing', ['document_routing/ochre-supplier-bill-anthropic']);
+      appliance.providers.script('document_routing', ['document_routing/ochre-supplier-bill']);
       appliance.providers.script('unified_extraction', ['unified_extraction/ochre-discount-line']);
       // The doc-first terminal drain (Anthropic) reaches a bill the matcher left bare.
       appliance.providers.script('document_disposition', ['document_disposition/ochre-bill-uncovered-account']);

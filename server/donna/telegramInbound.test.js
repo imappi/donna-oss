@@ -349,7 +349,7 @@ test('a Finnish owner is answered in Finnish: booked-to consequence and the name
     deps: { getOwnerLanguage: async () => 'fi' }
   });
   await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: booked.deps, message: { message_id: 40, chat: { id: Number(CHAT_ID) }, text: 'konferenssi Ref: 23DEF456' } });
-  assert.equal(booked.calls.texts.at(-1).text, 'Selvä, kirjasin tämän tilille Matkakulut. Se on nyt kirjanpidossasi. Vastaa, jos se ei ole oikein.');
+  assert.equal(booked.calls.texts.at(-1).text, 'Selvä, kirjasin tämän tilille Matkakulut. Se on nyt kirjanpidossasi.');
 
   const photo = makeDeps({ deps: {
     getOwnerLanguage: async () => 'fi',
@@ -486,4 +486,55 @@ test('owner chat: an empty or non-string reply is never sent, and is logged as a
   } finally {
     console.error = originalError;
   }
+});
+// Donna's in-band line about an answer is kept in the delivery ledger under
+// its question, so a tapped reply to that line reaches the question
+// (ownerReplyCorrection.js); the line keeps its invitation on Telegram.
+test('Telegram keeps the line about an answer under its question, so a tapped reply to it is anchored', async () => {
+  const line = 'We recorded that the business has been VAT-registered since 2026-01-01. Reply here if that is not right.';
+  const { deps, calls } = makeDeps({
+    deliveryById: { '4242': { ask_id: 'ask-registration', client_id: 'client-1' } },
+    resolvedResult: { evidence_request: { id: 'ask-registration', status: 'resolved' }, recode: { applied: true, owner_notice: line, owner_notice_statement: 'statement' } },
+    deps: { sendText: async (args) => { calls.texts.push(args); return { ok: true, id: '5150' }; } }
+  });
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps, message: { message_id: 12, chat: { id: Number(CHAT_ID) }, reply_to_message: { message_id: 4242 }, text: 'Yes, since 2026-01-01.' } });
+  assert.equal(calls.texts.at(-1).text, line);
+  const notice = calls.ledger.find((call) => call.entry.message_id === '5150');
+  assert.ok(notice, 'the outbound line is in the ledger');
+  assert.equal(notice.entry.ask_id, 'ask-registration');
+  assert.equal(notice.entry.client_id, 'client-1');
+  assert.equal(notice.entry.provider, 'telegram');
+  assert.equal(notice.entry.provider_payload.outbound.kind, 'owner_reply_notice');
+});
+
+test('Telegram: a tapped reply to a closed question no reader can take is not attached to it; it is read as a new message and the owner is told', async () => {
+  const { deps, calls } = makeDeps({
+    deliveryById: { '4242': { ask_id: 'ask-closed', client_id: 'client-1' } },
+    deps: {
+      getAskById: async () => ({ id: 'ask-closed', client_id: 'client-1', status: 'resolved', evidence_type: 'business_purpose', transaction_id: 'tx-1', request_payload: {} }),
+      readCorrectionReader: async () => ({ status: 'resolved', reader: null }),
+      // General chat reads it as a new message (here it stops at the memory gate).
+      appendClientPortalChatMessage: async (args) => ({ id: 'chat-row', ...args }),
+      assembleClientPortalTurn: async () => ({ ownerMemory: { shortCircuit: true } })
+    }
+  });
+  const result = await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps, message: { message_id: 13, chat: { id: Number(CHAT_ID) }, reply_to_message: { message_id: 4242 }, text: 'Actually it was a gift.' } });
+  assert.equal(calls.resolved.length, 0, 'the reply writer is not called');
+  assert.equal(result.closed_question, 'ask-closed');
+  assert.equal(calls.texts[0].text, 'That question is already closed, so I read your message as a new one.');
+  assert.equal(result.status, 'general_chat', 'read through the existing chat path');
+});
+
+test('Telegram: a tapped reply to a closed question with a correction reader goes to the reply writer', async () => {
+  const { deps, calls } = makeDeps({
+    deliveryById: { '4242': { ask_id: 'ask-closed', client_id: 'client-1' } },
+    resolvedResult: { evidence_request: { id: 'ask-closed', status: 'resolved' }, recode: { applied: false, correction: { outcome: 'not_recorded' }, owner_notice: 'Earlier answer stands.', owner_notice_statement: 'Earlier answer stands.' } },
+    deps: {
+      getAskById: async () => ({ id: 'ask-closed', client_id: 'client-1', status: 'resolved', evidence_type: 'business_purpose', transaction_id: 'tx-1', request_payload: {} }),
+      readCorrectionReader: async () => ({ status: 'resolved', reader: 'coder_reply' })
+    }
+  });
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps, message: { message_id: 14, chat: { id: Number(CHAT_ID) }, reply_to_message: { message_id: 4242 }, text: 'Actually it was a gift for a client.' } });
+  assert.equal(calls.resolved[0].evidenceRequestId, 'ask-closed');
+  assert.equal(calls.texts.at(-1).text, 'Earlier answer stands.');
 });

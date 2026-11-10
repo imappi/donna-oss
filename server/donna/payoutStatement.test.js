@@ -290,8 +290,9 @@ test('transport: no API key ⇒ a retryable failure without a call; empty input 
   try {
     let calls = 0;
     const result = await extractPayoutStatementFromBase64({ base64: 'aGk=', filename: 'p.pdf', fetchImpl: async () => { calls += 1; } });
-    // 2026-11-10: the reason names the missing key, not one provider.
-    assert.deepEqual([result.kind, result.code, result.reason, calls], ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'no_provider_key', 0]);
+    // 2026-11-10: the reason names the provider whose key is missing
+    // (Anthropic, the lane's first), in the parse wait vocabulary.
+    assert.deepEqual([result.kind, result.code, result.reason, result.provider, calls], ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'anthropic_not_configured', 'anthropic', 0]);
   } finally {
     if (prior === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = prior;

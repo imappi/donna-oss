@@ -166,10 +166,10 @@ test('refusal and max_tokens are named failures, never a partial statement', asy
     const base64 = await buildPdfBase64(1);
     providers.script('bank_statement_extraction', message(null, { stopReason: 'refusal' }));
     await assert.rejects(() => extractStructuredFromOpenAiVisionPaginated({ base64, filename: 's.pdf' }),
-      (error) => error.code === 'ANTHROPIC_REFUSAL' && error.servedModel === 'claude-opus-5-5');
+      (error) => error.code === 'PROVIDER_REFUSED' && error.servedModel === 'claude-opus-5-5');
     providers.script('bank_statement_extraction', message(null, { stopReason: 'max_tokens', text: '{"transactions":[' }));
     await assert.rejects(() => extractStructuredFromOpenAiVisionPaginated({ base64, filename: 's.pdf' }),
-      (error) => error.code === 'ANTHROPIC_MAX_TOKENS');
+      (error) => error.code === 'PROVIDER_OUTPUT_LIMIT');
     providers.script('bank_statement_extraction', { status: 529, body: { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } } });
     await assert.rejects(() => extractStructuredFromOpenAiVisionPaginated({ base64, filename: 's.pdf' }),
       (error) => error.code === 'LLM_CALL_PROVIDER_ERROR' && error.statusCode === 529);

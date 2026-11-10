@@ -8,6 +8,7 @@ import {
   revokeWhatsAppBindingInDb,
   recordMessageDeliveryLedgerInDb,
   resolveClientEvidenceRequestInDb,
+  readEvidenceCorrectionReaderInDb,
   recordEvidenceTopicTurnInDb,
   getClientEntityAxisFromDb,
   getClientOwnerLanguageInDb,
@@ -125,7 +126,8 @@ const smsConfig = {
   source: 'sms',
   documentIdPrefix: 'sms_doc',
   actorFallback: 'sms:webhook',
-  capabilities: { generalOwnerChat: false, ownerInitiatedMedia: false, persistOwnerThread: true },
+  // No quote-reply on SMS: Donna's in-band line invites no reply (inboundCore.js).
+  capabilities: { generalOwnerChat: false, ownerInitiatedMedia: false, persistOwnerThread: true, quoteReplyAnchor: false },
   copy: SMS_INBOUND_COPY,
   copyFor: smsInboundCopyFor,
   allowsClient: (clientId, gateContext, env) => ownerChannelAllowsClient({ channel: 'sms', clientId, gateContext, envFallback: smsEnvAllowsClient, env }),
@@ -140,6 +142,8 @@ const defaultDeps = (deps = {}) => ({
   getOpenAskByRef: deps.getOpenAskByRef || getOpenWhatsAppEvidenceRequestByRefInDb,
   claimInboundMessage: deps.claimInboundMessage || claimInboundSmsMessageInDb,
   resolveEvidenceRequest: deps.resolveEvidenceRequest || resolveClientEvidenceRequestInDb,
+  // A reply to a closed question: whether a reader can take it as a correction (ownerReplyCorrection.js).
+  readCorrectionReader: deps.readCorrectionReader || readEvidenceCorrectionReaderInDb,
   recordEvidenceTopicTurn: deps.recordEvidenceTopicTurn || recordEvidenceTopicTurnInDb,
   recordLedger: deps.recordLedger || recordMessageDeliveryLedgerInDb,
   sendText: deps.sendText || sendSmsText,

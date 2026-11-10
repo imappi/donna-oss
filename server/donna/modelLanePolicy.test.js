@@ -44,8 +44,9 @@ const TABLE_PRESENT = { match: 'to_regclass', rows: [{ present: 'model_lane_poli
 
 await test('set refuses an ungoverned lane and a model outside the qualified set — the feed rail', async () => {
   await assert.rejects(
-    // (document_routing joined the feed on 2026-11-10; document_chat stays ungoverned.)
-    () => setLaneDecidingPolicy({ client: makeMockClient(), firmId: 'f1', laneId: 'document_chat', decidingModel: 'x' }),
+    // (document_routing and document_chat joined the feed on 2026-11-10;
+    // merchant_lookup stays ungoverned.)
+    () => setLaneDecidingPolicy({ client: makeMockClient(), firmId: 'f1', laneId: 'merchant_lookup', decidingModel: 'x' }),
     (err) => err.code === 'LANE_NOT_GOVERNED'
   );
   await assert.rejects(

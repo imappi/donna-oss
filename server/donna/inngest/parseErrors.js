@@ -151,15 +151,10 @@ const inferCode = (err) => {
   return 'INTERNAL';
 };
 
-// A model-class failure whose thrower named no provider is attributed to the
-// model provider without guessing WHICH one. Until 2026-11-10 every such
-// failure was called 'openai'; since the owner's decision that Donna runs on
-// Claude the document lanes resolve Anthropic first, and a missing key names
-// no provider at all — an envelope must not blame one it never called.
 const inferProvider = (err, code) => {
   if (err?.provider) return err.provider;
-  if (code.startsWith('OCR_') || code === 'EXTRACTION_NO_TRANSACTIONS') return 'model_provider';
-  if (code.startsWith('DOCUMENT_EXTRACTION_')) return 'model_provider';
+  if (code.startsWith('OCR_') || code === 'EXTRACTION_NO_TRANSACTIONS') return 'openai';
+  if (code.startsWith('DOCUMENT_EXTRACTION_')) return 'openai';
   if (code === 'STORAGE_FETCH_FAILED' || code === 'CHECKSUM_MISMATCH') return 'supabase';
   return 'internal';
 };
@@ -230,6 +225,162 @@ export const parseRetriesExhaustedEnvelope = (envelope = {}, { attempts, maxAtte
   };
 };
 
+// ── Provider faults (the installation's, not the document's) ──────────────
+//
+// What kind of fault a provider's answer is, from its status and its error
+// body ({ code, type, message } — the provider's own error object), for any
+// provider. The four kinds a document must WAIT on rather than spend its
+// attempts on, or rest terminal for:
+//   not_configured — no key for the lane's provider on this installation
+//                    (no request is made);
+//   unauthorized   — the provider refused the key (401/403);
+//   no_credit      — the account has no credit or quota left (OpenAI 429
+//                    `insufficient_quota`, Anthropic 400 "credit balance is
+//                    too low", 402, `billing_*`);
+//   unreachable    — no answer at all (connection refused, DNS, reset).
+// What stays the document's: a plain 429 rate limit, 5xx and timeouts (a
+// large or slow document can cause them — retryable document attempts), and
+// any other 4xx (the provider rejected THIS request — the file, its size, its
+// format: DOCUMENT_EXTRACTION_REJECTED, terminal). A 400 is a content
+// rejection unless its error body names credit or billing.
+export const PROVIDER_FAULTS = Object.freeze({
+  NOT_CONFIGURED: 'not_configured',
+  UNAUTHORIZED: 'unauthorized',
+  NO_CREDIT: 'no_credit',
+  UNREACHABLE: 'unreachable'
+});
+const NO_CREDIT_ERROR_CODES = new Set([
+  'insufficient_quota', 'billing_hard_limit_reached', 'billing_not_active',
+  'credit_balance_exhausted', 'credit_balance_too_low', 'insufficient_credits'
+]);
+const NO_CREDIT_MESSAGE = /credit balance is too low|insufficient[ _]quota|exceeded your current quota|no credits? remaining|out of credits/i;
+
+export const providerFaultOfResponse = ({ status, providerError = null } = {}) => {
+  const n = Number(status || 0);
+  const err = providerError && typeof providerError === 'object' ? providerError : {};
+  const codes = [err.code, err.type].filter((value) => typeof value === 'string').map((value) => value.toLowerCase());
+  const noCredit = n === 402
+    || ([400, 403, 429].includes(n)
+      && (codes.some((code) => NO_CREDIT_ERROR_CODES.has(code)) || NO_CREDIT_MESSAGE.test(String(err.message || ''))));
+  if (noCredit) return PROVIDER_FAULTS.NO_CREDIT;
+  if (n === 401 || n === 403) return PROVIDER_FAULTS.UNAUTHORIZED;
+  return null;
+};
+
+// The provider's error object off a non-OK fetch Response, for the
+// classification above. Never persisted (it is read, not stored).
+export const readProviderError = async (response) => {
+  if (!response || typeof response.json !== 'function') return null;
+  try {
+    const body = await response.json();
+    return body?.error && typeof body.error === 'object' ? body.error : null;
+  } catch {
+    return null;
+  }
+};
+
+export const PROVIDER_WAIT_REASON_CODES = Object.freeze({
+  NOT_CONFIGURED: 'provider_not_configured',
+  UNAUTHORIZED: 'provider_unauthorized',
+  NO_CREDIT: 'provider_no_credit',
+  UNREACHABLE: 'provider_unreachable'
+});
+// Reasons an extractor persists with no provider prefix (the unified
+// extractor, providerTransport.providerKeyMissing, the router; the
+// transport-level throw every extractor maps to `network_error`).
+const BARE_FAULT_REASONS = Object.freeze({
+  no_provider_key: PROVIDER_FAULTS.NOT_CONFIGURED,
+  no_api_key: PROVIDER_FAULTS.NOT_CONFIGURED,
+  api_key_missing: PROVIDER_FAULTS.NOT_CONFIGURED,
+  network_error: PROVIDER_FAULTS.UNREACHABLE
+});
+// `<provider>_<fault>`: openai_not_configured, anthropic_no_credit, openai_401…
+const PREFIXED_FAULT = /^([a-z][a-z0-9_]*?)_(not_configured|no_credit|401|403)$/;
+const WAIT_REASON_BY_FAULT = Object.freeze({
+  [PROVIDER_FAULTS.NOT_CONFIGURED]: PROVIDER_WAIT_REASON_CODES.NOT_CONFIGURED,
+  [PROVIDER_FAULTS.UNAUTHORIZED]: PROVIDER_WAIT_REASON_CODES.UNAUTHORIZED,
+  [PROVIDER_FAULTS.NO_CREDIT]: PROVIDER_WAIT_REASON_CODES.NO_CREDIT,
+  [PROVIDER_FAULTS.UNREACHABLE]: PROVIDER_WAIT_REASON_CODES.UNREACHABLE
+});
+// Each unreachable wait re-sends the request, and a connection the same
+// request resets every time is more likely the request: those waits are
+// bounded (about two hours at the 300s recheck cap), then the failure counts
+// as a document attempt again. A missing key, a refused key and an empty
+// account make no billable read and wait without a bound until fixed.
+export const PROVIDER_UNREACHABLE_MAX_WAITS = 24;
+
+const keyNameFor = (provider) => (provider ? `${String(provider).toUpperCase()}_API_KEY` : null);
+
+// `categorized` is categorizeError's envelope. Returns the wait (kind,
+// provider read from the failure record, key name), or null when the failure
+// is the document's own.
+export const providerWaitFor = (categorized = {}) => {
+  if (!categorized) return null;
+  const reason = String(categorized.reason || '');
+  const prefixed = PREFIXED_FAULT.exec(reason);
+  let fault = BARE_FAULT_REASONS[reason] || null;
+  let provider = null;
+  if (prefixed) {
+    provider = prefixed[1];
+    fault = prefixed[2] === '401' || prefixed[2] === '403' ? PROVIDER_FAULTS.UNAUTHORIZED : prefixed[2];
+  }
+  if (categorized.code === 'DOCUMENT_EXTRACTION_UNAUTHORIZED') fault = PROVIDER_FAULTS.UNAUTHORIZED;
+  if (!fault) return null;
+  // A refused key is terminal-class (the same request replays byte-identically
+  // until the key changes) — and exactly why it waits. Every other fault is a
+  // retryable-class failure; a terminal envelope with such a reason is not ours.
+  if (fault !== PROVIDER_FAULTS.UNAUTHORIZED && categorized.retryable !== true) return null;
+  if (!provider) {
+    const named = categorized.provider;
+    provider = named && !['internal', 'unified'].includes(named) ? named : null;
+  }
+  const reasonCode = WAIT_REASON_BY_FAULT[fault];
+  return {
+    reason_code: reasonCode,
+    provider,
+    key_name: [PROVIDER_WAIT_REASON_CODES.NOT_CONFIGURED, PROVIDER_WAIT_REASON_CODES.UNAUTHORIZED].includes(reasonCode)
+      ? keyNameFor(provider)
+      : null
+  };
+};
+
+// The persisted receipt (documents.payload.parse_hold, the RT-02 key the
+// tray, the parse-status projection, the drain and the convergence verdict
+// already read). `prior` is the hold the row carried before this claim; the
+// wait count and `since` accumulate only while the reason is unchanged.
+// `waits` counts configuration waits; the document's own attempts stay on
+// parse_attempts / local_jobs.attempt_count, which a wait hands back.
+export const buildProviderWaitHold = ({ wait, categorized = {}, prior = null, parseRunId = null, now = new Date().toISOString() } = {}) => {
+  if (!wait) return null;
+  const same = Boolean(prior && prior.reason_code === wait.reason_code && (prior.provider || null) === (wait.provider || null));
+  return {
+    reason_code: wait.reason_code,
+    responsible_system: 'operator',
+    boundary: 'parse_extract',
+    provider: wait.provider || null,
+    key_name: wait.key_name || null,
+    code: categorized.code || null,
+    reason: categorized.reason || null,
+    ...(categorized.model ? { model: categorized.model } : {}),
+    parse_run_id: parseRunId,
+    since: same && prior.since ? prior.since : now,
+    checked_at: now,
+    waits: (same ? Number(prior.waits) || 0 : 0) + 1
+  };
+};
+
+export const isProviderWaitHold = (hold) =>
+  Boolean(hold && typeof hold === 'object' && Object.values(PROVIDER_WAIT_REASON_CODES).includes(hold.reason_code));
+
+// Whether this failure may wait instead of spending an attempt, given the
+// hold the row carried before the claim.
+export const providerWaitAllowed = ({ wait, prior = null } = {}) => {
+  if (!wait) return false;
+  if (wait.reason_code !== PROVIDER_WAIT_REASON_CODES.UNREACHABLE) return true;
+  const priorWaits = prior && prior.reason_code === wait.reason_code ? Number(prior.waits) || 0 : 0;
+  return priorWaits < PROVIDER_UNREACHABLE_MAX_WAITS;
+};
+
 export const isRetryableCode = (code) => RETRYABLE_CODES.has(code);
 export const isTerminalCode = (code) => TERMINAL_CODES.has(code);
 
@@ -240,8 +391,16 @@ export const isTerminalCode = (code) => TERMINAL_CODES.has(code);
 // byte-identically, so the retry budget only delays the terminal verdict.
 // 5xx / 0 / unknown stay retryable. Lives here (not in the extractors) so
 // the code names and their retryability semantics never drift apart.
-export const extractionFailureForStatus = (status, { provider = 'openai' } = {}) => {
+export const extractionFailureForStatus = (status, { provider = 'openai', providerError = null } = {}) => {
   const n = Number(status || 0);
+  // No credit on the account is the installation's, whatever status the
+  // provider uses for it (OpenAI 429 `insufficient_quota`, Anthropic 400
+  // "credit balance is too low", 402): its own reason, retryable class, so the
+  // worker makes it a provider wait instead of a rate limit or a rejection of
+  // the file (providerFaultOfResponse).
+  if (providerFaultOfResponse({ status: n, providerError }) === PROVIDER_FAULTS.NO_CREDIT) {
+    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: `${provider}_no_credit` };
+  }
   const unauthorized = n === 401 || n === 403;
   const deterministic = n >= 400 && n < 500 && n !== 408 && n !== 429;
   return {

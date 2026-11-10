@@ -21,9 +21,10 @@ test('the qwen plan seats exactly the lanes whose qualified set carries the clou
   // RT-14.)
   assert.ok(plan.skipped.some((s) => s.laneId === 'unified_extraction'));
   // Ungoverned lanes are the remaining sole-model bug surface, listed honestly.
-  // (bank_statement_vision joined the feed with the document lanes, 2026-11-10.)
+  // (bank_statement_vision and document_chat joined the feed with the
+  // document and text lanes, 2026-11-10.)
   assert.ok(plan.skipped.some((s) => s.laneId === 'bank_statement_vision'));
-  assert.ok(plan.ungoverned.includes('document_chat'));
+  assert.ok(plan.ungoverned.includes('merchant_lookup'));
   assert.ok(plan.ungoverned.includes('chat_engine'));
   // The split is a partition of the registry.
   assert.equal(

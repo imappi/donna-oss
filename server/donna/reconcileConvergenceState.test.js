@@ -193,7 +193,10 @@ const RECON_CLASSES = [null, 'explained', SETTLED_RECON_STATUSES_LOCKSTEP[0], 'p
 const CODED_ACCOUNT_CLASSES = [null, '7100'];
 const HELD_CLASSES = [[false, false], [true, false], [true, true]];
 const REFUSAL_CLASSES = [null, 'LEDGER_PERIOD_LOCKED'];
-const CORRECTION_CLASSES = [null, { status: 'pending' }, { status: 'pending', recovery: { state: 'blocked', code: 'EVIDENCE_MISSING' } }];
+const TAX_REGISTRATION_CHANGE = Object.freeze({ on_date: '2026-06-02', direction: 'became_registered' });
+const CORRECTION_CLASSES = [null, { status: 'pending' }, { status: 'pending', recovery: { state: 'blocked', code: 'EVIDENCE_MISSING' } },
+  { status: 'pending', tax_registration: TAX_REGISTRATION_CHANGE },
+  { status: 'pending', tax_registration: TAX_REGISTRATION_CHANGE, recovery: { state: 'blocked', code: 'CODING_CORRECTION_AUTHORITY_REQUIRED' } }];
 const ASK_FLAGS = ['hasOpenOwnerAsk', 'hasUndeliverableOwnerAsk', 'hasAnsweredOwnerAsk', 'hasOpenSeatAsk', 'hasAnsweredSeatAsk', 'hasOpenAgentAsk'];
 const DISPOSITION_CLASSES = [[null, null], ...SETTLING_DISPOSITIONS_LOCKSTEP.map((d) => [d, null]), ['needs_human', 'owner_ask'], ['chase_evidence', null]];
 const CASCADE_CLASSES = [null, 'failed'];
@@ -215,6 +218,8 @@ const POLICY_TABLE = [
   { when: (i) => i.hasUndeliverableOwnerAsk && !i.hasAnsweredOwnerAsk, then: () => v('hanging', 'owner_ask_undeliverable') },
   { when: (i) => i.hasAnsweredOwnerAsk, then: () => v('hanging', 'owner_answered_processing') },
   { when: (i) => i.hasAnsweredSeatAsk, then: () => v('hanging', 'seat_answered_processing') },
+  { when: (i) => i.codingCorrectionRequired?.tax_registration && i.codingCorrectionRequired.recovery, then: (i) => v('hanging', `posted_tax_registration_correction_${i.codingCorrectionRequired.recovery.state}:${i.codingCorrectionRequired.recovery.code}`) },
+  { when: (i) => i.codingCorrectionRequired?.tax_registration, then: () => v('hanging', 'posted_tax_registration_changed') },
   { when: (i) => i.codingCorrectionRequired?.recovery, then: (i) => v('hanging', `posted_evidence_correction_${i.codingCorrectionRequired.recovery.state}:${i.codingCorrectionRequired.recovery.code}`) },
   { when: (i) => i.codingCorrectionRequired, then: () => v('hanging', 'posted_evidence_reconsideration_required') },
   { when: (i) => i.codingState === 'applied' && i.ledgerPostRefused, then: (i) => v('hanging', `ledger_post_refused:${i.ledgerPostRefused}`) },

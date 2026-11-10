@@ -22,7 +22,7 @@ import { buildDonnaLedgerWriteback } from '../donnaLedgerWriteback.js';
 import { lockClientCloseBoundaryWithClient } from './closeSerialization.js';
 import { __createClientEvidenceRequestWithClient, consumeNativeUnresolvedCodingWithClient } from './asks.js';
 import { canonicalMerchantPattern, normalizeIntelText } from '../transactionIntel.js';
-import { accountOptionsForClient, CODING_DEFAULT_MODEL, knownPrincipalsForClientProfile, suggestTransactionCoding, suggestTransactionCodingBatch } from '../transactionLlm.js';
+import { accountOptionsForClient, CODING_STRONG_DEFAULT_MODELS, knownPrincipalsForClientProfile, suggestTransactionCoding, suggestTransactionCodingBatch } from '../transactionLlm.js';
 // Q9 (the sole-model lab, 2026-08-16): the coding lane's model-policy
 // resolution — same pattern as the disposition sweep owner (Q6c).
 import { readLaneDecidingPolicy } from '../modelLanePolicy.js';
@@ -679,7 +679,9 @@ export const __loadDirectUncodedNeedsReviewPool = async ({
 // posture as the disposition sweep (Q6c).
 export const resolveCodingTransport = async (client, { firmId, clientId }) => {
   const policy = await readLaneDecidingPolicy({ client, firmId, clientId, laneId: 'transaction_coding' });
-  if (!policy?.deciding_model || policy.deciding_model === CODING_DEFAULT_MODEL) return null;
+  // Either provider's strong default (2026-11-10: claude-opus-5-5 first,
+  // gpt-5.4 the alternative) keeps the default, resolved path.
+  if (!policy?.deciding_model || CODING_STRONG_DEFAULT_MODELS.includes(policy.deciding_model)) return null;
   const endpoint = resolveOpenAiCompatibleEndpoint({});
   return {
     provider: 'openai_compatible',

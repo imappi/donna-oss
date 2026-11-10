@@ -12,18 +12,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { schemaDeliveryFor, STRUCTURED_REPLY_TOOL, toStructuredOutputSchema } from './anthropicMessages.js';
+import { anthropicWireSchema, schemaDeliveryFor, STRUCTURED_ANSWER_TOOL_NAME } from './structuredRequest.js';
 import { extractClientIntakeDraft, __INTAKE_DRAFT_SCHEMA, __INSTRUCTIONS as INTAKE_INSTRUCTIONS } from './clientIntakeDraft.js';
 import { extractContractFromBase64, __CONTRACT_EXTRACTION_SCHEMA } from './contract.js';
 import { routeDocument, __ROUTER_SCHEMA } from './documentRouter.js';
 import { extractGenericDocumentFromBase64, __GENERIC_DOCUMENT_EXTRACTION_SCHEMA } from './genericDocument.js';
-import { repairMissingFields } from './parserRepair.js';
+import { __buildRepairSchema, repairMissingFields } from './parserRepair.js';
 import { extractPayoutStatementFromBase64, __PAYOUT_EXTRACTION_SCHEMA, __PAYOUT_INSTRUCTIONS } from './payoutStatement.js';
 import { extractReceiptFromBase64, __RECEIPT_EXTRACTION_SCHEMA } from './receipt.js';
 import { classifyReceipt, __RECEIPT_CLASSIFIER_SCHEMA, __INSTRUCTIONS as CLASSIFIER_INSTRUCTIONS } from './receiptClassifier.js';
 import { extractSalesInvoiceFromBase64, __INSTRUCTIONS as INVOICE_INSTRUCTIONS, __INVOICE_EXTRACTION_SCHEMA } from './salesInvoice.js';
 import { extractSupplierBillFromBase64, __BILL_EXTRACTION_SCHEMA } from './supplierBill.js';
-import { categorizeError, ParseError } from './inngest/parseErrors.js';
+import { categorizeError, ParseError, providerWaitFor } from './inngest/parseErrors.js';
 import { buildExtractorReceipt } from './inngest/parseDocument.js';
 import { installRecordedProviders, loadRecording } from './testSupport/recordedProviders.js';
 
@@ -59,9 +59,9 @@ const sampleFrom = (schema, key = '') => {
 // call when the request carries the tool (a schema past the structured-output
 // limits), JSON text otherwise. `prose` forces a text reply.
 const message = (object, { model = 'claude-opus-5-5', stopReason = 'end_turn', sent = null, prose = false } = {}) => {
-  const viaTool = !prose && Array.isArray(sent?.tools) && sent.tools.some((tool) => tool.name === STRUCTURED_REPLY_TOOL);
+  const viaTool = !prose && Array.isArray(sent?.tools) && sent.tools.some((tool) => tool.name === STRUCTURED_ANSWER_TOOL_NAME);
   const block = viaTool
-    ? { type: 'tool_use', id: 'toolu_synthetic', name: STRUCTURED_REPLY_TOOL, input: object }
+    ? { type: 'tool_use', id: 'toolu_synthetic', name: STRUCTURED_ANSWER_TOOL_NAME, input: object }
     : { type: 'text', text: typeof object === 'string' ? object : JSON.stringify(object) };
   return {
     status: 200,
@@ -78,13 +78,12 @@ const replyTo = (object, options = {}) => ({ respond: (sent) => message(object, 
 
 const UNSUPPORTED = ['minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'minLength', 'maxLength', 'pattern', 'minItems', 'maxItems'];
 const assertStructuredSchema = (sent, original, label) => {
-  assert.deepEqual(sent, toStructuredOutputSchema(original), `${label}: the lane's own schema is what is sent`);
+  assert.deepEqual(sent, anthropicWireSchema(original), `${label}: the lane's own schema is what is sent`);
   const walk = (node, path) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach((child, i) => walk(child, `${path}[${i}]`)); return; }
     for (const keyword of UNSUPPORTED) assert.ok(!(keyword in node), `${label}: ${path} carries ${keyword}`);
     if (node.type === 'object') assert.equal(node.additionalProperties, false, `${label}: ${path} is closed`);
-    assert.ok(!Array.isArray(node.type), `${label}: ${path} uses anyOf, not a type array`);
     for (const value of Object.values(node)) walk(value, path);
   };
   walk(sent, '$');
@@ -95,7 +94,7 @@ const assertAnthropicRequest = (body, { effort, system, schema, label, fileFirst
   assert.equal(body.stream, true, `${label}: streamed`);
   assert.deepEqual(body.thinking, { type: 'adaptive' }, `${label}: adaptive thinking`);
   assert.equal(body.output_config.effort, effort, `${label}: effort`);
-  if (schemaDeliveryFor(schema) === 'output_format') {
+  if (schemaDeliveryFor(schema).delivery === 'output_format') {
     assert.equal(body.output_config.format.type, 'json_schema', `${label}: structured output`);
     assertStructuredSchema(body.output_config.format.schema, schema, label);
     assert.equal(body.tools, undefined, `${label}: no tools`);
@@ -105,7 +104,7 @@ const assertAnthropicRequest = (body, { effort, system, schema, label, fileFirst
     // non-strict tool; auto choice (forced choice is rejected on this model).
     assert.equal(body.output_config.format, undefined, `${label}: no grammar-compiled format`);
     assert.equal(body.tools.length, 1, `${label}: one tool`);
-    assert.equal(body.tools[0].name, STRUCTURED_REPLY_TOOL);
+    assert.equal(body.tools[0].name, STRUCTURED_ANSWER_TOOL_NAME);
     assert.deepEqual(body.tools[0].input_schema, schema, `${label}: the lane's own schema, unchanged`);
     assert.equal(body.tools[0].strict, undefined, `${label}: non-strict`);
     assert.deepEqual(body.tool_choice, { type: 'auto' }, `${label}: auto tool choice`);
@@ -141,7 +140,9 @@ for (const lane of EXTRACTORS) {
       providers.script(lane.lane, {
         respond: (sent) => {
           body = sent;
-          return lane.recording ? { recording: `${lane.recording}-anthropic` } : message(sampleFrom(lane.schema), { sent });
+          // A committed (Responses-shaped) recording is served in the Messages
+          // shape by the stub's adaptation, with the requested model.
+          return lane.recording ? { recording: lane.recording } : message(sampleFrom(lane.schema), { sent });
         }
       });
       const result = await lane.run({ base64: PDF, filename: 'synteetti.pdf', mimeType: 'application/pdf' });
@@ -164,9 +165,9 @@ for (const lane of EXTRACTORS) {
       ]);
       const refused = await lane.run({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
       assert.deepEqual([refused.kind, refused.code, refused.reason, refused.model, refused.provider],
-        ['failed', 'DOCUMENT_EXTRACTION_REJECTED', 'provider_refusal', 'claude-opus-5-5', 'anthropic'], lane.label);
+        ['failed', 'DOCUMENT_EXTRACTION_REJECTED', 'provider_refused', 'claude-opus-5-5', 'anthropic'], lane.label);
       const cut = await lane.run({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
-      assert.deepEqual([cut.code, cut.reason], ['DOCUMENT_EXTRACTION_REJECTED', 'provider_max_tokens'], lane.label);
+      assert.deepEqual([cut.code, cut.reason], ['DOCUMENT_EXTRACTION_REJECTED', 'provider_output_limit'], lane.label);
       const overloaded = await lane.run({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
       assert.deepEqual([overloaded.code, overloaded.reason, overloaded.provider], ['DOCUMENT_EXTRACTION_FAILED', 'anthropic_529', 'anthropic'], lane.label);
     } finally { providers.restore(); restore(); }
@@ -176,7 +177,7 @@ for (const lane of EXTRACTORS) {
     keys({});
     try {
       const none = await lane.run({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
-      assert.deepEqual([none.kind, none.code, none.reason, none.provider], ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'no_provider_key', null]);
+      assert.deepEqual([none.kind, none.code, none.reason, none.provider], ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'anthropic_not_configured', 'anthropic']);
     } finally { restore(); }
     if (!lane.recording) return;
     keys({ openai: true });
@@ -195,25 +196,25 @@ test('a lane on tool delivery: a prose reply (no tool call) and a reply that bre
   keys({ anthropic: true });
   const providers = installRecordedProviders();
   try {
-    assert.equal(schemaDeliveryFor(__BILL_EXTRACTION_SCHEMA), 'tool', 'the bill schema carries 17 nullable fields');
-    assert.equal(schemaDeliveryFor(__RECEIPT_EXTRACTION_SCHEMA), 'output_format', 'the receipt schema carries 16');
+    assert.equal(schemaDeliveryFor(__BILL_EXTRACTION_SCHEMA).delivery, 'tool', 'the bill schema carries 17 nullable fields');
+    assert.equal(schemaDeliveryFor(__RECEIPT_EXTRACTION_SCHEMA).delivery, 'output_format', 'the receipt schema carries 16');
     providers.script('supplier_bill_extraction', [
       replyTo('The bill is from Synteetti Oy and totals 12,40 EUR.', { prose: true }),
       replyTo({ ...sampleFrom(__BILL_EXTRACTION_SCHEMA), extra_field: 1 })
     ]);
     const prose = await extractSupplierBillFromBase64({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
-    assert.deepEqual([prose.code, prose.reason, prose.model], ['DOCUMENT_EXTRACTION_REJECTED', 'provider_no_structured_reply', 'claude-opus-5-5']);
+    assert.deepEqual([prose.code, prose.reason, prose.model], ['DOCUMENT_EXTRACTION_REJECTED', 'provider_invalid_output', 'claude-opus-5-5']);
     const broken = await extractSupplierBillFromBase64({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
-    assert.deepEqual([broken.code, broken.reason], ['DOCUMENT_EXTRACTION_REJECTED', 'provider_schema_violation']);
+    assert.deepEqual([broken.code, broken.reason], ['DOCUMENT_EXTRACTION_REJECTED', 'provider_invalid_output']);
   } finally { providers.restore(); restore(); }
 });
 
-test('router on Anthropic: the twin recording, low effort, the file then the identity text, the served model on the routing receipt', async () => {
+test('router on Anthropic: the committed recording, adapted, low effort, the file then the identity text, the served model on the routing receipt', async () => {
   keys({ anthropic: true, openai: true });
   const providers = installRecordedProviders();
   try {
     let body = null;
-    providers.script('document_routing', { respond: (sent) => { body = sent; return { recording: 'document_routing/ochre-supplier-bill-anthropic' }; } });
+    providers.script('document_routing', { respond: (sent) => { body = sent; return { recording: 'document_routing/ochre-supplier-bill' }; } });
     const result = await routeDocument({
       base64: PDF, filename: 'lasku.pdf', mimeType: 'application/pdf',
       clientIdentity: { display_name: 'Synteetti Oy', legal_names: ['Synteetti Oy'] }
@@ -229,14 +230,14 @@ test('router on Anthropic: the twin recording, low effort, the file then the ide
 test('router: no key ⇒ api_key_missing naming the missing key; a refusal ⇒ llm_error, never a family', async () => {
   keys({});
   try {
-    assert.deepEqual(await routeDocument({ base64: PDF, filename: 'x.pdf' }), { routed: false, reason: 'api_key_missing', provider_reason: 'no_provider_key' });
+    assert.deepEqual(await routeDocument({ base64: PDF, filename: 'x.pdf' }), { routed: false, reason: 'api_key_missing', provider: 'anthropic', provider_reason: 'anthropic_not_configured' });
   } finally { restore(); }
   keys({ anthropic: true });
   const providers = installRecordedProviders();
   try {
     providers.script('document_routing', message(null, { stopReason: 'refusal' }));
     const refused = await routeDocument({ base64: PDF, filename: 'x.pdf' });
-    assert.deepEqual([refused.routed, refused.reason, refused.failure, refused.model], [false, 'llm_error', 'provider_refusal', 'claude-opus-5-5']);
+    assert.deepEqual([refused.routed, refused.reason, refused.failure, refused.model], [false, 'llm_error', 'provider_refused', 'claude-opus-5-5']);
   } finally { providers.restore(); restore(); }
 });
 
@@ -266,11 +267,11 @@ test('client intake on Anthropic: medium effort, the file first, the model on th
     await extractClientIntakeDraft({ text: 'Synteetti Oy, Y-tunnus 0000000-0' });
     assert.deepEqual(body.messages[0].content.map((block) => block.type), ['text']);
     keys({});
-    assert.deepEqual(await extractClientIntakeDraft({ text: 'x' }), { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: 'no_provider_key' });
+    assert.deepEqual(await extractClientIntakeDraft({ text: 'x' }), { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: 'anthropic_not_configured', provider: 'anthropic' });
   } finally { providers.restore(); restore(); }
 });
 
-test('parser repair on Anthropic: medium effort, the repair schema (nullable fields as anyOf), the repaired header', async () => {
+test('parser repair on Anthropic: medium effort, the repair schema as the shared wire copy sends it, the repaired header', async () => {
   keys({ anthropic: true });
   process.env.PARSER_REPAIR_ENABLED = 'true';
   const providers = installRecordedProviders();
@@ -281,7 +282,7 @@ test('parser repair on Anthropic: medium effort, the repair schema (nullable fie
     const summary = { warnings: [] };
     const result = await repairMissingFields({ base64: PDF, filename: 'k.pdf', mimeType: 'application/pdf', header, summary, documentType: 'receipt' });
     assert.equal(body.output_config.effort, 'medium');
-    assert.deepEqual(body.output_config.format.schema.properties.vendor_name, { anyOf: [{ type: 'string' }, { type: 'null' }] });
+    assert.deepEqual(body.output_config.format.schema, anthropicWireSchema(__buildRepairSchema(['vendor_name', 'total_amount'])), 'the lane\'s own schema, as the shared wire copy sends it');
     assert.ok(body.system.startsWith('The following fields could not be extracted on the first pass'));
     assert.deepEqual([result.repaired, header.vendor_name, header.total_amount], [true, 'Synteetti Oy', 12.5]);
     providers.script('parser_repair', message(null, { stopReason: 'refusal' }));
@@ -302,15 +303,18 @@ test('receipt classifier on Anthropic: low effort, text only, the provider and s
     assert.deepEqual([result.used_fallback, result.provider, result.model], [false, 'anthropic', 'claude-opus-5-5']);
     keys({});
     const none = await classifyReceipt({ header: { vendor_name: 'x' } });
-    assert.deepEqual([none.used_fallback, none.fallback_reason], [true, 'no_provider_key']);
+    assert.deepEqual([none.used_fallback, none.fallback_reason], [true, 'anthropic_not_configured']);
   } finally { providers.restore(); restore(); }
 });
 
-test('the parse pipeline: a missing key is stored as the missing key, never as OpenAI', () => {
+test('the parse pipeline: a missing key waits on the key the installation is meant to hold (ANTHROPIC_API_KEY), never OpenAI\'s', () => {
+  // The extractor's no-key result (anthropic_not_configured) as the worker
+  // throws it, read by #71's provider-wait model.
   const envelope = categorizeError(new ParseError('DOCUMENT_EXTRACTION_FAILED', {
-    message: 'Supplier bill extraction failed: no_provider_key', provider: null, reason: 'no_provider_key'
+    message: 'Supplier bill extraction failed: anthropic_not_configured', provider: 'anthropic', reason: 'anthropic_not_configured', retryable: true
   }));
-  assert.deepEqual([envelope.code, envelope.provider, envelope.reason], ['DOCUMENT_EXTRACTION_FAILED', 'model_provider', 'no_provider_key']);
+  assert.deepEqual([envelope.code, envelope.provider, envelope.reason], ['DOCUMENT_EXTRACTION_FAILED', 'anthropic', 'anthropic_not_configured']);
+  assert.deepEqual(providerWaitFor(envelope), { reason_code: 'provider_not_configured', provider: 'anthropic', key_name: 'ANTHROPIC_API_KEY' });
   const receipt = buildExtractorReceipt({ documentType: 'supplier_bill', result: { extractor_model: 'claude-opus-5-5', extractor_provider: 'anthropic' } });
   assert.deepEqual([receipt.provider, receipt.model], ['anthropic', 'claude-opus-5-5']);
   assert.equal(buildExtractorReceipt({ documentType: 'supplier_bill', result: {} }).provider, null, 'no provider is guessed');

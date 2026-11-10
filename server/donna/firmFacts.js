@@ -45,6 +45,10 @@ import { resolve as resolvePath } from 'node:path';
 
 import { factIsJurisdictionKnowledge } from './operatorMemoryPolicy.js';
 import { canonicalMerchantPattern, normalizeIntelText } from './transactionIntel.js';
+import { llmCall } from './llmCall.js';
+import { getLane } from './modelLanes.js';
+import { resolveTextLaneProvider } from './providerEndpoints.js';
+import { anthropicStructuredRequest, openAiStructuredRequest, typedLlmCallFailure } from './structuredRequest.js';
 
 export const FIRM_FACT_SCOPES = ['merchant', 'client', 'jurisdiction', 'firm'];
 export const FIRM_FACT_CONFIDENCES = ['low', 'medium', 'high'];
@@ -806,8 +810,16 @@ export const listFirmFacts = async ({ client, firmId, status = null, limit = MAX
 // events imply NO durable fact. The distiller runs on the strong tier
 // because deciding what the firm should remember forever is a
 // judgment call, not bulk filtering.
+// 2026-11-10 (owner's decision: Claude only): provider-agnostic — Anthropic
+// (claude-opus-5-5) when its key is present, OpenAI (this default) only when
+// no Anthropic key is configured; OPENAI_MODEL may pin either family's id.
+// Effort `medium`: one event in, usually zero facts out, and every fact is
+// refused or staged by deterministic checks after the call (sanitizeFact,
+// the jurisdiction refusal, erasure, conflict detection) — never minted.
 const DEFAULT_MODEL = 'gpt-5.4';
 export const __DEFAULT_MODEL = DEFAULT_MODEL;
+const LANE_PROVIDERS = getLane('memory_extraction').providers;
+const ANTHROPIC_EFFORT = 'medium';
 
 let dotEnvCache = null;
 const readDotEnv = () => {
@@ -828,13 +840,9 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL || dotEnv.OPENAI_MODEL || DEFAULT_MODEL
-  };
-};
+const resolveDistiller = () => resolveTextLaneProvider({
+  providers: LANE_PROVIDERS, openAiDefaultModel: DEFAULT_MODEL, dotEnv: readDotEnv()
+});
 
 // FIK-0b follow-up (docs/plan-2026-09-22-fi-jev-decision-knowledge.md §8.4): the
 // distiller may never propose a jurisdiction-scope fact. Such a fact applies to
@@ -877,54 +885,43 @@ NEVER return a rule about a country or jurisdiction (a VAT/GST rate or exemption
 
 Each fact is ONE plain-language sentence that names the subject explicitly and stands alone without this event's context. scope=merchant facts are about the counterparty (subject: the merchant/counterparty name); scope=client about the client's own business (subject: the client's registration number, or name if none); scope=firm about how this firm itself works. There is no jurisdiction scope. Confidence reflects how directly the event states the fact — the client's own words rate high; an inference from a recode rates medium at best.`;
 
-const outputTextFromResponse = (response = {}) => {
-  if (typeof response.output_text === 'string') return response.output_text;
-  for (const item of response.output || []) {
-    for (const content of item.content || []) {
-      if (typeof content.text === 'string') return content.text;
-    }
-  }
-  return '';
-};
-
 // Distill an event into zero-or-more sanitized facts. Pure failure
 // posture: any error returns { facts: [], model } — distillation must
-// never break the flow it rides (reply recode, drawer save).
+// never break the flow it rides (reply recode, drawer save). A provider
+// failure also rides back typed (`provider_failure`: no credit, bad key,
+// rate limit, refusal, output limit) for the caller's receipt. Both
+// providers go through the shared envelope; `model` is the id the RESPONSE
+// named (the configured id only when no response arrived).
 export const distillFirmFactsFromEvent = async ({ event = {}, fetchFn = fetch } = {}) => {
-  const config = getOpenAiConfig();
-  if (!config.apiKey) return { facts: [], model: 'not_configured' };
-  try {
-    const response = await fetchFn('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`
-      },
-      body: JSON.stringify({
-        model: config.model,
-        instructions: DISTILLER_INSTRUCTIONS,
-        input: JSON.stringify(event),
-        store: false,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'firm_fact_distillation',
-            strict: true,
-            schema: DISTILLER_SCHEMA
-          }
-        }
-      })
+  const resolved = resolveDistiller();
+  if (!resolved.ok) return { facts: [], model: 'not_configured' };
+  const input = JSON.stringify(event);
+  const execution = { root: { type: 'firm_fact_event', id: String(event?.transaction_id || event?.id || event?.kind || 'event') } };
+  const request = resolved.provider === 'anthropic'
+    ? anthropicStructuredRequest({
+      apiKey: resolved.apiKey, model: resolved.model, system: DISTILLER_INSTRUCTIONS, user: input,
+      schema: DISTILLER_SCHEMA, effort: ANTHROPIC_EFFORT, maxTokens: 16000, cacheSystem: true,
+      execution, fetchImpl: fetchFn
+    })
+    : openAiStructuredRequest({
+      apiKey: resolved.apiKey, model: resolved.model, instructions: DISTILLER_INSTRUCTIONS, input,
+      schemaName: 'firm_fact_distillation', schema: DISTILLER_SCHEMA, store: false, execution, fetchImpl: fetchFn
     });
-    if (!response.ok) return { facts: [], model: config.model };
-    const payload = await response.json();
-    const parsed = JSON.parse(outputTextFromResponse(payload));
+  try {
+    const { result } = await llmCall(request);
+    const parsed = result.parsed;
     const facts = (Array.isArray(parsed?.facts) ? parsed.facts : [])
       .map((candidate) => sanitizeFact(candidate))
       .filter(Boolean)
       .slice(0, MAX_FACTS_PER_EVENT);
-    return { facts, model: config.model };
-  } catch {
-    return { facts: [], model: config.model };
+    return { facts, model: result.model || resolved.model };
+  } catch (error) {
+    const typed = typedLlmCallFailure(resolved.provider, error);
+    return {
+      facts: [],
+      model: error?.telemetry?.model_source === 'response' ? error.telemetry.model : resolved.model,
+      ...(typed ? { provider_failure: typed.receipt() } : {})
+    };
   }
 };
 

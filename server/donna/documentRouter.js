@@ -5,7 +5,8 @@ import { isProviderSpendLimit } from './providerTransport.js';
 // Provider-agnostic since 2026-11-10 (the owner's decision that Donna runs
 // on Claude): Anthropic (claude-opus-5-5, the file as a document/image
 // block, structured output) first, the OpenAI Responses API (gpt-5.4) only
-// when no Anthropic key is configured — resolved by laneProviderResolver.js,
+// when no Anthropic key is configured — resolved by providerEndpoints.js
+// resolveLaneProvider (documentLaneRequest.js),
 // every call through the llmCall envelope. The router's verdict OVERRIDES the upload-time document type for
 // every family it can name once it clears DOCUMENT_ROUTER_MIN_CONFIDENCE
 // and the two blast-radius guards in `inngest/parseDocument.js`
@@ -26,8 +27,14 @@ import { resolve as resolvePath } from 'node:path';
 
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { asProviderResponse, llmCall } from './llmCall.js';
-import { anthropicFileBlock, callAnthropicMessages, isAnthropicStopFailure } from './anthropicMessages.js';
-import { envWithDotEnv, resolveLaneProvider } from './laneProviderResolver.js';
+import {
+  anthropicFileBlock,
+  documentLaneAnthropicRequest,
+  isProviderStopFailure,
+  notConfiguredFailure,
+  resolveDocumentLaneProvider,
+  stopFailureReason
+} from './documentLaneRequest.js';
 import { classifyModelProvenance } from './providerEndpoints.js';
 
 // Routing was the one principled nano use under the bulk-filter
@@ -189,13 +196,12 @@ const readDotEnv = () => {
   return vars;
 };
 
-// DOCUMENT_ROUTER_MODEL is the lane's knob (its id pins the provider);
-// OPENAI_MODEL tunes the OpenAI model only.
-const getRouterConfig = () => resolveLaneProvider({
+// DOCUMENT_ROUTER_MODEL is the lane's knob (its id pins the provider); no
+// provider-wide knob.
+const getRouterConfig = () => resolveDocumentLaneProvider({
   laneId: 'document_routing',
-  env: envWithDotEnv(readDotEnv()),
+  dotEnv: readDotEnv(),
   modelEnvKeys: ['DOCUMENT_ROUTER_MODEL'],
-  providerModelEnvKeys: { openai: ['OPENAI_MODEL'] },
   defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
 });
 
@@ -378,8 +384,9 @@ const routerTextParts = ({ clientContext, clientIdentity }) => {
   return parts;
 };
 
-const callAnthropicRouter = async ({ apiKey, model, base64, mimeType, filename, clientContext, clientIdentity, signal }) =>
-  callAnthropicMessages({
+// The shared structured request (structuredRequest.js), through the envelope.
+const callAnthropicRouter = async ({ apiKey, model, base64, mimeType, filename, clientContext, clientIdentity, signal }) => {
+  const { result } = await llmCall(documentLaneAnthropicRequest({
     apiKey,
     model,
     system: INSTRUCTIONS,
@@ -392,8 +399,11 @@ const callAnthropicRouter = async ({ apiKey, model, base64, mimeType, filename, 
     maxTokens: ANTHROPIC_MAX_TOKENS,
     sections: { system: INSTRUCTIONS, tools: ROUTER_SCHEMA },
     execution: { root: { type: 'document_routing', id: filenameCorrelationId(filename) } },
-    signal
-  });
+    signal,
+    timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS
+  }));
+  return { text: JSON.stringify(result.parsed), servedModel: result.model || null };
+};
 
 // ── Public API ──────────────────────────────────────────────────────
 // Never throws. Always returns a result object.
@@ -414,9 +424,11 @@ export const routeDocument = async ({
   const config = getRouterConfig();
 
   if (!config.ok) {
-    console.warn('[documentRouter] no model provider key configured', { correlation_id: correlationId, reason: config.reason });
-    // `api_key_missing` names no provider; `provider_reason` says which key.
-    return { routed: false, reason: 'api_key_missing', provider_reason: config.reason };
+    // `api_key_missing` is the router's own reason; `provider_reason` names
+    // the provider whose key is missing (`anthropic_not_configured`).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'document_routing');
+    console.warn('[documentRouter] no model provider key configured', { correlation_id: correlationId, reason: notConfigured });
+    return { routed: false, reason: 'api_key_missing', provider: missing, provider_reason: notConfigured };
   }
 
   const clean = trimBase64(base64);
@@ -456,7 +468,7 @@ export const routeDocument = async ({
         routed: false,
         reason: 'llm_error',
         provider: 'anthropic',
-        failure: isAnthropicStopFailure(err) ? err.reason : (err?.code || null),
+        failure: isProviderStopFailure(err) ? stopFailureReason(err) : (err?.code || null),
         ...(err?.servedModel ? { model: err.servedModel } : {})
       };
     } finally {

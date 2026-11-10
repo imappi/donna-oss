@@ -129,7 +129,7 @@ test('real PG: shared cloud parse worker uses per-type payable extraction and pr
       // same instructions and schema ride `instructions` / `text.format`.
       for (const sent of requests) {
         const request = { ...sent, instructions: sent.instructions ?? sent.system };
-        const schema = sent.text?.format?.schema ?? sent.tools?.find((tool) => tool.name === 'record_structured_result')?.input_schema;
+        const schema = sent.text?.format?.schema ?? sent.tools?.find((tool) => tool.name === 'structured_answer')?.input_schema;
         if (sent.text?.format) assert.equal(sent.text.format.strict, true);
         else assert.deepEqual([sent.model, sent.tool_choice], ['claude-opus-5-5', { type: 'auto' }]);
         assert.match(request.instructions, /PAYSLIP \/ PAYROLL RECORD/);

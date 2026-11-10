@@ -116,14 +116,14 @@ const stubFetch = ({ provider, text, model = null, status = 200, error = null, s
       : (() => {
         // The unified schema is past the structured-output limits, so the
         // request carries the structured-result tool and the reply is its
-        // call (anthropicMessages.js schemaDeliveryFor); a reply that is not
+        // call (structuredRequest.js schemaDeliveryFor); a reply that is not
         // JSON arrives as prose, which the lane must refuse.
         const sent = JSON.parse(init.body);
-        const viaTool = Array.isArray(sent.tools) && sent.tools.some((tool) => tool.name === 'record_structured_result');
+        const viaTool = Array.isArray(sent.tools) && sent.tools.some((tool) => tool.name === 'structured_answer');
         let input = null;
         try { input = JSON.parse(String(text || '').replace(/^```json\s*|\s*```$/g, '')); } catch { input = null; }
         const block = viaTool && input && typeof input === 'object'
-          ? { type: 'tool_use', id: 'toolu_1', name: 'record_structured_result', input }
+          ? { type: 'tool_use', id: 'toolu_1', name: 'structured_answer', input }
           : { type: 'text', text };
         return { id: 'msg_1', model, content: stopReason === 'refusal' ? [] : [block], stop_reason: stopReason === 'end_turn' && block.type === 'tool_use' ? 'tool_use' : stopReason, usage: { input_tokens: 1, output_tokens: 1 } };
       })();
@@ -137,7 +137,7 @@ const stubFetch = ({ provider, text, model = null, status = 200, error = null, s
         { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig' } },
         { type: 'content_block_stop', index: 0 },
         ...(stopReason === 'refusal' ? [] : [
-          { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'toolu_1', name: 'record_structured_result', input: {} } },
+          { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'toolu_1', name: 'structured_answer', input: {} } },
           ...[text.slice(0, 7), text.slice(7)].map((piece) => ({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: piece } })),
           { type: 'content_block_stop', index: 1 }
         ]),
@@ -596,9 +596,9 @@ test('extractUnified on Anthropic: Messages API, the document block, the reply a
   assert.equal(calls[0].url, 'https://api.anthropic.com/v1/messages');
   assert.equal(calls[0].init.headers['x-api-key'], 'sk-a');
   const body = calls[0].body;
-  // 2026-11-10: the lane's Anthropic default is claude-opus-5-5.
-  assert.equal(body.model, 'claude-opus-5-5');
-  // The current Messages request shape (anthropicMessages.js): structured
+  // 2026-11-10: the lane's Anthropic default stays claude-opus-4-8.
+  assert.equal(body.model, 'claude-opus-4-8');
+  // The shared Messages request (structuredRequest.js): structured
   // output through output_config.format, adaptive thinking, explicit effort,
   // streamed, and no forced tool choice and no server-side fallback.
   assert.equal(calls[0].init.headers['anthropic-version'], '2026-10-21');
@@ -608,9 +608,9 @@ test('extractUnified on Anthropic: Messages API, the document block, the reply a
   // The unified schema carries 63 nullable fields — past the structured-
   // output limit of 16 union parameters — so it rides, whole, as the input
   // schema of one non-strict tool with tool_choice auto (forced tool choice
-  // is rejected on claude-opus-5-5); the reply is held to the same schema.
+  // is rejected on the 5.x models); the reply is held to the same schema.
   assert.equal(body.output_config.format, undefined);
-  assert.deepEqual(body.tools.map((tool) => tool.name), ['record_structured_result']);
+  assert.deepEqual(body.tools.map((tool) => tool.name), ['structured_answer']);
   assert.equal(body.tools[0].input_schema.properties.document_type.enum.length, UNIFIED_DOCUMENT_TYPES.length);
   assert.equal(body.tools[0].strict, undefined, 'non-strict: a strict tool is grammar-compiled under the same limits');
   assert.deepEqual(body.tool_choice, { type: 'auto' });
@@ -630,17 +630,19 @@ test('extractUnified on Anthropic: Messages API, the document block, the reply a
   assert.equal(invalid.partial_header.header.counterparty_name, 'Ochre Lighting', 'even a schema-breaking reply keeps the header it carried');
 });
 
-test('extractUnified on Anthropic: a streamed reply is reassembled; refusal and max_tokens are named, final, receipted failures', async () => {
-  const streamed = stubFetch({ provider: 'anthropic', text: JSON.stringify(bill()), model: 'claude-opus-5-5', sse: true });
+test('extractUnified on Anthropic: a streamed reply is reassembled; refusal and max_tokens are the shared named failures, receipted with the served model', async () => {
+  const streamed = stubFetch({ provider: 'anthropic', text: JSON.stringify(bill()), model: 'claude-opus-4-8', sse: true });
   const ok = await extractUnified({ base64: PDF_B64, filename: 'x.pdf', env: { ANTHROPIC_API_KEY: 'sk-a' }, fetchImpl: streamed.fetchImpl });
-  assert.deepEqual([ok.kind, ok.provider, ok.model, ok.model_source], ['completed_header', 'anthropic', 'claude-opus-5-5', 'response_proven']);
+  assert.deepEqual([ok.kind, ok.provider, ok.model, ok.model_source], ['completed_header', 'anthropic', 'claude-opus-4-8', 'response_proven']);
   const refused = await extractUnified({ base64: PDF_B64, filename: 'x.pdf', env: { ANTHROPIC_API_KEY: 'sk-a' },
-    fetchImpl: stubFetch({ provider: 'anthropic', text: '', model: 'claude-opus-5-5', stopReason: 'refusal', sse: true }).fetchImpl });
-  assert.deepEqual([refused.kind, refused.code, refused.reason, refused.retryable, refused.model, refused.model_source, refused.stop_reason],
-    ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'provider_refusal', false, 'claude-opus-5-5', 'response_proven', 'refusal']);
+    fetchImpl: stubFetch({ provider: 'anthropic', text: '', model: 'claude-opus-4-8', stopReason: 'refusal', sse: true }).fetchImpl });
+  // PROVIDER_REFUSED is not retryable; PROVIDER_OUTPUT_LIMIT is (the shared
+  // failures' own posture, providerTransport.js).
+  assert.deepEqual([refused.kind, refused.code, refused.reason, refused.retryable, refused.model, refused.model_source, refused.provider_failure],
+    ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'provider_refused', false, 'claude-opus-4-8', 'response_proven', 'refusal']);
   const cut = await extractUnified({ base64: PDF_B64, filename: 'x.pdf', env: { ANTHROPIC_API_KEY: 'sk-a' },
-    fetchImpl: stubFetch({ provider: 'anthropic', text: '{"document_type":', model: 'claude-opus-5-5', stopReason: 'max_tokens' }).fetchImpl });
-  assert.deepEqual([cut.code, cut.reason, cut.retryable, cut.model], ['DOCUMENT_EXTRACTION_FAILED', 'provider_max_tokens', false, 'claude-opus-5-5']);
+    fetchImpl: stubFetch({ provider: 'anthropic', text: '{"document_type":', model: 'claude-opus-4-8', stopReason: 'max_tokens' }).fetchImpl });
+  assert.deepEqual([cut.code, cut.reason, cut.retryable, cut.model], ['DOCUMENT_EXTRACTION_FAILED', 'provider_output_limit', true, 'claude-opus-4-8']);
 });
 
 test('extractUnified: the model id falls back to the configured string, receipted as configured_fallback, when the response omits it', async () => {

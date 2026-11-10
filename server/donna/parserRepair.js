@@ -15,16 +15,20 @@ import { resolve as resolvePath } from 'node:path';
 import { clientFlagActs } from './clientConfig.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { asProviderResponse, llmCall } from './llmCall.js';
-import { callAnthropicFromResponsesBody, readProviderReply } from './anthropicMessages.js';
-import { envWithDotEnv, resolveLaneProvider } from './laneProviderResolver.js';
+import {
+  documentLaneRequestFromResponses,
+  notConfiguredFailure,
+  readDocumentLaneReply,
+  resolveDocumentLaneProvider
+} from './documentLaneRequest.js';
 
 // When this fires it writes vendor/date/total — the most load-bearing
 // fields on the document — so it gets the strong tier (Failure-A
 // anti-pattern otherwise). The module itself is repair scaffolding and
 // a retirement candidate alongside filenameFallback once logs show it
 // no longer fires post-strong-extractors; until then it must not be
-// the weakest model in the chain it repairs. OPENAI_MODEL stays the
-// override knob.
+// the weakest model in the chain it repairs. (OPENAI_MODEL tuned it until
+// 2026-11-10; the document lanes take no provider-wide knob.)
 const DEFAULT_MODEL = 'gpt-5.4';
 const REQUEST_TIMEOUT_MS = 30_000;
 // 2026-11-10 (the owner's decision that Donna runs on Claude): Anthropic
@@ -61,11 +65,11 @@ const readDotEnv = () => {
   return vars;
 };
 
-// No lane-specific model knob: OPENAI_MODEL tunes the OpenAI model only.
-const getOpenAiConfig = () => resolveLaneProvider({
+// No model knob: the lane's defaults per provider (no provider-wide knob
+// such as OPENAI_MODEL, 2026-11-10).
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
   laneId: 'parser_repair',
-  env: envWithDotEnv(readDotEnv()),
-  providerModelEnvKeys: { openai: ['OPENAI_MODEL'] },
+  dotEnv: readDotEnv(),
   defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
 });
 
@@ -130,7 +134,7 @@ Return only the requested fields. If you still cannot find a field, return null 
 // Single-shot repair call. Indirection via __callOpenAi / __callAnthropic
 // lets tests inject canned responses without touching the network. The body
 // is built ONCE (Responses shape): OpenAI sends it as is, Anthropic carries
-// it over unchanged (anthropicMessages.js callAnthropicFromResponsesBody).
+// it over unchanged (documentLaneRequest.js documentLaneRequestFromResponses, onto structuredRequest.js).
 const buildDefaultCall = (send) => async ({ apiKey, model, dataUrl, filename, missingFields, signal }) =>
   send({
     apiKey,
@@ -172,7 +176,15 @@ const defaultCallOpenAi = buildDefaultCall(({ apiKey, signal, filename, body }) 
   fetchImpl: (url, init) => fetch(url, { ...init, signal: init?.signal && signal ? AbortSignal.any([init.signal, signal]) : init?.signal || signal })
 })));
 
-const defaultCallAnthropic = buildDefaultCall(({ apiKey, signal, filename, body }) => callAnthropicFromResponsesBody({
+
+// The Anthropic call: the shared structured request (structuredRequest.js,
+// via documentLaneRequest.js) through the envelope, called here. llmCall is
+// loaded at call time where the module's import graph needs it.
+const callAnthropicEnvelope = async (options) => {
+  const { llmCall } = await import('./llmCall.js');
+  return llmCall(documentLaneRequestFromResponses({ timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS, ...options }));
+};
+const defaultCallAnthropic = buildDefaultCall(({ apiKey, signal, filename, body }) => callAnthropicEnvelope({
   apiKey,
   body,
   effort: ANTHROPIC_EFFORT,
@@ -261,7 +273,10 @@ export const repairMissingFields = async ({
   // ── LLM call ──
   const config = getOpenAiConfig();
   if (!config.ok) {
-    console.warn('[parserRepair] no model provider key configured', { correlation_id: correlationId, reason: config.reason });
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { reason: notConfigured } = notConfiguredFailure(config, 'parser_repair');
+    console.warn('[parserRepair] no model provider key configured', { correlation_id: correlationId, reason: notConfigured });
     return { ...EMPTY_RESULT };
   }
 
@@ -279,7 +294,7 @@ export const repairMissingFields = async ({
 
   let reply;
   try {
-    reply = await readProviderReply({
+    reply = await readDocumentLaneReply({
       provider: config.provider,
       callOpenAi: () => __callOpenAi(callArgs),
       callAnthropic: () => __callAnthropic(callArgs),

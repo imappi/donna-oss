@@ -29,7 +29,14 @@ import {
   snoozeProspect
 } from './replyTriageDb.js';
 import { draftInboundReply, triageInboundMessage } from './replyDrafter.js';
-import { getOpenAiConfig } from './openAiConfig.js';
+import { resolveMarketingProvider } from './openAiConfig.js';
+
+// The key the triage call will use, whichever provider resolves (Anthropic
+// first since 2026-11-10) — the sweep skips only when NEITHER is configured.
+const marketingProviderConfig = () => {
+  const resolved = resolveMarketingProvider();
+  return { apiKey: resolved.ok ? resolved.apiKey : '', model: resolved.model, provider: resolved.provider };
+};
 
 const isDisabled = (env) => {
   const v = String(env.MARKETING_TRIAGE_FORCE_DISABLE || '').toLowerCase();
@@ -55,7 +62,7 @@ export const runReplyTriageSweep = async ({
   snoozeProspectImpl = snoozeProspect,
   startSourceRunImpl = startSourceRun,
   finishSourceRunImpl = finishSourceRun,
-  getOpenAiConfigImpl = getOpenAiConfig
+  getOpenAiConfigImpl = marketingProviderConfig
 } = {}) => {
   const log = logger || console;
   const batchLimit = Number(limit || env.MARKETING_TRIAGE_BATCH_LIMIT || 10);

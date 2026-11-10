@@ -53,12 +53,32 @@ const stringList = (value) => Array.isArray(value) && value.every(nonemptyString
 // that states the fact (instruction), and the recogniser of a treatment that
 // the posting policy refuses for an unregistered business (needsRegistration). The coder's
 // contract (transactionLlm.js) tells the coder; the posting policy decides.
+// Optional filedReturnOn({ query, firmId, clientId, onDate }): the country's
+// read of a VAT return recorded as filed over a date, through the caller's
+// query function, for a posted line whose registration basis changed
+// (db/taxRegistrationChange.js). A country without a filed-return record
+// declares none.
 const validWithoutTax = (rule) => Boolean(rule) && typeof rule === 'object' && Boolean(rule.treatments)
   && nonemptyString(rule.treatments.purchase) && nonemptyString(rule.treatments.sale)
   && ['instruction', 'needsRegistration'].every((key) => typeof rule[key] === 'function');
+// A sale whose own sales document shows VAT on a date the record says not
+// registered (salesSourceShowsTax; taxSourceEvidence.js
+// assertSalesSourceTaxRegistration): the bank-line refusal code, one of
+// refusalCodes so the registration question and its answer cover the line;
+// the owner question that says what was seen (ownerQuestion) and, after the
+// owner says the business was not registered, the request for the corrected
+// invoice or the credit note (correctionRequest); and correctionAsk, the
+// corrected-document question kind that carries that request where the held
+// source is verified ('document_discrepancy'), or null for an owner question.
+const validSalesSourceShowsTax = (rule, refusalCodes) => Boolean(rule) && typeof rule === 'object'
+  && nonemptyString(rule.refusalCode) && refusalCodes.includes(rule.refusalCode)
+  && (rule.correctionAsk === null || rule.correctionAsk === 'document_discrepancy')
+  && ['ownerQuestion', 'correctionRequest'].every((key) => typeof rule[key] === 'function');
 const validTaxRegistration = (rule) => Boolean(rule) && typeof rule === 'object' && stringList(rule.refusalCodes)
   && nonemptyString(rule.profileField) && stringList(rule.recordLockedCodes) && validWithoutTax(rule.withoutTax)
-  && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice', 'notRecordedNotice'].every((key) => typeof rule[key] === 'function');
+  && validSalesSourceShowsTax(rule.salesSourceShowsTax, rule.refusalCodes)
+  && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice', 'notRecordedNotice'].every((key) => typeof rule[key] === 'function')
+  && (!Object.hasOwn(rule, 'filedReturnOn') || typeof rule.filedReturnOn === 'function');
 
 // The country's no-VAT treatment labels (withoutTax.treatments), for the
 // policy-vocabulary checks: a coder may propose one only on a line whose

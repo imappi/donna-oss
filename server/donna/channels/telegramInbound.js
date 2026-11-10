@@ -8,6 +8,7 @@ import {
   revokeWhatsAppBindingInDb,
   recordMessageDeliveryLedgerInDb,
   resolveClientEvidenceRequestInDb,
+  readEvidenceCorrectionReaderInDb,
   recordEvidenceTopicTurnInDb,
   getFinancialReportFromDb,
   getClientEntityAxisFromDb,
@@ -197,7 +198,9 @@ const telegramConfig = {
   source: 'telegram',
   documentIdPrefix: 'tg_doc',
   actorFallback: 'telegram:webhook',
-  capabilities: { generalOwnerChat: true, ownerInitiatedMedia: true, persistOwnerThread: true },
+  // quoteReplyAnchor: a reply quoting one of Donna's messages carries its id,
+  // so Donna's in-band line is kept in the delivery ledger (inboundCore.js).
+  capabilities: { generalOwnerChat: true, ownerInitiatedMedia: true, persistOwnerThread: true, quoteReplyAnchor: true },
   copy: TELEGRAM_INBOUND_COPY,
   copyFor: telegramInboundCopyFor,
   allowsClient: (clientId, gateContext, env) => ownerChannelAllowsClient({ channel: 'telegram', clientId, gateContext, envFallback: telegramEnvAllowsClient, env }),
@@ -220,6 +223,8 @@ const defaultDeps = (deps = {}) => ({
   // The owner's language for the acknowledgement copy (inboundCore picks it).
   getOwnerLanguage: deps.getOwnerLanguage || getClientOwnerLanguageInDb,
   resolveEvidenceRequest: deps.resolveEvidenceRequest || resolveClientEvidenceRequestInDb,
+  // A reply to a closed question: whether a reader can take it as a correction (ownerReplyCorrection.js).
+  readCorrectionReader: deps.readCorrectionReader || readEvidenceCorrectionReaderInDb,
   recordEvidenceTopicTurn: deps.recordEvidenceTopicTurn || recordEvidenceTopicTurnInDb,
   appendClientPortalChatMessage: deps.appendClientPortalChatMessage,
   assembleClientPortalTurn: deps.assembleClientPortalTurn,

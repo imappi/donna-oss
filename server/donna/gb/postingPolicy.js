@@ -6,7 +6,7 @@ import {
 } from './vatCodes.js';
 import { normalizeGbVatRegistration, resolveGbVatRegistrationOnDate } from './vatRegistration.js';
 import { ledgerAccountTypeFor } from '../ledger.js';
-import { assertTaxSourceEvidence } from '../taxSourceEvidence.js';
+import { assertSalesSourceTaxRegistration, assertTaxSourceEvidence } from '../taxSourceEvidence.js';
 import { toIsoDay } from '../dates.js';
 
 const salesTaxRole = 'liability.sales_tax_payable';
@@ -52,8 +52,22 @@ const assertGbNotRegistered = ({ profile = null, onDate, refusalCode, subject })
 // with TRANSACTION_GB_VAT_REGISTRATION_REQUIRED becomes a question to the
 // owner for the fact only they know — whether, and from when, the business is
 // VAT-registered. It asks no tax judgement and names no rule.
+// The FI twin: the owner's own sales document named in the owner's language.
+const gbSalesSourceWords = ({ language = 'en', source = {} } = {}) => {
+  const fi = language === 'fi';
+  const file = source.filename ? ` ${source.filename}` : '';
+  const date = toIsoDay(source.document_date);
+  const dated = date ? (fi ? ` (päivätty ${date})` : ` (dated ${date})`) : '';
+  const amount = source.tax_amount != null ? (fi ? `${Number(source.tax_amount).toFixed(2).replace('.', ',')}${source.currency ? ` ${source.currency}` : ''}`
+    : `${Number(source.tax_amount).toFixed(2)}${source.currency ? ` ${source.currency}` : ''}`) : '';
+  const rates = (source.rates || []).map((rate) => `${fi ? String(rate).replace('.', ',') : rate}%`).join(fi ? ' ja ' : ' and ');
+  const document = source.document_type === 'issued_receipt' ? (fi ? 'kuitissanne' : 'your receipt') : (fi ? 'myyntilaskussanne' : 'your sales invoice');
+  const shows = amount ? (fi ? `arvonlisäveroa (VAT) ${amount}` : `VAT of ${amount}`) : (fi ? `arvonlisäveroa (VAT ${rates})` : `VAT (${rates})`);
+  return { invoice: `${document}${file}${dated}`, shows };
+};
 const GB_TAX_REGISTRATION = Object.freeze({
-  refusalCodes: Object.freeze(['TRANSACTION_GB_VAT_REGISTRATION_REQUIRED', 'SUPPLIER_BILL_GB_VAT_REGISTRATION_REQUIRED']),
+  refusalCodes: Object.freeze(['TRANSACTION_GB_VAT_REGISTRATION_REQUIRED', 'SUPPLIER_BILL_GB_VAT_REGISTRATION_REQUIRED',
+    'TRANSACTION_GB_VAT_SALE_SOURCE_SHOWS_VAT_UNREGISTERED']),
   onDate: ({ profile = null, onDate = null } = {}) => {
     const at = toIsoDay(onDate);
     if (!at) return { registered: null, reason: 'no_as_of_date' };
@@ -106,6 +120,30 @@ const GB_TAX_REGISTRATION = Object.freeze({
     instruction: ({ onDate = null } = {}) => `The business is not VAT-registered on ${toIsoDay(onDate) || 'this date'}. It charges no VAT on its sales and reclaims no VAT on its purchases, whatever VAT a supplier's receipt or invoice shows: the gross amount is the cost or the revenue, with no VAT code and no VAT leg.`,
     needsRegistration: ({ taxType = '', taxTreatment = '', direction = '' } = {}) =>
       Boolean(resolveGbVatCode(resolveGbVatCodeForCoding({ taxType, taxTreatment, direction })))
+  }),
+  // The FI twin (finland/postingPolicy.js salesSourceShowsTax): a sale whose
+  // own sales invoice or receipt shows VAT on a date the record says not
+  // registered. The same two wordings, the same silence on whether the VAT
+  // shown is owed. correctionAsk null: the corrected-document question
+  // (document_discrepancy) is the Finnish coder contract's, so the UK's
+  // request for the corrected invoice is an owner question on the line.
+  salesSourceShowsTax: Object.freeze({
+    refusalCode: 'TRANSACTION_GB_VAT_SALE_SOURCE_SHOWS_VAT_UNREGISTERED',
+    correctionAsk: null,
+    ownerQuestion: ({ language = 'en', lineLabel = '', onDate = null, source = {} } = {}) => {
+      const at = toIsoDay(onDate) || '';
+      const line = lineLabel ? `${lineLabel}: ` : '';
+      const { invoice, shows } = gbSalesSourceWords({ language, source });
+      if (language === 'fi') return `${line}${invoice} näkyy ${shows}, mutta tietojemme mukaan yritys ei ollut ${at} rekisteröity arvonlisäverovelvolliseksi (VAT) Yhdistyneessä kuningaskunnassa. Oliko yritys tuolloin rekisteröity? Jos oli, mistä päivästä alkaen rekisteröinti on voimassa?`;
+      return `${line}${invoice} shows ${shows}, but our records say the business was not VAT-registered on ${at}. Was the business VAT-registered then? If so, from what date is the registration effective?`;
+    },
+    correctionRequest: ({ language = 'en', lineLabel = '', onDate = null, source = {} } = {}) => {
+      const at = toIsoDay(onDate) || '';
+      const line = lineLabel ? `${lineLabel}: ` : '';
+      const { invoice, shows } = gbSalesSourceWords({ language, source });
+      if (language === 'fi') return `${line}${invoice} näkyy ${shows}, mutta yritys ei ollut ${at} rekisteröity arvonlisäverovelvolliseksi (VAT). Lähetä meille korjattu lasku tai hyvityslasku, jolla lasku on korjattu.`;
+      return `${line}${invoice} shows ${shows}, but the business was not VAT-registered on ${at}. Please send us the corrected invoice, or the credit note that corrects it.`;
+    }
   }),
   // replyInvitation: false drops the closing invitation (the FI twin).
   recordedNotice: ({ language = 'en', record = null, replyInvitation = true } = {}) => {
@@ -168,6 +206,9 @@ export const GB_POSTING_POLICY = Object.freeze({
       if (resolveGbVatCode(stamped)) registration(stamped);
       return coding;
     }
+    // A sale whose own sales document shows VAT, for a business the record
+    // says is not registered: refused whatever treatment the coding carries.
+    assertSalesSourceTaxRegistration({ registration: GB_TAX_REGISTRATION, profile, transaction, coding, document });
     const direction = gbVatDirectionForTransaction(transaction, coding);
     // The not-registered treatment (stamped NONE by enrichment) posts only on
     // a date the record says not registered, whatever account it codes: the

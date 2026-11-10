@@ -42,7 +42,7 @@
 // Every lane whose input includes a document (or that classifies one) moved
 // to `providers: ['anthropic', 'openai']` — Anthropic first, OpenAI a
 // qualified alternative that runs only when no Anthropic key is configured —
-// resolving through laneProviderResolver.js, with claude-opus-5-5 as each
+// resolving through providerEndpoints.js resolveLaneProvider, with claude-opus-5-5 as each
 // moved lane's Anthropic default. The qualified sets below grew to include
 // claude-opus-5-5 by that dated decision; the PROMOTION VERDICT these
 // extensions ride is a full Finnish company-month run on Claude only,
@@ -108,10 +108,10 @@ export const MODEL_LANES = Object.freeze([
     // human-signed change.
     providers: ['anthropic', 'openai'],
     promptVersion: 'unified-extraction-v8',
-    // 2026-11-10 (CLAUDE_ONLY_DECISION): the Anthropic default moved from
-    // claude-opus-4-8 to claude-opus-5-5; the set stays exactly the two
-    // providers' defaults.
-    qualified: ['claude-opus-5-5', 'gpt-5.4'],
+    // 2026-11-10 (CLAUDE_ONLY_DECISION): the Anthropic default stays
+    // claude-opus-4-8 (its request moved onto the shared structured seam);
+    // the set stays exactly the two providers' defaults.
+    qualified: ['claude-opus-4-8', 'gpt-5.4'],
     modules: ['server/donna/unifiedExtractor.js'],
     note: 'THE load-bearing extraction call — the appliance default since RT-12; the per-type family below serves the cloud for one release, then deletes.'
   }),
@@ -144,7 +144,16 @@ export const MODEL_LANES = Object.freeze([
     id: 'transaction_coding',
     title: 'Transaction coding',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
     modules: ['server/donna/transactionLlm.js'],
     // Q9 (Kari's dated sole-model lab call, 2026-08-16: "whenever Donna or
     // any part of its workflow invokes an LLM, it needs to be qwen 27B —
@@ -154,8 +163,8 @@ export const MODEL_LANES = Object.freeze([
     // chat/completions via llmCall, mismatch guard, response-proven model
     // id in the ai_suggestion receipt) and per-flip receipts as Q6c/Q7.
     // Product-wide promotion still requires the signed §5.2 gate verdict.
-    qualified: ['gpt-5.4', 'qwen/qwen3.8-27b'],
-    note: 'Q9 (2026-08-16): governed for the sole-model lab — experiment policies may seat the qualified 27B as the coding decider; the strong default (gpt-5.4) holds absent a policy row.'
+    qualified: ['claude-opus-5-5', 'gpt-5.4', 'qwen/qwen3.8-27b'],
+    note: 'Q9 (2026-08-16): governed for the sole-model lab — experiment policies may seat the qualified 27B as the coding decider; the strong default holds absent a policy row (claude-opus-5-5 since 2026-11-10; gpt-5.4 only without an Anthropic key).'
   }),
   lane({
     id: 'type_extractors_legacy',
@@ -202,8 +211,19 @@ export const MODEL_LANES = Object.freeze([
     id: 'document_chat',
     title: 'Document chat',
     kind: 'deciding',
-    endpointClass: 'openai',
-    modules: ['server/donna/documentChat.js']
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
+    modules: ['server/donna/documentChat.js'],
+    note: 'Text-only: the document\'s extracted fields and the chat turns, never the file itself.'
   }),
   lane({
     id: 'intent_compilation',
@@ -217,7 +237,17 @@ export const MODEL_LANES = Object.freeze([
     id: 'ask_drafting',
     title: 'Ask drafting',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
     modules: ['server/donna/askPipeline.js']
   }),
   lane({
@@ -232,7 +262,17 @@ export const MODEL_LANES = Object.freeze([
     id: 'memory_extraction',
     title: 'Memory extraction (firm/entity facts)',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
     modules: ['server/donna/firmFacts.js'],
     note: 'Mints durable memory — the clearest evidence-only test case for challengers. (entityFacts.js, the env-dark statutory-record extractor, was deleted in RT-14, 2026-09-02.)'
   }),
@@ -262,7 +302,17 @@ export const MODEL_LANES = Object.freeze([
     id: 'owner_invoice_command_read',
     title: 'Owner invoice command read',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
     modules: ['server/donna/ownerInvoiceCommandRead.js'],
     note: 'Fully envelope-adopted (the M3 pass-1 site).'
   }),
@@ -280,7 +330,17 @@ export const MODEL_LANES = Object.freeze([
     id: 'marketing_drafting',
     title: 'Marketing drafters + reply ingestion',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
     modules: [
       'server/donna/marketing/dossierDrafter.js',
       'server/donna/marketing/nurtureDrafter.js',

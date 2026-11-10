@@ -285,19 +285,11 @@ const DIRECT_PROVIDER_CALL_ALLOWLIST = new Set([
   // cannot consume TypeSafe's choice/noul distributions. Uses the same deadline
   // transport and typed failures, strict response validation and no internal retries.
   'server/donna/jevProvider.js',
-  'server/donna/askPipeline.js',
-  'server/donna/documentChat.js',
-  'server/donna/firmFacts.js',
   // Instrumented (M3 pass 1) but keeps its structured __callAnthropic seam, so
   // it still holds a direct fetch. Partial adoption, recorded as partial.
   'server/donna/intentCompiler.js',
   'server/donna/louisPipeline.js',
-  'server/donna/marketing/dossierDrafter.js',
-  'server/donna/marketing/nurtureDrafter.js',
-  'server/donna/marketing/replyDrafter.js',
-  'server/donna/marketing/socialPostDrafter.js',
   'server/donna/merchantLookup.js',
-  'server/donna/outbound/replyIngestion.js',
   // reconciliationLlmCore.js left this list at Q7 (2026-08-16): its
   // compatible deciding path rides llmCall, which is what this lint's
   // predicate keys on. Its ANTHROPIC deciding transport is still a direct
@@ -320,12 +312,17 @@ const DIRECT_PROVIDER_CALL_ALLOWLIST = new Set([
 // envelope (RT-12, 2026-09-02), leaving 27.
 // The retired support-resolution lab took runtime.js and louis.js with it
 // (2026-11-05), leaving 24.
-// The document lanes moved onto the envelope with the Claude-only decision
-// (2026-11-10): bankStatementVision (its three bare fetches),
-// clientIntakeDraft, contract, documentRouter, genericDocument, parserRepair,
-// receipt, receiptClassifier, salesInvoice and supplierBill — leaving 14.
+// The Claude-only text lanes (owner's decision, 2026-11-10) moved
+// askPipeline.js (its new Anthropic path; the OpenAI path stays on the
+// deadline transport, but the module now routes through the envelope),
+// documentChat.js, firmFacts.js, the four marketing drafters and
+// outbound/replyIngestion.js onto the envelope, leaving 16.
+// The document lanes followed the same day: bankStatementVision (its three
+// bare fetches), clientIntakeDraft, contract, documentRouter,
+// genericDocument, parserRepair, receipt, receiptClassifier, salesInvoice and
+// supplierBill — leaving 6.
 // LOWER this when a site migrates; never raise it.
-const MAX_DIRECT_PROVIDER_CALL_SITES = 14; // Typed Jev preview added; generic callers still migrate to llmCall.
+const MAX_DIRECT_PROVIDER_CALL_SITES = 6; // Typed Jev preview added; generic callers still migrate to llmCall.
 
 const walkJsFiles = (dir, acc = []) => {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

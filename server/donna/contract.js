@@ -48,16 +48,22 @@ import {
 } from './receipt.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { extractionFailureForStatus } from './inngest/parseErrors.js';
-import { callAnthropicFromResponsesBody, readProviderReply, thrownReason } from './anthropicMessages.js';
-import { envWithDotEnv, resolveLaneProvider } from './laneProviderResolver.js';
+import {
+  documentLaneRequestFromResponses,
+  notConfiguredFailure,
+  readDocumentLaneReply,
+  resolveDocumentLaneProvider,
+  stopFailureReason,
+  thrownReason
+} from './documentLaneRequest.js';
 import { classifyModelProvenance } from './providerEndpoints.js';
 
 // Contract extraction is a load-bearing call: its output (counterparty +
 // direction, obligations) is persisted and reasoned about downstream, so per
 // the trust-the-strong-LLM principle (CLAUDE.md, docs/donna-llm-trust-strategy.md)
 // it defaults to gpt-5.4, not the nano — matching salesInvoice / supplierBill /
-// receipt. Env override (CONTRACT_EXTRACTOR_MODEL → OPENAI_MODEL) stays the
-// per-deploy tuning knob.
+// receipt. CONTRACT_EXTRACTOR_MODEL stays the per-deploy tuning knob (the
+// OPENAI_MODEL fallback ended 2026-11-10: no provider-wide knob).
 const DEFAULT_MODEL = 'gpt-5.4';
 // 2026-11-10 (the owner's decision that Donna runs on Claude): the lane
 // (type_extractors_legacy) resolves Anthropic first; claude-opus-5-5 reads
@@ -161,13 +167,11 @@ const readDotEnv = () => {
   return vars;
 };
 
-// The lane's model knob(s) pin the provider by id; OPENAI_MODEL tunes the
-// OpenAI model only.
-const getOpenAiConfig = () => resolveLaneProvider({
+// The lane's model knob pins the provider by id; no provider-wide knob.
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
   laneId: 'type_extractors_legacy',
-  env: envWithDotEnv(readDotEnv()),
+  dotEnv: readDotEnv(),
   modelEnvKeys: ['CONTRACT_EXTRACTOR_MODEL'],
-  providerModelEnvKeys: { openai: ['OPENAI_MODEL'] },
   defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
 });
 
@@ -686,7 +690,7 @@ const buildDefaultCall = (send) => async ({ apiKey, model, dataUrl, filename, si
 
 // The request body is built ONCE (Responses shape) and sent by either
 // transport: OpenAI as is, Anthropic carried over unchanged
-// (anthropicMessages.js callAnthropicFromResponsesBody). Both ride llmCall.
+// (documentLaneRequest.js documentLaneRequestFromResponses, onto structuredRequest.js). Both ride llmCall.
 const executionFor = (filename) => ({ root: { type: 'document_extraction', id: filenameCorrelationId(filename) } });
 
 const sendOpenAi = async ({ apiKey, signal, body }) => {
@@ -705,7 +709,15 @@ const sendOpenAi = async ({ apiKey, signal, body }) => {
   }));
 };
 
-const sendAnthropic = ({ apiKey, signal, body }) => callAnthropicFromResponsesBody({
+
+// The Anthropic call: the shared structured request (structuredRequest.js,
+// via documentLaneRequest.js) through the envelope, called here. llmCall is
+// loaded at call time where the module's import graph needs it.
+const callAnthropicEnvelope = async (options) => {
+  const { llmCall } = await import('./llmCall.js');
+  return llmCall(documentLaneRequestFromResponses({ timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS, ...options }));
+};
+const sendAnthropic = ({ apiKey, signal, body }) => callAnthropicEnvelope({
   apiKey,
   body,
   effort: ANTHROPIC_EFFORT,
@@ -738,14 +750,16 @@ export const extractContractFromBase64 = async ({
   const config = getOpenAiConfig();
 
   if (!config.ok) {
-    console.warn('[contract] no model provider key configured', { correlation_id: correlationId, reason: config.reason });
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'type_extractors_legacy');
+    console.warn('[contract] no model provider key configured', { correlation_id: correlationId, reason: notConfigured });
     return {
       kind: 'failed',
       model: null,
-      provider: config.provider,
+      provider: missing,
       code: 'DOCUMENT_EXTRACTION_FAILED',
-      // Names the missing key (`no_provider_key`), not one provider.
-      reason: config.reason
+      reason: notConfigured
     };
   }
 
@@ -767,7 +781,7 @@ export const extractContractFromBase64 = async ({
 
   let reply;
   try {
-    reply = await readProviderReply({
+    reply = await readDocumentLaneReply({
       provider: config.provider,
       callOpenAi: () => __callOpenAi({
       apiKey: config.apiKey,
@@ -823,16 +837,16 @@ export const extractContractFromBase64 = async ({
       status,
       elapsed_ms: Date.now() - startedAt
     });
-    return { ...extractionFailureForStatus(status, { provider: config.provider }), ...stamp(null) };
+    return { ...extractionFailureForStatus(status, { provider: config.provider, providerError: reply.providerError }), ...stamp(null) };
   }
 
   if (!reply.ok && reply.kind === 'stop') {
     // A refusal or a cut-off reply will not clear with a retry of the same
     // request: terminal, named, receipted with the model that gave it.
     console.error('[contract] provider stopped without a usable reply', {
-      correlation_id: correlationId, provider: config.provider, stop_reason: reply.error.stopReason, elapsed_ms: Date.now() - startedAt
+      correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason, elapsed_ms: Date.now() - startedAt
     });
-    return { kind: 'failed', ...stamp(reply.error.servedModel), code: 'DOCUMENT_EXTRACTION_REJECTED', reason: reply.error.reason };
+    return { kind: 'failed', ...stamp(reply.error.servedModel), code: 'DOCUMENT_EXTRACTION_REJECTED', reason: stopFailureReason(reply.error) };
   }
 
   if (!reply.ok) {

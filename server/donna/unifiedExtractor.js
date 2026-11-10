@@ -23,9 +23,10 @@ import { isProviderSpendLimit } from './providerTransport.js';
 //    flags rail permits env to keep.
 //  - The transport rides the shared llmCall envelope on BOTH providers:
 //    OpenAI (Responses API, json_schema strict) and Anthropic (Messages API,
-//    structured output through output_config.format since 2026-11-10 — the
-//    shared anthropicMessages.js request — then the SAME schema validated
-//    after parse, as before). The provider
+//    since 2026-11-10 the shared structured request, structuredRequest.js
+//    anthropicStructuredRequest via documentLaneRequest.js — its schema is
+//    past the grammar's limits, so the answer is the one `structured_answer`
+//    tool call — then the SAME schema validated after parse, as before). The provider
 //    is resolved from the keys present (anthropic preferred when both are);
 //    the model id on every receipt is the one the RESPONSE named.
 //  - A read below the confidence floor, or one the model self-reports as
@@ -50,14 +51,18 @@ import { normalizeSourceBusinessUse } from './sourceBusinessUse.js';
 import crypto from 'node:crypto';
 
 import { llmCall } from './llmCall.js';
-import { anthropicFileBlock, callAnthropicMessages, isAnthropicStopFailure } from './anthropicMessages.js';
-import { inferProviderFromModel, resolveLaneProvider } from './laneProviderResolver.js';
+import {
+  anthropicFileBlock,
+  documentLaneAnthropicRequest,
+  isProviderStopFailure,
+  stopFailureReason
+} from './documentLaneRequest.js';
 import { extractJson } from './extractJson.js';
 import { buildClientIdentityPromptFragment } from './clientIdentityPrompt.js';
 import { buildCorrectionsPromptFragment } from './documentCorrections.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { normalizeIsoOrDayFirstDate, normalizeValidIsoDate, normalizeIsoCurrency } from './parsePrimitives.js';
-import { classifyModelProvenance } from './providerEndpoints.js';
+import { classifyModelProvenance, resolveLaneProvider } from './providerEndpoints.js';
 import { validateReceiptTotals } from './totalsValidation.js';
 import { extractionFailureForStatus } from './inngest/parseErrors.js';
 import { isDesktopHostEnv } from './desktop/hostPlaneSeed.js';
@@ -90,16 +95,18 @@ export const UNIFIED_EXTRACTOR_PROMPT_VERSION = 'unified-extraction-v8';
 // present. The lane's qualified MODEL set (modelLanes.js) is value-synced
 // with these defaults by modelLanes.test.js.
 export const UNIFIED_EXTRACTOR_PROVIDERS = Object.freeze(['anthropic', 'openai']);
-// 2026-11-10 (the owner's decision: Donna runs on Claude): the Anthropic
-// default moves from claude-opus-4-8 to claude-opus-5-5, the model every
-// document lane now defaults to; it rides the Claude-only promotion run.
+// The Anthropic default stays claude-opus-4-8 (the owner's direction of
+// 2026-11-10: the unified lane keeps its measured model; only its request
+// moved onto the shared structured seam). UNIFIED_EXTRACTOR_MODEL may pin
+// another id.
 export const UNIFIED_EXTRACTOR_DEFAULT_MODELS = Object.freeze({
-  anthropic: 'claude-opus-5-5',
+  anthropic: 'claude-opus-4-8',
   openai: 'gpt-5.4'
 });
-// Depth per call (adaptive thinking is always on for claude-opus-5-5): a
-// full classification + field extraction feeding the books is the work
-// that repays depth, so `high`. Room for thinking plus a long line list.
+// Depth per call (adaptive thinking, on claude-opus-4-8 as on the 5.x
+// models): a full classification + field extraction feeding the books is
+// the work that repays depth, so `high`. Room for thinking plus a long
+// line list.
 export const UNIFIED_EXTRACTOR_ANTHROPIC_EFFORT = 'high';
 const ANTHROPIC_MAX_TOKENS = 64_000;
 
@@ -159,21 +166,20 @@ export const unifiedExtractorServes = ({ documentType, env = process.env, hostCl
 // (only when it belongs to the resolved provider — a claude id never goes
 // to OpenAI), else the provider's strong default. Every choice is receipted
 // (`source`) so a silent downgrade is readable from the data.
-// Lifted into laneProviderResolver.js (2026-11-10) so every document lane
-// shares it; this export keeps its name, arguments and result.
+// The resolver itself is shared (providerEndpoints.js resolveLaneProvider,
+// 2026-11-10): the text lanes moved onto both providers resolve by the same
+// rule, so it has one owner. This lane keeps its own env knobs and defaults.
 export const resolveUnifiedProvider = ({ env = process.env, provider = null, model = null, keys = null } = {}) =>
   resolveLaneProvider({
-    laneId: 'unified_extraction',
+    providers: UNIFIED_EXTRACTOR_PROVIDERS,
+    defaultModels: UNIFIED_EXTRACTOR_DEFAULT_MODELS,
+    providerEnvKey: UNIFIED_EXTRACTOR_PROVIDER_ENV,
+    modelEnvKeys: [UNIFIED_EXTRACTOR_MODEL_ENV],
     env,
     provider,
     model,
-    keys,
-    providerEnvKey: UNIFIED_EXTRACTOR_PROVIDER_ENV,
-    modelEnvKeys: [UNIFIED_EXTRACTOR_MODEL_ENV],
-    defaultModels: UNIFIED_EXTRACTOR_DEFAULT_MODELS,
-    providers: UNIFIED_EXTRACTOR_PROVIDERS
+    keys
   });
-export { inferProviderFromModel };
 
 // ── prompt ─────────────────────────────────────────────────────────────
 // The system prompt's FIRST sentence is the lane signature the recorded
@@ -265,8 +271,8 @@ const buildUserPrompt = ({ filename, documentType, dateFormatHint, hint, clientI
 // metadata: some upload paths deliver an empty / octet-stream mime for a
 // perfectly good PDF, which once sent a PDF as an image block and the
 // provider rejected it. (The OpenAI part builder sniffs the same way.)
-// (anthropicMessages.js owns the block shape; the OpenAI part builder sniffs
-// the same way.)
+// (documentLaneRequest.js owns the block shape; the OpenAI part builder
+// sniffs the same way.)
 const buildContentBlock = ({ base64, mimeType, filename }) => anthropicFileBlock({ base64, mimeType, filename });
 
 // ── normalisation helpers ──────────────────────────────────────────────
@@ -1013,7 +1019,7 @@ const callProvider = async ({ provider, apiKey, model, system, userText, base64,
     });
     return result;
   }
-  const { text, servedModel } = await callAnthropicMessages({
+  const { result } = await llmCall(documentLaneAnthropicRequest({
     apiKey,
     model,
     system,
@@ -1025,11 +1031,13 @@ const callProvider = async ({ provider, apiKey, model, system, userText, base64,
     execution,
     promptVersion: UNIFIED_EXTRACTOR_PROMPT_VERSION,
     // This module holds the reply to the schema itself (and keeps the
-    // partial header of a violating reply), as on both providers before.
+    // partial header of a violating reply), as on both providers before;
+    // the stop_reason checks and the one-tool-call rule still apply.
     validate: false,
-    fetchImpl
-  });
-  return { text, servedModel };
+    fetchImpl,
+    timeoutMs: REQUEST_TIMEOUT_MS
+  }));
+  return { text: JSON.stringify(result.parsed), servedModel: result.model || null };
 };
 
 // ── the public call ────────────────────────────────────────────────────
@@ -1109,22 +1117,23 @@ export const extractUnified = async ({
   } catch (error) {
     if (isProviderSpendLimit(error)) throw error;
     const elapsed = Date.now() - startedAt;
-    if (isAnthropicStopFailure(error)) {
-      // A refusal or a cut-off reply is the provider's named answer, not a
-      // transport hiccup: final, receipted with the model that gave it.
+    if (isProviderStopFailure(error)) {
+      // A refusal, a cut-off reply or an answer that is not the structured
+      // call is the provider's named answer, not a transport hiccup:
+      // receipted with the model that gave it; whether the queue may re-ask
+      // is the shared failure's own posture (providerTransport.js).
       const provenance = classifyModelProvenance({ responseModel: error.servedModel, requestedModel: resolved.model });
       console.error('[unifiedExtractor] provider stopped without a usable reply', {
-        correlation_id: correlationId, provider: resolved.provider, stop_reason: error.stopReason, elapsed_ms: elapsed
+        correlation_id: correlationId, provider: resolved.provider, failure: error.code, reason: error.reason, elapsed_ms: elapsed
       });
       return receipt({
-        kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: error.reason, retryable: false,
-        model: provenance.model, model_source: provenance.model_source, stop_reason: error.stopReason,
-        refusal_category: error.refusalCategory ?? null
+        kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: stopFailureReason(error), retryable: error.retryable === true,
+        model: provenance.model, model_source: provenance.model_source, provider_failure: error.reason || null
       });
     }
     if (error?.code === 'LLM_CALL_PROVIDER_ERROR') {
       const status = Number(error.status || 0);
-      const failure = extractionFailureForStatus(status, { provider: resolved.provider });
+      const failure = extractionFailureForStatus(status, { provider: resolved.provider, providerError: error.providerError || null });
       console.error('[unifiedExtractor] provider returned non-OK', {
         correlation_id: correlationId, provider: resolved.provider, status, elapsed_ms: elapsed
       });

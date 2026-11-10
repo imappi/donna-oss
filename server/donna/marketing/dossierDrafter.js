@@ -16,10 +16,16 @@
 // still applies to the LIVE account: the first production run must confirm
 // the model + account support web_search; a provider error surfaces as an
 // honest 503, never as a silently un-researched dossier.
+// 2026-11-10 (owner's decision: Claude only): with an Anthropic key the same
+// instructions, input and schema go to the Messages API with its server-side
+// web search tool (web_search_20260209, bounded by max_uses) and structured
+// output (`output_config.format`) — confirmed together on a live call that
+// day; OpenAI keeps the shape above and runs only without an Anthropic key.
 
 import { BANDS, RECURRING_MONTHLY_PRICE, fmt } from '../../../src/lib/pricing.js';
 import { UNSUBSCRIBE_PLACEHOLDER } from './marketingOutbound.js';
-import { getOpenAiConfig, outputTextFromResponse } from './openAiConfig.js';
+import { llmCall } from '../llmCall.js';
+import { marketingFailureMessage, marketingKeyMissingMessage, marketingStructuredRequest, resolveMarketingProvider } from './openAiConfig.js';
 import { RECOMMENDED_ACTIONS, RUBRIC_DIMENSIONS, tierCapabilities } from './prospectLab.js';
 
 const FIT_GATES = ['service_business', 'volume_under_1000', 'single_entity', 'country_in_icp'];
@@ -172,48 +178,36 @@ const drafterUnavailable = (message) => {
 // attachDossier writer precondition, so an invalid dossier can never reach
 // the queue whatever the caller does.
 export const draftProspectDossier = async ({ prospect, fetchImpl = fetch, openAiConfig = null } = {}) => {
-  const config = openAiConfig || getOpenAiConfig();
-  if (!config.apiKey) {
-    throw drafterUnavailable('OpenAI API key is not configured; the dossier drafter has no fallback by design.');
+  const resolved = resolveMarketingProvider({ openAiConfig });
+  if (!resolved.ok) {
+    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'the dossier drafter has no fallback by design.'));
   }
 
   const includeMessage = tierCapabilities(prospect.tier).can_generate_message;
-  const response = await fetchImpl('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
-      model: config.model,
+  let call;
+  try {
+    call = await llmCall(marketingStructuredRequest({
+      resolved,
       instructions: buildDossierInstructions({ includeMessage }),
       input: JSON.stringify(buildDossierInput(prospect)),
+      schemaName: 'prospect_dossier',
+      schema: buildDossierSchema({ includeMessage }),
       store: false,
-      tools: [{ type: 'web_search' }],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'prospect_dossier',
-          strict: true,
-          schema: buildDossierSchema({ includeMessage })
-        }
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw drafterUnavailable(errorBody?.error?.message || `OpenAI dossier request failed with ${response.status}.`);
+      // The investigation needs the web on either provider: OpenAI's
+      // built-in tool, or Anthropic's server-side web search (bounded).
+      openAiTools: [{ type: 'web_search' }],
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }],
+      executionType: 'marketing_prospect_dossier',
+      executionId: prospect?.id || prospect?.company_number || prospect?.company_name,
+      fetchImpl
+    }));
+  } catch (error) {
+    const message = marketingFailureMessage(resolved.provider, error);
+    if (!message) throw error;
+    throw drafterUnavailable(message);
   }
-
-  const payload = await response.json();
-  let dossier = null;
-  try {
-    dossier = JSON.parse(outputTextFromResponse(payload));
-  } catch {
-    throw drafterUnavailable('OpenAI returned an unreadable dossier.');
-  }
+  const dossier = call.result.parsed;
   if (!includeMessage) dossier.message = null;
 
-  return { dossier, model: payload.model || config.model };
+  return { dossier, model: call.result.model || resolved.model };
 };

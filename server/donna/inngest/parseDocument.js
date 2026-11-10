@@ -24,7 +24,14 @@ import { isProviderSpendLimit } from '../providerTransport.js';
 import crypto from 'node:crypto';
 
 import { inngest } from './client.js';
-import { categorizeError, ParseError, parseRetriesExhaustedEnvelope } from './parseErrors.js';
+import {
+  buildProviderWaitHold,
+  categorizeError,
+  ParseError,
+  parseRetriesExhaustedEnvelope,
+  providerWaitAllowed,
+  providerWaitFor
+} from './parseErrors.js';
 import {
   claimParseRunInDb,
   findOverlappingStatementInDb,
@@ -1117,7 +1124,8 @@ const extractDocumentInner = async ({
       throw new ParseError(extraction.code, {
         message: `Receipt extraction failed: ${extraction.reason || extraction.code}`,
         // The provider the lane resolved (Anthropic first since 2026-11-10);
-        // null only when no provider key was configured at all.
+        // with no key, the provider whose key is missing (its reason reads
+        // `<provider>_not_configured`, #71's wait vocabulary).
         provider: extraction.provider || null,
         reason: extraction.reason || null,
         model: extraction.model || null
@@ -1211,7 +1219,8 @@ const extractDocumentInner = async ({
       throw new ParseError(extraction.code, {
         message: `Supplier bill extraction failed: ${extraction.reason || extraction.code}`,
         // The provider the lane resolved (Anthropic first since 2026-11-10);
-        // null only when no provider key was configured at all.
+        // with no key, the provider whose key is missing (its reason reads
+        // `<provider>_not_configured`, #71's wait vocabulary).
         provider: extraction.provider || null,
         reason: extraction.reason || null,
         model: extraction.model || null
@@ -1275,7 +1284,8 @@ const extractDocumentInner = async ({
       throw new ParseError(extraction.code, {
         message: `${documentType === 'deposit_slip' ? 'Deposit slip' : 'Payout statement'} extraction failed: ${extraction.reason || extraction.code}`,
         // The provider the lane resolved (Anthropic first since 2026-11-10);
-        // null only when no provider key was configured at all.
+        // with no key, the provider whose key is missing (its reason reads
+        // `<provider>_not_configured`, #71's wait vocabulary).
         provider: extraction.provider || null,
         reason: extraction.reason || null,
         model: extraction.model || null
@@ -1325,7 +1335,8 @@ const extractDocumentInner = async ({
       throw new ParseError(extraction.code, {
         message: `${extractor.type === 'issued_receipt' ? 'Issued receipt' : 'Sales invoice'} extraction failed: ${extraction.reason || extraction.code}`,
         // The provider the lane resolved (Anthropic first since 2026-11-10);
-        // null only when no provider key was configured at all.
+        // with no key, the provider whose key is missing (its reason reads
+        // `<provider>_not_configured`, #71's wait vocabulary).
         provider: extraction.provider || null,
         reason: extraction.reason || null,
         model: extraction.model || null
@@ -1412,6 +1423,24 @@ const extractDocumentInner = async ({
     llmFirst: isBankStatementLlmFirstEnabled({ configSnapshot }),
     ...(Number(document.parse_attempts) > 1 ? { bypassCache: true } : {})
   });
+  const visionSkipped = extraction?.extraction_diagnostics?.vision_skipped;
+  if (visionSkipped === 'not_configured' || visionSkipped === 'provider_fault') {
+    // The statement has no text layer and cloud OCR could not be used — no
+    // key, a refused key, or no credit on the account. It was never read: a
+    // provider wait (parseErrors.providerWaitFor), never `skipped /
+    // no_transactions_detected`, which reads as a fact about the statement.
+    // The provider and the fault come from the extractor's record.
+    const details = extraction.extraction_diagnostics.vision_skipped_details || {};
+    const provider = details.provider || 'openai';
+    const fault = visionSkipped === 'not_configured' ? 'not_configured' : details.fault;
+    const unauthorized = fault === 'unauthorized';
+    throw new ParseError(unauthorized ? 'DOCUMENT_EXTRACTION_UNAUTHORIZED' : 'DOCUMENT_EXTRACTION_FAILED', {
+      provider,
+      retryable: !unauthorized,
+      reason: unauthorized ? `${provider}_${details.status === 403 ? 403 : 401}` : `${provider}_${fault}`,
+      message: `Bank statement extraction failed: ${provider} ${fault} (no text layer; cloud OCR unavailable)`
+    });
+  }
   // Re-read the original PDF once when the text layer produced inconsistent
   // rows. Never repair amounts or weaken balance checks. Bypass failed cached
   // extractions so the existing bounded queue retry can make fresh progress.
@@ -2196,6 +2225,57 @@ const runParseAndWrite = async ({ firmId, documentId, parseRunId, log, attempt =
     };
   } catch (err) {
     const categorized = categorizeError(err);
+    // A provider wait: the installation has no key for the provider this
+    // document needs, or the provider could not be reached at all
+    // (parseErrors.providerWaitFor). Not the document's failure, so not one
+    // of its attempts: release the run with the typed hold as its persisted
+    // reason (the attempt the claim counted is handed back) and report the
+    // wait instead of throwing. The desktop job defers on it without spending
+    // an attempt (desktop/parseDocumentJob.js); on the cloud the drain
+    // re-checks a held row after PARSE_HOLD_RECHECK_SECONDS. The next claim
+    // that finds the provider answering reads the document under this run id.
+    const wait = providerWaitFor(categorized);
+    const priorHold = claimResult?.prior_hold || null;
+    if (wait && providerWaitAllowed({ wait, prior: priorHold })) {
+      const hold = buildProviderWaitHold({ wait, categorized, prior: priorHold, parseRunId });
+      let released = null;
+      let releaseThrew = false;
+      try {
+        released = await releaseParseRunForRetryInDb({ firmId, documentId, parseRunId, providerHold: hold });
+      } catch (releaseError) {
+        releaseThrew = true;
+        log.error?.('parse-document: provider-wait release failed; the ordinary retry path keeps the run', {
+          documentId,
+          parseRunId,
+          error: releaseError?.message || String(releaseError)
+        });
+      }
+      if (released) {
+        log.warn?.('parse-document: waiting for the model provider; no attempt spent', {
+          documentId,
+          parseRunId,
+          reason_code: hold.reason_code,
+          provider: hold.provider,
+          key_name: hold.key_name,
+          waits: hold.waits,
+          code: categorized.code,
+          reason: categorized.reason || null
+        });
+        return {
+          handled: false,
+          reason: 'provider_wait',
+          claim_outcome: 'provider_wait',
+          reason_code: hold.reason_code,
+          hold,
+          document_id: documentId
+        };
+      }
+      if (!releaseThrew) {
+        // The row is no longer this run's `processing` (a newer manual run,
+        // or a terminal writer won): nothing of ours to hold.
+        return { handled: false, reason: 'not_pending', claim_outcome: 'not_pending', document_id: documentId };
+      }
+    }
     if (categorized.retryable) {
       // `processing` is exclusive ownership. Release this exact run before
       // throwing so Inngest's next attempt can claim it from pending; a

@@ -700,6 +700,13 @@ export const labelForTrayRow = (row = {}, formatMessage = null, formatAmount = n
     // parse_claim by entity readiness. Render the persisted hold, not
     // "Queued" — the row is waiting on readiness, not on the drain.
     if (row.parse_hold && typeof row.parse_hold === 'object') {
+      // A provider wait (boundary parse_extract: no key on this installation,
+      // or the provider unreachable) rests on the operator, never on the
+      // person uploading: FI-05's "saved, taking longer", no provider or key
+      // wording. The firm's stream row names the stored reason.
+      if (row.parse_hold.boundary === 'parse_extract') {
+        return { label: takingLongerLabel(formatMessage, row), tone: 'pending' };
+      }
       return { label: trayMessage(formatMessage, 'upload.row.waitingReadiness', 'Waiting for readiness…'), tone: 'pending' };
     }
     return { label: trayMessage(formatMessage, 'upload.row.queued', 'Queued'), tone: 'pending' };

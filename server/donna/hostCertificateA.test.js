@@ -451,3 +451,19 @@ test('v6: a refused signed PUT through the real cloud adapter records the stage 
     assert.ok(!serialized.includes(secret), `receipt must not carry ${secret}`);
   }
 });
+
+test('2026-11-10: an Anthropic-only host lights every text lane (Claude only; OpenAI the alternative)', async () => {
+  const anthropicOnly = await observeHostCertificateA({
+    env: { ...env, OPENAI_API_KEY: '' }, rootDir: ROOT, observedAt: OBSERVED_AT, manifest, schedulerEnabled: true,
+    query: makeQuery(), storageOps: makeStorage().ops
+  });
+  assert.equal(anthropicOnly.status, 'PASS');
+  const routes = anthropicOnly.checks.find(({ id }) => id === 'model_routes');
+  for (const laneId of ['transaction_coding', 'ask_drafting', 'memory_extraction', 'owner_invoice_command_read', 'document_chat', 'marketing_drafting']) {
+    const lane = routes.detail.lanes.find(({ lane_id }) => lane_id === laneId);
+    assert.equal(lane.credential_present, true, `${laneId} is lit`);
+    assert.deepEqual(lane.providers, ['anthropic', 'openai'], laneId);
+    assert.deepEqual(lane.lit_providers, ['anthropic'], `${laneId}: lit by the Anthropic key`);
+    assert.ok(!routes.detail.dark_lanes.includes(laneId), laneId);
+  }
+});

@@ -35,8 +35,14 @@ import { resolve as resolvePath } from 'node:path';
 
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { asProviderResponse, llmCall } from './llmCall.js';
-import { callAnthropicFromResponsesBody, readProviderReply, thrownReason } from './anthropicMessages.js';
-import { envWithDotEnv, resolveLaneProvider } from './laneProviderResolver.js';
+import {
+  documentLaneRequestFromResponses,
+  notConfiguredFailure,
+  readDocumentLaneReply,
+  resolveDocumentLaneProvider,
+  stopFailureReason,
+  thrownReason
+} from './documentLaneRequest.js';
 import { classifyModelProvenance } from './providerEndpoints.js';
 
 // Strong tier by default — see module header. Override for evals only.
@@ -79,9 +85,9 @@ const readDotEnv = () => {
 };
 
 // CLIENT_INTAKE_MODEL is the lane knob; its id pins the provider.
-const getOpenAiConfig = () => resolveLaneProvider({
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
   laneId: 'client_intake_draft',
-  env: envWithDotEnv(readDotEnv()),
+  dotEnv: readDotEnv(),
   modelEnvKeys: ['CLIENT_INTAKE_MODEL'],
   defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
 });
@@ -322,7 +328,15 @@ const defaultCallOpenAi = buildDefaultCall(({ apiKey, signal, filename, body }) 
   fetchImpl: (url, init) => fetch(url, { ...init, signal: init?.signal && signal ? AbortSignal.any([init.signal, signal]) : init?.signal || signal })
 })));
 
-const defaultCallAnthropic = buildDefaultCall(({ apiKey, signal, filename, body }) => callAnthropicFromResponsesBody({
+
+// The Anthropic call: the shared structured request (structuredRequest.js,
+// via documentLaneRequest.js) through the envelope, called here. llmCall is
+// loaded at call time where the module's import graph needs it.
+const callAnthropicEnvelope = async (options) => {
+  const { llmCall } = await import('./llmCall.js');
+  return llmCall(documentLaneRequestFromResponses({ timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS, ...options }));
+};
+const defaultCallAnthropic = buildDefaultCall(({ apiKey, signal, filename, body }) => callAnthropicEnvelope({
   apiKey,
   body,
   effort: ANTHROPIC_EFFORT,
@@ -428,9 +442,11 @@ export const extractClientIntakeDraft = async ({
   const config = getOpenAiConfig();
 
   if (!config.ok) {
-    console.warn('[clientIntakeDraft] no model provider key configured', { correlation_id: correlationId, reason: config.reason });
-    // Names the missing key (`no_provider_key`), not one provider.
-    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: config.reason };
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'client_intake_draft');
+    console.warn('[clientIntakeDraft] no model provider key configured', { correlation_id: correlationId, reason: notConfigured });
+    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: notConfigured, provider: missing };
   }
 
   const clean = trimBase64(base64);
@@ -453,7 +469,7 @@ export const extractClientIntakeDraft = async ({
 
   let reply;
   try {
-    reply = await readProviderReply({
+    reply = await readDocumentLaneReply({
       provider: config.provider,
       callOpenAi: () => __callOpenAi(callArgs),
       callAnthropic: () => __callAnthropic(callArgs),
@@ -491,7 +507,7 @@ export const extractClientIntakeDraft = async ({
 
   if (!reply.ok && reply.kind === 'stop') {
     console.error('[clientIntakeDraft] provider stopped without a usable reply', {
-      correlation_id: correlationId, provider: config.provider, stop_reason: reply.error.stopReason, elapsed_ms: Date.now() - startedAt
+      correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason, elapsed_ms: Date.now() - startedAt
     });
     return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_REJECTED', reason: reply.error.reason, model: reply.error.servedModel || null };
   }

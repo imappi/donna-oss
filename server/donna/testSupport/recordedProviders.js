@@ -49,11 +49,12 @@
 // production schemas, never a captured customer document) or, when captured
 // from a real call, redacted. `provenance` on each file says which.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KNOWN_PROVIDER_HOSTS } from '../providerEndpoints.js';
+import { STRUCTURED_ANSWER_TOOL_NAME } from '../structuredRequest.js';
 
 export const RECORDINGS_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -86,7 +87,16 @@ export const OPENAI_SCHEMA_LANES = Object.freeze({
   parser_repair: 'parser_repair',
   client_intake_draft: 'client_intake_draft',
   firm_fact_distillation: 'memory_extraction',
-  document_chat_response: 'document_chat'
+  document_chat_response: 'document_chat',
+  // 2026-11-10: the remaining text lanes, so one lane id scripts a lane on
+  // either provider (the Anthropic prefixes below use the same ids).
+  owner_invoice_command_reading: 'owner_invoice_command_read',
+  outbound_owner_reply_verdict: 'owner_reply_classification',
+  marketing_nurture_draft: 'marketing_nurture_draft',
+  marketing_reply_triage: 'marketing_reply_triage',
+  marketing_reply_draft: 'marketing_reply_draft',
+  prospect_dossier: 'prospect_dossier',
+  marketing_social_posts: 'marketing_social_posts'
 });
 
 // Anthropic lanes open their system prompt with a fixed sentence; the
@@ -101,6 +111,20 @@ export const ANTHROPIC_SYSTEM_LANES = Object.freeze([
   Object.freeze({ lane: 'document_disposition', prefix: 'You triage a single parsed evidence DOCUMENT' }),
   Object.freeze({ lane: 'reconciliation_triage', prefix: 'You evaluate low-confidence ' }),
   Object.freeze({ lane: 'unified_extraction', prefix: 'You are extracting fields from one financial document' }),
+  // 2026-11-10 (Claude only): the text lanes on their Anthropic transport.
+  // Same lane ids as their OpenAI schema names map to above; the system
+  // prompt is each lane's own instructions, unchanged.
+  Object.freeze({ lane: 'transaction_coding', prefix: 'You code bank transactions for a bookkeeping firm\'s client.' }),
+  Object.freeze({ lane: 'ask_drafting', prefix: 'You draft the bookkeeping firm\'s periodic message to its client.' }),
+  Object.freeze({ lane: 'memory_extraction', prefix: 'You distill durable LOCAL knowledge for a bookkeeping firm' }),
+  Object.freeze({ lane: 'owner_invoice_command_read', prefix: 'You read a message a business OWNER sent to Donna' }),
+  Object.freeze({ lane: 'owner_reply_classification', prefix: 'You classify an email reply from a business OWNER to Donna' }),
+  Object.freeze({ lane: 'document_chat', prefix: 'You are Donna, an accounting assistant embedded in a document' }),
+  Object.freeze({ lane: 'marketing_nurture_draft', prefix: 'You write short nurture emails for Donna' }),
+  Object.freeze({ lane: 'marketing_reply_triage', prefix: 'You triage inbound email for Donna' }),
+  Object.freeze({ lane: 'marketing_reply_draft', prefix: 'You draft Donna\'s reply to an email she received.' }),
+  Object.freeze({ lane: 'prospect_dossier', prefix: 'You are the investigator for Donna' }),
+  Object.freeze({ lane: 'marketing_social_posts', prefix: 'You write public posts for ' }),
   // 2026-11-10: the document lanes on their Anthropic transport. Each lane id
   // is the one its OpenAI strict schema names above, so a test scripts one
   // lane whichever provider answers.
@@ -183,7 +207,10 @@ export const classifyProviderRequest = ({ url, init = {} } = {}) => {
   if (schemaName && OPENAI_SCHEMA_LANES[schemaName]) {
     lane = OPENAI_SCHEMA_LANES[schemaName];
   } else if (systemText) {
-    lane = ANTHROPIC_SYSTEM_LANES.find(({ prefix }) => systemText.startsWith(prefix))?.lane || null;
+    // Leading whitespace is not part of a signature (document chat's prompt
+    // opens with a newline).
+    const opening = systemText.trimStart();
+    lane = ANTHROPIC_SYSTEM_LANES.find(({ prefix }) => opening.startsWith(prefix))?.lane || null;
   }
   if (!lane && endpointClass === 'anthropic') {
     const userText = userTextOf(body);
@@ -227,76 +254,17 @@ export const loadRecording = (name) => {
 
 const modelServedOf = (body) => (typeof body?.model === 'string' && body.model ? body.model : null);
 
-// A lane can be served by more than one provider (2026-11-10: the document
-// lanes resolve Anthropic first, OpenAI when no Anthropic key is set). A
-// scripted recording names the CONTENT; its wire shape is per provider. When
-// the request goes to a provider other than the recording's, the twin
-// `<name>-<endpoint_class>` is served — the same authored content in that
-// provider's shape (the unified lane's `-openai` recordings are the
-// precedent). No twin ⇒ refused: a body in the wrong provider's shape is
-// never served.
-export const twinRecordingFor = (step, endpointClass) => {
-  if (!step?.recording || !step.endpoint_class || !endpointClass || step.endpoint_class === endpointClass) return { step };
-  const twinName = `${step.recording}-${endpointClass}`;
-  if (!existsSync(recordingPath(twinName))) {
-    return { refusal: `recording ${step.recording} is an ${step.endpoint_class} body and the request went to ${endpointClass}; commit ${twinName}.json` };
-  }
-  const twin = loadRecording(twinName);
-  return { step: { ...step, status: twin.status, body: twin.body, headers: twin.headers || {}, recording: twin.name, endpoint_class: twin.endpoint_class } };
-};
-
-// An INLINE step body (authored in test code, not a committed recording) in
-// the OpenAI Responses shape, served to a request that went to Anthropic, is
-// carried into the Messages shape: the same structured output text, with the
-// model the request asked for as the served id (the journal marks the call
-// `converted_from: 'openai'`). Only a successful structured body converts;
-// an error body is read the same way by both providers' transports.
-const responsesText = (body) => {
-  if (typeof body?.output_text === 'string') return body.output_text;
-  const texts = (Array.isArray(body?.output) ? body.output : []).flatMap((item) => item?.content || [])
-    .map((part) => (typeof part?.text === 'string' ? part.text : null)).filter((text) => text !== null);
-  return texts.length ? texts.join('') : null;
-};
-
-// When the request carries the structured-result tool (a lane whose schema is
-// past the structured-output limits, anthropicMessages.js schemaDeliveryFor),
-// the same output arrives as that tool's call, as it does on the wire.
-const STRUCTURED_REPLY_TOOL = 'record_structured_result';
-
-export const convertInlineBody = (step, classified, requestBody = null) => {
-  if (step?.recording || classified?.endpoint_class !== 'anthropic' || step?.status !== 200) return step;
-  const text = responsesText(step.body);
-  if (text === null || step.body?.type === 'message') return step;
-  const viaTool = Array.isArray(requestBody?.tools) && requestBody.tools.some((tool) => tool?.name === STRUCTURED_REPLY_TOOL);
-  let input = null;
-  if (viaTool) { try { input = JSON.parse(text); } catch { input = null; } }
-  return {
-    ...step,
-    converted_from: 'openai',
-    body: {
-      id: String(step.body?.id || 'fixture').replace(/^resp_/, 'msg_'),
-      type: 'message',
-      role: 'assistant',
-      model: classified.model_requested,
-      content: input && typeof input === 'object'
-        ? [{ type: 'tool_use', id: 'toolu_fixture_converted', name: STRUCTURED_REPLY_TOOL, input }]
-        : [{ type: 'text', text }],
-      stop_reason: input && typeof input === 'object' ? 'tool_use' : 'end_turn',
-      stop_sequence: null,
-      usage: { input_tokens: step.body?.usage?.input_tokens ?? 0, output_tokens: step.body?.usage?.output_tokens ?? 0 }
-    }
-  };
-};
-
-// A recording (or inline body) authors the lane's structured result as JSON
-// text. When the request carries the structured-result tool — the lane's
-// schema is past the structured-output limits — the provider returns that
+// An ANTHROPIC recording (or inline Messages body) authors the lane's
+// structured result as JSON text. When the request carries the
+// `structured_answer` tool — the lane's schema is past the structured-output
+// limits (structuredRequest.js schemaDeliveryFor) — the provider returns that
 // result as the tool's call, so the stub delivers the same JSON that way
-// (`delivered_as: 'structured_result_tool'` on the journal). A text reply that
-// is not JSON stays text: the lane must refuse it by name.
+// (`delivered_as: 'structured_answer_tool'` on the journal). A text reply
+// that is not JSON stays text: the lane must refuse it by name. (A Responses
+// body is adapted below, tool call included.)
 export const deliverAsStructuredTool = (step, requestBody = null) => {
   const body = step?.body;
-  const wantsTool = Array.isArray(requestBody?.tools) && requestBody.tools.some((tool) => tool?.name === STRUCTURED_REPLY_TOOL);
+  const wantsTool = Array.isArray(requestBody?.tools) && requestBody.tools.some((tool) => tool?.name === STRUCTURED_ANSWER_TOOL_NAME);
   if (!wantsTool || step?.status !== 200 || body?.type !== 'message' || !Array.isArray(body.content)) return step;
   if (body.content.some((block) => block?.type === 'tool_use')) return step;
   const index = body.content.findIndex((block) => block?.type === 'text');
@@ -305,8 +273,8 @@ export const deliverAsStructuredTool = (step, requestBody = null) => {
   try { input = JSON.parse(body.content[index].text); } catch { return step; }
   if (!input || typeof input !== 'object' || Array.isArray(input)) return step;
   const content = [...body.content];
-  content[index] = { type: 'tool_use', id: `toolu_${String(body.id || 'fixture').replace(/^msg_/, '')}`, name: STRUCTURED_REPLY_TOOL, input };
-  return { ...step, delivered_as: 'structured_result_tool', body: { ...body, content, stop_reason: body.stop_reason === 'end_turn' ? 'tool_use' : body.stop_reason } };
+  content[index] = { type: 'tool_use', id: `toolu_${String(body.id || 'fixture').replace(/^msg_/, '')}`, name: STRUCTURED_ANSWER_TOOL_NAME, input };
+  return { ...step, delivered_as: 'structured_answer_tool', body: { ...body, content, stop_reason: body.stop_reason === 'end_turn' ? 'tool_use' : body.stop_reason } };
 };
 
 const jsonResponse = (status, body, headers = {}) =>
@@ -346,6 +314,46 @@ const normalizeStep = (lane, step) => {
   };
 };
 
+// ── a text-lane recording served to the other provider (2026-11-10) ──────
+// The text lanes run on Anthropic whenever its key is present; most
+// committed recordings for them were captured as OpenAI Responses bodies.
+// When such a body answers an Anthropic Messages request, the stub serves
+// the SAME answer in the Messages shape the request expects: a text block
+// (structured output) or the one `structured_answer` tool call (tool
+// delivery, structuredRequest.js). The served model is the one the request
+// named — a recording of another provider's model never appears on a Claude
+// receipt — and the journal marks the call `adapted`. Error steps pass as
+// scripted.
+const isResponsesBody = (body) => Boolean(body && typeof body === 'object'
+  && (typeof body.output_text === 'string' || Array.isArray(body.output)) && !Array.isArray(body.content));
+
+const responsesText = (body) => {
+  if (typeof body.output_text === 'string' && body.output_text) return body.output_text;
+  return (body.output || []).flatMap((item) => item?.content || [])
+    .map((part) => (typeof part?.text === 'string' ? part.text : '')).join('');
+};
+
+export const responsesBodyAsMessage = (body, request = {}) => {
+  const text = responsesText(body);
+  const toolDelivery = Array.isArray(request?.tools) && request.tools.some((tool) => tool?.name === 'structured_answer');
+  let input = null;
+  if (toolDelivery) {
+    try { input = JSON.parse(text); } catch { input = null; }
+  }
+  return {
+    id: typeof body.id === 'string' ? body.id : 'msg_recorded',
+    type: 'message',
+    role: 'assistant',
+    model: typeof request?.model === 'string' && request.model ? request.model : body.model,
+    content: input && typeof input === 'object'
+      ? [{ type: 'tool_use', id: 'toolu_recorded', name: 'structured_answer', input }]
+      : [{ type: 'text', text }],
+    stop_reason: input && typeof input === 'object' ? 'tool_use' : 'end_turn',
+    stop_details: null,
+    usage: { input_tokens: body.usage?.input_tokens ?? 0, output_tokens: body.usage?.output_tokens ?? 0 }
+  };
+};
+
 // Install the stub on globalThis.fetch (or on the `target` object given).
 // Returns the controller; call `restore()` in the test's finally.
 export const installRecordedProviders = ({
@@ -381,16 +389,7 @@ export const installRecordedProviders = ({
       step = normalizeStep(classified.lane, response);
     }
     const at = now().toISOString();
-    if (step) {
-      const twin = twinRecordingFor(step, classified.endpoint_class);
-      if (twin.refusal) {
-        const entry = { seq, at, ...classified, status: UNSCRIPTED_STATUS, model_served: null, recording: step.recording, refused: true };
-        calls.push(entry);
-        unscripted.push(entry);
-        return jsonResponse(UNSCRIPTED_STATUS, { error: { type: 'recorded_providers_wrong_provider', message: `recorded-providers: ${twin.refusal}` } });
-      }
-      step = deliverAsStructuredTool(convertInlineBody(twin.step, classified, parseBody(init)), parseBody(init));
-    }
+    if (step && classified.endpoint_class === 'anthropic') step = deliverAsStructuredTool(step, parseBody(init));
     if (!step) {
       const entry = { seq, at, ...classified, status: UNSCRIPTED_STATUS, model_served: null, recording: null, refused: true };
       calls.push(entry);
@@ -403,18 +402,20 @@ export const installRecordedProviders = ({
         }
       });
     }
+    const adapt = classified.endpoint_class === 'anthropic' && step.status >= 200 && step.status < 300 && isResponsesBody(step.body);
+    const served = adapt ? responsesBodyAsMessage(step.body, parseBody(init) || {}) : step.body;
     calls.push({
       seq,
       at,
       ...classified,
       status: step.status,
-      model_served: modelServedOf(step.body),
+      model_served: modelServedOf(served),
       recording: step.recording,
-      ...(step.converted_from ? { converted_from: step.converted_from } : {}),
+      ...(adapt ? { adapted: 'openai_responses_to_anthropic_messages' } : {}),
       ...(step.delivered_as ? { delivered_as: step.delivered_as } : {}),
       refused: false
     });
-    return jsonResponse(step.status, step.body, step.headers);
+    return jsonResponse(step.status, served, step.headers);
   };
 
   target.fetch = stub;

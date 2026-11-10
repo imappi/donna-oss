@@ -336,9 +336,7 @@ await test('registry views: thresholds resolve per lane; the governed-lane view 
     // RT-12 (2026-09-02, decision D1): THE load-bearing extraction lane is
     // provider-agnostic; its qualified set is its two providers' strong
     // defaults. No challenger wiring (eligible stays false). Registry order.
-    // 2026-11-10 (the owner's decision that Donna runs on Claude): its
-    // Anthropic default moved to claude-opus-5-5.
-    { id: 'unified_extraction', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'unified_extraction', qualified: ['claude-opus-4-8', 'gpt-5.4'], eligible: false },
     // Q7 (2026-08-16): the load-bearing reconciliation lane joined the feed
     // for the Honeybee lab — experiment-seatable cloud 27B, Opus reverse
     // shadow; promotion still needs the signed verdict. Registry order.
@@ -346,13 +344,19 @@ await test('registry views: thresholds resolve per lane; the governed-lane view 
     // Q9 (2026-08-16, the sole-model lab): the coding lane joined the feed —
     // experiment-seatable 27B, no challenger wiring (eligible stays false);
     // product-wide promotion still needs the signed verdict.
-    { id: 'transaction_coding', qualified: ['gpt-5.4', 'qwen/qwen3.8-27b'], eligible: false },
-    // 2026-11-10 (the owner's decision that Donna runs on Claude): the
-    // document lanes joined the feed, claude-opus-5-5 first and each lane's
-    // OpenAI default as the qualified alternative. No challenger wiring.
+    // 2026-11-10 (owner's decision: Claude only): claude-opus-5-5 joins as the
+    // strong default, gpt-5.4 the alternative; rides the Claude-only verdict.
+    // The text lanes and the document lanes join the feed with both strong
+    // defaults (registry order). No challenger wiring.
+    { id: 'transaction_coding', qualified: ['claude-opus-5-5', 'gpt-5.4', 'qwen/qwen3.8-27b'], eligible: false },
     { id: 'type_extractors_legacy', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
     { id: 'bank_statement_vision', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'document_chat', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'ask_drafting', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'memory_extraction', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'owner_invoice_command_read', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
     { id: 'client_intake_draft', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'marketing_drafting', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
     { id: 'parser_repair', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
     // Q6c (2026-08-16): the §9.5 staged candidate joined the disposition
     // lane's qualified set under the model-lab call — experiment-basis

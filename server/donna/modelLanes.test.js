@@ -5,7 +5,11 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { LANE_KINDS, MODEL_LANES, getLane, laneForModule, laneModelFlagKey } from './modelLanes.js';
-import { ENDPOINT_CLASSES, providerUrlLintPattern } from './providerEndpoints.js';
+import { ENDPOINT_CLASSES, providerUrlLintPattern, TEXT_LANE_DEFAULT_MODELS } from './providerEndpoints.js';
+
+// The text lanes moved onto both providers by the owner's decision of
+// 2026-11-10 (Claude only; OpenAI the alternative), in registry order.
+const TEXT_LANES = ['transaction_coding', 'document_chat', 'ask_drafting', 'memory_extraction', 'owner_invoice_command_read', 'marketing_drafting'];
 import {
   UNIFIED_EXTRACTOR_DEFAULT_MODELS,
   UNIFIED_EXTRACTOR_PROMPT_VERSION,
@@ -129,13 +133,23 @@ const FEED_GOVERNED_LANES = {
   // joins the feed — the cloud dense 27B is experiment-seatable as the
   // coding decider; the strong default holds absent a policy row.
   // Product-wide promotion still requires the signed verdict.
-  transaction_coding: ['gpt-5.4', 'qwen/qwen3.8-27b'],
+  // 2026-11-10 (the owner's decision: Donna runs on Claude only): the text
+  // lanes go provider-agnostic, Anthropic first — claude-opus-5-5 joins as
+  // each lane's strong default, gpt-5.4 stays the qualified alternative.
+  // Rides the promotion verdict named in modelLanes.js (a full Finnish
+  // company-month on Claude only, measured before merge).
+  transaction_coding: ['claude-opus-5-5', 'gpt-5.4', 'qwen/qwen3.8-27b'],
+  ask_drafting: ['claude-opus-5-5', 'gpt-5.4'],
+  memory_extraction: ['claude-opus-5-5', 'gpt-5.4'],
+  owner_invoice_command_read: ['claude-opus-5-5', 'gpt-5.4'],
+  document_chat: ['claude-opus-5-5', 'gpt-5.4'],
+  marketing_drafting: ['claude-opus-5-5', 'gpt-5.4'],
   // RT-12 (decision D1, 2026-09-02): THE load-bearing extraction call is
   // provider-agnostic — the qualified set is the two providers' strong
   // defaults (value-synced with UNIFIED_EXTRACTOR_DEFAULT_MODELS below).
-  // 2026-11-10 (the owner's decision that Donna runs on Claude): the
-  // Anthropic default moved to claude-opus-5-5.
-  unified_extraction: ['claude-opus-5-5', 'gpt-5.4'],
+  // 2026-11-10: its Anthropic default stays claude-opus-4-8 (the owner's
+  // direction; only its request moved onto the shared structured seam).
+  unified_extraction: ['claude-opus-4-8', 'gpt-5.4'],
   // 2026-11-10 (the owner's decision that Donna runs on Claude): every
   // document lane joins the feed with claude-opus-5-5 first and its OpenAI
   // strong default as the qualified alternative. This extension rides the
@@ -199,6 +213,13 @@ await test('governed lanes\' qualified sets stay value-synced with their decidin
   assert.ok(codingDefault, 'transactionLlm.js no longer declares DEFAULT_MODEL where this test reads it');
   assert.ok(getLane('transaction_coding').qualified.includes(codingDefault),
     `transactionLlm's DEFAULT_MODEL (${codingDefault}) must be in the coding lane's qualified set`);
+  // 2026-11-10: every moved text lane qualifies BOTH strong defaults the
+  // shared resolver hands out (TEXT_LANE_DEFAULT_MODELS).
+  for (const id of TEXT_LANES) {
+    for (const model of Object.values(TEXT_LANE_DEFAULT_MODELS)) {
+      assert.ok(getLane(id).qualified.includes(model), `${id}: the strong default ${model} must be qualified`);
+    }
+  }
 });
 
 // ── RT-12: provider-agnostic lanes and prompt versions ────────────────
@@ -213,17 +234,31 @@ await test('every lane names its providers; the unified lane is the one provider
       `${entry.id}: promptVersion is null or a non-empty string`);
   }
   const agnostic = MODEL_LANES.filter((entry) => entry.providers.length > 1).map((entry) => entry.id);
+  // Registry order. 2026-11-10: the text lanes (TEXT_LANES) and the
+  // document lanes (type_extractors_legacy, bank_statement_vision,
+  // client_intake_draft, parser_repair, document_routing,
+  // receipt_classification), Anthropic first.
   assert.deepEqual(agnostic, [
     'host_provider_probe',
     'unified_extraction',
-    // 2026-11-10: the document lanes, Anthropic first.
+    'transaction_coding',
     'type_extractors_legacy',
     'bank_statement_vision',
+    'document_chat',
+    'ask_drafting',
+    'memory_extraction',
+    'owner_invoice_command_read',
     'client_intake_draft',
+    'marketing_drafting',
     'parser_repair',
     'document_routing',
     'receipt_classification'
   ], 'a lane goes provider-agnostic in its own dated commit');
+  // The text lanes (2026-11-10): Anthropic first, OpenAI the alternative.
+  for (const id of TEXT_LANES) {
+    assert.deepEqual([...getLane(id).providers], ['anthropic', 'openai'], `${id}: Anthropic first`);
+    assert.equal(getLane(id).endpointClass, 'anthropic', `${id}: the primary endpoint class is Anthropic`);
+  }
   const unified = getLane('unified_extraction');
   assert.deepEqual([...unified.providers], UNIFIED_EXTRACTOR_PROVIDERS);
   assert.deepEqual([...unified.qualified].sort(), Object.values(UNIFIED_EXTRACTOR_DEFAULT_MODELS).sort(),

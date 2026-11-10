@@ -70,17 +70,18 @@ starts, you sign in, the demo firm and company are created with their
 Finnish chart of accounts, and uploads are stored. No document is read.
 The statement row shows as "Stalled" and an uploaded receipt waits.
 
-Reading and booking need keys, set in `.env`:
+Reading and booking need keys, set in `.env`. One Anthropic key is
+enough for every model task; an OpenAI key is optional.
 
 | Provider | Variable | What it does |
 |---|---|---|
-| OpenAI | `OPENAI_API_KEY` | Routes and reads documents, including the bank statement; coding; drafts asks |
-| Anthropic | `ANTHROPIC_API_KEY` | Reads receipts and invoices (preferred over OpenAI when both are set); reconciliation triage; bank-line disposition; chat |
+| Anthropic | `ANTHROPIC_API_KEY` | Every model task: routes and reads documents, including the bank statement; codes bank lines; drafts asks; reconciliation triage; bank-line disposition; chat; what Donna remembers. Claude (`claude-opus-5-5` unless a task names another model) |
+| OpenAI (optional) | `OPENAI_API_KEY` | The same tasks on OpenAI, used only when no Anthropic key is set |
 | Typesafe | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | First-line decisions on matching, disposition and coding. Without it, bank lines stay "Stalled" |
 
 A local book creates every company with the Typesafe lane switched on
-(`JEV_RECONCILIATION`). If you have OpenAI and Anthropic keys but no
-Typesafe key, add this line to `.env`:
+(`JEV_RECONCILIATION`). If you have an Anthropic key but no Typesafe key,
+add this line to `.env`:
 
 ```bash
 CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION
@@ -88,8 +89,8 @@ CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION
 
 It is the existing kill switch (`forceDisabled` in
 `server/donna/clientConfig.js`). It can only switch a capability off. With
-it, the bank lines are coded by the OpenAI coder and the Anthropic
-disposition step instead of staying "Stalled".
+it, the bank lines are coded by the Claude coder and the disposition step
+instead of staying "Stalled".
 
 When a key is set, the contents of the documents you upload and of the
 books are sent to that provider. At start the runtime prints a
@@ -116,8 +117,8 @@ cp .env.example .env
 sed -i.bak "s/^DONNA_ACCESS_TOKEN=.*/DONNA_ACCESS_TOKEN=$(openssl rand -hex 24)/" .env && rm .env.bak
 ```
 
-To use model providers, put their keys in `.env` now. A document uploaded
-without a key is not read again by itself once a key is added (see
+To use model providers, put their keys in `.env` now. You can also add
+them later: a document uploaded without a key waits for it (see
 Troubleshooting).
 
 **3. Start the runtime.** In a terminal of its own:
@@ -190,7 +191,7 @@ This key is the only sign-in on a local book. Anyone who has it can read
 and change every company on it.
 
 **7. Look at the company.** Choose Kampaamo Kultalanka Oy in the sidebar.
-With an OpenAI key, the February 2025 bank lines (36) appear within a
+With an Anthropic key, the February 2025 bank lines (36) appear within a
 minute or two of step 5. Without one, the statement is the only row.
 
 **8. Upload a document.** Open the owner's view of the company at
@@ -204,7 +205,8 @@ then press **Upload 1 file** (Lähetä 1 tiedosto).
 Watch the runtime terminal: a `parse-document` job starts within seconds
 and logs what it found. With keys, the receipt is read and appears as a
 row of its own on the firm view, beside the bank line of the same amount.
-Without keys, the log says `openai_not_configured` and the job retries.
+Without keys, the log says `waiting for the model provider; no attempt
+spent` and the document waits for its key (see Troubleshooting).
 
 **9. Stop and reset.** Press Ctrl-C in the runtime and web terminals. The
 data stays in `~/.donna-desktop` (or `DONNA_DESKTOP_DATA_DIR`) for the next
@@ -233,10 +235,21 @@ rm -rf ~/.donna-desktop
 - **Uploads fail with `Evidence storage upload failed with 404`**: the web
   app is being served by `npm run dev`. The Vite dev server does not route
   the local document store. Use `npm run local:web`.
-- **The statement stays "Stalled" after you add a key**: a document
-  uploaded without a key is not read again by itself. Stop both, reset
-  (step 9), and run steps 3 to 5 again.
-- **Every bank line is "Stalled" although OpenAI and Anthropic are lit**:
+- **A document is "Stalled" with `No OPENAI_API_KEY on this
+  installation: not read yet`**: it was uploaded without the key it needs.
+  Nothing is lost and no attempt is spent while it waits. Add the key to
+  `.env` and restart the runtime (step 3); each waiting document is read
+  within five minutes, under the same upload, with no new upload and no
+  reset. The owner's view says only that the file is saved and taking
+  longer. The same holds when the provider refuses the key (`… refused
+  OPENAI_API_KEY`: fix the key), when the account has no credit left (`…
+  has no credit left on this account`: add credit; no restart needed), and
+  when the provider cannot be reached at all: the row names the cause and
+  is read once the provider answers. A book from an earlier release that left
+  such a document failed, or a scanned statement with no lines, reads it
+  again once on the first start of this release (also one failed on a
+  refused key or after four "no credit" or rate-limit answers).
+- **Every bank line is "Stalled" although Anthropic is lit**:
   the runtime log shows `Configure the first-line provider model for this
   host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`, or switch that lane
   off with `CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION` in `.env`

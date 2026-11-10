@@ -58,8 +58,14 @@ import { buildClientIdentityPromptFragment } from './clientIdentityPrompt.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { normalizeIsoCurrency, normalizeIsoOrDayFirstDate } from './parsePrimitives.js';
 import { extractionFailureForStatus } from './inngest/parseErrors.js';
-import { callAnthropicFromResponsesBody, isAnthropicStopFailure, thrownReason } from './anthropicMessages.js';
-import { envWithDotEnv, resolveLaneProvider } from './laneProviderResolver.js';
+import {
+  documentLaneRequestFromResponses,
+  isProviderStopFailure,
+  notConfiguredFailure,
+  resolveDocumentLaneProvider,
+  stopFailureReason,
+  thrownReason
+} from './documentLaneRequest.js';
 import { classifyModelProvenance } from './providerEndpoints.js';
 
 // The strong tier for the load-bearing extraction call (CLAUDE.md); the env
@@ -114,13 +120,12 @@ const readDotEnv = () => {
   return vars;
 };
 
-// PAYOUT_EXTRACTOR_MODEL is the lane knob (its id pins the provider);
-// OPENAI_MODEL tunes the OpenAI model only.
-const getOpenAiConfig = () => resolveLaneProvider({
+// PAYOUT_EXTRACTOR_MODEL is the lane knob (its id pins the provider); no
+// provider-wide knob.
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
   laneId: 'type_extractors_legacy',
-  env: envWithDotEnv(readDotEnv()),
+  dotEnv: readDotEnv(),
   modelEnvKeys: ['PAYOUT_EXTRACTOR_MODEL'],
-  providerModelEnvKeys: { openai: ['OPENAI_MODEL'] },
   defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
 });
 
@@ -584,14 +589,16 @@ export const extractPayoutStatementFromBase64 = async ({
   const kind = PAYOUT_DOCUMENT_TYPES.includes(documentType) ? documentType : 'payout_statement';
 
   if (!config.ok) {
-    console.warn('[payout-statement] no model provider key configured', { correlation_id: correlationId, reason: config.reason });
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'type_extractors_legacy');
+    console.warn('[payout-statement] no model provider key configured', { correlation_id: correlationId, reason: notConfigured });
     return {
       kind: 'failed',
       model: null,
-      provider: config.provider,
+      provider: missing,
       code: 'DOCUMENT_EXTRACTION_FAILED',
-      // Names the missing key (`no_provider_key`), not one provider.
-      reason: config.reason
+      reason: notConfigured
     };
   }
 
@@ -646,16 +653,21 @@ export const extractPayoutStatementFromBase64 = async ({
   let result;
   try {
     if (config.provider === 'anthropic') {
-      const { text, servedModel } = await callAnthropicFromResponsesBody({
+      // The shared structured request (structuredRequest.js, via
+      // documentLaneRequest.js): the answer is already parsed and held to
+      // the schema; the model is the response's.
+      const { result: answer } = await llmCall(documentLaneRequestFromResponses({
         apiKey: config.apiKey,
         body,
         effort: ANTHROPIC_EFFORT,
         maxTokens: ANTHROPIC_MAX_TOKENS,
         execution,
         promptVersion: PAYOUT_PROMPT_VERSION,
-        fetchImpl: (url, init) => transport(url, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal })
-      });
-      result = parseText(text, servedModel);
+        signal: controller.signal,
+        timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS,
+        fetchImpl: transport
+      }));
+      result = { parsed: answer.parsed, servedModel: answer.model || null };
     } else ({ result } = await llmCall({
       provider: 'openai',
       url: 'https://api.openai.com/v1/responses',
@@ -685,15 +697,15 @@ export const extractPayoutStatementFromBase64 = async ({
         status: err.status,
         elapsed_ms: Date.now() - startedAt
       });
-      return { ...extractionFailureForStatus(Number(err.status || 0), { provider: config.provider }), ...stamp(null) };
+      return { ...extractionFailureForStatus(Number(err.status || 0), { provider: config.provider, providerError: err.providerError || null }), ...stamp(null) };
     }
-    if (isAnthropicStopFailure(err)) {
+    if (isProviderStopFailure(err)) {
       // A refusal or a cut-off reply will not clear with a retry of the same
       // request: terminal, named, receipted with the model that gave it.
       console.error('[payout-statement] provider stopped without a usable reply', {
-        correlation_id: correlationId, provider: config.provider, stop_reason: err.stopReason, elapsed_ms: Date.now() - startedAt
+        correlation_id: correlationId, provider: config.provider, failure: err.code, reason: err.reason, elapsed_ms: Date.now() - startedAt
       });
-      return { kind: 'failed', ...stamp(err.servedModel), code: 'DOCUMENT_EXTRACTION_REJECTED', reason: err.reason };
+      return { kind: 'failed', ...stamp(err.servedModel), code: 'DOCUMENT_EXTRACTION_REJECTED', reason: stopFailureReason(err) };
     }
     if (err?.code === 'PAYOUT_STRUCTURED_BAD_JSON') {
       console.error('[payout-statement] structured response was not valid JSON', {

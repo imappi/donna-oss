@@ -10,15 +10,17 @@ import { asProviderResponse, llmCall } from './llmCall.js';
 import {
   ANTHROPIC_MAX_REQUEST_BYTES,
   anthropicFileBlock,
-  callAnthropicMessages
-} from './anthropicMessages.js';
-import { envWithDotEnv, resolveLaneProvider } from './laneProviderResolver.js';
+  documentLaneAnthropicRequest,
+  missingProviderFor,
+  resolveDocumentLaneProvider
+} from './documentLaneRequest.js';
 
 // PROVIDERS (2026-11-10, the owner's decision that Donna runs on Claude):
-// the lane resolves its provider through laneProviderResolver.js — Anthropic
-// (claude-opus-5-5) first, OpenAI (gpt-5.4) only when no Anthropic key is
-// configured. Every call rides the llmCall envelope; on Anthropic the shared
-// anthropicMessages.js request (document block + structured output,
+// the lane resolves its provider through providerEndpoints.js
+// resolveLaneProvider (documentLaneRequest.js) — Anthropic (claude-opus-5-5)
+// first, OpenAI (gpt-5.4) only when no Anthropic key is configured. Every
+// call rides the llmCall envelope; on Anthropic the shared structured
+// request (structuredRequest.js: document block + structured output,
 // streamed). The model id this module returns is the one the provider's
 // RESPONSE named. The exported names below still say "OpenAi" because the
 // pipeline and tests import them by those names; they serve both providers.
@@ -102,19 +104,23 @@ const STRUCTURED_EFFORT = 'high';
 const TRANSCRIPTION_EFFORT = 'medium';
 // Thinking counts toward max_tokens; a 4-page chunk or a 48K-char text
 // fragment can carry a long line list. A reply that still hits the cap is
-// a named failure (ANTHROPIC_MAX_TOKENS), never a truncated statement.
+// a named failure (PROVIDER_OUTPUT_LIMIT), never a truncated statement.
 const STATEMENT_MAX_TOKENS = 64_000;
 
 const getOpenAiConfig = () => {
   const dotEnv = readDotEnvFromCwd();
-  const resolved = resolveLaneProvider({
+  const resolved = resolveDocumentLaneProvider({
     laneId: 'bank_statement_vision',
-    env: envWithDotEnv(dotEnv),
+    dotEnv,
     modelEnvKeys: ['OPENAI_VISION_MODEL'],
     defaultModels: STATEMENT_READER_DEFAULT_MODELS
   });
   return {
     provider: resolved.provider,
+    // The provider whose key is missing when none is configured: the lane's
+    // first (the parse wait names ANTHROPIC_API_KEY, not a key the
+    // installation never meant to hold).
+    missingProvider: resolved.ok ? null : missingProviderFor(resolved, 'bank_statement_vision'),
     apiKey: resolved.ok ? resolved.apiKey : '',
     configured: resolved.ok,
     reason: resolved.reason,
@@ -474,6 +480,10 @@ const extractTextFromResponse = (payload) => {
 // hold a key? (Name kept: the pipeline imports it.)
 export const isOpenAiVisionConfigured = () => getOpenAiConfig().configured;
 
+// Which provider the statement reader is waiting on when it is not
+// configured (the parse worker's not_configured record names it).
+export const statementReaderMissingProvider = () => getOpenAiConfig().missingProvider;
+
 const notConfiguredError = (config, what) => {
   const error = new Error(`No model provider key is configured for ${what} (${config.reason || 'no_provider_key'}).`);
   error.code = 'STATEMENT_READER_NOT_CONFIGURED';
@@ -505,7 +515,7 @@ const requestStatementModel = async ({ config, file = null, prompt, schema = nul
         const content = file
           ? [anthropicFileBlock({ base64: file.base64, mimeType: file.mimeType, filename: file.filename }), { type: 'text', text: prompt }]
           : [{ type: 'text', text: prompt }];
-        const { text, servedModel } = await callAnthropicMessages({
+        const { result } = await llmCall(documentLaneAnthropicRequest({
           apiKey: config.apiKey,
           model: config.model,
           content,
@@ -514,13 +524,22 @@ const requestStatementModel = async ({ config, file = null, prompt, schema = nul
           maxTokens: STATEMENT_MAX_TOKENS,
           execution,
           sections: { context: prompt, tools: schema || undefined },
-          fetchImpl: withSignal
-        });
-        return { text, servedModel, provider: 'anthropic' };
+          signal: controller.signal,
+          timeoutMs: OPENAI_VISION_TIMEOUT_MS
+        }));
+        return {
+          text: schema ? JSON.stringify(result.parsed) : result.text,
+          servedModel: result.model || null,
+          provider: 'anthropic'
+        };
       } catch (error) {
+        error.provider ||= 'anthropic';
         if (error?.code === 'LLM_CALL_PROVIDER_ERROR') {
           console.error(`[bankStatementVision] ${label} request failed`, { provider: 'anthropic', status: error.status, model: config.model });
           error.statusCode = error.status;
+          // The provider's own error object, where #71's fault reader looks
+          // (an account with no credit is a provider wait, not a rejection).
+          error.details = { error: error.providerError || null };
         }
         throw error;
       }
@@ -551,6 +570,8 @@ const requestStatementModel = async ({ config, file = null, prompt, schema = nul
       const error = new Error(`OpenAI ${label} failed with ${response.status}.`);
       error.code = file ? 'OPENAI_VISION_REQUEST_FAILED' : 'OPENAI_TEXT_REQUEST_FAILED';
       error.statusCode = response.status;
+      error.provider = 'openai';
+      error.details = await response.json().catch(() => null);
       throw error;
     }
     const payload = await response.json();

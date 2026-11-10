@@ -21,8 +21,13 @@ import { resolve as resolvePath } from 'node:path';
 
 import { CATEGORY_ACCOUNTS, canonicalMerchantPattern } from './transactionIntel.js';
 import { asProviderResponse, llmCall } from './llmCall.js';
-import { callAnthropicFromResponsesBody, readProviderReply } from './anthropicMessages.js';
-import { envWithDotEnv, resolveLaneProvider } from './laneProviderResolver.js';
+import {
+  documentLaneRequestFromResponses,
+  notConfiguredFailure,
+  readDocumentLaneReply,
+  resolveDocumentLaneProvider,
+  stopFailureReason
+} from './documentLaneRequest.js';
 import { classifyModelProvenance } from './providerEndpoints.js';
 
 const DEFAULT_MODEL = 'gpt-5.4-nano';
@@ -149,13 +154,12 @@ const readDotEnv = () => {
   return vars;
 };
 
-// RECEIPT_CLASSIFIER_MODEL is the lane knob (its id pins the provider); the
-// global OPENAI_MODEL tunes the OpenAI model only.
-const getOpenAiConfig = () => resolveLaneProvider({
+// RECEIPT_CLASSIFIER_MODEL is the lane knob (its id pins the provider); no
+// provider-wide knob.
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
   laneId: 'receipt_classification',
-  env: envWithDotEnv(readDotEnv()),
+  dotEnv: readDotEnv(),
   modelEnvKeys: ['RECEIPT_CLASSIFIER_MODEL'],
-  providerModelEnvKeys: { openai: ['OPENAI_MODEL'] },
   defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
 });
 
@@ -438,7 +442,15 @@ const defaultCallOpenAi = async ({ apiKey, signal, ...args }) => asProviderRespo
   fetchImpl: (url, init) => fetch(url, { ...init, signal: init?.signal && signal ? AbortSignal.any([init.signal, signal]) : init?.signal || signal })
 }));
 
-const defaultCallAnthropic = async ({ apiKey, signal, ...args }) => callAnthropicFromResponsesBody({
+
+// The Anthropic call: the shared structured request (structuredRequest.js,
+// via documentLaneRequest.js) through the envelope, called here. llmCall is
+// loaded at call time where the module's import graph needs it.
+const callAnthropicEnvelope = async (options) => {
+  const { llmCall } = await import('./llmCall.js');
+  return llmCall(documentLaneRequestFromResponses({ timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS, ...options }));
+};
+const defaultCallAnthropic = async ({ apiKey, signal, ...args }) => callAnthropicEnvelope({
   apiKey,
   body: buildBody(args),
   effort: ANTHROPIC_EFFORT,
@@ -465,14 +477,16 @@ export const classifyReceipt = async ({
   const correlationId = filenameCorrelationId(filename);
 
   if (!config.ok) {
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'receipt_classification');
     console.warn('[receiptClassifier] no model provider key configured', {
       correlation_id: correlationId,
-      reason: config.reason
+      reason: notConfigured
     });
     return makeDeterministicSemanticOutput({
       vendor,
-      // Names the missing key (`no_provider_key`), not one provider.
-      reason: config.reason
+      reason: notConfigured
     });
   }
 
@@ -489,7 +503,7 @@ export const classifyReceipt = async ({
 
   let reply;
   try {
-    reply = await readProviderReply({
+    reply = await readDocumentLaneReply({
       provider: config.provider,
       callOpenAi: () => __callOpenAi(callArgs),
       callAnthropic: () => __callAnthropic(callArgs),
@@ -524,7 +538,7 @@ export const classifyReceipt = async ({
 
   if (!reply.ok && reply.kind === 'stop') {
     console.error('[receiptClassifier] provider stopped without a usable reply', {
-      correlation_id: correlationId, provider: config.provider, stop_reason: reply.error.stopReason
+      correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason
     });
     return makeDeterministicSemanticOutput({ vendor, reason: reply.error.reason });
   }
