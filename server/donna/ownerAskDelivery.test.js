@@ -71,3 +71,18 @@ test('the in-band channel reply does not repeat a clarification the fan-out alre
   assert.equal(buildResolvedReplyText({ resolved: resolved(['ask-1']), fallback: 'x' }), 'Thanks. I sent you a follow-up question.');
   assert.equal(buildResolvedReplyText({ resolved: resolved([]), fallback: 'x' }), 'Which month was this for?');
 });
+
+test('while the one gate holds questions, the reply to the owner\'s own message acknowledges and asks nothing', () => {
+  const resolved = (followUp) => ({
+    evidence_request: { status: 'open', response_payload: { reply_processing: { clarification: 'Which month was this for?' } } },
+    recode: { needsClarification: true, ...(followUp === undefined ? {} : { follow_up_delivery: followUp }) }
+  });
+  // Refused (containment / readiness), or the gate's answer is unknown: fail closed.
+  for (const followUp of [{ refused: 'INTERNAL_PILOT_SEND_DISABLED', held: ['ask-1'] }, { refused: 'ENTITY_NOT_READY' }, { error: 'follow_up_failed' }, undefined]) {
+    assert.equal(buildResolvedReplyText({ resolved: resolved(followUp), fallback: 'x' }), 'Your answer is saved. Coding has not finished yet.', JSON.stringify(followUp));
+  }
+  assert.equal(buildResolvedReplyText({ resolved: resolved({ refused: 'INTERNAL_PILOT_SEND_DISABLED' }), fallback: 'x', language: 'fi' }),
+    'Vastauksesi on tallessa. Kirjaus ei ole vielä valmis.');
+  // Allowed but delivered nowhere (portal or escalated): the question still rides the reply, as before.
+  assert.equal(buildResolvedReplyText({ resolved: resolved({ delivered: [], portal: ['ask-1'] }), fallback: 'x' }), 'Which month was this for?');
+});

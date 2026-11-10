@@ -474,6 +474,8 @@ test('real PG: "still unpaid" to an unpaid sales invoice or supplier bill keeps 
         deliver: async ({ client, evidenceRequestIds }) => {
           delivered.push(...evidenceRequestIds);
           await client.query(`update client_evidence_requests set send_count = send_count + 1, last_sent_at = now() where id = any($1::text[])`, [evidenceRequestIds]);
+          // The fan-out's contract: it names the asks it delivered.
+          return { delivered: evidenceRequestIds };
         } };
       const sweep = (days) => withFirmDbClient((client) => runAskReaskSweep({ client, firmId: FIRM, clientId: ACCRUAL, now: Date.now() + days * 86400000, deps }));
       assert.equal((await sweep(8)).considered, 0, 'an acknowledged ask is not nudged on the 7-day clock');

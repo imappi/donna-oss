@@ -351,8 +351,18 @@ export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language 
     && typeof clarification === 'string' && clarification.trim()) {
     // The follow-up question already reached the owner through the gated ask
     // fan-out (ownerReplyRecovery.js): acknowledge, do not send it twice.
-    if (Array.isArray(recode.follow_up_delivery?.delivered) && recode.follow_up_delivery.delivered.length) {
+    const followUp = recode.follow_up_delivery;
+    if (Array.isArray(followUp?.delivered) && followUp.delivered.length) {
       return 'Thanks. I sent you a follow-up question.';
+    }
+    // The one owner-send gate (ownerAskDelivery.js) holds QUESTIONS to the
+    // owner; it does not silence Donna's answer to a message the owner sent.
+    // So while it refuses — send containment, readiness, or an answer it could
+    // not read (it fails closed) — the reply to the owner's own message only
+    // acknowledges the answer, and the clarification waits on the ask for
+    // release. The gate's answer is the one the follow-up delivery already got.
+    if (!followUp || followUp.refused || followUp.error) {
+      return recode.exhausted ? copy.savedCodingExhausted : copy.savedCodingPending;
     }
     return clarification.trim();
   }

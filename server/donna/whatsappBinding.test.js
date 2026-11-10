@@ -269,7 +269,9 @@ test('sensitive-ask notice send failure is a NAMED ledger row, never a throw int
     env: { WHATSAPP_ENABLED: 'true', WHATSAPP_CLIENTS: 'client' },
     deps: { deliverOwnerMessage: async () => ({ ok: false, status: 400, error: 'template does not exist', body: { error: { code: 132002 } } }), OWNER_CHANNELS: { WHATSAPP: 'whatsapp' } }
   });
-  assert.deepEqual(result, { sent: 1 }, 'the batch completes');
+  // The question itself never rode WhatsApp (only the portal notice was
+  // attempted, and it failed): nothing was delivered, and the count says so.
+  assert.deepEqual(result, { sent: 0, delivered: [] }, 'the batch completes');
   const failed = db.state.ledger.get('meta:whatsapp_sensitive_notice_ask_x');
   assert.ok(failed.failed_at, 'the failed notice is visible in the ledger');
   assert.equal(failed.failure_reason, 'template does not exist');
