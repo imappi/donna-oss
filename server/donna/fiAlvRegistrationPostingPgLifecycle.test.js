@@ -82,7 +82,12 @@ test('real PG (FI): ALV registration gates ALV-coded posting', { skip: !pgUrl &&
   await line('unregistered', 'u-sale', { incoming: true, account: 'Sales' });
   await code('unregistered');
   await refused('unregistered', 'u-purchase', 'TRANSACTION_ALV_REGISTRATION_REQUIRED');
-  await refused('unregistered', 'u-sale', 'TRANSACTION_ALV_REGISTRATION_REQUIRED');
+  // The sale settles the business's own sales invoice, which prints ALV: that
+  // contradicts the record, so it is refused by the sale-source rule
+  // (taxSourceEvidence.js assertSalesSourceTaxRegistration) before the
+  // registration rule reads its code. Still nothing reaches the ledger; the
+  // registration rule on a rated sale is pinned in finland/postingPolicy.test.js.
+  await refused('unregistered', 'u-sale', 'TRANSACTION_ALV_SALE_SOURCE_SHOWS_VAT_UNREGISTERED');
 
   // 2. No registration record at all: unknown is not "registered".
   await book('unrecorded', null);

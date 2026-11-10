@@ -61,6 +61,7 @@ import { postLedgerTransactionInDb } from './ledger.js';
 import { getXeroAccountsForClient } from './xero.js';
 import { deliverEmailEvidenceAsksAfterSend, deliverSmsEvidenceAsksAfterSend, deliverTelegramEvidenceAsksAfterSend, deliverWhatsAppEvidenceAsksAfterSend } from './channels.js';
 import { preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
+import { CODER_FINISHED_CODING_STATES, CORRECTION_NOT_CORRECTABLE_CODE, CORRECTION_OUTCOMES, CORRECTION_READERS, correctionNotRecordedNotice, correctionOf } from '../ownerReplyCorrection.js';
 import { amountText, dayText } from '../salesRecognitionGap.js';
 import { getFirmSnapshotFromDb } from './snapshot.js';
 
@@ -1372,6 +1373,10 @@ const recodeTransactionAfterClientReplyWithClient = async ({
     [firmId, clientId, transactionId]
   );
   if (!txResult.rows[0]) return { applied: false, skipped: 'transaction_not_found' };
+  // A correction to the answer a closed question already holds
+  // (ownerReplyCorrection.js): applied, it codes the line as any answer does;
+  // not applied, it moves nothing and the question goes back as it was.
+  const correction = correctionOf(evidenceRequest);
   const transaction = rowToTransactionPayload(txResult.rows[0]);
 
   const clientResult = await client.query('select * from clients where firm_id = $1 and id = $2', [firmId, clientId]);
@@ -1696,6 +1701,11 @@ const recodeTransactionAfterClientReplyWithClient = async ({
           }
         }
       }
+    } else if (correction) {
+      // The coder could not settle the correction: the earlier coding stands.
+      // Nothing on the line changes; the question goes back to its closed state.
+      await restoreUnrecordedCorrectionWithClient({ client, firmId, clientId, evidenceRequestId: evidenceRequest.id,
+        replyKey: expectedReplyKey, actorId, actorType: correction.actor_type, reason: 'coder_did_not_apply' });
     } else {
       await client.query(
         `update transactions
@@ -1733,8 +1743,9 @@ const recodeTransactionAfterClientReplyWithClient = async ({
       );
     }
 
-    nativeFollowUp = await consumeNativeUnresolvedCodingWithClient({ client, firmId, clientId, transactionId, policy: currentPolicy,
+    nativeFollowUp = correction && !applies ? null : await consumeNativeUnresolvedCodingWithClient({ client, firmId, clientId, transactionId, policy: currentPolicy,
       suggestion: suggestionPayload, actorId, answeredRequestId: evidenceRequest.id });
+    const correctionOutcome = correction ? { ...correction, outcome: applies ? CORRECTION_OUTCOMES.recorded : CORRECTION_OUTCOMES.notRecorded } : null;
     await client.query(
       `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
        values ($1, $2, 'system', $3, 'transaction.reply_recode', 'transaction', $4, $5::jsonb)`,
@@ -1751,6 +1762,7 @@ const recodeTransactionAfterClientReplyWithClient = async ({
           evidence_required: suggestionPayload.evidence_required,
           follow_up_question: applies ? null : suggestionPayload.ask_client_question || null,
           model: suggestionPayload.model || null,
+          ...(correctionOutcome ? { correction: correctionOutcome } : {}),
           ...(heldRowScope ? { held_row_scope: heldRowScope,
             remaining_rows: (heldRowOutcome || []).map(({ transaction_id, match_id, skipped = null, reason = null, refusal = null }) =>
               ({ transaction_id, match_id, skipped, reason, refusal })) } : {})
@@ -1758,7 +1770,8 @@ const recodeTransactionAfterClientReplyWithClient = async ({
       ]
     );
     if (expectedReplyKey) {
-      const processing = { reply_key: expectedReplyKey, state: applies ? 'completed' : 'needs_clarification', applied: applies };
+      const processing = { reply_key: expectedReplyKey, state: applies || correction ? 'completed' : 'needs_clarification', applied: applies,
+        ...(correctionOutcome ? { correction: correctionOutcome } : {}) };
       const { recordOwnerReplyProcessingReceipt } = await import('../ownerReplyProcessingReceipt.js');
       await recordOwnerReplyProcessingReceipt({ client, firmId, clientId, actorId,
         evidenceRequestId: evidenceRequest.id, transactionId, processing,
@@ -1841,6 +1854,13 @@ const recodeTransactionAfterClientReplyWithClient = async ({
     // coding mints one); the owner-reply clock delivers it through the gated
     // fan-out (ownerReplyRecovery.js).
     ...(nativeFollowUp?.id ? { follow_up_request_id: nativeFollowUp.id } : {}),
+    // A correction says what came of it; one that changed nothing says so in
+    // the owner's language (the in-band line and the statement are the same).
+    ...(correction ? { correction: { outcome: applies ? CORRECTION_OUTCOMES.recorded : CORRECTION_OUTCOMES.notRecorded } } : {}),
+    ...(correction && !applies ? (() => {
+      const notice = correctionNotRecordedNotice({ profile: clientResult.rows[0]?.profile, client: clientResult.rows[0] });
+      return { owner_notice: notice, owner_notice_statement: notice };
+    })() : {}),
     // W1 (INV-04): the committed learning — candidates staged, never facts minted.
     learning: {
       rules_minted: [],
@@ -2084,6 +2104,58 @@ export const __normalizeAnswerSource = (value) => {
   return ANSWER_SOURCES.includes(clean) ? clean : null;
 };
 
+// A reply to a closed question (ownerReplyCorrection.js). Only an answered
+// question (`resolved`) holds an answer to correct; a cancelled one has none.
+// The reader is the one that owns the question's kind, or null when no reader
+// can take a correction (the reply is then not attached to the question).
+export const evidenceCorrectionReaderFor = async (row, { codingState = null } = {}) => {
+  if (!row || row.status !== 'resolved' || (row.audience || 'client') !== 'client') return null;
+  const { resolveStructuredOwnerReplyAdapter, supportsStructuredOwnerReply } = await import('../statutoryRegistry.js');
+  if (supportsStructuredOwnerReply(row)) {
+    return resolveStructuredOwnerReplyAdapter({ request: row })?.readsCorrections === true ? CORRECTION_READERS.structured : null;
+  }
+  if (!row.transaction_id || !codingState || CODER_FINISHED_CODING_STATES.includes(codingState)) return null;
+  return CORRECTION_READERS.coder;
+};
+
+// The same decision for a surface that has to choose before it writes
+// (a chat channel reading a reply to a closed question).
+export const readEvidenceCorrectionReaderInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId, evidenceRequestId } = {}) =>
+  withFirmDbClient(async (client) => {
+    const row = (await client.query('select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3',
+      [firmId, clientId, evidenceRequestId])).rows[0] || null;
+    if (!row) return { status: null, reader: null };
+    const codingState = row.transaction_id ? (await client.query('select coding_state from transactions where firm_id = $1 and client_id = $2 and id = $3',
+      [firmId, row.client_id, row.transaction_id])).rows[0]?.coding_state ?? null : null;
+    return { status: row.status, reader: await evidenceCorrectionReaderFor(row, { codingState }) };
+  });
+
+// Inside a correction reader's transaction, when its outcome records nothing:
+// the question goes back to the closed state it was in before the correction
+// (status, resolved_at, resolved_by), with a receipt. The reader's processing
+// receipt (with the correction and its outcome) is written by the reader.
+// Never touches a line. Returns whether the question was put back.
+export const restoreUnrecordedCorrectionWithClient = async ({ client, firmId, clientId, evidenceRequestId, replyKey,
+  actorId = 'system', actorType = 'system', reason = null }) => {
+  const current = (await client.query('select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3 for update',
+    [firmId, clientId, evidenceRequestId])).rows[0];
+  const correction = correctionOf(current);
+  if (!current || current.status !== 'replied' || !correction || ownerReplyIdentity(current) !== replyKey) return false;
+  const restored = correction.prior_status || 'resolved';
+  await client.query(`update client_evidence_requests set status = $4, resolved_at = $5::timestamptz, resolved_by = $6,
+      request_payload = case when request_payload ? 'evidence_request'
+        then jsonb_set(request_payload, '{evidence_request,status}', to_jsonb($4::text)) else request_payload end,
+      updated_at = now()
+    where firm_id = $1 and client_id = $2 and id = $3`,
+  [firmId, clientId, evidenceRequestId, restored, correction.prior_resolved_at || null, correction.prior_resolved_by || null]);
+  await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+    values ($1, $2, $3, $4, 'evidence_request.correction_not_recorded', 'client_evidence_request', $5, $6::jsonb)`,
+  [firmId, clientId, actorType || 'system', actorId, evidenceRequestId, JSON.stringify({ reply_key: replyKey, reason,
+    restored_status: restored, reader: correction.reader, transaction_id: current.transaction_id || null,
+    earlier_reply: correction.earlier_reply ?? null, reply: current.response_payload?.reply ?? null })]);
+  return true;
+};
+
 export const resolveClientEvidenceRequestInDb = async ({
   firmId = DEFAULT_FIRM_ID,
   evidenceRequestId,
@@ -2128,6 +2200,63 @@ export const resolveClientEvidenceRequestInDb = async ({
       }
       const authority = await assertEvidenceReplyAuthority(client, { firmId, row, replyAuthority });
       const now = new Date().toISOString();
+      // A reply to a closed question is a correction to the answer it holds
+      // (ownerReplyCorrection.js), never a silent reopening. A firm resolution
+      // (an explicit review state) keeps its own path below.
+      if (!cleanNextReviewState && ['resolved', 'cancelled'].includes(row.status)) {
+        const suppliedDocumentIds = Array.isArray(documentIds) ? [...new Set(documentIds.filter(Boolean))] : [];
+        if (!__shouldResumeFromClientReply({ reply: cleanReply, documentIds: suppliedDocumentIds })) {
+          // Closing a question that is already closed, with nothing said: nothing to do.
+          await client.query('rollback');
+          return { evidence_request: rowToClientEvidenceRequestPayload(row), recode: null, documentDisposition: null,
+            clientId: row.client_id, transactionId: row.transaction_id || null, already: row.status };
+        }
+        const codingState = row.transaction_id ? (await client.query('select coding_state from transactions where firm_id = $1 and client_id = $2 and id = $3',
+          [firmId, row.client_id, row.transaction_id])).rows[0]?.coding_state ?? null : null;
+        const reader = await evidenceCorrectionReaderFor(row, { codingState });
+        if (!reader) {
+          // No reader can take a correction of this kind: the reply is not
+          // attached to the closed question and nothing is written.
+          throw Object.assign(new Error('This question is closed and no reader can take a correction to its answer; the reply was not attached to it.'),
+            { statusCode: 409, code: CORRECTION_NOT_CORRECTABLE_CODE, details: { evidence_request_id: row.id, status: row.status, coding_state: codingState } });
+        }
+        const earlier = row.response_payload || {};
+        const correction = { reader, prior_status: row.status,
+          prior_resolved_at: row.resolved_at ? new Date(row.resolved_at).toISOString() : null, prior_resolved_by: row.resolved_by || null,
+          earlier_reply: earlier.reply ?? null, earlier_responded_at: earlier.responded_at || (row.responded_at ? new Date(row.responded_at).toISOString() : null),
+          earlier_document_ids: Array.isArray(earlier.document_ids) ? earlier.document_ids : [], earlier_reply_key: ownerReplyIdentity(row),
+          corrected_at: now, actor_id: actorId, actor_type: actorType || 'system' };
+        const correctionPayload = { reply: cleanReply || null, document_ids: suppliedDocumentIds, responded_at: now,
+          answer_source: cleanAnswerSource, answer_recorded_by: cleanAnswerSource ? actorId : null };
+        const replyKey = ownerReplyIdentity({ id: row.id, response_payload: correctionPayload });
+        correctionPayload.reply_processing = { reply_key: replyKey, state: 'pending', attempts: 0, actor_id: actorId, actor_type: actorType,
+          ...(authority ? { authority_basis: authority } : {}), correction };
+        // The question waits on its reader; the line is not touched here (the
+        // reader alone may move it, and only when its outcome says so).
+        await client.query(`update client_evidence_requests set status = 'replied', resolved_at = null, resolved_by = null,
+            response_payload = response_payload || $3::jsonb,
+            request_payload = case when request_payload ? 'evidence_request'
+              then jsonb_set(request_payload, '{evidence_request,status}', '"replied"'::jsonb) else request_payload end,
+            updated_at = now()
+          where firm_id = $1 and id = $2`, [firmId, cleanRequestId, JSON.stringify(correctionPayload)]);
+        await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+          values ($1, $2, $3, $4, 'evidence_request.correction', 'client_evidence_request', $5, $6::jsonb)`,
+        [firmId, row.client_id, actorType || 'system', actorId, row.id, JSON.stringify({ ...correction, reply_key: replyKey,
+          reply: correctionPayload.reply, responded_at: now, document_ids: suppliedDocumentIds, transaction_id: row.transaction_id || null,
+          ...(authority ? { authority_basis: authority } : {}), ...(cleanAnswerSource ? { answer_source: cleanAnswerSource } : {}),
+          ...(channel === 'mobile' ? { channel } : {}) })]);
+        await client.query('commit');
+        let recode = null;
+        try {
+          const { processOwnerReplyWithClient } = await import('../ownerReplyRecovery.js');
+          recode = await processOwnerReplyWithClient({ client, firmId, clientId: row.client_id, evidenceRequestId: row.id, actorId });
+        } catch (recodeError) {
+          recode = { applied: false, error: recodeError?.message || 'Correction reading failed.', ...(isCodingPolicyError(recodeError) ? { policy_failure: true, code: recodeError.code } : {}) };
+        }
+        const refreshed = (await client.query('select * from client_evidence_requests where firm_id = $1 and id = $2 limit 1', [firmId, cleanRequestId])).rows[0];
+        return { evidence_request: rowToClientEvidenceRequestPayload(refreshed), recode, documentDisposition: null,
+          clientId: row.client_id, transactionId: row.transaction_id || null, correction: { reader } };
+      }
       const nextRequestStatus = cleanNextReviewState ? 'resolved' : 'replied';
       // RT-16: a firm resolution names the line's next coding state in the
       // legacy label vocabulary; the ledger rungs are FACTS the posting
@@ -2401,7 +2530,9 @@ export const resolveClientEvidenceRequestInDb = async ({
   // "accepted, click to post". Runs OUTSIDE the resolve txn/connection (pool
   // max 2). Best-effort: a posting failure leaves the line accepted/explained
   // (still shown in the Reconciled tab) rather than failing the durable reply.
-  if (resolveResult.recode?.applied && resolveResult.transactionId) {
+  // A correction read by a lane adapter is about the business, not its anchor
+  // line: nothing here posts that line (the adapter's outcome alone moves it).
+  if (resolveResult.recode?.applied && resolveResult.transactionId && resolveResult.correction?.reader !== CORRECTION_READERS.structured) {
     try {
       const scope = await readRetainedProcessingScopeInDb({ firmId,clientId:resolveResult.clientId });
       if (!scope.allowed) {
@@ -2427,6 +2558,8 @@ export const resolveClientEvidenceRequestInDb = async ({
     evidence_request: resolveResult.evidence_request,
     recode: resolveResult.recode,
     document_disposition: resolveResult.documentDisposition || null,
+    ...(resolveResult.correction ? { correction: resolveResult.correction } : {}),
+    ...(resolveResult.already ? { already: resolveResult.already } : {}),
     snapshot
   };
 };

@@ -67,10 +67,10 @@ const seedFi = async (pool, clientId, profile = {}) => {
   for (const flag of ['FINLAND_ALV_CODING', 'JURISDICTION_ACCOUNT_PALETTE', 'RECONCILIATION_CODE_MATCHED_NO_REVIEW', 'CODING_AUTO_POST', 'LEDGER_AUTO_POST']) await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$4,'auto','manual')", [`${clientId}-${flag}`, firmId, clientId, flag]);
   await seedPackPaletteChartWithClient(pool, { firmId, clientId });
 };
-const FI = { currency: 'EUR', gross: 125.5, tax: 25.5, refusalCode: 'TRANSACTION_ALV_REGISTRATION_REQUIRED', field: 'alv_registration',
+const FI = { currency: 'EUR', gross: 125.5, tax: 25.5, rate: 25.5, saleRefusalCode: 'TRANSACTION_ALV_SALE_SOURCE_SHOWS_VAT_UNREGISTERED', refusalCode: 'TRANSACTION_ALV_REGISTRATION_REQUIRED', field: 'alv_registration',
   verdict: { proposed_account: 'Office expenses', tax_treatment: 'ALV 25,5 %' }, sale: { proposed_account: 'Sales', tax_treatment: 'ALV 25,5 %' },
   withoutTax: { purchase: 'ALV_NONDEDUCTIBLE_INPUT', sale: 'ALV_OUT_OF_SCOPE' } };
-const GB = { currency: 'GBP', gross: 120, tax: 20, refusalCode: 'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED', field: 'vat_registration',
+const GB = { currency: 'GBP', gross: 120, tax: 20, rate: 20, saleRefusalCode: 'TRANSACTION_GB_VAT_SALE_SOURCE_SHOWS_VAT_UNREGISTERED', refusalCode: 'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED', field: 'vat_registration',
   verdict: { proposed_account: 'Software subscriptions', tax_treatment: 'VAT 20%' }, sale: { proposed_account: 'Sales', tax_treatment: 'VAT 20%' },
   withoutTax: { purchase: 'NONE', sale: 'NONE' } };
 
@@ -114,12 +114,18 @@ const mockModels = (t, reading) => {
 const answerWith = (registered, from = null, until = null, confidence = 0.97) => () =>
   ({ answer: { registered, registered_from: from, registered_until: until }, confidence, clarification: null });
 
-const addLine = async (pool, clientId, country, id, date = '2026-06-02', { sale = false } = {}) => {
+const addLine = async (pool, clientId, country, id, date = '2026-06-02', { sale = false, tax = country.tax, printedLine = false } = {}) => {
   const family = sale ? 'sales_invoice' : 'receipt';
   await pool.query("insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,payload) values($1,$2,$3,$4,$5,$6,$7,$8,'needs_review','{}')",
     [id, firmId, clientId, date, `Synthetic ${sale ? 'customer payment' : 'office supplies'} ${id.slice(-1)}`, sale ? country.gross : 0, sale ? 0 : country.gross, country.currency]);
-  // The source prints VAT whether or not the business is registered.
-  await pool.query("insert into documents(id,firm_id,client_id,filename,document_type,parse_status,total_amount,tax_amount,currency,document_date,payload) values($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,'{}')", [`doc-${id}`, firmId, clientId, sale ? 'Synthetic sales invoice.pdf' : 'Synthetic receipt.pdf', family, country.gross, country.tax, country.currency, date]);
+  // The source prints VAT whether or not the business is registered (a
+  // supplier's receipt), or as its issuer wrote it (the business's own sales
+  // invoice); `tax: 0` is a document that prints none.
+  await pool.query("insert into documents(id,firm_id,client_id,filename,document_type,parse_status,total_amount,tax_amount,currency,document_date,payload,parse_summary) values($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,'{}',$10)", [`doc-${id}`, firmId, clientId, sale ? 'Synthetic sales invoice.pdf' : 'Synthetic receipt.pdf', family, country.gross, tax, country.currency, date,
+    printedLine ? { line_amounts_include_tax: true } : {}]);
+  // One printed line with its rate: the source's components are complete (verified).
+  if (printedLine) await pool.query("insert into document_lines(id,firm_id,client_id,document_id,line_no,description,amount,tax_rate,payload) values($1,$2,$3,$4,1,'Synthetic consulting',$5,$6,'{}')",
+    [`line-${id}`, firmId, clientId, `doc-${id}`, country.gross, tax > 0 ? country.rate : 0]);
   await pool.query("insert into reconciliation_matches(id,firm_id,client_id,bank_transaction_id,matched_object_type,matched_object_id,match_amount,match_confidence,status,created_by,payload) values($1,$2,$3,$4,$5,$6,$7,.98,'auto_matched','fixture','{}')", [`match-${id}`, firmId, clientId, id, family, `doc-${id}`, country.gross]);
 };
 const lineRow = async (pool, id) => (await pool.query('select coding_state,convergence_state,convergence_reason,payload from transactions where id=$1', [id])).rows[0];
@@ -484,13 +490,14 @@ for (const [label, country, seed] of [['GB', GB, seedGb], ['FI', FI, seedFi]]) {
     assert.equal(await registrationQuestions(pool, clientId), 0, 'no question to the owner');
   });
 
-  test(`real PG (${label}): a sale by a business recorded as not registered posts its full amount as revenue with no VAT leg`, { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+  // Its own sales invoice prints no VAT: the sale posts as #64 built it.
+  test(`real PG (${label}): a sale by a business recorded as not registered, whose own invoice shows no VAT, posts its full amount as revenue with no VAT leg`, { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
     const pool = await freshDb(t);
     const clientId = `${label.toLowerCase()}-sale-not-registered`;
     await seed(pool, clientId, { [country.field]: { status: 'not_registered' } });
     mockModels(t, { verdict: country.verdict, sale: country.sale, current: answerWith('unclear') });
     const id = `${clientId}-sale`;
-    await addLine(pool, clientId, country, id, '2026-06-02', { sale: true });
+    await addLine(pool, clientId, country, id, '2026-06-02', { sale: true, tax: 0 });
     await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
     const row = await lineRow(pool, id);
     assert.equal(await journals(pool, id), 1, JSON.stringify(row.payload.ledger_post_refusal || row.convergence_reason));
@@ -679,3 +686,176 @@ test('real PG (FI): a supplier bill dated before the registration start posts wi
   assert.equal(row.convergence_state, 'auto_reconciled', JSON.stringify([row.convergence_state, row.convergence_reason]));
   assert.equal(await registrationQuestions(pool, clientId), 0);
 });
+
+// A sale whose OWN sales invoice shows VAT, by a business the record says is
+// not registered on the line's date. The record and the invoice contradict
+// each other: either the business is registered (the books lose output VAT
+// it owes) or it issued an invoice showing VAT it was not entitled to charge
+// (the invoice needs correcting). Nothing posts; the named refusal is stored;
+// the owner is asked the registration fact with what was seen; "yes" the
+// record covers posts the sale with its VAT split; "no" ends on an open
+// request to the owner for the corrected invoice or the credit note.
+const SALE_WORDING = {
+  FI: {
+    question: 'Synthetic customer payment e: myyntilaskussanne Synthetic sales invoice.pdf (päivätty 2026-06-02) näkyy arvonlisäveroa 25,50 EUR, mutta tietojemme mukaan yritys ei ollut arvonlisäverorekisterissä 2026-06-02. Oliko yritys tuolloin merkitty arvonlisäverorekisteriin? Jos oli, mistä päivästä alkaen?',
+    correction: 'Synthetic customer payment e: myyntilaskussanne Synthetic sales invoice.pdf (päivätty 2026-06-02) näkyy arvonlisäveroa 25,50 EUR, mutta yritys ei ollut arvonlisäverorekisterissä 2026-06-02. Lähetä meille korjattu lasku tai hyvityslasku, jolla lasku on korjattu.',
+    no: 'Ei ollut, yritys ei ole arvonlisäverorekisterissä.', yes: 'Kyllä, 1.1.2026 alkaen.'
+  },
+  GB: {
+    question: 'Synthetic customer payment e: your sales invoice Synthetic sales invoice.pdf (dated 2026-06-02) shows VAT of 20.00 GBP, but our records say the business was not VAT-registered on 2026-06-02. Was the business VAT-registered then? If so, from what date is the registration effective?',
+    correction: 'Synthetic customer payment e: your sales invoice Synthetic sales invoice.pdf (dated 2026-06-02) shows VAT of 20.00 GBP, but the business was not VAT-registered on 2026-06-02. Please send us the corrected invoice, or the credit note that corrects it.',
+    no: 'No, we were not VAT registered.', yes: 'Yes, registered from 1 January 2026.'
+  }
+};
+const openAsks = async (pool, clientId) => (await pool.query("select id,transaction_id,question,status,evidence_type,request_payload from client_evidence_requests where client_id=$1 and status in ('draft','open','replied') order by created_at,id", [clientId])).rows;
+
+// Steps 1–4: coded without VAT (the coder follows the not-registered fact),
+// refused by name, re-admitted once by the clock, and asked.
+const refuseSaleAndAsk = async ({ pool, clientId, id, country, label }) => {
+  await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
+  const refused = (await lineRow(pool, id)).payload.ledger_post_refusal;
+  assert.equal(refused?.code, country.saleRefusalCode, JSON.stringify(refused));
+  assert.equal(refused.details.registered, false);
+  assert.equal(refused.details.as_of, '2026-06-02');
+  assert.equal(refused.details.sales_source.document_id, `doc-${id}`);
+  assert.equal(refused.details.sales_source.tax_amount, country.tax);
+  assert.equal(await journals(pool, id), 0, 'nothing posts');
+  await recoverChangedCodingEvidenceInDb({ firmId });
+  await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
+  const guard = (await lineRow(pool, id)).payload.ai_suggestion?.tax_unresolved_guard;
+  assert.equal(guard?.constraint, 'tax_registration_unrecorded', JSON.stringify(guard));
+  assert.equal(guard.sales_source.document_id, `doc-${id}`);
+  const asked = await runCodingAutoPostForTransaction({ firmId, clientId, transactionId: id, env: {}, configSnapshot: AUTO });
+  assert.equal(asked.owner_asked, 1, JSON.stringify(asked));
+  assert.equal(await journals(pool, id), 0);
+  const asks = await openAsks(pool, clientId);
+  assert.equal(asks.length, 1, 'one question on the owner');
+  assert.equal(asks[0].request_payload.lane, 'tax_registration', 'the registration question and its lane');
+  assert.equal(asks[0].question, SALE_WORDING[label].question);
+  const row = await lineRow(pool, id);
+  assert.equal(row.payload.ledger_post_refusal?.code ?? row.payload.posting_recovery?.review?.previous_refusal?.code, country.saleRefusalCode, 'the named refusal is stored');
+  assert.equal(row.coding_state, 'asked');
+  assert.equal(row.convergence_state, 'on_owner', JSON.stringify([row.convergence_state, row.convergence_reason]));
+  return asks[0];
+};
+
+for (const [label, country, seed] of [['FI', FI, seedFi], ['GB', GB, seedGb]]) {
+  test(`real PG (${label}): a sale whose own invoice shows VAT, record says not registered: nothing posts, the owner is asked; "yes" from a covering date posts it with its VAT split`, { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+    const pool = await freshDb(t);
+    const clientId = `${label.toLowerCase()}-sale-shows-vat-yes`;
+    await seed(pool, clientId, { [country.field]: { status: 'not_registered' } });
+    const counts = mockModels(t, { verdict: country.verdict, sale: country.sale, current: answerWith('yes', '2026-01-01') });
+    const id = `${clientId}-sale`;
+    await addLine(pool, clientId, country, id, '2026-06-02', { sale: true, printedLine: label === 'FI' });
+    await refuseSaleAndAsk({ pool, clientId, id, country, label });
+    const { resolved } = await reply(pool, clientId, SALE_WORDING[label].yes);
+    assert.equal(counts.reader, 1);
+    assert.equal(resolved.recode?.applied, true, JSON.stringify(resolved.recode));
+    const record = (await profileOf(pool, clientId))[country.field];
+    assert.deepEqual([record.status, record.registered_from], ['registered', '2026-01-01'], 'recorded through #62');
+    await recodeAndPost(pool, clientId, [id]);
+    assert.equal(await journals(pool, id), 1, JSON.stringify((await lineRow(pool, id)).payload.ledger_post_refusal));
+    const legs = await postedLegs(pool, [id]);
+    assert.deepEqual(legs.filter(leg => leg.credit > 0).map(leg => leg.credit).sort((a, b) => a - b), [country.tax, country.gross - country.tax], `revenue net and output VAT: ${JSON.stringify(legs)}`);
+    assert.equal(legs.filter(leg => leg.account_type === 'revenue').length, 1);
+    const row = await lineRow(pool, id);
+    assert.equal(row.convergence_state, 'auto_reconciled', JSON.stringify([row.convergence_state, row.convergence_reason]));
+    assert.equal((await openAsks(pool, clientId)).length, 0);
+  });
+
+  test(`real PG (${label}): a sale whose own invoice shows VAT, owner says "no": nothing posts and the owner is asked for the corrected invoice or the credit note`, { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+    const pool = await freshDb(t);
+    const clientId = `${label.toLowerCase()}-sale-shows-vat-no`;
+    await seed(pool, clientId, { [country.field]: { status: 'not_registered' } });
+    mockModels(t, { verdict: country.verdict, sale: country.sale, current: answerWith('no') });
+    const id = `${clientId}-sale`;
+    await addLine(pool, clientId, country, id, '2026-06-02', { sale: true, printedLine: label === 'FI' });
+    const question = await refuseSaleAndAsk({ pool, clientId, id, country, label });
+    await reply(pool, clientId, SALE_WORDING[label].no);
+    assert.equal((await profileOf(pool, clientId))[country.field].status, 'not_registered');
+    assert.equal((await pool.query('select status from client_evidence_requests where id=$1', [question.id])).rows[0].status, 'resolved');
+    await recodeAndPost(pool, clientId, [id]);
+    assert.equal(await journals(pool, id), 0, 'never posted as plain revenue while its own source shows VAT');
+    const asks = await openAsks(pool, clientId);
+    assert.equal(asks.length, 1, JSON.stringify(asks));
+    assert.equal(asks[0].transaction_id, id);
+    assert.equal(asks[0].question, SALE_WORDING[label].correction);
+    // FI: the held source is verified, so it is Finland's corrected-document
+    // question (a corrected invoice in the reply replaces the held source).
+    // GB: that contract is Finnish; the request is an owner question.
+    assert.equal(asks[0].evidence_type, label === 'FI' ? 'document_discrepancy' : 'business_purpose');
+    assert.notEqual(asks[0].request_payload.lane, 'tax_registration');
+    const row = await lineRow(pool, id);
+    const guard = row.payload.ai_suggestion.tax_unresolved_guard;
+    assert.equal(guard.constraint, 'sales_source_shows_vat_unregistered');
+    assert.equal(guard.refusal_code, country.saleRefusalCode);
+    assert.equal(guard.answer.evidence_request_id, question.id);
+    assert.equal(row.payload.ai_suggestion.posting_requirement, label === 'FI' ? 'document_discrepancy' : 'owner_fact');
+    assert.equal(row.coding_state, 'asked');
+    assert.equal(row.convergence_state, 'on_owner', JSON.stringify([row.convergence_state, row.convergence_reason]));
+    // A second clock tick neither posts nor asks again.
+    await recoverChangedCodingEvidenceInDb({ firmId });
+    await recodeAndPost(pool, clientId, [id]);
+    assert.equal(await journals(pool, id), 0);
+    assert.equal((await openAsks(pool, clientId)).length, 1);
+  });
+
+  test(`real PG (${label}): a VAT-registered business's sale whose own invoice shows VAT posts with its VAT split and no question`, { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+    const pool = await freshDb(t);
+    const clientId = `${label.toLowerCase()}-sale-registered`;
+    await seed(pool, clientId, { [country.field]: { status: 'registered', registered_from: '2026-01-01' } });
+    mockModels(t, { verdict: country.verdict, sale: country.sale, current: answerWith('unclear') });
+    const id = `${clientId}-sale`;
+    await addLine(pool, clientId, country, id, '2026-06-02', { sale: true });
+    await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
+    assert.equal(await journals(pool, id), 1, JSON.stringify((await lineRow(pool, id)).payload.ledger_post_refusal));
+    const legs = await postedLegs(pool, [id]);
+    assert.deepEqual(legs.filter(leg => leg.credit > 0).map(leg => leg.credit).sort((a, b) => a - b), [country.tax, country.gross - country.tax]);
+    assert.equal((await openAsks(pool, clientId)).length, 0);
+  });
+}
+
+// FI, the held source not verified (header VAT only, no printed lines): the
+// corrected-document question needs a verified source, so after the "no" the
+// request is an owner question with the same wording.
+test('real PG (FI): after a "no", an unverified sales source is asked for its correction as an owner question', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+  const pool = await freshDb(t);
+  const clientId = 'fi-sale-shows-vat-header-only';
+  await seedFi(pool, clientId, { alv_registration: { status: 'not_registered' } });
+  mockModels(t, { verdict: FI.verdict, sale: FI.sale, current: answerWith('no') });
+  const id = `${clientId}-sale`;
+  await addLine(pool, clientId, FI, id, '2026-06-02', { sale: true });
+  await refuseSaleAndAsk({ pool, clientId, id, country: FI, label: 'FI' });
+  await reply(pool, clientId, SALE_WORDING.FI.no);
+  await recodeAndPost(pool, clientId, [id]);
+  assert.equal(await journals(pool, id), 0);
+  const asks = await openAsks(pool, clientId);
+  assert.deepEqual(asks.map(ask => [ask.evidence_type, ask.question]), [['business_purpose', SALE_WORDING.FI.correction]]);
+  const row = await lineRow(pool, id);
+  assert.equal(row.convergence_state, 'on_owner', JSON.stringify([row.convergence_state, row.convergence_reason]));
+});
+
+// Check, not build: money in coded as a sale with no matched sales document
+// (nothing printed) is not this conflict and is not refused for printed VAT.
+// It does not post either: the revenue-source rule that predates #64
+// (codingRevenueEvidence.js codingRevenueEvidenceGap) asks the owner for the
+// sales record, as it does for a registered business.
+for (const [label, country, seed] of [['FI', FI, seedFi], ['GB', GB, seedGb]]) {
+  test(`real PG (${label}): money in with no matched sales document, record says not registered, is not refused for printed VAT; the sales record is asked for`, { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+    const pool = await freshDb(t);
+    const clientId = `${label.toLowerCase()}-sale-no-document`;
+    await seed(pool, clientId, { [country.field]: { status: 'not_registered' } });
+    mockModels(t, { verdict: country.verdict, sale: country.sale, current: answerWith('unclear') });
+    const id = `${clientId}-sale`;
+    await pool.query("insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,payload) values($1,$2,$3,'2026-06-02','Synthetic customer payment e',$4,0,$5,'needs_review','{}')",
+      [id, firmId, clientId, country.gross, country.currency]);
+    await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
+    await runCodingAutoPostForTransaction({ firmId, clientId, transactionId: id, env: {}, configSnapshot: AUTO });
+    const row = await lineRow(pool, id);
+    assert.notEqual(row.payload.ledger_post_refusal?.code, country.saleRefusalCode);
+    assert.equal(await journals(pool, id), 0);
+    assert.deepEqual((await openAsks(pool, clientId)).map(ask => ask.evidence_type), ['supporting_document']);
+    assert.equal(await registrationQuestions(pool, clientId), 0);
+    assert.equal(row.convergence_state, 'on_owner');
+  });
+}
