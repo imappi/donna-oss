@@ -58,3 +58,19 @@ test('a malformed register value is refused, not preserved', () => {
     { business_stage: 'new' }, { business_stage: 'new', suggestion_dismissed: false, extra: 1 }, [], 'new'
   ]) refused({ business_setup: value });
 });
+
+// The Finnish pilot preparation's camelCase keys (hostedPilot.js), validated to
+// what it writes: entityType like entity_type, accountingCurrency an ISO code.
+test('entityType and accountingCurrency are known keys, validated to what the pilot writes', () => {
+  const pilot = { entityType: 'fi-oy', accountingCurrency: 'EUR' };
+  const { patch, warnings } = validateAndNormaliseProfilePatch(pilot, { jurisdiction: 'fi' });
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(patch, pilot);
+  assert.equal(validateAndNormaliseProfilePatch({ accountingCurrency: ' gbp ' }).patch.accountingCurrency, 'GBP');
+  assert.deepEqual(validateAndNormaliseProfilePatch({ accountingCurrency: null, entityType: null }, { jurisdiction: 'fi' }).patch,
+    { accountingCurrency: null, entityType: null });
+  for (const value of ['EURO', 'E1R', '', 12, {}]) refused({ accountingCurrency: value });
+  for (const patchValue of [{ entityType: 7 }, { entityType: 'fi-made-up-form' }]) {
+    assert.throws(() => validateAndNormaliseProfilePatch(patchValue, { jurisdiction: 'fi' }), (error) => error.statusCode === 400, JSON.stringify(patchValue));
+  }
+});

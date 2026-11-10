@@ -101,7 +101,18 @@ export const persistFinlandSellerIdentityInDb = async ({
     profilePatch.iban = sellerIdentity.iban.trim();
   }
   if (!Object.keys(profilePatch).length) return null;
-  return updateClientProfileInDb({ firmId, clientId, profilePatch, actorId });
+  // Who gave these details: the chat's actorId is the binding's owner
+  // collaborator when the binding has one, else the binding's verifier or the
+  // transport's fallback id ('whatsapp:webhook'), neither of whom typed them.
+  // The row names the owner only when actorId is an active collaborator holding
+  // this book; otherwise it stays 'system' with the id it was given.
+  const owner = actorId ? await withFirmDbClient(async (client) => (await client.query(
+    `select fc.id from firm_collaborators fc join client_assignments ca
+        on ca.firm_id = fc.firm_id and ca.principal_type = 'firm_collaborator' and ca.principal_id = fc.id
+      where fc.firm_id = $1 and fc.id = $2 and ca.client_id = $3 and fc.status = 'active' and ca.status = 'active'
+      limit 1`, [firmId, actorId, clientId])).rows[0] || null) : null;
+  return updateClientProfileInDb({ firmId, clientId, profilePatch, actorId,
+    ...(owner ? { principal: { principalType: 'firm_collaborator', principalId: owner.id } } : {}) });
 };
 
 export const createInvoiceIssuanceEvidenceRequestInDb = async ({
