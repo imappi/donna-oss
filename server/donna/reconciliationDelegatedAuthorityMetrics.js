@@ -53,15 +53,22 @@ const queryGrants = async (client, firmId, clientId) => {
     const res = await client.query(
       `select
           count(*)::int as total,
-          count(*) filter (where status = 'active')::int as active,
-          count(*) filter (where status = 'revoked')::int as revoked,
-          count(*) filter (where status = 'suspended')::int as suspended,
-          count(*) filter (where use_count > 0)::int as used,
-          count(*) filter (where correction_count > 0)::int as corrected,
-          count(*) filter (where archetype <> all($${params.length + 1}::text[]))::int as high_risk,
-          coalesce(array_agg(distinct model) filter (where model is not null), '{}') as models
-         from reconciliation_authority_grants
-        where firm_id = $1${where}`,
+          count(*) filter (where g.status = 'active')::int as active,
+          count(*) filter (where g.status = 'revoked')::int as revoked,
+          count(*) filter (where g.status = 'suspended')::int as suspended,
+          -- "used" = the grant authorised at least one acceptance, read from the
+          -- persisted accept receipts (the same source the grants view reads,
+          -- listAuthorityGrantsForClient). The use_count column is not maintained.
+          count(*) filter (where exists (
+            select 1 from reconciliation_matches m
+             where m.firm_id = g.firm_id and m.client_id = g.client_id
+               and m.payload->'authorization'->'delegated_authority'->>'grant_id' = g.id
+          ))::int as used,
+          count(*) filter (where g.correction_count > 0)::int as corrected,
+          count(*) filter (where g.archetype <> all($${params.length + 1}::text[]))::int as high_risk,
+          coalesce(array_agg(distinct g.model) filter (where g.model is not null), '{}') as models
+         from reconciliation_authority_grants g
+        where g.firm_id = $1${where ? ' and g.client_id = $2' : ''}`,
       [...params, V1_ARCHETYPES]
     );
     const row = res.rows[0] || {};

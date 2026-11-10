@@ -56,7 +56,7 @@ export const redisposeDocumentOwnerReplyWithClient = async ({ client, firmId, re
     replyDocumentIds: request.response_payload?.document_ids || [],
     actorId,
     decidingPolicy,
-    stillOpen: noSettlementAskStillOpen(request.request_payload?.lane)
+    stillOpen: noSettlementAskStillOpen(request.request_payload?.lane, request.request_payload?.recognition)
   });
 };
 

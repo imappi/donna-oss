@@ -203,7 +203,7 @@ const insertBill = (seed, { id, clientId = ACCRUAL, total, tax, date, number, ve
 const runBill = (clientId, documentId) => withFirmDbClient((client) => runSupplierBillReconciliationLlmForDocument({
   client, firmId: FIRM, clientId, documentId, fetchImpl: async () => { throw new Error('legacy provider must not be called'); } }));
 
-test('real PG: an uploaded unpaid supplier bill on an accrual book is asked of the owner once and then waits on them; cash books and credit notes are unchanged',
+test('real PG: an uploaded unpaid supplier bill on an accrual book is asked of the owner once and then waits on them; cash books are unchanged and a supplier credit note is asked as a credit note',
   { skip: !PG_URL && 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async () => {
     const { seed, url, stop } = await boot();
     const prior = { DATABASE_URL: process.env.DATABASE_URL, DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX };
@@ -229,11 +229,16 @@ test('real PG: an uploaded unpaid supplier bill on an accrual book is asked of t
       assert.ok(!second.supplier_bill_settlement_ask?.minted, JSON.stringify(second));
       assert.equal((await asksFor(seed, 'bill-tukku')).length, 1, 'the same bill is never asked twice');
 
-      // A supplier credit note is not an unpaid bill: no ask.
+      // A supplier credit note is not an unpaid bill: it is asked as a credit
+      // note (deducted, refunded or still open), never as "has it been paid".
       await insertBill(seed, { id: 'bill-credit', total: -62, tax: -12, date: '2025-02-09', number: 'HL-12', paymentStatus: 'credit_note' });
       const credit = await runBill(ACCRUAL, 'bill-credit');
-      assert.equal(credit.supplier_bill_settlement_ask?.minted ?? false, false, JSON.stringify(credit));
-      assert.deepEqual(await asksFor(seed, 'bill-credit'), []);
+      assert.equal(credit.supplier_bill_settlement_ask?.minted, true, JSON.stringify(credit));
+      const creditAsks = await asksFor(seed, 'bill-credit');
+      assert.deepEqual(creditAsks.map((a) => [a.request_payload.lane, a.request_payload.recognition]),
+        [['supplier_bill_settlement', 'unrecorded_uploaded_supplier_credit_note']]);
+      assert.match(creditAsks[0].question, /^Ostohyvityslasku HL-12 \(Tukku Oy, 62,00 EUR, päivätty 9\.2\.2025\): /);
+      assert.doesNotMatch(creditAsks[0].question, /Onko lasku maksettu/);
 
       // Cash basis: unchanged, the bill is recorded when it is paid.
       await insertBill(seed, { id: 'bill-cash', clientId: CASH, total: 248, tax: 48, date: '2025-02-05', number: '4711' });
@@ -524,6 +529,115 @@ test('real PG: "still unpaid" to an unpaid sales invoice or supplier bill keeps 
         assert.equal(after.request_payload.obligation_open_acknowledged, undefined, c.id);
       }
     } finally {
+      await __endFirmDbPoolForTests().catch(() => {});
+      for (const [k, v] of Object.entries(prior)) { if (v == null) delete process.env[k]; else process.env[k] = v; }
+      await stop();
+    }
+  });
+
+// Part-paid documents and a supplier credit note netted from a bill payment,
+// through the real reader (the ALV read and the financial statements) on
+// PostgreSQL. Every amount is a persisted fact: the document totals, the
+// match_amount of each decided match, the posted settlement journal's date.
+//   1. A sales invoice and a supplier bill each paid one instalment inside
+//      February: the instalment is in the posted ledger, the unpaid remainder
+//      is named with its amount (gross, net and tax) in both drafts.
+//   2. A supplier bill paid net of a supplier credit note (the bank line is
+//      matched to the bill alone, at bill − credit): Donna holds no record
+//      that the credit was deducted, so it does not infer one. The bill's
+//      unpaid remainder and the credit note are both named, and the owner is
+//      asked about the credit note on the supplier lane, in a question that
+//      fits a credit note, never twice.
+const instalment = async (seed, { documentId, type, txId, date, amount, journalDate }) => {
+  const [moneyIn, moneyOut] = type === 'sales_invoice' ? [amount, 0] : [0, amount];
+  await seed.query(`insert into transactions (id, firm_id, client_id, transaction_date, description, money_in, money_out, currency, status, payload)
+    values ($1, $2, $3, $4, $1, $5, $6, 'EUR', 'posted', '{}'::jsonb)`, [txId, FIRM, ACCRUAL, date, moneyIn, moneyOut]);
+  await seed.query(`insert into reconciliation_matches (id, firm_id, client_id, bank_transaction_id, matched_object_type, matched_object_id, status, match_amount, payload)
+    values ($1, $2, $3, $4, $5, $6, 'confirmed', $7, '{}'::jsonb)`, [`m-${txId}`, FIRM, ACCRUAL, txId, type, documentId, amount]);
+  if (journalDate) await journal(seed, { sourceType: 'transaction', sourceId: txId, date: journalDate });
+};
+
+test('real PG: a part-paid invoice or bill names its unpaid remainder; a supplier credit note netted from a bill payment is asked of the owner, never inferred',
+  { skip: !PG_URL && 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async () => {
+    const { seed, url, stop } = await boot();
+    const prior = { DATABASE_URL: process.env.DATABASE_URL, DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX };
+    const priorDecide = __jevReconciliation.decide;
+    process.env.DATABASE_URL = url; process.env.DATABASE_POOL_MAX = '3';
+    __jevReconciliation.decide = noSettlement;
+    try {
+      // ── 1. Part-paid ───────────────────────────────────────────────────────
+      // Sales invoice 1010: 800,00 + 204,00 ALV; 502,00 in February, 502,00 in March.
+      await insertDocument(seed, { id: 'doc-osa', customer: 'Osamaksu Oy', total: 1004, tax: 204, date: '2025-02-04', number: '1010', paymentStatus: 'partial' });
+      await instalment(seed, { documentId: 'doc-osa', type: 'sales_invoice', txId: 'tx-osa-1', date: '2025-02-20', amount: 502, journalDate: '2025-02-20' });
+      await instalment(seed, { documentId: 'doc-osa', type: 'sales_invoice', txId: 'tx-osa-2', date: '2025-03-20', amount: 502, journalDate: '2025-03-20' });
+      // Its neighbour paid in full by two February instalments stays represented.
+      await insertDocument(seed, { id: 'doc-kaksi', customer: 'Kaksi Oy', total: 251, tax: 51, date: '2025-02-06', number: '1011', paymentStatus: 'paid' });
+      await instalment(seed, { documentId: 'doc-kaksi', type: 'sales_invoice', txId: 'tx-kaksi-1', date: '2025-02-10', amount: 125.5, journalDate: '2025-02-10' });
+      await instalment(seed, { documentId: 'doc-kaksi', type: 'sales_invoice', txId: 'tx-kaksi-2', date: '2025-02-24', amount: 125.5, journalDate: '2025-02-24' });
+      // Supplier bill 4720: 400,00 + 96,00 ALV; 248,00 paid in February, the rest not yet.
+      await insertBill(seed, { id: 'bill-osa', vendor: 'Rautakulma Oy', total: 496, tax: 96, date: '2025-02-03', number: '4720', paymentStatus: 'partial' });
+      await instalment(seed, { documentId: 'bill-osa', type: 'supplier_bill', txId: 'tx-bill-osa-1', date: '2025-02-17', amount: 248, journalDate: '2025-02-17' });
+
+      // ── 2. Netted supplier credit note ─────────────────────────────────────
+      // Bill 4730 248,00 (48,00 ALV) and credit note HL-30 −62,00 (−12,00 ALV);
+      // the business paid 186,00 and the line is matched to the bill alone.
+      await insertBill(seed, { id: 'bill-net', vendor: 'Tukku Oy', total: 248, tax: 48, date: '2025-02-05', number: '4730', paymentStatus: 'partial' });
+      await insertBill(seed, { id: 'bill-net-cn', vendor: 'Tukku Oy', total: -62, tax: -12, date: '2025-02-09', number: 'HL-30', paymentStatus: 'credit_note' });
+      await instalment(seed, { documentId: 'bill-net', type: 'supplier_bill', txId: 'tx-bill-net', date: '2025-02-15', amount: 186, journalDate: '2025-02-15' });
+      // Nothing links the two documents: no credit application names a supplier bill.
+      assert.equal((await seed.query('select count(*)::int as n from document_credit_applications')).rows[0].n, 0);
+
+      // The credit note's no-settlement verdict puts it on the owner, once.
+      const first = await runBill(ACCRUAL, 'bill-net-cn');
+      assert.equal(first.jev_reason, 'jev_no_settlement', JSON.stringify(first));
+      assert.equal(first.supplier_bill_settlement_ask?.minted, true, JSON.stringify(first.supplier_bill_settlement_ask));
+      const asks = await asksFor(seed, 'bill-net-cn');
+      assert.equal(asks.length, 1);
+      assert.deepEqual([asks[0].status, asks[0].evidence_type, asks[0].audience, asks[0].request_payload.lane, asks[0].request_payload.recognition],
+        ['draft', 'payment_method', 'client', 'supplier_bill_settlement', 'unrecorded_uploaded_supplier_credit_note']);
+      // A Finnish book: a credit-note question in Finnish, not "has the bill been paid".
+      assert.match(asks[0].question, /^Ostohyvityslasku HL-30 \(Tukku Oy, 62,00 EUR, päivätty 9\.2\.2025\): /);
+      assert.match(asks[0].question, /vähennetty/);
+      assert.doesNotMatch(asks[0].question, /Onko lasku maksettu/);
+      const second = await runBill(ACCRUAL, 'bill-net-cn');
+      assert.ok(!second.supplier_bill_settlement_ask?.minted, JSON.stringify(second));
+      assert.equal((await asksFor(seed, 'bill-net-cn')).length, 1, 'the same credit note is never asked twice');
+      // The bill itself is not re-asked as unpaid: it has a decided, posted line.
+      assert.deepEqual(await asksFor(seed, 'bill-net'), []);
+
+      // ── The ALV draft ──────────────────────────────────────────────────────
+      const alv = await getFinlandAlvReturnFromDb({ firmId: FIRM, clientId: ACCRUAL, period: '2025-02' });
+      assert.equal(alv.review.status, 'needs_review');
+      assert.deepEqual(alv.review.blockers, ['unrecognized_sales_documents', 'unrecognized_purchase_documents']);
+      const sales = alv.review.unrecognizedSales;
+      assert.deepEqual(sales.items.map((i) => [i.document_id, i.rests, i.gross, i.net, i.tax]), [['doc-osa', 'part_settled_in_period', 502, 400, 102]]);
+      assert.deepEqual(sales.items[0].remainder, { document_gross: 1004, settled_in_period: 502, remaining_gross: 502, remaining_tax: 102 });
+      assert.deepEqual(sales.represented, [{ document_id: 'doc-kaksi', by: 'settlement_journal' }]);
+      assert.match(sales.statement, /^1 uploaded sales document is not fully recognised .*: 400\.00 EUR net \+ 102\.00 tax\. 1 of them is paid only in part in this period; only its unpaid remainder is counted here\.$/);
+      const purchases = alv.review.unrecognizedPurchases;
+      assert.deepEqual(purchases.items.map((i) => [i.document_id, i.kind, i.rests, i.gross, i.net, i.tax, i.on_nobody]), [
+        ['bill-osa', 'invoice', 'part_settled_in_period', 248, 200, 48, true],
+        ['bill-net', 'invoice', 'part_settled_in_period', 62, 50, 12, true],
+        ['bill-net-cn', 'credit_note', 'no_settlement', -62, -50, -12, false]]);
+      assert.equal(purchases.items[2].held_by[0].anchor, 'document');
+      assert.deepEqual(purchases.totals, [{ currency: 'EUR', count: 3, gross: 248, net: 200, tax: 48, tax_unknown_count: 0 }]);
+      assert.deepEqual(purchases.represented, []);
+
+      // ── The financial statements ──────────────────────────────────────────
+      const report = await getFinancialReportFromDb({ firmId: FIRM, clientId: ACCRUAL, periodStart: '2025-02-01', periodEnd: '2025-02-28' });
+      const byCode = Object.fromEntries(report.draft.reasons.map((r) => [r.code, r]));
+      assert.deepEqual(byCode.unrecognized_sales_documents?.document_ids, ['doc-osa'], JSON.stringify(report.draft.reasons));
+      assert.match(byCode.unrecognized_sales_documents.detail, /400\.00 EUR net \+ 102\.00 tax/);
+      assert.deepEqual(byCode.unrecognized_purchase_documents?.document_ids, ['bill-osa', 'bill-net', 'bill-net-cn']);
+      assert.match(byCode.unrecognized_purchase_documents.detail, /200\.00 EUR expense \+ 48\.00 input tax/);
+
+      // March holds the second sales instalment: the invoice is not listed there.
+      const march = await getFinlandAlvReturnFromDb({ firmId: FIRM, clientId: ACCRUAL, period: '2025-03' });
+      assert.equal(march.review.unrecognizedSales, undefined);
+      // This module reports and asks: nothing was posted by any of it.
+      assert.equal((await seed.query(`select count(*)::int as n from ledger_journals where client_id = $1`, [ACCRUAL])).rows[0].n, 6);
+    } finally {
+      __jevReconciliation.decide = priorDecide;
       await __endFirmDbPoolForTests().catch(() => {});
       for (const [k, v] of Object.entries(prior)) { if (v == null) delete process.env[k]; else process.env[k] = v; }
       await stop();

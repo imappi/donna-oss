@@ -84,13 +84,22 @@ export const listOpenSeatAsksForPrincipal = async ({
   if (!type || !id) return [];
   // The document anchor rides request_payload.document_id (the doc-first
   // drain's lane; transaction_id is the only artifact column) — lock-step
-  // with openOwnerAskDocIdsFrom in src/lib/documentsInbox.js.
+  // with openOwnerAskDocIdsFrom in src/lib/documentsInbox.js. An ask on a
+  // standing subject (a physical count line, an account role) has neither:
+  // it is labelled by its canonical anchor's typed rung (buildCanonicalAnchor),
+  // and anything else carries no label rather than a borrowed 'document'.
   const result = await queryFirmDb(
     `select cer.id, cer.firm_id, cer.client_id, cer.transaction_id,
             cer.request_payload->>'document_id' as document_id,
             cer.question, cer.status, cer.created_by, cer.created_at,
-            case when cer.transaction_id is not null then 'transaction' else 'document' end as artifact_type,
-            coalesce(cer.transaction_id, cer.request_payload->>'document_id') as artifact_id
+            case when cer.transaction_id is not null then 'transaction'
+                 when cer.request_payload->>'document_id' is not null then 'document'
+                 when cer.canonical_anchor like 'physical\\_count\\_line:%' then 'physical_count_line'
+                 when cer.canonical_anchor like 'account\\_role:%' then 'account_role'
+            end as artifact_type,
+            coalesce(cer.transaction_id, cer.request_payload->>'document_id',
+                     case when cer.canonical_anchor like 'physical\\_count\\_line:%' or cer.canonical_anchor like 'account\\_role:%'
+                          then substr(cer.canonical_anchor, strpos(cer.canonical_anchor, ':') + 1) end) as artifact_id
        from client_evidence_requests cer
       where cer.firm_id = $1
         and cer.audience = 'seat'
