@@ -260,7 +260,7 @@ export const AR_AE_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-01.ar2-remaining-surfaces-contract',
   catalogVersion: AR_AE_CATALOG_VERSION,
-  expectedMessageCount: 2867,
+  expectedMessageCount: 2868,
   sourceContext: Object.freeze([
     'docs/design-donna-arabic-localization.md',
     'docs/ar4f-ae-native-review-packet.md'
