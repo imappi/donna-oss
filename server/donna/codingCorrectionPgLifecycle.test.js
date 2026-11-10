@@ -320,6 +320,17 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
   assert.doesNotMatch(convergenceForTransaction(await tx(id)).reason,/_correction_(blocked|failed):/);
   return stored;
  };
+ // The "next free tick" can itself meet real contention on a loaded machine
+ // (autovacuum/ANALYZE of the freshly written scratch tables takes the same
+ // SHARE UPDATE EXCLUSIVE). That is the rule working, not a failure: each
+ // contended retry must record nothing; a bounded few later the tick is free.
+ const freeTick=async id=>{const before=await failureCount(id);let res;
+  for(let i=0;i<20;i++){res=await recoverPostedCodingCorrectionsInDb(onlyCase(id));
+   if(res.find(r=>r.transactionId===id)?.state!=='contended')return res;
+   assert.equal(await failureCount(id),before,'a contended retry mints no receipt');
+   assert.doesNotMatch(JSON.stringify((await caseOf(id)).recovery||{}),/55P03|40001|40P01/);
+   await new Promise(r=>setTimeout(r,250));}
+  return res;};
  phase='allocation';
  // 1. Held before the tick: the scan fence refuses before any claim or model call.
  await seed('contended-scan');await recoverChangedCodingEvidenceInDb({firmId:'f'});
@@ -327,7 +338,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-scan'));}finally{await release();}
  assert.deepEqual(await assertContended('contended-scan',result,0),beforeCase,'the case is left exactly as it was');
  assert.equal(calls,contendedCalls,'no model call is spent behind a held fence');
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-scan'));
+ result=await freeTick('contended-scan');
  assert.equal(result.find(r=>r.transactionId==='contended-scan').state,'completed',JSON.stringify(result));
  // 2. Taken while the coder reasons: the decision fence refuses; the claim is
  // returned, so the reconsideration budget is not spent on contention.
@@ -336,7 +347,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-decision'));}finally{race=null;if(release)await release();}
  let stored=await assertContended('contended-decision',result,0);
  assert.equal(stored.recovery?.attempts,undefined,JSON.stringify(stored));
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-decision'));
+ result=await freeTick('contended-decision');
  assert.equal(result.find(r=>r.transactionId==='contended-decision').state,'completed',JSON.stringify(result));
  // 3. Taken after the decision commits: the adjustment writer refuses; the
  // saved decision stays ready and is replayed without another model call.
@@ -349,7 +360,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(stored.recovery.state,'ready');assert.equal(stored.recovery.attempts,1);
  assert.equal((await pool.query('select count(*)::int n from ledger_journals where correction_of_journal_id=$1',[stored.original_journal_id])).rows[0].n,0);
  contendedCalls=calls;
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-write'));
+ result=await freeTick('contended-write');
  assert.equal(result.find(r=>r.transactionId==='contended-write').state,'completed',JSON.stringify(result));
  assert.equal(calls,contendedCalls,'the saved decision is replayed, not reasoned again');
  // 4. A case stored before this rule with the raw code as its blocker is
@@ -362,7 +373,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  release=await holdFence();
  try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-legacy'));}finally{await release();}
  await assertContended('contended-legacy',result,0);
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-legacy'));
+ result=await freeTick('contended-legacy');
  assert.equal(result.find(r=>r.transactionId==='contended-legacy').state,'completed',JSON.stringify(result));
  // 5. A real refusal under the same held fence is still recorded as itself.
  await seed('contended-refusal');await recoverChangedCodingEvidenceInDb({firmId:'f'});
@@ -374,7 +385,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(await failureCount('contended-refusal'),1);assert.equal(calls,contendedCalls);
  assert.equal(convergenceForTransaction(await tx('contended-refusal')).reason,'posted_evidence_correction_blocked:CODING_CORRECTION_AUTHORITY_REQUIRED');
  await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'canary',actorId:'member',actorType:'firm_member',reason:'Restore synthetic correction authority'}));
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-refusal'));
+ result=await freeTick('contended-refusal');
  assert.equal(result.find(r=>r.transactionId==='contended-refusal').state,'completed',JSON.stringify(result));
  // 6./7. A serialization failure or a deadlock in the REPEATABLE READ scan is
  // the same transient condition as a held fence: never a blocked code. A second
@@ -395,7 +406,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
   finally{await holder.query('rollback').catch(()=>{});holder.release();}}
  assert.deepEqual(await assertContended('serialization-scan',result,0),beforeCase,'a serialization failure leaves the case as it was');
  assert.equal(calls,contendedCalls,'no model call is spent on a serialization failure');
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('serialization-scan'));
+ result=await freeTick('serialization-scan');
  assert.equal(result.find(r=>r.transactionId==='serialization-scan').state,'completed',JSON.stringify(result));
  //   7. The holder then asks for the scan's own lease: 40P01, deadlock detected.
  // The holder's deadlock_timeout is longer, so the scan is the one aborted.
@@ -410,7 +421,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
   finally{await holder.query('rollback').catch(()=>{});await holder.query('select pg_advisory_unlock_all()').catch(()=>{});holder.release();}}
  assert.deepEqual(await assertContended('deadlock-scan',result,0),beforeCase,'a deadlock leaves the case as it was');
  assert.equal(calls,contendedCalls,'no model call is spent on a deadlock');
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('deadlock-scan'));
+ result=await freeTick('deadlock-scan');
  assert.equal(result.find(r=>r.transactionId==='deadlock-scan').state,'completed',JSON.stringify(result));
  //   A case stored before this rule as blocked:40001 is pending again on the
  //   next contended tick, with no receipt, like a stored 55P03 (section 4).
@@ -421,7 +432,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  release=await holdFence();
  try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('serialization-legacy'));}finally{await release();}
  await assertContended('serialization-legacy',result,0);
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('serialization-legacy'));
+ result=await freeTick('serialization-legacy');
  assert.equal(result.find(r=>r.transactionId==='serialization-legacy').state,'completed',JSON.stringify(result));
  // 8. A programming error is neither transient nor a refusal: it is stored as
  // an unexpected failure with its message, and the case is taken again.
@@ -432,7 +443,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(stored.recovery.state,'blocked');assert.equal(stored.recovery.details.message,'synthetic programming error');
  assert.equal(stored.recovery.details.cause_name,'TypeError');assert.equal(await failureCount('unexpected-error'),1);
  assert.equal(stored.recovery.attempts,0,'a programming error returns the reasoning slot it claimed');
- result=await recoverPostedCodingCorrectionsInDb(onlyCase('unexpected-error'));
+ result=await freeTick('unexpected-error');
  assert.equal(result.find(r=>r.transactionId==='unexpected-error').state,'completed',JSON.stringify(result));
 
  // A waiting owner case cannot consume the bounded clock's only slot forever.
