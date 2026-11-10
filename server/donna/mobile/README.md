@@ -55,4 +55,9 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
   expired-token / admin-token refusals; every response validated against the
   contract.
 
+- `mobilePushRegistrations.test.js` / `mobilePushRegistrationsPgLifecycle.test.js`
+  — device registrations (migration 170): validation, idempotency, a token
+  moving to another owner, removal, the not-yours 404, and registrations
+  ending with the owner's access (removal, client delete, collaborator row).
+
 `GAPS.md` lists what the contract asks for that Donna cannot say yet.

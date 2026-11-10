@@ -35,6 +35,7 @@ import {
   revokeSession
 } from './mobileAuth.js';
 import { createFirmRouteDispatcher } from './mobileDispatch.js';
+import { PUSH_REGISTRATION_ROUTES } from './mobilePushRegistrations.js';
 import {
   buildBooksStatus,
   buildQueue,
@@ -537,9 +538,7 @@ export const NOT_IMPLEMENTED = Object.freeze([
   ['GET', /^\/entities\/[^/]+\/artifacts\/(queue_card|document)\/[^/]+\/messages$/, 'Item conversations are not available on this server yet.'],
   ['POST', /^\/entities\/[^/]+\/artifacts\/(queue_card|document)\/[^/]+\/messages$/, 'Item conversations are not available on this server yet.'],
   ['POST', /^\/entities\/[^/]+\/mileage$/, 'Donna records mileage only from a chat proposal today.'],
-  ['GET', /^\/entities\/[^/]+\/activity$/, 'The activity feed is not available on this server yet.'],
-  ['POST', /^\/notifications\/registrations$/, 'Push notifications are not available on this server yet.'],
-  ['DELETE', /^\/notifications\/registrations\/[^/]+$/, 'Push notifications are not available on this server yet.']
+  ['GET', /^\/entities\/[^/]+\/activity$/, 'The activity feed is not available on this server yet.']
 ]);
 
 const ENTITY_ROUTES = [
@@ -567,6 +566,7 @@ const AUTH_ROUTES = [['POST', /^\/auth\/sessions$/], ['POST', /^\/auth\/sessions
 // prefix). Used by the coverage test that pins every contract operation.
 export const mobileRouteState = (method, path) => {
   if (AUTH_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'implemented';
+  if (PUSH_REGISTRATION_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'implemented';
   if (NOT_IMPLEMENTED.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'not_implemented';
   const entity = path.match(/^\/entities\/[^/]+(\/.*)$/);
   if (entity && ENTITY_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(entity[1]))) return 'implemented';
@@ -610,6 +610,13 @@ const route = async (req, res, requestUrl, deps) => {
   const owner = await resolveMobileOwner(auth);
 
   if (path === '/me' && method === 'GET') return send(res, 200, await meBody(owner));
+  for (const [verb, pattern, handler] of PUSH_REGISTRATION_ROUTES) {
+    const match = verb === method ? path.match(pattern) : null;
+    if (match) {
+      const { status, body } = await handler({ owner, match, readBody: () => readJson(req) });
+      return send(res, status, body);
+    }
+  }
 
   for (const [verb, pattern, reason] of NOT_IMPLEMENTED) {
     if (verb === method && pattern.test(path)) {

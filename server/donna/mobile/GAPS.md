@@ -59,11 +59,40 @@ changes are proposals for this one. Nothing here is worked around in code.
   only sent (`open`) asks, as the contract mapping says. One of the two is
   wrong; worth a decision.
 
+## Device registrations for notifications
+
+`POST` / `DELETE /notifications/registrations` store and remove registrations
+(`mobilePushRegistrations.js`, migration 170). Nothing sends yet.
+
+- **No sender.** Donna has no push sender; a registration is stored, never
+  used. The module header states the rule a sender must apply (usable only
+  while the owner still has a current assignment to the entity the
+  notification is about) and that tokens are pruned on Expo's
+  `DeviceNotRegistered` receipt.
+- **A firm joined later is not covered until the app registers again.** One
+  registration has one row per owner principal the identity held when it
+  registered, and the app skips re-registering an unchanged token
+  (`pushRegistration.ts`). Proposal (app): re-register on sign-in even when
+  the token is unchanged — the server answers the same id and writes nothing
+  when nothing changed.
+- **A lapsing assignment window has no writer to hook.** Access removal and
+  client deletion end the rows in their own transaction; an assignment whose
+  `ends_at` simply passes leaves the row until that token registers again.
+  The sender rule above makes such a row unusable.
+- **Errors the contract does not declare.** `registerForPush` lists only
+  `201` and `unregisterFromPush` only `204`; the adapter also answers `400
+  REGISTRATION_INVALID` (malformed token, platform or locale), `401`, `403`
+  and `404 NOT_FOUND` (not your registration) in the `ApiError` envelope.
+  Contract proposal: declare them.
+- **The token is stored as sent.** A sender needs it, so it is not hashed in
+  the row; it is kept out of logs, error bodies and audit metadata (receipts
+  carry a 12-hex sha256 prefix). The table is server-side only (RLS block).
+
 ## Endpoints answering `501 NOT_IMPLEMENTED`
 
 Chat (list, send, apply), artifact conversations, mileage, activity, onboarding
 voice/text drafts and profile confirmation, business setup and lookup,
-settings, reviews, account deletion request, push registration. Each has no
+settings, reviews, account deletion request. Each has no
 existing Donna reader or writer to route to, or (chat) one whose action
 vocabulary does not match the contract's (`answer_evidence_request` /
 `record_mileage` vs `answer_card` / `approve_card` / `record_mileage`, with
