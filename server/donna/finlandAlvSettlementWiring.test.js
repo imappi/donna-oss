@@ -56,6 +56,10 @@ const fakeClient = ({
     queries,
     async query(sql, params = []) {
       queries.push({ sql, params });
+      // The filed-VAT-return guard's reads (db/ledger.js assertJournalDateOutsideFiledReturn,
+      // 2026-11-10): no stored chart for the journal's codes and no filed return in this fixture.
+      if (sql.includes('select code, account_type from ledger_accounts')) return { rows: [] };
+      if (sql.includes('from alv_returns')) return { rows: [] };
       // Policy receipt shares the caller-owned posting transaction and lock.
       if (['savepoint runtime_policy_incident', 'release savepoint runtime_policy_incident',
         'rollback to savepoint runtime_policy_incident',

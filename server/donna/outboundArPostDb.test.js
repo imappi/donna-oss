@@ -360,6 +360,9 @@ const reversalFakeClient = ({
     queries,
     async query(sql, params = []) {
       queries.push({ sql, params });
+      // The filed-VAT-return guard reads the client's country (db/ledger.js
+      // assertJournalDateOutsideFiledReturn, 2026-11-10); the US keeps no filed-return record.
+      if (sql === 'select jurisdiction, profile from clients where firm_id = $1 and id = $2') return { rows: [{ jurisdiction: 'us', profile: {} }] };
       if (sql.includes('from ledger_journals') && sql.includes('reversal_of_journal_id = $3')) {
         return { rows: priorReversal ? [{ id: 'journal-rev-old' }] : [] };
       }

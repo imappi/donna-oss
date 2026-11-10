@@ -33,7 +33,7 @@ export const FI_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-28.sg-native-intake.1',
   catalogVersion: FI_CATALOG_VERSION,
-  expectedMessageCount: 2872,
+  expectedMessageCount: 2876,
   register: 'informal second person singular (sinä); never teitittely',
   outOfScope: Object.freeze([
     'server-built text: emails, SMS, chat-channel messages, questions written by code or a model',

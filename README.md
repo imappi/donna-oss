@@ -5,9 +5,6 @@ statements, codes each line in the local VAT rules, reconciles bank lines
 against documents, and asks the business owner only the questions only they
 can answer.
 
-This is a source release of a working codebase, not a supported product.
-There is no hosted service, no support and no warranty.
-
 ## Status
 
 - **Finland** is the most complete market: ALV coding, the Finnish chart of
@@ -337,6 +334,9 @@ Without `DONNA_PG_TEST_URL` the database suites are skipped.
 
 Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). The licence
 does not grant rights to the name Donna.
+
+This is a source release of a working codebase, not a supported product.
+There is no hosted service, no support and no warranty.
 
 ## Contributing
 

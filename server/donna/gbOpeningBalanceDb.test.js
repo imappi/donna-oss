@@ -93,6 +93,10 @@ const fakeFiClient = ({ incorporationDate = '2020-01-01', fiscalYearId = 'fy-fi-
   return {
     writes,
     async query(sql, params = []) {
+      // The filed-VAT-return guard's reads (db/ledger.js assertJournalDateOutsideFiledReturn,
+      // 2026-11-10): no stored chart for the journal's codes and no filed return in this fixture.
+      if (sql.includes('select code, account_type from ledger_accounts')) return { rows: [] };
+      if (sql.includes('from alv_returns')) return { rows: [] };
       if (sql === 'select id from ledger_accounts where firm_id=$1 and client_id=$2 order by id for update') {
         assert.deepEqual(params, ['firm-1', 'client-1']);
         return { rows: [] };
