@@ -66,7 +66,7 @@
 // it from the line's own reconciliation_matches (collectHeldPendingAuthorityMatches)
 // and feeds hasCoveringAuthorityGrant from the grant surface's read-only coverage
 // check, so a coded line whose match is held reads hanging, never finished;
-// migration 167 marks a client's held lines whenever its grants change.
+// migration 174 marks a client's held lines whenever its grants change.
 
 import { assertVerdictTransactionBudgetActive, clearVerdictTransactionBudget } from './executionBudget.js';
 import { bindConvergenceConnection, unbindConvergenceConnection, withConvergenceTransaction, isConvergencePool, convergenceConnectionRecord } from './convergenceConnection.js';

@@ -1,4 +1,4 @@
--- 167 — A standing authority grant is a convergence input.
+-- 174 — A standing authority grant is a convergence input.
 --
 -- A material match held by the materiality ceiling (reconciliation_matches
 -- status 'suggested', payload.authorization reasons ['above_materiality_ceiling'])
@@ -41,6 +41,6 @@ create trigger reconciliation_authority_grants_convergence_mark
   for each row execute function convergence_mark_from_authority_grant();
 
 insert into convergence_marks (firm_id, client_id, target_type, target_id, source)
-select distinct m.firm_id, m.client_id, 'transaction', m.bank_transaction_id, 'migration_167'
+select distinct m.firm_id, m.client_id, 'transaction', m.bank_transaction_id, 'migration_174'
   from reconciliation_matches m
  where m.status = 'suggested' and m.bank_transaction_id is not null;
