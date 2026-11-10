@@ -169,7 +169,11 @@ test('real PG: a NETS credit settled by a koontilasku row posts bank net · fee 
   const refused = (await pool.query("select coding_state, convergence_state, convergence_reason, payload->'ledger_post_refusal' as refusal from transactions where id = 'tx-nets-6'")).rows[0];
   assert.equal(refused.coding_state, 'applied', 'the coding decision stands; only the post is refused');
   assert.equal(refused.refusal.code, 'TRANSACTION_ALV_TREATMENT_UNRESOLVED');
-  assert.equal(refused.refusal.source, 'ledger_auto_post_sweep');
+  // One owner per stamp: the named writer's own receipt stamped this refusal
+  // before the sweep; the sweep keeps that stamp and adds only its audit row.
+  assert.equal(refused.refusal.source, 'posting_policy');
+  assert.deepEqual((await pool.query("select metadata->>'code' as code, metadata->>'source' as source from audit_events where resource_id = 'tx-nets-6' and action = 'ledger.auto_post_refused'")).rows,
+    [{ code: 'TRANSACTION_ALV_TREATMENT_UNRESOLVED', source: 'ledger_auto_post_sweep' }]);
   assert.deepEqual([refused.convergence_state, refused.convergence_reason], ['hanging', 'ledger_post_refused:TRANSACTION_ALV_TREATMENT_UNRESOLVED'], 'the refused post is visible to convergence');
   assert.equal((await sweepLedgerAutoPost({ firmId, clientId, configSnapshot, transactionId: 'tx-nets-6' })).eligible, 0, 'the refusal damps the next tick');
   // RT-25 — the receipt is the input, the stamp is second. On the mini a
