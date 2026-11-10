@@ -56,7 +56,7 @@ test('no key: the failure names the provider whose key is missing, in the parse 
   assert.deepEqual(notConfiguredFailure(none, 'type_extractors_legacy'), { provider: 'anthropic', reason: 'anthropic_not_configured' });
   // A pinned gpt id with no OpenAI key names OpenAI.
   const pinned = resolveDocumentLaneProvider({ laneId: 'type_extractors_legacy', env: { ANTHROPIC_API_KEY: 'a', BILL_EXTRACTOR_MODEL: 'gpt-5.4' }, modelEnvKeys: ['BILL_EXTRACTOR_MODEL'], defaultModels: { anthropic: 'claude-opus-5-5', openai: 'gpt-5.4' } });
-  assert.deepEqual(notConfiguredFailure(pinned, 'type_extractors_legacy'), { provider: 'openai', reason: 'openai_not_configured' });
+  assert.deepEqual(notConfiguredFailure(pinned, 'type_extractors_legacy'), { provider: 'openai', reason: 'openai_not_configured', pinned_by: 'BILL_EXTRACTOR_MODEL=gpt-5.4' });
 });
 
 test('files: a PDF is a document block titled with its file name, an image an image block; the bytes outrank the declared mime', () => {
