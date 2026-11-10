@@ -873,6 +873,15 @@ export const isPublicDonnaHealthPath = (pathname) =>
 // not the rest of the firm API.
 const isParseCronPath = (pathname) => pathname === '/api/donna/firms/documents/parse-cron';
 
+const supabaseUserPersonName = (user) => {
+  const meta = user?.user_metadata && typeof user.user_metadata === 'object' ? user.user_metadata : {};
+  for (const value of [meta.full_name, meta.name]) {
+    const clean = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+    if (clean && clean.length <= 200) return clean;
+  }
+  return null;
+};
+
 const validateSupabaseBearerToken = async (token) => {
   const config = getSupabaseAuthConfig();
   if (!token || !config.url || !config.publishableKey) return null;
@@ -903,6 +912,10 @@ const validateSupabaseBearerToken = async (token) => {
     // GoTrue's own confirmation stamp. Read by the owner-invite acceptance,
     // which binds a principal by email and so needs the email proven.
     emailVerified: Boolean(user?.email_confirmed_at || user?.confirmed_at),
+    // The person's own name, when the identity provider holds one (Google
+    // fills user_metadata.full_name; an email + password sign-up has none).
+    // Read by self-provisioning to name the owner principal; null otherwise.
+    name: supabaseUserPersonName(user),
     staff: config.allowedEmails.size === 0 || config.allowedEmails.has(email)
   };
 };

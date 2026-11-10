@@ -586,6 +586,10 @@ export const selfProvisionClientWorkspace = async ({
 
   const clientId = idFor('client-self', targetFirmId, email);
   const displayName = String(companyName || '').trim() || email.split('@')[0] || 'My business';
+  // The owner PERSON's name is not the company's: it is the name the identity
+  // provider holds for them (auth.name), or nothing. Readers fall back to the
+  // email address for a principal with no name.
+  const ownerName = String(auth?.name || '').trim() || null;
 
   // Client row first (createClientInDb runs its own transaction). The
   // deterministic id makes this a safe upsert on retry. profile.email is what
@@ -622,7 +626,7 @@ export const selfProvisionClientWorkspace = async ({
     }
   });
   if (normalizedJurisdiction === 'GB') await seedGbChart({ firmId: targetFirmId, clientId, entityType: normalizedEntityType });
-  await bindOwner({ firmId: targetFirmId, email, userId, clientId, displayName });
+  await bindOwner({ firmId: targetFirmId, email, userId, clientId, displayName: ownerName });
 
   return { clientId, created: true };
 };
