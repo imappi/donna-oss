@@ -46,6 +46,7 @@ test('every contract operation is either routed or answers NOT_IMPLEMENTED — n
   const implemented = Object.entries(states).filter(([, state]) => state === 'implemented').map(([key]) => key).sort();
   assert.deepEqual(implemented, [
     'DELETE /auth/sessions/current',
+    'GET /entities/{entityId}/business-setup',
     'GET /entities/{entityId}/documents',
     'GET /entities/{entityId}/documents/parse-status',
     'GET /entities/{entityId}/documents/{documentId}',
@@ -55,6 +56,7 @@ test('every contract operation is either routed or answers NOT_IMPLEMENTED — n
     'GET /me',
     'POST /auth/sessions',
     'POST /auth/sessions/refresh',
+    'POST /entities/{entityId}/business-setup',
     'POST /entities/{entityId}/documents/register',
     'POST /entities/{entityId}/documents/upload-intent',
     'POST /entities/{entityId}/documents/{documentId}/resolve-duplicate',

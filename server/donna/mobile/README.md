@@ -55,4 +55,10 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
   expired-token / admin-token refusals; every response validated against the
   contract.
 
+- `mobileBusinessSetup.test.js` / `mobileBusinessSetupPgLifecycle.test.js` —
+  the business register: parsing, projection and patches; then on PostgreSQL
+  the manual confirm, stage and defer through the firm profile route, and the
+  no-token / staff / foreign-entity / stale-candidate / replaced-ID (including
+  a race) / non-Finnish / lookup refusals.
+
 `GAPS.md` lists what the contract asks for that Donna cannot say yet.
