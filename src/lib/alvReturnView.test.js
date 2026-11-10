@@ -269,3 +269,16 @@ test('covered_by: another live return over these dates is shown as the server gi
   assert.deepEqual(pending.coveredBy.map((c) => `${c.periodKey}:${c.tone}`), ['2026:pending']);
   assert.deepEqual(buildAlvReturnViewModel(envelope()).coveredBy, [], 'an envelope without covered_by (older server) renders nothing extra');
 });
+
+test('open correction cases: the blocker names each line, its reason and a closed period', () => {
+  const view = alvBlockerView('open_coding_corrections', { openCodingCorrections: { count: 3, truncated: true, items: [
+    { transaction_id: 'tx-1', journal_id: 'j-1', journal_date: '2026-06-10', reason: 'posted_source_evidence_changed', next_action: 'recode_decided', recovery: null },
+    { transaction_id: 'tx-2', journal_id: 'j-2', journal_date: '2026-06-12', reason: 'posted_tax_registration_changed', next_action: 'person_corrects_closed_period', recovery: { state: 'blocked', code: 'CODING_CORRECTION_TAX_PERIOD_CLOSED' } }
+  ] } });
+  assert.equal(view.severity, 'blocker');
+  assert.equal(view.label, 'Kauden kirjauksia korjataan');
+  assert.match(view.hint, /^3 tämän kauden kirjauksella on avoin korjaus\. Luvut ovat kirjanpidon mukaiset/);
+  assert.match(view.hint, /10\.6\.2026 \(tapahtuma tx-1, kirjaus j-1\): tosite muuttui kirjauksen jälkeen\./);
+  assert.match(view.hint, /12\.6\.2026 \(tapahtuma tx-2, kirjaus j-2\): ALV-rekisteröinti on nyt toinen kuin kirjattaessa — kausi on lukittu tai ilmoitettu, korjauksen tekee ihminen\./);
+  assert.match(view.hint, /Näytetään 2 \/ 3\.$/);
+});

@@ -16,6 +16,7 @@ test('real DB wiring scopes the persisted period and posted ledger read to the t
       { journal_id: 'j1', line_no: 1, debit: 0, credit: 100, tax_type: 'VAT_SR_20_OUTPUT', account_type: 'revenue' },
       { journal_id: 'j1', line_no: 2, debit: 0, credit: 20, tax_type: 'NONE', account_type: 'liability', role: 'vat_output' }
     ] };
+    if (sql.includes('from transactions t')) return { rows: [] }; // no open correction case in the period
     throw new Error('unexpected query');
   } };
   const prepared = await prepareGbVatReturnWithClient({
@@ -29,6 +30,7 @@ test('real DB wiring scopes the persisted period and posted ledger read to the t
   assert.deepEqual(calls[0].params, ['firm-1', 'client-1']);
   assert.deepEqual(calls[1].params, ['firm-1', 'client-1', '2026-01-01', '2026-03-31']);
   assert.match(calls[1].sql, /lj\.status in \('posted', 'closed'\)/); // a close lock seals posted journals to closed
+  assert.deepEqual(calls[2].params.slice(0, 4), ['firm-1', 'client-1', '2026-01-01', '2026-03-31'], 'the open-correction read is scoped to the client and the period');
   assert.match(renderGbVatReturnForOwner(prepared), /Box 9: £0\.00/);
 });
 

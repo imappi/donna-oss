@@ -212,4 +212,59 @@ assert.throws(
   (error) => error.code === 'LEDGER_WRITEBACK_INVALID_PAYLOAD' && /same as the bank account/.test(error.message)
 );
 
+// ─── a market's declared bank and cash accounts (FI: tilikartta 1910 / 1900) ─
+const fiCoded = (name, extra = {}) => buildDonnaLedgerWriteback({ jurisdiction: 'fi',
+  transaction: { id: 'tx-fi', date: '2026-03-05', money_out: 120, account_currency: 'EUR', ai_suggestion: { proposed_account: name }, ...extra.transaction },
+  ledgerAccounts: extra.ledgerAccounts || [{ id: 'acct-7000', code: '7000', name: 'Vuokrakulut', type: 'expense', status: 'active', aliases: ['Rent'] }] });
+// An empty bank side mints the chart's 1910, carrying its declaration.
+const fiRent = fiCoded('Rent');
+assert.deepEqual([fiRent.bank_account.code, fiRent.bank_account.name, fiRent.bank_account.currency, fiRent.bank_account.source],
+  ['1910', 'Pankkitili', 'EUR', 'market_declared_bank']);
+assert.equal(fiRent.bank_account.declared_account.statutory_group, 'cash_and_bank');
+const fiJournal = buildLedgerJournalForTransaction({ transaction: { id: 'tx-fi', date: '2026-03-05', money_out: 120, account_currency: 'EUR' },
+  coding: fiRent.coding, bankAccount: fiRent.bank_account });
+assert.deepEqual(fiJournal.lines.map((l) => [l.direction, l.account.code, l.account.type, l.account.canonical_role ?? null, l.account.statutory_group ?? null]),
+  [['debit', '7000', 'expense', null, null], ['credit', '1910', 'bank', 'asset.cash', 'cash_and_bank']]);
+// A further currency never lands on (and is never refused by) the EUR row.
+const eurBank = { id: 'acct-1910', code: '1910', name: 'Pankkitili', type: 'bank', currency: 'EUR', canonical_role: 'asset.cash', status: 'active' };
+const fiUsd = fiCoded('Rent', { transaction: { account_currency: 'USD' }, ledgerAccounts: [eurBank] });
+assert.deepEqual([fiUsd.bank_account.code, fiUsd.bank_account.name, fiUsd.bank_account.currency], [null, 'Pankkitili · USD', 'USD']);
+const usdRow = { id: 'acct-usd', code: null, name: 'Pankkitili · USD', type: 'bank', currency: 'USD', canonical_role: 'asset.cash', status: 'active' };
+const fiUsdAgain = fiCoded('Rent', { transaction: { account_currency: 'USD' }, ledgerAccounts: [eurBank, usdRow] });
+assert.equal(fiUsdAgain.bank_account.id, 'acct-usd', 'one stable row per currency');
+assert.equal(fiUsdAgain.bank_account.declared_account.name, 'Pankkitili · USD', 'the minted row keeps its declaration');
+// The cash box: the coder's chart name posts to 1900 with the chart shape,
+// minted or not; it is never a bank leg.
+const cashRow = { id: 'acct-1900', code: '1900', name: 'Käteinen raha', type: 'cash', currency: 'EUR', canonical_role: 'asset.cash', status: 'active' };
+const fiCash = fiCoded('Käteinen raha', { ledgerAccounts: [eurBank] });
+assert.deepEqual([fiCash.coding.account_code, fiCash.coding.account_name, fiCash.coding.declared_account.account_type, fiCash.bank_account.code],
+  ['1900', 'Käteinen raha', 'cash', '1910']);
+const cashJournal = buildLedgerJournalForTransaction({ transaction: { id: 'tx-fi', date: '2026-03-05', money_out: 120, account_currency: 'EUR' },
+  coding: fiCash.coding, bankAccount: fiCash.bank_account });
+assert.deepEqual(cashJournal.lines[0].account, { role: 'counterparty', code: '1900', name: 'Käteinen raha', type: 'cash', normal_balance: 'debit', tax_type: '',
+  xero_account_id: '', label: '1900 · Käteinen raha', canonical_role: 'asset.cash', statutory_group: 'cash_and_bank' });
+assert.equal(findDonnaLedgerBankAccount({ transaction: { account_currency: 'EUR' }, ledgerAccounts: [cashRow],
+  postingAccounts: (await import('./provisioningPolicyRegistry.js')).resolveMarketPostingAccounts('fi') }), null, 'the cash box is not a bank leg');
+assert.equal(fiCoded('Rent', { ledgerAccounts: [cashRow] }).bank_account.code, '1910');
+// An existing book's engine-default row keeps the EUR bank leg (no mid-book
+// move), unless the chart's own 1910 is there too (the opening balance posts it).
+const legacyDefault = { id: 'acct-default', code: null, name: 'Business Checking · EUR', type: 'bank', currency: 'EUR', status: 'active' };
+assert.equal(fiCoded('Rent', { ledgerAccounts: [legacyDefault] }).bank_account.id, 'acct-default');
+assert.equal(fiCoded('Rent', { ledgerAccounts: [legacyDefault, eurBank] }).bank_account.id, 'acct-1910');
+assert.equal(fiCoded('Rent', { ledgerAccounts: [legacyDefault, eurBank], transaction: { bank_account_code: 'Business Checking · EUR' } }).bank_account.id,
+  'acct-default', 'a statement\'s explicit bank hint still wins');
+// No declaration: byte-identical to before — the EUR default for any currency.
+const gbChart = [{ id: 'gb-1400', code: '1400', name: 'Bank account', type: 'bank', canonical_role: 'asset.cash', status: 'active' }];
+for (const jurisdiction of ['gb', 'sg', 'us', null]) {
+  const result = buildDonnaLedgerWriteback({ jurisdiction, ledgerAccounts: gbChart,
+    transaction: { id: 'tx-n', date: '2026-03-05', money_out: 5, account_currency: 'USD', ai_suggestion: { proposed_account: 'Käteinen raha' } } });
+  assert.deepEqual(result.bank_account, { id: 'gb-1400', code: '1400', name: 'Bank account', currency: null, tax_type: null,
+    account_label: '1400 · Bank account', source: 'native_ledger' }, String(jurisdiction));
+  assert.equal(result.coding.declared_account, undefined);
+  assert.equal(result.coding.account_code, '', 'no market cash account where none is declared');
+  assert.deepEqual(buildDonnaLedgerWriteback({ jurisdiction, ledgerAccounts: [legacyDefault],
+    transaction: { id: 'tx-n', date: '2026-03-05', money_out: 5, account_currency: 'USD', ai_suggestion: { proposed_account: 'Rent' } } }).bank_account.id,
+  'acct-default', 'without a declaration the finder still takes the only bank row');
+}
+
 console.log('donnaLedgerWriteback tests passed');

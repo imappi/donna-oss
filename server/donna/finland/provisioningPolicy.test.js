@@ -51,3 +51,23 @@ test('only a new Finnish Oy has a birth chart; no market gains a default chart',
   }
   assert.equal(marketHasNativeDefaultChart('fi'), false, 'existing FI books keep the palette path');
 });
+
+test('the bank and cash accounts a Finnish book posts to are the chart\'s own rows; nothing is invented', async () => {
+  const { resolveMarketPostingAccounts } = await import('../provisioningPolicyRegistry.js');
+  const declared = resolveMarketPostingAccounts('FI');
+  assert.equal(declared, FI_PROVISIONING_POLICY.postingAccounts);
+  for (const [account, code] of [[declared.bankAccount({ currency: 'EUR' }), '1910'], [declared.bankAccount({}), '1910'], [declared.cashAccount(), '1900']]) {
+    const chart = resolveAccount(code);
+    assert.deepEqual([account.code, account.name, account.account_type, account.normal_balance, account.statutory_group],
+      [chart.code, chart.name_fi, chart.account_type, chart.normal_balance, chart.statutory_group], code);
+    assert.equal(account.canonical_role, 'asset.cash');
+    assert.ok(Object.isFrozen(account));
+  }
+  // A further currency: the chart declares one bank row, so no second code —
+  // its own name (the row's key), the chart's group, its currency.
+  assert.deepEqual(declared.bankAccount({ currency: 'usd' }), { code: null, name: 'Pankkitili · USD', account_type: 'bank', normal_balance: 'debit',
+    canonical_role: 'asset.cash', statutory_group: 'cash_and_bank', currency: 'USD' });
+  assert.notEqual(declared.bankAccount({ currency: 'SEK' }).name, declared.bankAccount({ currency: 'USD' }).name);
+  // Markets that declare nothing keep the engine default.
+  for (const jurisdiction of ['gb', 'sg', 'us', 'ae', null]) assert.equal(resolveMarketPostingAccounts(jurisdiction), null, String(jurisdiction));
+});
