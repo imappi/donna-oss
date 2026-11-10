@@ -141,6 +141,22 @@ const getOpenAiConfig = () => {
   return { ...resolved, apiKey: resolved.ok ? resolved.apiKey : '', model: resolved.model || DEFAULT_MODEL };
 };
 
+// Lines per batch request, by the transport that decides. A chunk is one
+// call, and a coding round runs its chunks one after another inside ONE job
+// (the parse-document leg, or a coding re-drive), whose budget is 300 s on
+// the appliance and 285 s per Inngest invocation. Measured on the
+// appliance harness (2026-11-10, Finnish statement, claude-opus-5-5 at
+// effort high, streamed): 25 lines took 164 s and 19.5k output tokens, about
+// 6.6 s and 780 output tokens a line, so one 25-line chunk filled what the
+// parse job had left and the round's next chunk was cut by the budget. Ten
+// lines (about 70 s) leave room for more than one chunk in a job and cost
+// little when the budget cuts one. OpenAI and the compatible rung keep 25.
+export const CODING_BATCH_LINES = Object.freeze({ anthropic: 10, default: 25 });
+export const codingBatchLinesFor = (transport = null) => {
+  if (transport?.provider === 'openai_compatible') return CODING_BATCH_LINES.default;
+  return getOpenAiConfig().provider === 'anthropic' ? CODING_BATCH_LINES.anthropic : CODING_BATCH_LINES.default;
+};
+
 // The key-missing receipt names the provider the resolution was for (the
 // lane's first, Anthropic, when no key exists at all).
 const codingKeyMissing = (config) => {

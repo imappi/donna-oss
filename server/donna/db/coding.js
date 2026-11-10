@@ -22,7 +22,7 @@ import { buildDonnaLedgerWriteback } from '../donnaLedgerWriteback.js';
 import { lockClientCloseBoundaryWithClient } from './closeSerialization.js';
 import { __createClientEvidenceRequestWithClient, consumeNativeUnresolvedCodingWithClient } from './asks.js';
 import { canonicalMerchantPattern, normalizeIntelText } from '../transactionIntel.js';
-import { accountOptionsForClient, CODING_STRONG_DEFAULT_MODELS, knownPrincipalsForClientProfile, suggestTransactionCoding, suggestTransactionCodingBatch } from '../transactionLlm.js';
+import { accountOptionsForClient, codingBatchLinesFor, CODING_STRONG_DEFAULT_MODELS, knownPrincipalsForClientProfile, suggestTransactionCoding, suggestTransactionCodingBatch } from '../transactionLlm.js';
 // Q9 (the sole-model lab, 2026-08-16): the coding lane's model-policy
 // resolution — same pattern as the disposition sweep owner (Q6c).
 import { readLaneDecidingPolicy } from '../modelLanePolicy.js';
@@ -1507,6 +1507,12 @@ export const batchSuggestTransactionCodingInDb = async ({
         ]
       }).catch((error) => { firmFactRead = firmFactReadFailure(error); return []; });
 
+      // Q9 — resolved ONCE per round: the whole round's chunks decide under
+      // the same policy row (a mid-round policy flip must not split a round
+      // across two models). Resolved before chunking: the chunk size is the
+      // deciding transport's (codingBatchLinesFor).
+      const codingTransport = await resolveCodingTransport(client, { firmId, clientId });
+      const batchLines = codingBatchLinesFor(codingTransport);
       const codingUnits = [];
       const chunked = new Set();
       // One batch request shares one policy, so a chunk never mixes the
@@ -1534,7 +1540,7 @@ export const batchSuggestTransactionCodingInDb = async ({
         const key=guidanceKeyOf(unit[0]);
         if(!chunksByGuidance.has(key))chunksByGuidance.set(key,[]);
         const keyed=chunksByGuidance.get(key);
-        if(!keyed.length || keyed.at(-1).length+unit.length>25)keyed.push([]);
+        if(!keyed.length || keyed.at(-1).length+unit.length>batchLines)keyed.push([]);
         keyed.at(-1).push(...unit);
         for(const tx of unit)chunked.add(tx.id);
       }
@@ -1569,10 +1575,6 @@ export const batchSuggestTransactionCodingInDb = async ({
       // account name, with how many lines are blocked on it).
       const missingAccountsByName = new Map();
 
-      // Q9 — resolved ONCE per round: the whole round's chunks decide under
-      // the same policy row (a mid-round policy flip must not split a round
-      // across two models).
-      const codingTransport = await resolveCodingTransport(client, { firmId, clientId });
       const jevEnabled = clientFlagActs({ flagKey: 'JEV_RECONCILIATION',
         snapshot: await readClientConfigSnapshot(client, { firmId, clientId, strict: true }), envFallback: () => false });
 
