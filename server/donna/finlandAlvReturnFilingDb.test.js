@@ -26,12 +26,14 @@ const readyVerdict = () => ({
 
 const period = { key: '2026-06', type: 'month', starts_on: '2026-06-01', ends_on: '2026-06-30' };
 
-const fakeClient = ({ transitionMatches = true, duplicate = false } = {}) => {
+const fakeClient = ({ transitionMatches = true, duplicate = false, liveRows = [] } = {}) => {
   const queries = [];
   return {
     queries,
     async query(sql, params = []) {
       queries.push({ sql, params });
+      if (sql.includes('pg_advisory_xact_lock')) return { rows: [{}] };
+      if (sql.includes('from alv_returns') && sql.includes('starts_on <=')) return { rows: liveRows };
       if (sql.includes('insert into alv_returns')) {
         if (duplicate) throw Object.assign(new Error('duplicate key'), { code: '23505' });
         return { rows: [{ id: params[0], firm_id: params[1], client_id: params[2], period_key: params[3], period_type: params[4], starts_on: params[5], ends_on: params[6], status: 'draft_pending_confirmation', verdict: JSON.parse(params[7]), model: params[8], created_by: params[9] }] };
@@ -73,6 +75,21 @@ test('draft create: a live row for the period (pending or filed) is a typed 409,
     __createAlvReturnDraftWithClient({ client: fakeClient({ duplicate: true }), firmId: 'firm-1', clientId: 'client-1', period, verdict: readyVerdict() }),
     (e) => e.code === 'ALV_RETURN_ALREADY_LIVE' && e.statusCode === 409
   );
+});
+
+test('draft create: dates already covered by another live return are a typed 409 naming that return', async () => {
+  const client = fakeClient({ liveRows: [{ id: 'alv-q3', period_key: '2026-Q2', period_type: 'quarter', starts_on: '2026-04-01', ends_on: '2026-06-30', status: 'filed' }] });
+  await assert.rejects(
+    __createAlvReturnDraftWithClient({ client, firmId: 'firm-1', clientId: 'client-1', period, verdict: readyVerdict() }),
+    (e) => e.code === 'ALV_RETURN_PERIOD_OVERLAP' && e.statusCode === 409
+      && /2026-Q2 \(2026-04-01 – 2026-06-30, filed\) already covers/.test(e.message)
+      && e.details.overlapping[0].id === 'alv-q3'
+  );
+  assert.ok(!client.queries.some((q) => q.sql.includes('insert into')), 'refused before any write');
+  const lock = client.queries.findIndex((q) => q.sql.includes('pg_advisory_xact_lock'));
+  const check = client.queries.findIndex((q) => q.sql.includes('from alv_returns'));
+  assert.ok(lock >= 0 && lock < check, 'the overlap read runs under the per-client lock');
+  assert.equal(client.queries[lock].params[0], 'alv-return-periods:firm-1:client-1');
 });
 
 test('mark filed: requires the authority basis, flips only a pending row, audits with the receipt', async () => {
@@ -143,6 +160,24 @@ test('start motion, ready compute: mints the row, creates + DELIVERS the confirm
   assert.match(created.asks[0].question, /Maksettava vero 102,00 €/);
   assert.match(created.asks[0].question, /Vahvista vastaamalla/);
   assert.deepEqual(created.delivered, ['ask-1'], 'the confirm ask is DELIVERED, not parked');
+});
+
+test('start motion, ready compute over dates already covered: the refusal surfaces, NO ask is created or sent', async () => {
+  const created = { asks: [], delivered: [] };
+  const overlap = Object.assign(new Error('ALV return 2026-06 was not created: the return 2026-Q2 already covers some of these dates.'), { statusCode: 409, code: 'ALV_RETURN_PERIOD_OVERLAP' });
+  await assert.rejects(
+    startFinlandAlvReturnFilingInDb({
+      firmId: 'firm-1', clientId: 'client-1', period: '2026-06',
+      flagActsImpl: async () => true,
+      scopeDriftImpl: async () => null,
+      computeImpl: async () => ({ period, ...readyVerdict() }),
+      createDraftImpl: async () => { throw overlap; },
+      createAskImpl: async (args) => { created.asks.push(args); return { id: 'ask-x' }; },
+      deliverAsksImpl: async ({ evidenceRequestIds }) => created.delivered.push(...evidenceRequestIds)
+    }),
+    (e) => e === overlap
+  );
+  assert.deepEqual(created, { asks: [], delivered: [] }, 'the owner is never asked to confirm a return that would double-report');
 });
 
 test('start motion, needs_review compute: NO row — the blockers ride an owner clarification ask', async () => {
