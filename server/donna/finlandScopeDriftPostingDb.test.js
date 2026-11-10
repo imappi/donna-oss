@@ -39,6 +39,7 @@ const fakeClient = ({ flags = {}, askInsertReturns = true, entityType = null } =
       if (sql.includes('select code, account_type from ledger_accounts')) return { rows: [] };
       if (sql.includes('from alv_returns')) return { rows: [] };
       if (sql.includes('lj.journal_date::text as journal_date, ll.id as line_id')) return { rows: [] };
+      if (sql.includes('period_start::text as period_start') && sql.includes('from close_periods')) return { rows: [] };
       if (sql === 'select id from ledger_accounts where firm_id=$1 and client_id=$2 order by id for update') {
         assert.deepEqual(params,['firm-1','client-1']);
         return {rows:[]};
@@ -186,6 +187,7 @@ const sweepClient = ({ pending = [] } = {}) => {
       if (sql.includes('select code, account_type from ledger_accounts')) return { rows: [] };
       if (sql.includes('from alv_returns')) return { rows: [] };
       if (sql.includes('lj.journal_date::text as journal_date, ll.id as line_id')) return { rows: [] };
+      if (sql.includes('period_start::text as period_start') && sql.includes('from close_periods')) return { rows: [] };
       if (sql === 'select id from ledger_accounts where firm_id=$1 and client_id=$2 order by id for update') {
         assert.deepEqual(params,['firm-1','client-1']);
         return {rows:[]};
