@@ -1095,6 +1095,9 @@ const exportXeroMirrorRetryTransactionInDb = async ({
       error.code = `XERO_MIRROR_RETRY_${String(classification.issue || 'INELIGIBLE').toUpperCase()}`;
       throw error;
     }
+    // The same evidence gate as the first write-back; a refusal stops here,
+    // before any provider call. Its document is what the policy judges by.
+    const matchedDocument = await assertCurrentCodingEvidence({ client, firmId, clientId, transaction });
     const retained = retainedXeroMirrorPreview(transaction);
     if (retained) return { connection, transaction, preview: retained, classification };
     const postingContext = await resolvePostingContextWithClient({ client, firmId, clientId, businessDate: transaction.date });
@@ -1118,6 +1121,8 @@ const exportXeroMirrorRetryTransactionInDb = async ({
       throw xeroMirrorReplayError('XERO_MIRROR_RETRY_LINEAGE_MISSING',
         'Current translation would change the recorded connector tax code; restore the original accounting receipt.');
     }
+    // The rebuilt request passes the same postable-tax checks as a first write-back.
+    xeroPostingCoding({ transaction, preview, postingContext, matchedDocument });
     return { connection, transaction, preview, classification };
   });
 

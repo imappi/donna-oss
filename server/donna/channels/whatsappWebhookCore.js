@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { OWNER_REPLY_WORD_END, OWNER_REPLY_WORD_START } from './ownerReplyText.js';
 
 const env = (key, envObj = process.env) => String(envObj?.[key] || '').trim();
 
@@ -24,8 +25,11 @@ export const extractBindingToken = (text) => {
   return match?.[1] || '';
 };
 
+// "Ref" is a whole word under the owner-reply letter rule (ownerReplyText.js):
+// ä and ö are letters, which JavaScript's \b does not know.
+const ASK_REF_PATTERN = new RegExp(`${OWNER_REPLY_WORD_START}ref\\s*[:#-]?\\s*([A-Za-z0-9][A-Za-z0-9_-]{1,24})${OWNER_REPLY_WORD_END}`, 'iu');
 export const extractAskRef = (text) => {
-  const match = String(text || '').match(/\bref\s*[:#-]?\s*([A-Za-z0-9][A-Za-z0-9_-]{1,24})\b/i);
+  const match = String(text || '').match(ASK_REF_PATTERN);
   return match?.[1]?.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || '';
 };
 
