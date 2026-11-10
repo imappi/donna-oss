@@ -418,11 +418,9 @@ const resolveTransactionFocus = async ({
     'select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1',
     [firmId, clientId]
   );
-  const ownerProfile = clientRow.rows?.[0]
-    ? { ...(clientRow.rows[0].profile || {}), jurisdiction: clientRow.rows[0].profile?.jurisdiction || clientRow.rows[0].jurisdiction }
-    : null;
+  const ownerRow = clientRow.rows?.[0] || null;
   const explanation = d.generateMatchExplanation({
-    transaction, match, document, reviewItem, language: preferredOwnerTemplateLanguage(ownerProfile)
+    transaction, match, document, reviewItem, language: preferredOwnerTemplateLanguage(ownerRow?.profile, ownerRow)
   });
   // Same optional signed-URL augmentation the artifact-drawer block did,
   // so this stays a drop-in for that consumer. Best-effort.

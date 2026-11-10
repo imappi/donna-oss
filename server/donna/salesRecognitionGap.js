@@ -436,7 +436,7 @@ export const ensureNoSettlementAskWithClient = async ({ client, firmId, clientId
   if (!clientFlagActs({ flagKey: DOCUMENT_NO_LINE_DISPOSITION_FLAG_KEY, snapshot, envFallback: () => false })) {
     return { minted: false, reason: 'flag_off' };
   }
-  const clientRow = (await client.query('select profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
+  const clientRow = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
   if (!clientRow || basisOf(clientRow) !== 'accrual') return { minted: false, reason: 'not_accrual' };
   const document = (await client.query(
     `select id, document_type, parse_status, duplicate_of, payment_status, customer_name, vendor_name, total_amount, currency,
@@ -459,7 +459,7 @@ export const ensureNoSettlementAskWithClient = async ({ client, firmId, clientId
   const mintOutcome = {};
   const request = await __createClientEvidenceRequestWithClient({
     client, firmId, clientId, documentId,
-    question: lane.buildQuestion({ document, language: preferredOwnerTemplateLanguage(clientRow.profile) }),
+    question: lane.buildQuestion({ document, language: preferredOwnerTemplateLanguage(clientRow.profile, clientRow) }),
     evidenceType: SALES_RECOGNITION_ASK_EVIDENCE_TYPE,
     actorId,
     markTransactionNeedsClient: false,

@@ -467,12 +467,9 @@ export const __runCanonicalRoleResolutionWithClient = async ({
       );
     }
 
-    // The owner's language, from the client row already read (the profile, with
-    // the client's jurisdiction where the profile does not carry one).
-    const ownerLanguage = preferredOwnerTemplateLanguage({
-      ...(clientRow.profile && typeof clientRow.profile === 'object' ? clientRow.profile : {}),
-      jurisdiction: clientRow.profile?.jurisdiction || clientRow.jurisdiction
-    });
+    // The owner's language, from the client row already read (its profile and
+    // its authoritative jurisdiction column).
+    const ownerLanguage = preferredOwnerTemplateLanguage(clientRow.profile, clientRow);
     for (const ask of plan.asks) {
       const built = buildCanonicalRoleAsk({ ask, language: ownerLanguage });
       // buildCanonicalRoleAsk fails closed on a refusal it has no wording for;
