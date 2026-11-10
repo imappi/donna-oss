@@ -235,6 +235,7 @@ import { runCanonicalRoleResolutionForClient, runCanonicalRoleResolutionSweep } 
 import { assessEvidenceTopicTurn, buildEvidenceTopicState, ownerLanguageForBindings, redeemOwnerChannelCode } from './channels/inboundCore.js';
 import { getClientOwnerLanguageInDb } from './firmDb.js';
 import { resolveStructuredOwnerReplyAdapter, supportsStructuredOwnerReply } from './statutoryRegistry.js';
+import { asksOwnerForDocument } from './ownerDocumentUnavailable.js';
 import { runEvidenceTopicReminderSweep } from './channels/evidenceTopicReminders.js';
 import { recordConvergenceMetricsSnapshot, computeAskClockMetrics } from './convergenceMetricSnapshots.js';
 import { addToWaitlist } from './marketingWaitlistDb.js';
@@ -13060,8 +13061,11 @@ const donnaFirmsApiHandler = async (req, res) => {
         descriptor: documentIds.length > 0 ? { kind: 'document', id: documentIds[0] } : null
       });
 
+      // A text reply to a question that asked for a document is read by its
+      // strong reader (ownerDocumentUnavailable.js), never held here by the
+      // keyword assessment: "it is missing" may be the answer itself.
       if (!answerSource && (evidenceRequest?.status === 'open' || evidenceRequest?.status === 'draft')
-        && !(replyText && supportsStructuredOwnerReply(evidenceRequest)) && !portalTurn.terminal) {
+        && !(replyText && (supportsStructuredOwnerReply(evidenceRequest) || asksOwnerForDocument(evidenceRequest))) && !portalTurn.terminal) {
         const topicState = buildEvidenceTopicState({
           ask: evidenceRequest,
           turn: { ...portalTurn, text: replyText },
