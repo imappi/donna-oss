@@ -262,12 +262,16 @@ const modelServedOf = (body) => (typeof body?.model === 'string' && body.model ?
 // (the journal marks the call `adapted: 'anthropic_text_to_structured_answer'`,
 // as the Responses adaptation below marks its own). A text reply
 // that is not JSON stays text: the lane must refuse it by name. (A Responses
-// body is adapted below, tool call included.) An INLINE body a test scripts
-// is served exactly as scripted — a test that answers in prose is proving the
-// lane refuses prose — unless it names the committed recording whose wire
-// shape it reuses (`recording_template`, testSupport/fiReliabilitySources.js).
-export const deliverAsStructuredTool = (step, requestBody = null) => {
-  if (!step?.recording && !step?.recording_template) return step;
+// body is adapted below, tool call included.) Converted: a committed
+// recording, a fixture that names the recording whose wire shape it reuses
+// (`recording_template`, testSupport/fiReliabilitySources.js), and any answer
+// on the unified extraction lane, whose Anthropic recordings — and the
+// fixtures tests derive from them — were authored as text before its request
+// moved onto the shared call. Any other INLINE body is served exactly as
+// scripted: a test that answers in prose is proving the lane refuses prose.
+const TEXT_AUTHORED_LANES = Object.freeze(new Set(['unified_extraction']));
+export const deliverAsStructuredTool = (step, requestBody = null, lane = null) => {
+  if (!step?.recording && !step?.recording_template && !TEXT_AUTHORED_LANES.has(lane)) return step;
   const body = step?.body;
   const wantsTool = Array.isArray(requestBody?.tools) && requestBody.tools.some((tool) => tool?.name === STRUCTURED_ANSWER_TOOL_NAME);
   if (!wantsTool || step?.status !== 200 || body?.type !== 'message' || !Array.isArray(body.content)) return step;
@@ -395,7 +399,7 @@ export const installRecordedProviders = ({
       step = normalizeStep(classified.lane, response);
     }
     const at = now().toISOString();
-    if (step && classified.endpoint_class === 'anthropic') step = deliverAsStructuredTool(step, parseBody(init));
+    if (step && classified.endpoint_class === 'anthropic') step = deliverAsStructuredTool(step, parseBody(init), classified.lane);
     if (!step) {
       const entry = { seq, at, ...classified, status: UNSCRIPTED_STATUS, model_served: null, recording: null, refused: true };
       calls.push(entry);
