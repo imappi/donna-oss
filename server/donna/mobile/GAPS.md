@@ -17,7 +17,7 @@ changes are proposals for this one. Nothing here is worked around in code.
 | `BooksStatus.headline` | `null` | No persisted plain-language headline. | Donna: write it with the checks run. |
 | `AskPayload.choices` | `null` | Donna's ask pipeline has no choice shape (DESIGN-NOTES smell 1). | Donna: draft choices at ask-mint time. |
 | `ApprovalPayload.batch_key` | `null` | No persisted batch grain for held actions. | — |
-| `Entity.business_profile` | `null` | No canonical business-profile aggregate (DESIGN-NOTES smell 9). | Donna: a profile aggregate and its single writer. |
+| `Entity.business_profile` | `null` until the owner first states a fact | Served from `client_business_profiles` (migration 168), written only by `PUT …/onboarding/profile`. A confirmation with every fact empty declares nothing. | — |
 | `QueueCard.counterparty` (asks) | `null` | The ask's persisted `request_payload` carries a descriptor, amount, currency and date, not a counterparty. | Donna: persist the counterparty at ask-mint time. |
 | `MobileSettings.financial_year.*` | `null` when the book has no `fiscal_years` rows | Read only from persisted `fiscal_years` (via `GET /clients/:id/fiscal-periods`). A self-provisioned book has none until the fiscal-period intake or the close records one; the calendar projection is not persisted data. `first` is shown only when the earliest persisted year starts on the recorded incorporation date. | Donna: record the first tilikausi at birth when the incorporation date is known. |
 | `MobileSettings.vat_period` (UK) | `quarter` when `profile.gb.vat_stagger` is recorded, else `null` | An HMRC stagger (1/2/3) is a quarterly stagger; monthly and annual UK filers have no home in the profile. | Donna: a UK filing-frequency fact. |
@@ -104,11 +104,31 @@ changes are proposals for this one. Nothing here is worked around in code.
   the row; it is kept out of logs, error bodies and audit metadata (receipts
   carry a 12-hex sha256 prefix). The table is server-side only (RLS block).
 
+- **Renaming the business from the app.** `PUT …/onboarding/profile` refuses
+  a `business_name` that differs from `Entity.display_name` (`400
+  BUSINESS_NAME_CHANGE_NOT_AVAILABLE`; nothing in the request is saved). The
+  only home for the name is `clients.company_name` (mirrored from
+  `profile.companyName`), and that column is also the seller name on issued
+  invoices (`finland/invoiceIssuance.js`, `ownerInvoiceSellerContext.js`), the
+  close-archive heading, the client identity anchor in extraction and coding
+  prompts and the owner-adoption digest. Donna has no separate trading-name
+  home. Decision needed: a trading-name field read by display only, with
+  statutory output reading the registered legal name, or an explicit rule that
+  the owner's name for the business is the invoice name.
+- **Undeclared statuses on the profile save.** A staff identity is `403
+  MOBILE_OWNER_ONLY`, as on every route; a save still contended after three
+  attempts is `409 PROFILE_SAVE_CONTENDED`. The operation lists only
+  400/401/404.
+- **Owner name across firms.** `owner_name` is written to the acting owner's
+  collaborator row in the entity's firm. `/me` takes the principal name from
+  the first firm, so an owner with books in two firms sees the edit there only
+  when it was made in the first.
+
 ## Endpoints answering `501 NOT_IMPLEMENTED`
 
 Chat (list, send, apply), artifact conversations, mileage, activity, onboarding
-voice/text drafts and profile confirmation, business register lookup, reviews,
-account deletion request. Each has no
+voice/text drafts, business register lookup, reviews, account deletion request.
+Each has no
 existing Donna reader or writer to route to, or (chat) one whose action
 vocabulary does not match the contract's (`answer_evidence_request` /
 `record_mileage` vs `answer_card` / `approve_card` / `record_mileage`, with

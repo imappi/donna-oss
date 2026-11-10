@@ -35,6 +35,7 @@ import {
   revokeSession
 } from './mobileAuth.js';
 import { getBusinessSetup, updateBusinessSetup } from './mobileBusinessSetup.js';
+import { confirmBusinessProfile } from './mobileBusinessProfile.js';
 import { createFirmRouteDispatcher } from './mobileDispatch.js';
 import { PUSH_REGISTRATION_ROUTES } from './mobilePushRegistrations.js';
 import {
@@ -527,7 +528,6 @@ export const NOT_IMPLEMENTED = Object.freeze([
   ['POST', /^\/me\/deletion-request$/, 'Donna has no account-deletion request writer yet.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/voice-draft$/, 'Voice onboarding is not available on this server.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/text-draft$/, 'Onboarding drafts are not available on this server.'],
-  ['PUT', /^\/entities\/[^/]+\/onboarding\/profile$/, 'Donna has no business-profile writer yet.'],
   ['POST', /^\/entities\/[^/]+\/business-setup\/lookup$/, 'Business register lookup is not available on this server yet. You can enter your business details yourself.'],
   ['GET', /^\/entities\/[^/]+\/reviews\/(taxes|month)$/, 'Tax and month reviews are not available on this server yet.'],
   ['GET', /^\/entities\/[^/]+\/chat$/, 'Chat is not available in the app on this server yet; use Donna on the web.'],
@@ -559,7 +559,8 @@ const ENTITY_ROUTES = [
   ['POST', /^\/documents\/([^/]+)\/resolve-duplicate$/, async (ctx, [id]) => resolveDuplicate(ctx, id, await readJson(ctx.req))],
   ['GET', /^\/business-setup$/, (ctx) => getBusinessSetup(ctx)],
   ['POST', /^\/business-setup$/, async (ctx) => updateBusinessSetup(ctx, await readJson(ctx.req))],
-  ['GET', /^\/documents\/([^/]+)$/, async (ctx, [id]) => (await documentsWithState(ctx, [await oneDocument(ctx, id)]))[0]]
+  ['GET', /^\/documents\/([^/]+)$/, async (ctx, [id]) => (await documentsWithState(ctx, [await oneDocument(ctx, id)]))[0]],
+  ['PUT', /^\/onboarding\/profile$/, async (ctx) => confirmBusinessProfile(ctx, await readJson(ctx.req))]
 ];
 
 const AUTH_ROUTES = [['POST', /^\/auth\/sessions$/], ['POST', /^\/auth\/sessions\/refresh$/], ['DELETE', /^\/auth\/sessions\/current$/], ['GET', /^\/me$/]];
@@ -637,6 +638,8 @@ const route = async (req, res, requestUrl, deps) => {
       if (!match) continue;
       const ctx = {
         ...scope,
+        auth,
+        identity: owner.identity,
         req,
         query: requestUrl.searchParams,
         locale: localeOf(req),
