@@ -14,17 +14,37 @@
 // registered on its date, one per country posting policy that raises it (each
 // declares it on its taxRegistration). The clock re-runs the coder with the
 // refusal on posting_recovery; the coder's contract (transactionLlm.js) turns
-// it into the owner's registration question while the record still does not
-// say registered. Nothing here lets the line post: the policy still decides.
+// it into the owner's registration question while the record does not settle
+// the date (unknown). When the record says not registered on the date, the
+// coder is told so and codes the line without VAT; nothing is asked (the
+// bound for that case is below). Nothing here lets the line post: the policy
+// still decides.
 // A supplier bill posts only as the AP leg of its bank line's post
 // (db/ledger.js), so a bill refused for registration on its own date refuses
 // that bank line with the bill's code: the same owner fact, the same question.
+// The UK's not-registered treatment (no VAT code) refused because the record
+// does not say not registered on the date is the same fact from the other
+// side: the coder is re-run with the refusal while the record says registered,
+// and an unknown record becomes the same owner question.
 export const TAX_REGISTRATION_REFUSALS = Object.freeze([
   'TRANSACTION_ALV_REGISTRATION_REQUIRED',
   'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED',
   'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED',
-  'SUPPLIER_BILL_GB_VAT_REGISTRATION_REQUIRED'
+  'SUPPLIER_BILL_GB_VAT_REGISTRATION_REQUIRED',
+  'TRANSACTION_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED',
+  'SUPPLIER_BILL_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED'
 ]);
+// A line refused for registration on a date the record says the business is
+// NOT registered: the coder was told that fact and still chose a treatment
+// that needs registration. The clock re-runs it once with the refusal (the
+// coder is told again, transactionLlm.js); if it still cannot post, it rests
+// visibly unfinished on the refusal. The count is its own field on the
+// clock's receipt, per case revision, so a line that spent attempts on an
+// earlier refusal (an unknown record, before the owner answered) still gets
+// its one re-run with the fact.
+export const NOT_REGISTERED_MAX_RECONSIDERATIONS = 1;
+export const refusedWhileNotRegistered = (refusal) => TAX_REGISTRATION_REFUSALS.includes(refusal?.code)
+  && refusal?.details?.registered === false;
 export const CODING_EVIDENCE_RECONSIDERED_REFUSALS = Object.freeze([
   ...TAX_REGISTRATION_REFUSALS,
   'TRANSACTION_ALV_CODING_SOURCE_CONFLICT',
@@ -110,6 +130,14 @@ export const CODING_RECONSIDERATION_CONTRACT = 'coding-reconsideration-v2-shared
 export const codingReconsiderationAttempts = (receipt) =>
   receipt && typeof receipt === 'object' && receipt.contract === CODING_RECONSIDERATION_CONTRACT
     ? Number(receipt.attempts || 0) : 0;
+export const notRegisteredReconsiderationAttempts = (receipt) =>
+  receipt && typeof receipt === 'object' && receipt.contract === CODING_RECONSIDERATION_CONTRACT
+    ? Number(receipt.not_registered_attempts || 0) : 0;
+// Whether the clock may still re-run the coder for this refusal: the worker
+// (db/codingEvidence.js) and the projection (caseHealth.js) read this one rule.
+export const codingReconsiderationsLeft = (receipt, refusal) => refusedWhileNotRegistered(refusal)
+  ? notRegisteredReconsiderationAttempts(receipt) < NOT_REGISTERED_MAX_RECONSIDERATIONS
+  : codingReconsiderationAttempts(receipt) < CODING_CONFLICT_MAX_RECONSIDERATIONS;
 
 export const CODING_POLICY_FAILED_ACTION = 'transaction.coding.policy_failed';
 export const CODING_POLICY_RECOVERED_ACTION = 'transaction.coding.policy_recovered';

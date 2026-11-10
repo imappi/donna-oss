@@ -12,5 +12,6 @@ desktop/build-identity.json
 .DS_Store
 *.env
 .env.*
+!.env.example
 .vercel
 backups/

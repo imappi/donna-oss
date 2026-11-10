@@ -37,6 +37,10 @@
 //   every live registration question of this client closed with a receipt that
 //   points at this answer, and every line refused for registration re-admitted
 //   to the coder with the answer stamped on it (tax_registration_answer).
+// - The outcome carries one line for the owner in their language (the
+//   country's recordedNotice, or notRecordedNotice when nothing was recorded),
+//   with and without its invitation to reply; the worker keeps it on the
+//   answered question (ownerReplyNotice.js).
 //
 // The country specifics (record key, normaliser, wording) come from the
 // country posting policy's taxRegistration declaration; nothing here knows a
@@ -231,12 +235,20 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
       line_ids: lines.map((line) => line.id), rests_on: conflict ? 'firm_record_correction' : 'firm_reapproval_workflow' })])).rows[0].id;
     const state = conflict ? 'record_conflict' : 'record_locked';
     const stamped = await stampLines({ client, firmId, clientId, request, rule, profile: row.profile || {}, receiptId: String(receipt), state, lines });
-    return { recorded: false, [state]: true, receipt_id: String(receipt), lines: stamped, drivenAction: `tax_registration_${state}` };
+    // The owner is told, in their language, that nothing was recorded and a
+    // person must check it; never that it was recorded. The line invites no
+    // reply, so it is its own statement (ownerReplyNotice.js).
+    const notRecorded = String(rule.notRecordedNotice({ language, reason: state }) || '').slice(0, 500);
+    return { recorded: false, [state]: true, receipt_id: String(receipt), lines: stamped, drivenAction: `tax_registration_${state}`,
+      owner_notice: notRecorded, owner_notice_statement: notRecorded };
   }
 
   const profile = changed ? (await readClient(client, firmId, clientId))?.profile || {} : row.profile || {};
   const after = profile[rule.profileField] ?? null;
   const ownerNotice = String(rule.recordedNotice({ language, record: after }) || '').slice(0, 500);
+  // The same line without its invitation to reply, for a surface where the
+  // closed question has no reply (the portal's answered questions).
+  const ownerNoticeStatement = String(rule.recordedNotice({ language, record: after, replyInvitation: false }) || '').slice(0, 500);
   const receipt = (await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
     values ($1, $2, $3, $4, 'tax_registration.owner_answer_recorded', 'client', $2, $5::jsonb) returning id`,
   [firmId, clientId, actorType || 'client', actorId, JSON.stringify({ evidence_request_id: request.id, answered_by: answeredBy,
@@ -253,7 +265,7 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
         response_payload = response_payload || $5::jsonb, updated_at = now()
       where firm_id = $1 and client_id = $2 and id = $3 and status in ('draft', 'open', 'replied') returning id`,
     [firmId, clientId, ask.id, actorId, JSON.stringify({ tax_registration_resolution: { settled_by_evidence_request_id: request.id,
-      registration_receipt_id: receiptId, record: after }, ...(ask.id === request.id ? { owner_notice: ownerNotice } : {}) })]);
+      registration_receipt_id: receiptId, record: after } })]);
     if (!closed.rowCount) continue;
     closedIds.push(ask.id);
     await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
@@ -263,8 +275,9 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
   }
   if (!closedIds.includes(request.id)) refuse('OWNER_REPLY_SUPERSEDED', 'The registration question changed before it could close.');
   const stamped = await stampLines({ client, firmId, clientId, request, rule, profile, receiptId, state: 'recorded', lines });
+  // The worker keeps the line on the answered question (ownerReplyNotice.js).
   return { recorded: true, changed, record: after, receipt_id: receiptId, resolved_ask_ids: closedIds, lines: stamped,
-    owner_notice: ownerNotice };
+    owner_notice: ownerNotice, owner_notice_statement: ownerNoticeStatement };
 };
 
 const readFollowUp = async ({ client, firmId, request, kind }) => {

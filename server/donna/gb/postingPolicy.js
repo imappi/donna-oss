@@ -2,7 +2,7 @@
 import {
   GB_VAT_CODES, GB_VAT_INPUT_ROLE, GB_VAT_OUTPUT_ROLE, applyGbVatCodingToCoding,
   gbVatControlAccountFromChart, gbVatDirectionForTransaction, gbVatOutputCodeForRate, resolveGbVatCode, resolveGbVatCodeForCoding,
-  resolveGbVatSplitForPosting, splitGbVatGross
+  resolveGbVatSplitForPosting, splitGbVatGross, GB_NOT_REGISTERED_TREATMENT, isGbNotRegisteredTreatment
 } from './vatCodes.js';
 import { normalizeGbVatRegistration, resolveGbVatRegistrationOnDate } from './vatRegistration.js';
 import { ledgerAccountTypeFor } from '../ledger.js';
@@ -30,6 +30,21 @@ const assertGbVatRegistered = ({ profile = null, onDate, code, refusalCode, subj
   if (resolution.registered === true) return;
   refuse(refusalCode, `${subject} would post the VAT code ${code}, but the business is ${resolution.registered === false ? 'not VAT-registered' : 'not recorded as VAT-registered'} on ${at || 'an unknown date'} (${resolution.reason}). A business that is not registered charges and reclaims no VAT, so nothing was posted; record the VAT registration (or correct the coding) and post again.`,
     { vat_code: code, as_of: at || null, registered: resolution.registered, registration_reason: resolution.reason });
+};
+
+// The not-registered treatment's own check, the other side of the rule above:
+// it posts a line with no VAT code, so it is admitted only on a date the
+// record says the business is NOT registered. A registered business, or one
+// with no record, is refused by name: the treatment would leave its VAT return
+// blind to the line. assertGbVatRegistered is unchanged and still refuses
+// every VAT_ code for an unregistered business.
+const assertGbNotRegistered = ({ profile = null, onDate, refusalCode, subject }) => {
+  const at = toIsoDay(onDate);
+  const resolution = at ? resolveGbVatRegistrationOnDate({ registration: profile?.vat_registration ?? null, onDate: at })
+    : { registered: null, reason: 'no_as_of_date' };
+  if (resolution.registered === false) return;
+  refuse(refusalCode, `${subject} is coded '${GB_NOT_REGISTERED_TREATMENT}', but the business is ${resolution.registered === true ? 'VAT-registered' : 'not recorded as not VAT-registered'} on ${at || 'an unknown date'} (${resolution.reason}). That treatment is only for a business that is not registered on the date, so nothing was posted; correct the coding (or the registration record) and post again.`,
+    { as_of: at || null, registered: resolution.registered, registration_reason: resolution.reason });
 };
 
 // The registration declaration the shared coder contract reads
@@ -82,13 +97,29 @@ const GB_TAX_REGISTRATION = Object.freeze({
         ? 'We cannot record the VAT registration yet. Please tell us the exact effective date of registration, or send a copy of the HMRC registration certificate (VAT4).'
         : 'Thanks for your reply. We could not tell from it whether the business is VAT-registered. Please answer yes or no, and if yes, the date the registration is effective from.';
   },
-  recordedNotice: ({ language = 'en', record = null } = {}) => {
+  // Not registered on the line's date: no VAT charged or reclaimed, the gross
+  // is the cost or the revenue. Every VAT_ code needs registration in the UK
+  // (assertGbVatRegistered), zero-rated, exempt and outside-scope included, so
+  // the treatment is one that renders to no VAT code at all.
+  withoutTax: Object.freeze({
+    treatments: Object.freeze({ purchase: GB_NOT_REGISTERED_TREATMENT, sale: GB_NOT_REGISTERED_TREATMENT }),
+    instruction: ({ onDate = null } = {}) => `The business is not VAT-registered on ${toIsoDay(onDate) || 'this date'}. It charges no VAT on its sales and reclaims no VAT on its purchases, whatever VAT a supplier's receipt or invoice shows: the gross amount is the cost or the revenue, with no VAT code and no VAT leg.`,
+    needsRegistration: ({ taxType = '', taxTreatment = '', direction = '' } = {}) =>
+      Boolean(resolveGbVatCode(resolveGbVatCodeForCoding({ taxType, taxTreatment, direction })))
+  }),
+  // replyInvitation: false drops the closing invitation (the FI twin).
+  recordedNotice: ({ language = 'en', record = null, replyInvitation = true } = {}) => {
     const from = record?.registered_from || '', until = record?.registered_until || '';
     if (language === 'fi') return `${record?.status === 'not_registered' ? 'Kirjasimme, että yritys ei ole rekisteröity arvonlisäverovelvolliseksi (VAT).'
-      : until ? `Kirjasimme, että yrityksen VAT-rekisteröinti oli voimassa ${from ? `${from} – ` : ''}${until}.` : `Kirjasimme, että yrityksen VAT-rekisteröinti on voimassa ${from} alkaen.`} Vastaa tähän, jos tieto ei ole oikein.`;
+      : until ? `Kirjasimme, että yrityksen VAT-rekisteröinti oli voimassa ${from ? `${from} – ` : ''}${until}.` : `Kirjasimme, että yrityksen VAT-rekisteröinti on voimassa ${from} alkaen.`}${replyInvitation ? ' Vastaa tähän, jos tieto ei ole oikein.' : ''}`;
     return `${record?.status === 'not_registered' ? 'We recorded that the business is not VAT-registered.'
-      : until ? `We recorded that the business was VAT-registered ${from ? `from ${from} ` : ''}until ${until}.` : `We recorded that the business has been VAT-registered since ${from}.`} Reply here if that is not right.`;
-  }
+      : until ? `We recorded that the business was VAT-registered ${from ? `from ${from} ` : ''}until ${until}.` : `We recorded that the business has been VAT-registered since ${from}.`}${replyInvitation ? ' Reply here if that is not right.' : ''}`;
+  },
+  // The answer was saved but not recorded (the FI twin; no UK guard locks the
+  // record today, so this is the conflict outcome).
+  notRecordedNotice: ({ language = 'en' } = {}) => (language === 'fi'
+    ? 'Vastauksesi on tallennettu, mutta emme muuttaneet yrityksen VAT-rekisteröinnistä olevaa tietoa. Kirjanpitäjän on tarkistettava asia ennen kuin tietoa muutetaan.'
+    : 'Your answer is saved, but we did not change the VAT registration details we hold for the business. Your accountant needs to check it before the record is changed.')
 });
 
 // The Finnish evidence rule as UK law and practice allow it (owner decision
@@ -138,6 +169,14 @@ export const GB_POSTING_POLICY = Object.freeze({
       return coding;
     }
     const direction = gbVatDirectionForTransaction(transaction, coding);
+    // The not-registered treatment (stamped NONE by enrichment) posts only on
+    // a date the record says not registered, whatever account it codes: the
+    // account class is not always resolved here, and a registered business
+    // has no use for the treatment.
+    if (!resolveGbVatCode(stamped) && isGbNotRegisteredTreatment(coding.tax_treatment || transaction.tax_treatment || transaction.ai_suggestion?.tax_treatment || '')) {
+      assertGbNotRegistered({ profile, onDate, refusalCode: 'TRANSACTION_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED', subject: 'This bank line' });
+      return coding;
+    }
     // The FI TRANSACTION_ALV_ACCOUNT_INCOMPATIBLE twin: an explicit VAT code
     // whose side differs from the resolved revenue or expense account is an
     // authored conflict (an output code on an expense, an input code on
@@ -180,6 +219,15 @@ export const GB_POSTING_POLICY = Object.freeze({
       return { expenseTaxType, alvSplit: null, payablesAccount: null };
     }
     const code = resolveGbVatCodeForCoding({ taxType: expenseTaxType || '', taxTreatment: verdict.tax_treatment || '', direction: 'in' });
+    // The not-registered treatment: the bill posts gross with no VAT code,
+    // only on a bill date the record says not registered.
+    if (!code && isGbNotRegisteredTreatment(verdict.tax_treatment)) {
+      assertGbNotRegistered({ profile, onDate: document.document_date, refusalCode: 'SUPPLIER_BILL_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED', subject: 'This supplier bill' });
+      const payablesAccount = gbVatControlAccountFromChart(ledgerAccounts, 'liability.accounts_payable');
+      if (!payablesAccount?.code) refuse('SUPPLIER_BILL_GB_PAYABLES_UNRESOLVED',
+        'No single active chart account carries the accounts-payable role (liability.accounts_payable) — resolve the chart before this bill can post AP.');
+      return { expenseTaxType: 'NONE', alvSplit: null, payablesAccount };
+    }
     if (!code) refuse('SUPPLIER_BILL_GB_VAT_SPLIT_UNSUPPORTED', "A GB VAT-coding client's AP post requires a resolvable VAT treatment on the coding verdict — posting gross would forfeit the input-VAT reclaim.");
     registration(code);
     expenseTaxType = code;

@@ -52,6 +52,7 @@ import UploadTray from './UploadTray.jsx';
 import ClientReports from './donna-client-reports.jsx';
 import ClientBookInspection from './client-book-inspection.jsx';
 import ClientPortalChatPanel from './ClientPortalChatPanel.jsx';
+import AnsweredOwnerNotices from './AnsweredOwnerNotices.jsx';
 
 const QUESTIONS = [
   { id: 'q1', kind: 'Receipt', desc: 'CITY GYM, LISBON · Card **1111', date: '2026-10-14', amount: 9.15, currency: 'EUR', card: '**1111', tag: 'café' },
@@ -3844,6 +3845,11 @@ export default function DonnaClientPortal({
             })()}
           </section>
         )}
+
+        {/* What Donna did with the owner's answers — the stored line on
+            each answered question (an answered question leaves § 02).
+            Renders nothing when no answer carries one. */}
+        <AnsweredOwnerNotices requests={clientEvidenceRequestsScoped} clientId={selectedClient?.id || null} />
 
         {/* All-clear state — when everything is done, the hero already
             says "All clear — June is ready to close." No need for an

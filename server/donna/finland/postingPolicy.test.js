@@ -117,3 +117,42 @@ test('FI: an unregistered business gets no ALV-coded supplier bill post', () => 
   assert.equal(posted.expenseTaxType, 'ALV_25_5_INPUT');
   assert.deepEqual([posted.alvSplit.net, posted.alvSplit.vat], [100, 25.5]);
 });
+
+// The other side (not-registered lines post without VAT): the declared no-VAT
+// treatments carry no tax box and no deduction, so an unregistered business's
+// purchase and sale post through the same rule with no split; the rule itself
+// is unchanged and still refuses every code that needs registration.
+test('FI: the declared no-VAT treatments post for an unregistered business, gross with no split', () => {
+  const { withoutTax } = policy.taxRegistration;
+  assert.deepEqual(withoutTax.treatments, { purchase: 'Vähennyskelvoton ALV (osto)', sale: 'Ei ALV-käsittelyä' });
+  for (const [coding, transaction, code] of [[expense({ tax_treatment: withoutTax.treatments.purchase }), purchase, 'ALV_NONDEDUCTIBLE_INPUT'],
+    [revenue({ tax_treatment: withoutTax.treatments.sale }), sale, 'ALV_OUT_OF_SCOPE']]) {
+    const enriched = policy.adapter.enrichCoding({ coding, transaction, taxCodingEnabled: true });
+    assert.equal(enriched.tax_type, code);
+    assert.equal(alvCodeNeedsRegistration(code), false);
+    for (const profile of [notRegistered, { alv_registration: { status: 'registered', registered_from: '2026-07-01' } }]) {
+      assert.deepEqual(assertPostable({ coding: enriched, transaction, profile }), enriched);
+    }
+    assert.equal(policy.adapter.transactionSplit({ coding: enriched, transaction }), null, 'no ALV leg');
+  }
+  const direction = (transaction) => (transaction.money_out ? 'in' : 'out');
+  assert.equal(withoutTax.needsRegistration({ taxTreatment: withoutTax.treatments.purchase, direction: direction(purchase) }), false);
+  assert.equal(withoutTax.needsRegistration({ taxTreatment: withoutTax.treatments.sale, direction: direction(sale) }), false);
+  assert.equal(withoutTax.needsRegistration({ taxTreatment: 'ALV 25,5 %', direction: 'in' }), true);
+  assert.equal(withoutTax.needsRegistration({ taxTreatment: 'ALV 25,5 %', direction: 'out' }), true);
+  assert.match(withoutTax.instruction({ onDate: '2026-06-02' }), /not in the Finnish VAT register .* on 2026-06-02/);
+  // The rule is unchanged: a rated purchase is still refused.
+  assert.throws(() => assertPostable({ coding: expense({ tax_treatment: 'ALV 25,5 %' }), transaction: purchase, profile: notRegistered }),
+    refusedWith('TRANSACTION_ALV_REGISTRATION_REQUIRED'));
+});
+
+test('FI: a supplier bill coded with the no-VAT purchase treatment posts its gross for an unregistered business', () => {
+  const document = { id: 'bill', document_date: '2026-02-10', total_amount: 125.5, tax_amount: 25.5 };
+  const verdict = { account_code: '7680', account_name: 'Office expenses', tax_treatment: 'Vähennyskelvoton ALV (osto)' };
+  const posted = policy.adapter.supplierBillTaxPosting({ verdict, document, taxCodingEnabled: true,
+    profile: { alv_registration: { status: 'registered', registered_from: '2026-03-01' } } });
+  assert.equal(posted.expenseTaxType, 'ALV_NONDEDUCTIBLE_INPUT');
+  assert.equal(posted.alvSplit, null);
+  assert.throws(() => policy.adapter.supplierBillTaxPosting({ verdict: { ...verdict, tax_treatment: 'ALV 25,5 %' }, document, taxCodingEnabled: true, profile: notRegistered }),
+    refusedWith('SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED'));
+});

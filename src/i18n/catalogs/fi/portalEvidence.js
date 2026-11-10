@@ -80,6 +80,7 @@ const portalEvidence = Object.freeze({
   "portal.reply.skip": "Ohita toistaiseksi",
   "portal.reply.sendNoteEvidence": "Lähetä viesti ja tositteet",
   "portal.reply.sendEvidence": "Lähetä tositteet",
+  "portal.answered.title": "Mitä Donna teki vastauksillasi",
   "portal.reply.sendNote": "Lähetä viesti"
 });
 
