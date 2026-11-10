@@ -73,7 +73,9 @@ await test('updateClientProfileInDb: merges patch + writes audit + commits', asy
   assert.match(audits[0].sql, /actor_type, actor_id/);
   assert.equal(audits[0].params[2], 'kari@books.example');
   const auditMeta = JSON.parse(audits[0].params[3]);
-  assert.deepEqual(auditMeta, { keys: ['dismissed_tiles'] });
+  // previous_values: what each written key held before (none here: the
+  // mock client has no stored profile).
+  assert.deepEqual(auditMeta, { keys: ['dismissed_tiles'], previous_values: {} });
 });
 
 await test('updateClientProfileInDb: server-stamps accounting_system provenance from actorId', async () => {
