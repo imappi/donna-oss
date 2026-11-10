@@ -30,6 +30,7 @@ import { isAuthority } from '../loopExecutionPolicy.js';
 import { purgeLoopsShadowForDeletedClient } from '../caseManager.js';
 import { purgeLocalJobsForDeletedClient } from '../desktop/localJobQueue.js';
 import { purgeMemoriesForDeletedLegalEntity } from '../memoriesDb.js';
+import { endPushRegistrationsWithoutCurrentAccess } from '../mobile/mobilePushRegistrationAccess.js';
 import { purgeConvergenceMetricSnapshotsForDeletedClient } from '../convergenceMetricSnapshots.js';
 import { ANSWERED_PROCESSING_ASK_STATUSES, hasAnsweredOwnerAskInRequests, hasAnsweredSeatAskInRequests, hasOpenAgentAskInRequests, hasOpenOwnerAskInRequests, hasOpenSeatAskInRequests, OPEN_OWNER_ASK_STATUSES } from '../reconcileConvergenceState.js';
 import { CLOSED_PERIOD_STATUSES } from '../ledgerReadModel.js';
@@ -987,6 +988,10 @@ export const deleteClientInDb = async ({
       // × 3, exhausted). Purge them here, in the transaction, before the
       // receipt below so the receipt carries what died.
       const localJobsPurged = await purgeLocalJobsForDeletedClient({ client, clientId });
+      // Phone registrations (migration 170) hang off the owner's collaborator
+      // row, which outlives the client; an owner whose only current access was
+      // this client keeps none. Ended before the receipt so it carries them.
+      const pushRegistrationsEnded = await endPushRegistrationsWithoutCurrentAccess(client, { firmId, exceptClientId: clientId });
 
       // Record the audit event before the cascade so client_id is still
       // resolvable. audit_events.client_id is `on delete set null`, so the
@@ -1004,7 +1009,8 @@ export const deleteClientInDb = async ({
           } : {}),
           ...(localJobsPurged
             ? { local_jobs_purged: { total: localJobsPurged.deleted, by_status: localJobsPurged.by_status } }
-            : {})
+            : {}),
+          ...(pushRegistrationsEnded.length ? { push_registrations_ended: pushRegistrationsEnded } : {})
         })]
       );
 
