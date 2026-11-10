@@ -31,6 +31,8 @@ const IDENTICAL_TO_ENGLISH = Object.freeze({
   "mounted.financial.finland.yel": "code or abbreviation (YEL)",
   "mounted.import.validationSummary": "arguments only ({valid} · {blocked} · {issues})",
   "mounted.team.donna": "product name (Donna)",
+  "portal.chat.channel.telegram": "product name (Telegram)",
+  "portal.chat.channel.whatsapp": "product name (WhatsApp)",
   "mounted.venture.xero": "product name (Xero)",
   "mounted.workspace.accountingSystem.procountor": "product name (Procountor)",
   "mounted.workspace.accountingSystem.qbo": "product name (QuickBooks Online)",

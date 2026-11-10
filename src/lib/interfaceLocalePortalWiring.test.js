@@ -76,7 +76,10 @@ test('mixed-direction prose, filenames, identifiers, amounts, dates, and counts 
   assert.match(portalSource, /formatTimestamp\(activityFixture\.uploadedAt\)/);
   assert.match(portalSource, /intl\.formatNumber\(visibleUploads\.length\)/);
   assert.match(chatSource, /<BidiText direction="auto">\{entry\.text\}<\/BidiText>/);
-  assert.match(chatSource, /<IdentifierText>\{card\.intentKind\}<\/IdentifierText>/);
+  // Stored codes read as catalog labels, never as the code itself.
+  assert.match(chatSource, /ownerIntentKindLabel\(card\.intentKind, intl\.formatMessage\)/);
+  assert.match(chatSource, /portalChannelLabel\(card\.channel, intl\.formatMessage\)/);
+  assert.doesNotMatch(chatSource, /selected_mutation\.writer/);
   assert.match(chatSource, /formatTimestamp\(card\.lastOwnerMessageAt\)/);
   assert.match(portalSource, /formatTimestamp\(item\.q\.topic\.lastOwnerMessageAt\)/);
   assert.doesNotMatch(chatSource, /\{card\.outcomeLabel\}/);

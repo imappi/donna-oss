@@ -228,7 +228,9 @@ export function ProposalMetaStrip({ action, meta, tone }) {
       </div>
       {effectId && <div style={{ fontSize: tone.metaLine.size, color: tone.metaLine.color, lineHeight: tone.metaLine.lineHeight, fontFamily: tone.bodyFont }}>{message(effectId)}</div>}
       {guardId && <div style={{ fontSize: tone.metaLine.size, color: tone.metaLine.color, lineHeight: tone.metaLine.lineHeight, fontFamily: tone.bodyFont }}>{message(guardId)}</div>}
-      {meta.writer && <div style={{ fontSize: tone.metaLine.size, color: tone.metaLine.color, lineHeight: tone.metaLine.lineHeight, fontFamily: tone.mono }}>→ <IdentifierText>{meta.writer}</IdentifierText></div>}
+      {/* meta.writer (the internal function that would apply this) is kept for
+          receipts and tests but never shown: the effect line above already says
+          what the change does, in the interface language. */}
       {meta.beforeAfter.map((row, index) => <ProposalDiffRow key={`ba-${index}`} action={action} row={row} tone={tone} message={message} />)}
       <ProposalWarnings action={action} meta={meta} tone={tone} message={message} />
       {meta.checkReport && <CheckReportStrip checkReport={meta.checkReport} tone={tone} />}
@@ -364,7 +366,6 @@ export function ApplyReceiptStrip({ action, receipt, tone }) {
         <ReceiptStatus action={action} receipt={receipt} color={color} tone={tone} message={message} />
         <span style={{ fontSize: tone.receipt.summarySize, color: tone.receipt.summaryColor }}>{receiptSummary(action, message)}</span>
       </div>
-      {receipt.writer && <div style={{ fontSize: 10.5, color: tone.receipt.writerColor, fontFamily: tone.mono }}>→ <IdentifierText>{receipt.writer}</IdentifierText></div>}
       {receipt.rows.map((row, index) => (
         <ReceiptRow key={`r-${index}`} action={action} row={row} tone={tone} message={message} formatCount={formatCount} formatDate={formatDate} />
       ))}

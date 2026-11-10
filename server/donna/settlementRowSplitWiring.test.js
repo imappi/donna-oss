@@ -69,7 +69,7 @@ const fakeClient = ({
       if (['savepoint runtime_policy_incident', 'release savepoint runtime_policy_incident',
         'rollback to savepoint runtime_policy_incident',
         'select pg_advisory_xact_lock(hashtextextended($1, 0))'].includes(sql)) return { rows: [] };
-      if (sql.includes('select jurisdiction, entity_type, profile from clients')) return { rows: [{ jurisdiction: 'fi', entity_type: null, profile: { accounting_basis: 'cash', accounting_system: 'none' } }] };
+      if (sql.includes('select jurisdiction, entity_type, profile from clients')) return { rows: [{ jurisdiction: 'fi', entity_type: null, profile: { accounting_basis: 'cash', accounting_system: 'none', alv_registration: { status: 'registered', registered_from: '2020-01-01' } } }] };
       if (sql.includes('select id from transactions')) return { rows: transaction ? [{ id: transaction.id }] : [] };
       if (sql.includes('from audit_events') && sql.trimStart().startsWith('select')) return { rows: [] };
       if (sql.includes('select * from transactions')) return { rows: [transaction] };

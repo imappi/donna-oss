@@ -32,6 +32,31 @@ const assertGbVatRegistered = ({ profile = null, onDate, code, refusalCode, subj
     { vat_code: code, as_of: at || null, registered: resolution.registered, registration_reason: resolution.reason });
 };
 
+// The registration declaration the shared coder contract reads
+// (postingPolicy.js taxRegistration; transactionLlm.js): a bank line refused
+// with TRANSACTION_GB_VAT_REGISTRATION_REQUIRED becomes a question to the
+// owner for the fact only they know — whether, and from when, the business is
+// VAT-registered. It asks no tax judgement and names no rule.
+const GB_TAX_REGISTRATION = Object.freeze({
+  refusalCodes: Object.freeze(['TRANSACTION_GB_VAT_REGISTRATION_REQUIRED']),
+  onDate: ({ profile = null, onDate = null } = {}) => {
+    const at = toIsoDay(onDate);
+    if (!at) return { registered: null, reason: 'no_as_of_date' };
+    const { registered, reason } = resolveGbVatRegistrationOnDate({ registration: profile?.vat_registration ?? null, onDate: at });
+    return { registered, reason };
+  },
+  ownerQuestion: ({ language = 'en', lineLabel = '', onDate = null, registered = null } = {}) => {
+    const at = toIsoDay(onDate) || '';
+    const line = lineLabel ? `${lineLabel}: ` : '';
+    if (language === 'fi') return registered === false
+      ? `${line}tietojemme mukaan yritys ei ollut ${at} rekisteröity arvonlisäverovelvolliseksi (VAT) Yhdistyneessä kuningaskunnassa. Onko yritys rekisteröitynyt sen jälkeen? Jos on, mistä päivästä alkaen rekisteröinti on voimassa?`
+      : `${line}meillä ei ole tietoa siitä, onko yritys rekisteröity arvonlisäverovelvolliseksi (VAT) Yhdistyneessä kuningaskunnassa. Onko yritys rekisteröity? Jos on, mistä päivästä alkaen rekisteröinti on voimassa?`;
+    return registered === false
+      ? `${line}our records say the business was not VAT-registered on ${at}. Has the business registered for VAT since then? If so, from what date is the registration effective?`
+      : `${line}we have no record of whether the business is VAT-registered. Is the business registered for VAT? If so, from what date is the registration effective?`;
+  }
+});
+
 // The Finnish evidence rule as UK law and practice allow it (owner decision
 // 2026-11-09; the PR records each rule and its source). Two UK differences:
 //  - The input rule binds the machine only. A reclaim without a VAT invoice
@@ -54,6 +79,7 @@ export const GB_POSTING_POLICY = Object.freeze({
   nativeTaxCodePrefixes: Object.freeze(['VAT_']), nativeTaxCodes: Object.freeze(GB_VAT_CODES.map(({ code }) => code)),
   salesInvoiceChannels: Object.freeze(['outbound']), salesTaxControlRole: salesTaxRole,
   taxEvidence: GB_TAX_EVIDENCE,
+  taxRegistration: GB_TAX_REGISTRATION,
   capabilities: Object.freeze({ prepareLedgerAccounts: true, enrichCoding: true, transactionSplit: true,
     salesInvoiceTaxPosting: true, supplierBillTaxPosting: true,
     planArSettlement: false, arSettlementReceivableCoding: false, assertPostableTaxCoding: true, sourceTaxPosting: false }),

@@ -41,7 +41,7 @@ test('real PG: drafted posting claims read journals; confirmed owner settlement 
   const root=new URL('../../db/migrations/',import.meta.url);
   for(const file of(await readdir(root)).filter(f=>f.endsWith('.sql')).sort()) await client.query(await readFile(new URL(file,root),'utf8'));
   await client.query(`insert into firms(id,name,slug) values('f','Synthetic firm','material-errors');
-    insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values('c','f','Synthetic Oy','fi','fi-oy','{"jurisdiction":"fi","entity_type":"fi-oy","accounting_system":"none"}');
+    insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values('c','f','Synthetic Oy','fi','fi-oy','{"jurisdiction":"fi","entity_type":"fi-oy","accounting_system":"none","alv_registration":{"status":"registered","registered_from":"2020-01-01"}}');
     insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values('tax','f','c','FINLAND_ALV_CODING','auto','manual');`);
   for(const id of ['salary','posted']) {
     await client.query(`insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,coding_state,payload)

@@ -22,7 +22,7 @@ async function freshFiBook(t, label) {
   const migrations = new URL('../../db/migrations/', import.meta.url);
   for (const file of (await readdir(migrations)).filter(n => n.endsWith('.sql')).sort()) await pool.query(await readFile(new URL(file, migrations), 'utf8'));
   await pool.query("insert into firms(id,name,slug) values($1,'Synthetic refund proof',$1)", [firmId]);
-  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic Refund Oy','FI','fi-oy',$3)", [clientId, firmId, { jurisdiction: 'FI', accounting_system: 'none', accounting_basis: 'cash' }]);
+  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic Refund Oy','FI','fi-oy',$3)", [clientId, firmId, { jurisdiction: 'FI', accounting_system: 'none', accounting_basis: 'cash', alv_registration: { status: 'registered', registered_from: '2020-01-01' } }]);
   for (const flag of ['FINLAND_ALV_CODING', 'FINLAND_ALV_RETURN', 'JURISDICTION_ACCOUNT_PALETTE', 'RECONCILIATION_CODE_MATCHED_NO_REVIEW', 'CODING_AUTO_POST', 'LEDGER_AUTO_POST']) await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$1,'auto','manual')", [flag, firmId, clientId]);
   await seedPackPaletteChartWithClient(pool, { firmId, clientId });
   const journal = async id => (await pool.query("select j.id,l.account_name,l.account_code,l.tax_type,l.debit,l.credit,l.payload from ledger_journals j join ledger_lines l on l.journal_id=j.id where j.firm_id=$1 and j.client_id=$2 and j.source_type='transaction' and j.source_id=$3 order by l.line_no", [firmId, clientId, id])).rows;

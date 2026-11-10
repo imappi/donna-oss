@@ -139,6 +139,7 @@ test('start motion, ready compute: mints the row, creates + DELIVERS the confirm
     actorId: 'member-1',
     flagActsImpl: async () => true,
     liveOverlapImpl: async () => [],
+    ownerLanguageImpl: async () => 'fi',
     scopeDriftImpl: async () => null,
     computeImpl: async () => ({ period, ...readyVerdict() }),
     createDraftImpl: async (args) => {
@@ -171,6 +172,7 @@ test('start motion, ready compute over dates already covered: the refusal surfac
       firmId: 'firm-1', clientId: 'client-1', period: '2026-06',
       flagActsImpl: async () => true,
       liveOverlapImpl: async () => [],
+      ownerLanguageImpl: async () => 'fi',
       scopeDriftImpl: async () => null,
       computeImpl: async () => ({ period, ...readyVerdict() }),
       createDraftImpl: async () => { throw overlap; },
@@ -211,6 +213,7 @@ test('start motion, needs_review compute: NO row — the blockers ride an owner 
     period: '2026-06',
     flagActsImpl: async () => true,
     liveOverlapImpl: async () => [],
+    ownerLanguageImpl: async () => 'fi',
     scopeDriftImpl: async () => null,
     computeImpl: async () => ({
       period,
@@ -250,6 +253,7 @@ test('start motion, G-7: a filing_blocked scope-drift verdict escalates — NO d
     period: '2026-06',
     flagActsImpl: async () => true,
     liveOverlapImpl: async () => [],
+    ownerLanguageImpl: async () => 'fi',
     scopeDriftImpl: async () => ({
       verdict: 'filing_blocked',
       triggers: [
@@ -280,6 +284,7 @@ test('start motion, G-7: a filing_blocked scope-drift verdict escalates — NO d
     period: '2026-06',
     flagActsImpl: async () => true,
     liveOverlapImpl: async () => [],
+    ownerLanguageImpl: async () => 'fi',
     scopeDriftImpl: async () => ({ verdict: 'supported_with_review', triggers: [{ id: 'cash_activity', severity: 'supported_with_review' }] }),
     computeImpl: async () => ({ period, ...readyVerdict() }),
     createDraftImpl: async (args) => {
@@ -291,4 +296,78 @@ test('start motion, G-7: a filing_blocked scope-drift verdict escalates — NO d
   });
   assert.equal(ok.action, 'confirmation_requested');
   assert.equal(passThrough.drafts.length, 1);
+});
+
+// ── The owner's language on the ALV escalation and confirm asks ──────────────
+// A Finnish company whose owner chose English read both asks in Finnish, and a
+// part-paid document was called "not yet recorded". The language is the one
+// resolver's (getClientOwnerLanguageInDb by default; injected here).
+const escalate = async ({ language, review }) => {
+  const asks = [];
+  const seen = [];
+  await startFinlandAlvReturnFilingInDb({
+    firmId: 'firm-1', clientId: 'client-1', period: '2026-06',
+    flagActsImpl: async () => true,
+    liveOverlapImpl: async () => [],
+    ownerLanguageImpl: async (input) => { seen.push(input); return language; },
+    scopeDriftImpl: async () => null,
+    computeImpl: async () => ({ period, alvReturn: readyVerdict().alvReturn, review, provenance: {} }),
+    createDraftImpl: async (args) => ({ id: 'alv-row-1', status: 'draft_pending_confirmation', period_key: args.period.key, verdict: args.verdict }),
+    createAskImpl: async (args) => { asks.push(args); return { id: 'ask-1' }; },
+    deliverAsksImpl: async () => {}
+  });
+  return { question: asks[0].question, seen };
+};
+const census = (rests) => ({ items: rests.map((r, i) => ({ document_id: `doc-${i}`, rests: r })) });
+
+test('ALV escalation: English for an owner who chose English; a part-paid document is named as paid only in part', async () => {
+  const review = {
+    status: 'needs_review',
+    blockers: ['uncoded_revenue_lines', 'unrecognized_sales'],
+    uncodedRevenueLines: [{ journal_id: 'j1' }, { journal_id: 'j2' }],
+    incompatibleLines: [{ journal_id: 'j3' }],
+    unrecognizedSales: census(['no_settlement', 'part_settled_in_period']),
+    unrecognizedPurchases: census(['part_settled_in_period', 'part_settled_in_period'])
+  };
+  const en = await escalate({ language: 'en', review });
+  assert.deepEqual(en.seen, [{ firmId: 'firm-1', clientId: 'client-1' }]);
+  assert.equal(en.question, [
+    'The VAT return (2026-06) is not ready to file yet.',
+    '2 income transactions have no VAT treatment yet. Tell me what sales these are.',
+    '1 entry has a VAT code that does not fit the account. I will go through it with you.',
+    "1 uploaded sales invoice or credit note is not yet recorded in this period's sales, so its sales and VAT are missing from the calculation.",
+    '1 uploaded sales invoice is paid only in part in this period, so the sales and VAT of its unpaid remainder are missing from the calculation.',
+    '2 uploaded purchase invoices are paid only in part in this period, so the costs and deductible VAT of their unpaid remainder are missing from the calculation.'
+  ].join(' '));
+  const fi = await escalate({ language: 'fi', review });
+  assert.equal(fi.question, [
+    'ALV-ilmoitus (2026-06) ei ole vielä valmis lähetettäväksi.',
+    '2 tulotapahtumaa ilman ALV-käsittelyä — kerro, mitä myyntiä nämä ovat.',
+    '1 kirjausta, joiden ALV-koodi ei sovi tilille — tarkistan ne kanssasi.',
+    '1 ladattua myyntilaskua tai hyvityslaskua ei ole vielä kirjattu tämän kauden myyntiin, joten niiden myynti ja ALV puuttuvat laskelmasta.',
+    '1 ladattu myyntilasku on maksettu tällä kaudella vain osittain, joten sen maksamattoman loppuosan myynti ja ALV puuttuvat laskelmasta.',
+    '2 ladattua ostolaskua on maksettu tällä kaudella vain osittain, joten niiden maksamattoman loppuosan kulut ja vähennettävä ALV puuttuvat laskelmasta.'
+  ].join(' '));
+  assert.doesNotMatch(fi.question, /2 ladattua ostolaskua tai ostohyvityslaskua ei ole vielä kirjattu/, 'a part-paid bill is not called unrecorded');
+});
+
+test('ALV confirm ask: English for an owner who chose English, Finnish otherwise', async () => {
+  const confirm = async (language) => {
+    const asks = [];
+    await startFinlandAlvReturnFilingInDb({
+      firmId: 'firm-1', clientId: 'client-1', period: '2026-06',
+      flagActsImpl: async () => true,
+      liveOverlapImpl: async () => [],
+      ownerLanguageImpl: async () => language,
+      scopeDriftImpl: async () => null,
+      computeImpl: async () => ({ period, ...readyVerdict() }),
+      createDraftImpl: async (args) => ({ id: 'alv-row-1', status: 'draft_pending_confirmation', period_key: args.period.key, verdict: args.verdict }),
+      createAskImpl: async (args) => { asks.push(args); return { id: 'ask-1' }; },
+      deliverAsksImpl: async () => {}
+    });
+    return asks[0].question;
+  };
+  assert.match(await confirm('en'), /^VAT return, tax period 2026-06\nVAT payable 102\.00 €\./);
+  assert.match(await confirm('en'), /Reply “yes” to confirm and I will file the return/);
+  assert.match(await confirm('fi'), /^ALV-ilmoitus, verokausi 2026-06\nMaksettava vero 102,00 €\./);
 });

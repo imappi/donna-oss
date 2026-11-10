@@ -30,7 +30,7 @@ test('real PG: reminder settles one original obligation, posts exact components 
   const migrations=new URL('../../db/migrations/',import.meta.url);
   for(const file of(await readdir(migrations)).filter(f=>f.endsWith('.sql')).sort())await pool.query(await readFile(new URL(file,migrations),'utf8'));
   await pool.query("insert into firms(id,name,slug) values('firm','Synthetic firm','reminder-proof')");
-  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,profile) values('company','firm','Synthetic seller Oy','fi',$1)",[{jurisdiction:'fi',accounting_system:'none',accounting_basis:'cash'}]);
+  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,profile) values('company','firm','Synthetic seller Oy','fi',$1)",[{jurisdiction:'fi',accounting_system:'none',accounting_basis:'cash',alv_registration:{status:'registered',registered_from:'2020-01-01'}}]);
   await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values('tax','firm','company','FINLAND_ALV_CODING','auto','manual')");
   for(const d of[invoice,reminder]){
     await pool.query("insert into documents(id,firm_id,client_id,filename,document_type,parse_status,customer_name,reference_number,document_date,currency,total_amount,tax_amount,parse_summary,payload) values($1,'firm','company',$1,'sales_invoice','completed',$2,$3,$4,'EUR',$5,$6,$7,'{}')",[d.id,d.customer_name,d.reference_number,d.document_date,d.total_amount,d.tax_amount,d.parse_summary]);

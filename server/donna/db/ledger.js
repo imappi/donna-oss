@@ -736,6 +736,18 @@ export const resolveSettlementRowSplit = async ({ client, firmId, clientId, tran
     if (!split || Math.abs(split.vat - feeTax) > 0.02) refuseSettlementSplit('SETTLEMENT_SPLIT_FEE_TAX_UNRESOLVED',
       'The source fee includes tax; select its supported fee-tax treatment before posting.', { fee, fee_tax: feeTax });
     feeAlvSplit = { ...split, net: fee, vat: feeTax };
+    // The fee leg carries its own tax code and VAT split, whatever the sales
+    // leg carries (with the country's tax-coding switch off, the sales leg is
+    // not checked for one). Registration binds it the same way: the policy's
+    // own reader on the line's date; only a recorded registration posts.
+    const registrationRule = postingContext?.policy?.taxRegistration;
+    if (registrationRule) {
+      const onDate = transaction.date || transaction.transaction_date;
+      const registration = registrationRule.onDate({ profile: postingContext.profile || null, onDate });
+      if (registration?.registered !== true) refuseSettlementSplit(registrationRule.refusalCodes[0],
+        'The processor fee would post its VAT split, but the business is not recorded as VAT-registered on this date, so nothing was posted. Record the registration (or correct the fee coding) and post again.',
+        { vat_code: feeTaxPlan.code || null, as_of: String(onDate || '').slice(0, 10) || null, registered: registration?.registered ?? null, registration_reason: registration?.reason || null });
+    }
   }
   const rowReceipt = {
     document_id: row.document_id,

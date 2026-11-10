@@ -57,7 +57,7 @@ test(`FI real HTTP and PG (${browserDefaultScope ? 'browser omitted firm_id' : '
   await pool.query(`insert into firm_members(id,firm_id,user_id,email,name,role,status,access_level)
     values('owner',$1,'owner-user','owner@currency.example','Owner','owner','active','staff')`,[firmId]);
   await pool.query(`insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile)
-    values($1,$2,'Salong Test Oy','fi','fi-oy',$3)`,[clientId,firmId,{jurisdiction:'fi',accounting_system:'none',accounting_basis:'accrual'}]);
+    values($1,$2,'Salong Test Oy','fi','fi-oy',$3)`,[clientId,firmId,{jurisdiction:'fi',accounting_system:'none',accounting_basis:'accrual',alv_registration:{status:'registered',registered_from:'2020-01-01'}}]);
   for (const flag of ['FINLAND_ALV_CODING','JURISDICTION_ACCOUNT_PALETTE','CODING_AUTO_POST','LEDGER_AUTO_POST']) {
     await pool.query(`insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source)
       values($1,$2,$3,$4,'auto','manual')`,[flag,firmId,clientId,flag]);

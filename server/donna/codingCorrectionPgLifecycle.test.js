@@ -44,7 +44,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  const root=new URL('../../db/migrations/',import.meta.url);
  for(const f of(await readdir(root)).filter(f=>f.endsWith('.sql')).sort())await pool.query(await readFile(new URL(f,root),'utf8'));
  await pool.query(`insert into firms(id,name,slug) values('f','Synthetic firm','correction-test');
- insert into clients(id,firm_id,company_name,jurisdiction,profile) values('c','f','Synthetic company','fi','{"jurisdiction":"fi","accounting_system":"none","accounting_basis":"cash"}');
+ insert into clients(id,firm_id,company_name,jurisdiction,profile) values('c','f','Synthetic company','fi','{"jurisdiction":"fi","accounting_system":"none","accounting_basis":"cash","alv_registration":{"status":"registered","registered_from":"2020-01-01"}}');
  insert into firm_members(id,firm_id,email,name,role,status) values('member','f','fixture@example.invalid','Fixture','admin','active');`);
  const withClient=async fn=>{const client=await pool.connect();try{return await fn(client);}finally{client.release();}};
  await withClient(client=>enrollJevExperiment({client,...scope,actorId:'member',authorityBasis:'Synthetic regression only',trialId:'correction',expiresAt:'2100-01-01',model:'fixture-provider'}));

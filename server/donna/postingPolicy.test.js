@@ -14,6 +14,10 @@ const expense = { account_code: 'OPERATING', account_name: 'Operating expense', 
 const bankAccount = { code: 'BANK', name: 'Entity bank' };
 // A VAT-registered UK business: VAT codes post only for one (gb/postingPolicy.js).
 const gbRegistered = { vat_registration: { status: 'registered', registered_from: '2020-01-01' } };
+// The Finnish twin: the business these fixtures describe posts ALV, so it is
+// ALV-registered on its record (finland/postingPolicy.js refuses otherwise).
+const fiRegistered = { alv_registration: { status: 'registered', registered_from: '2020-01-01' } };
+const fiDated = { date: '2026-09-05' };
 const hasCode = (code) => (error) => error instanceof PostingPolicyError && error.code === code;
 
 test('six posting countries explicitly preserve native transaction behavior and operation capabilities', () => {
@@ -116,13 +120,13 @@ test('foreign native tax codes refuse before every coding-bearing operation, inc
 test('supplier adapters preserve stated VAT tolerance, country refusals, and chart resolution', () => {
   const fi = resolvePostingPolicy({ jurisdiction: 'fi' }).adapter;
   const gb = resolvePostingPolicy({ jurisdiction: 'gb' }).adapter;
-  const fiInput = { verdict: { tax_treatment: 'ALV 25,5 %' }, document: { total_amount: 125.5, tax_amount: 25.51 }, taxCodingEnabled: true };
+  const fiInput = { verdict: { tax_treatment: 'ALV 25,5 %' }, document: { total_amount: 125.5, tax_amount: 25.51, document_date: '2026-09-05' }, taxCodingEnabled: true, profile: fiRegistered };
   const fiResult = fi.supplierBillTaxPosting(fiInput);
   assert.equal(fiResult.alvSplit.net, 99.99);
   assert.equal(fiResult.alvSplit.vat, 25.51);
   assert.equal(fiResult.expenseTaxType, 'ALV_25_5_INPUT');
   assert.equal(fiResult.payablesAccount.code, '2870');
-  assert.throws(() => fi.supplierBillTaxPosting({ ...fiInput, document: { total_amount: 125.5, tax_amount: 30 } }), { code: 'SUPPLIER_BILL_ALV_AMOUNT_MISMATCH' });
+  assert.throws(() => fi.supplierBillTaxPosting({ ...fiInput, document: { total_amount: 125.5, tax_amount: 30, document_date: '2026-09-05' } }), { code: 'SUPPLIER_BILL_ALV_AMOUNT_MISMATCH' });
   assert.throws(() => fi.supplierBillTaxPosting({ ...fiInput, verdict: { tax_treatment: 'ALV-tarkistus' } }), { code: 'SUPPLIER_BILL_ALV_SPLIT_UNSUPPORTED' });
   const gbInput = { verdict: { tax_treatment: 'VAT 20%' }, document: { total_amount: 120, tax_amount: 20, document_date: '2026-09-05' }, taxCodingEnabled: true, ledgerAccounts: chart, profile: gbRegistered };
   const gbResult = gb.supplierBillTaxPosting(gbInput);
@@ -155,7 +159,7 @@ test('registered invoice and supplier operations feed balanced real journal buil
     assert.equal(journal.lines[0].debit, journal.lines[1].credit + journal.lines[2].credit);
     const bill = { documentId: 'BILL-FIXTURE', date: '2026-09-05', total: 100 + rate };
     const tax = adapter.supplierBillTaxPosting({ verdict: { tax_treatment: jurisdiction === 'fi' ? 'ALV 25,5 %' : 'VAT 20%' },
-      document: { total_amount: 100 + rate, tax_amount: rate, document_date: '2026-09-05' }, ledgerAccounts: chart, taxCodingEnabled: true, profile: gbRegistered });
+      document: { total_amount: 100 + rate, tax_amount: rate, document_date: '2026-09-05' }, ledgerAccounts: chart, taxCodingEnabled: true, profile: jurisdiction === 'fi' ? fiRegistered : gbRegistered });
     const supplierJournal = buildSupplierBillJournal({ bill,
       expenseAccount: { code: 'EXP', name: 'Expense', type: 'expense', tax_type: tax.expenseTaxType },
       ...(tax.payablesAccount ? { payablesAccount: tax.payablesAccount } : {}), alvSplit: tax.alvSplit });
@@ -198,8 +202,8 @@ test('RT-23: assertPostableTaxCoding refuses an unresolved treatment on a P&L le
   assert.throws(() => fi.assertPostableTaxCoding({ coding: { ...expense }, taxCodingEnabled: true }), { code: 'TRANSACTION_ALV_TREATMENT_UNRESOLVED' });
   assert.throws(() => fi.assertPostableTaxCoding({ coding: { ...expense, tax_treatment: 'GST 9%' }, taxCodingEnabled: true }), { code: 'TRANSACTION_ALV_TREATMENT_UNRESOLVED' });
   // A resolved code, an out-of-scope code, a control-account NONE, a balance-sheet leg, or tax coding off: passes.
-  assert.deepEqual(fi.assertPostableTaxCoding({ coding: { ...revenue, tax_type: 'ALV_25_5_OUTPUT' }, taxCodingEnabled: true }), { ...revenue, tax_type: 'ALV_25_5_OUTPUT' });
-  assert.deepEqual(fi.assertPostableTaxCoding({ coding: { ...expense, xero_tax_type: 'ALV_OUT_OF_SCOPE' }, taxCodingEnabled: true }), { ...expense, xero_tax_type: 'ALV_OUT_OF_SCOPE' });
+  assert.deepEqual(fi.assertPostableTaxCoding({ coding: { ...revenue, tax_type: 'ALV_25_5_OUTPUT' }, taxCodingEnabled: true, transaction: fiDated, profile: fiRegistered }), { ...revenue, tax_type: 'ALV_25_5_OUTPUT' });
+  assert.deepEqual(fi.assertPostableTaxCoding({ coding: { ...expense, xero_tax_type: 'ALV_OUT_OF_SCOPE' }, taxCodingEnabled: true, transaction: fiDated, profile: fiRegistered }), { ...expense, xero_tax_type: 'ALV_OUT_OF_SCOPE' });
   assert.deepEqual(fi.assertPostableTaxCoding({ coding: { ...revenue, tax_type: 'NONE' }, taxCodingEnabled: true }), { ...revenue, tax_type: 'NONE' });
   assert.deepEqual(fi.assertPostableTaxCoding({ coding: { ...liability, tax_treatment: 'ALV-tarkistus' }, taxCodingEnabled: true }), { ...liability, tax_treatment: 'ALV-tarkistus' });
   assert.deepEqual(fi.assertPostableTaxCoding({ coding: { ...revenue, tax_treatment: 'ALV-tarkistus' }, taxCodingEnabled: false }), { ...revenue, tax_treatment: 'ALV-tarkistus' });
@@ -265,9 +269,9 @@ test('source component and processor fee tax planning belongs to the explicitly 
 
 test('FI: output ALV on money received needs the settled sales source; evidenced and untaxed income still post', () => {
   const fi = resolvePostingPolicy({ jurisdiction: 'fi' }).adapter;
-  const received = { money_in: 49.9, money_out: 0 };
+  const received = { ...fiDated, money_in: 49.9, money_out: 0 };
   const sales = { document_type: 'sales_invoice', match_status: 'auto_matched', total_amount: 49.9, tax_amount: 10.14, matched_line_id: null };
-  const post = (coding, extra = {}) => fi.assertPostableTaxCoding({ coding, transaction: received, taxCodingEnabled: true, autonomousCoding: true, ...extra });
+  const post = (coding, extra = {}) => fi.assertPostableTaxCoding({ coding, transaction: received, taxCodingEnabled: true, autonomousCoding: true, profile: fiRegistered, ...extra });
   const refusal = { code: 'TRANSACTION_ALV_EVIDENCE_REQUIRED' };
   // The replay: a bank-only refund on Other income at ALV 25,5 %, typed or not yet in the chart.
   assert.throws(() => post({ proposed_account: 'Other income', account_type: 'revenue', tax_type: 'ALV_25_5_OUTPUT' }), refusal);
@@ -315,7 +319,7 @@ test('GB: the shared source-evidence rule, as UK law and practice allow it (synt
   assert.deepEqual(post(software({ tax_type: 'VAT_SR_20_INPUT' }), { autonomousCoding: false }), software({ tax_type: 'VAT_SR_20_INPUT' }));
   // Finland keeps its stricter input rule for a person's decision too.
   assert.throws(() => fi.adapter.assertPostableTaxCoding({ coding: { proposed_account: 'Operating supplies', account_type: 'expense', tax_type: 'ALV_25_5_INPUT' },
-    transaction: spent, taxCodingEnabled: true, autonomousCoding: false }), { code: 'TRANSACTION_ALV_EVIDENCE_REQUIRED' });
+    transaction: spent, taxCodingEnabled: true, autonomousCoding: false, profile: fiRegistered }), { code: 'TRANSACTION_ALV_EVIDENCE_REQUIRED' });
   // Output: money received at a positive rate needs a settled sales source for the machine.
   const other = (tax) => ({ proposed_account: 'Other income', account_type: 'revenue', ...tax });
   assert.throws(() => post(other({ tax_treatment: 'VAT 20%' }), { transaction: received }), refusal);

@@ -87,7 +87,9 @@ test('real HTTP + PG: a fresh hosted Oy is born with the coded Finnish statutory
       const firm = await api('/api/donna/firms/self-provision', { workspace: 'firm', firm_name: 'Tilitoimisto FI21 Oy', owner_name: 'Kaisa Kirjanpitäjä' });
       assert.equal(firm.statusCode, 201, JSON.stringify(firm.body));
       const firmId = firm.body.firm_id; const memberId = firm.body.member_id;
-      const created = await api('/api/donna/firms/clients', { id_scope: 'firm', profile: { id: 'leipomo-fi21', companyName: 'Leipomo Testi Oy', uen: '3224455-8', jurisdiction: 'FI', entityType: 'fi-oy', defaultCurrency: 'EUR' } });
+      const created = await api('/api/donna/firms/clients', { id_scope: 'firm', profile: { id: 'leipomo-fi21', companyName: 'Leipomo Testi Oy', uen: '3224455-8', jurisdiction: 'FI', entityType: 'fi-oy', defaultCurrency: 'EUR',
+        // The Oy posts ALV, so its record says it is ALV-registered.
+        alv_registration: { status: 'registered', registered_from: '2020-01-01' } } });
       assert.equal(created.statusCode, 200, JSON.stringify(created.body));
       const clientId = created.body.created_client_id;
 

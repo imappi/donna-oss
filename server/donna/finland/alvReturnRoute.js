@@ -41,52 +41,103 @@ export const buildAlvFilingAuthorityBasis = ({ message = {}, phoneHash = null } 
 });
 
 const euro = (n) => `${(Number(n) || 0).toFixed(2).replace('.', ',')} €`;
+const euroEn = (n) => `${(Number(n) || 0).toFixed(2)} €`;
+
+// The route's owner lines, per owner language (preferredOwnerTemplateLanguage,
+// passed in as `language`). This is a Finnish lane, so an absent language keeps
+// the historical Finnish copy, unchanged; 'en' (an owner who chose English) gets
+// English. The English lines invite only replies the route reads (yes / no).
+// G-3: the Suomi.fi mandate is the one filing precondition only the OWNER can
+// fix — granting Donna the "veroasioiden hoito" valtuutus happens in Suomi.fi,
+// not in Donna. The ask stays open; the next "kyllä" retries after the grant.
+const ALV_ROUTE_COPY = Object.freeze({
+  fi: Object.freeze({
+    heading: (periodKey) => `ALV-ilmoitus, verokausi ${periodKey}`,
+    nil: 'Ei ALV-toimintaa kaudella — nollailmoitus.',
+    refund: (amount) => `Palautukseen oikeuttava vero ${euro(amount)}.`,
+    payable: (amount) => `Maksettava vero ${euro(amount)}.`,
+    taxes: (outputTax, deductible) => `Myynnin vero ${euro(outputTax)} · Vähennettävä vero ${euro(deductible)}.`,
+    confirm: 'Vahvista vastaamalla “kyllä”, niin lähetän ilmoituksen Verohallinnolle. Peru vastaamalla “ei”.',
+    nudge: 'Vastaa “kyllä” niin lähetän ALV-ilmoituksen Verohallinnolle, tai “ei” niin perun sen.',
+    fileFailed: 'ALV-ilmoituksen lähetys ei onnistunut. Vastaa “kyllä” niin yritän uudelleen, tai “ei” niin perun ilmoituksen.',
+    mandateMissing: 'ALV-ilmoitusta ei voi vielä lähettää: Suomi.fi-valtuutus (veroasioiden hoito) puuttuu tai ei ole voimassa. Myönnä valtuutus Suomi.fi-valtuudet-palvelussa, niin vahvistetaan kirjaus — sen jälkeen vastaa “kyllä” uudelleen.',
+    rejected: (reason) => `ALV-ilmoitusta ei hyväksytty: ${reason}`,
+    stale: 'Tämä ALV-ilmoitus on jo käsitelty.',
+    filed: (periodKey) => `ALV-ilmoitus (${periodKey}) lähetetty Verohallinnolle.`,
+    filedNil: 'Nollailmoitus.',
+    filedRefund: (amount) => `Palautusta odotettavissa ${euro(amount)}.`,
+    filedPayable: (amount) => `Maksettavaa ${euro(amount)} — maksuohjeet OmaVerossa.`,
+    cancelled: (periodKey) => `ALV-ilmoitus (${periodKey}) peruttu. Korjataan kirjanpito ja lasken sen uudelleen.`,
+    textOnly: 'Vastaa tekstillä: “kyllä” tai “ei”.',
+    overlapStatus: { filed: 'lähetetty', draft_pending_confirmation: 'odottaa vahvistusta' },
+    overlapLead: (periodKey, named) => `ALV-ilmoitusta (${periodKey}) ei lähetetty: ${named ? `ilmoitus ${named}` : 'toinen ilmoitus'} kattaa jo osan samoista päivistä.`,
+    overlapTwice: 'Samoja myyntejä ja ostoja ei voi ilmoittaa kahdesti.',
+    overlapFiled: 'Lähetetty ilmoitus pysyy ennallaan. Peru tämä ilmoitus vastaamalla “ei”.',
+    overlapBothWaiting: 'Kumpaakaan ei lähetetä, ennen kuin toinen perutaan. Peru tämä ilmoitus vastaamalla “ei”.'
+  }),
+  en: Object.freeze({
+    heading: (periodKey) => `VAT return, tax period ${periodKey}`,
+    nil: 'No VAT activity in the period, so this is a nil return.',
+    refund: (amount) => `VAT to be refunded ${euroEn(amount)}.`,
+    payable: (amount) => `VAT payable ${euroEn(amount)}.`,
+    taxes: (outputTax, deductible) => `VAT on sales ${euroEn(outputTax)} · Deductible VAT ${euroEn(deductible)}.`,
+    confirm: 'Reply “yes” to confirm and I will file the return with the Finnish Tax Administration. Reply “no” to cancel.',
+    nudge: 'Reply “yes” and I will file the VAT return with the Finnish Tax Administration, or “no” and I will cancel it.',
+    fileFailed: 'Filing the VAT return did not go through. Reply “yes” and I will try again, or “no” and I will cancel the return.',
+    mandateMissing: 'I can\'t file the VAT return yet: the Suomi.fi authorisation for tax matters (veroasioiden hoito) is missing or no longer valid. Grant the authorisation in the Suomi.fi e-Authorizations service, then reply “yes” again.',
+    rejected: (reason) => `The VAT return was not accepted: ${reason}`,
+    stale: 'This VAT return has already been handled.',
+    filed: (periodKey) => `VAT return (${periodKey}) filed with the Finnish Tax Administration.`,
+    filedNil: 'Nil return.',
+    filedRefund: (amount) => `A refund of ${euroEn(amount)} is expected.`,
+    filedPayable: (amount) => `${euroEn(amount)} to pay. The payment instructions are in OmaVero.`,
+    cancelled: (periodKey) => `VAT return (${periodKey}) cancelled. Let's fix the books and I will calculate it again.`,
+    textOnly: 'Please reply in text: “yes” or “no”.',
+    overlapStatus: { filed: 'filed', draft_pending_confirmation: 'waiting for confirmation' },
+    overlapLead: (periodKey, named) => `The VAT return (${periodKey}) was not filed: ${named ? `the return ${named}` : 'another return'} already covers some of the same days.`,
+    overlapTwice: 'The same sales and purchases can\'t be reported twice.',
+    overlapFiled: 'The filed return stays as it is. Reply “no” to cancel this return.',
+    overlapBothWaiting: 'Neither is filed until one of them is cancelled. Reply “no” to cancel this return.'
+  })
+});
+export const alvRouteCopyFor = (language) => ALV_ROUTE_COPY[language] || ALV_ROUTE_COPY.fi;
 
 // The confirm summary renders the PERSISTED verdict (render-the-persisted-verdict)
 // — the same boxes the filing will transmit, never a re-compute.
-export const summarizeAlvReturnVerdict = ({ periodKey = '', verdict = {} } = {}) => {
+export const summarizeAlvReturnVerdict = ({ periodKey = '', verdict = {}, language = 'fi' } = {}) => {
+  const copy = alvRouteCopyFor(language);
   const alvReturn = verdict.alvReturn || {};
-  const out = [`ALV-ilmoitus, verokausi ${periodKey}`];
-  if (alvReturn.nilReturn) out.push('Ei ALV-toimintaa kaudella — nollailmoitus.');
-  else if (alvReturn.refund) out.push(`Palautukseen oikeuttava vero ${euro(Math.abs(alvReturn.payable))}.`);
-  else out.push(`Maksettava vero ${euro(alvReturn.payable)}.`);
+  const out = [copy.heading(periodKey)];
+  if (alvReturn.nilReturn) out.push(copy.nil);
+  else if (alvReturn.refund) out.push(copy.refund(Math.abs(alvReturn.payable)));
+  else out.push(copy.payable(alvReturn.payable));
   const boxes = alvReturn.boxes || {};
   const outputTax = ['301', '302', '303'].reduce((sum, f) => sum + (Number(boxes[f]) || 0), 0);
   const deductible = Number(boxes['307']) || 0;
   if (!alvReturn.nilReturn) {
-    out.push(`Myynnin vero ${euro(outputTax)} · Vähennettävä vero ${euro(deductible)}.`);
+    out.push(copy.taxes(outputTax, deductible));
   }
   return out.join('\n');
 };
 
-const CONFIRM_INSTRUCTION = 'Vahvista vastaamalla “kyllä”, niin lähetän ilmoituksen Verohallinnolle. Peru vastaamalla “ei”.';
-const NUDGE_CONFIRM = 'Vastaa “kyllä” niin lähetän ALV-ilmoituksen Verohallinnolle, tai “ei” niin perun sen.';
-const FILE_FAILED_TEXT = 'ALV-ilmoituksen lähetys ei onnistunut. Vastaa “kyllä” niin yritän uudelleen, tai “ei” niin perun ilmoituksen.';
-// G-3: the Suomi.fi mandate is the one filing precondition only the OWNER can
-// fix — granting Donna the "veroasioiden hoito" valtuutus happens in Suomi.fi,
-// not in Donna. The ask stays open; the next "kyllä" retries after the grant.
-const MANDATE_MISSING_TEXT = 'ALV-ilmoitusta ei voi vielä lähettää: Suomi.fi-valtuutus (veroasioiden hoito) puuttuu tai ei ole voimassa. Myönnä valtuutus Suomi.fi-valtuudet-palvelussa, niin vahvistetaan kirjaus — sen jälkeen vastaa “kyllä” uudelleen.';
-
 // ALV_RETURN_FILING_OVERLAP: another live return already covers some of these
-// dates. Nothing was sent. The owner can cancel this return ("ei"); a filed
-// return stays as filed. Two returns both waiting: neither is sent until one
-// is cancelled.
-const OVERLAP_STATUS_WORDS = { filed: 'lähetetty', draft_pending_confirmation: 'odottaa vahvistusta' };
-const filingOverlapText = ({ periodKey, error }) => {
+// dates. Nothing was sent. The owner can cancel this return ("ei" / "no"); a
+// filed return stays as filed. Two returns both waiting: neither is sent until
+// one is cancelled.
+const filingOverlapText = ({ periodKey, error, language = 'fi' }) => {
+  const copy = alvRouteCopyFor(language);
   const others = Array.isArray(error?.details?.overlapping) ? error.details.overlapping : [];
-  const named = others.map((other) => `${other.period_key} (${OVERLAP_STATUS_WORDS[other.status] || other.status})`).join(', ');
+  const named = others.map((other) => `${other.period_key} (${copy.overlapStatus[other.status] || other.status})`).join(', ');
   const anyFiled = others.some((other) => other.status === 'filed');
   return [
-    `ALV-ilmoitusta (${periodKey}) ei lähetetty: ${named ? `ilmoitus ${named}` : 'toinen ilmoitus'} kattaa jo osan samoista päivistä.`,
-    'Samoja myyntejä ja ostoja ei voi ilmoittaa kahdesti.',
-    anyFiled
-      ? 'Lähetetty ilmoitus pysyy ennallaan. Peru tämä ilmoitus vastaamalla “ei”.'
-      : 'Kumpaakaan ei lähetetä, ennen kuin toinen perutaan. Peru tämä ilmoitus vastaamalla “ei”.'
+    copy.overlapLead(periodKey, named),
+    copy.overlapTwice,
+    anyFiled ? copy.overlapFiled : copy.overlapBothWaiting
   ].join(' ');
 };
 
-export const alvReturnConfirmQuestion = ({ periodKey, verdict }) =>
-  `${summarizeAlvReturnVerdict({ periodKey, verdict })}\n\n${CONFIRM_INSTRUCTION}`;
+export const alvReturnConfirmQuestion = ({ periodKey, verdict, language = 'fi' }) =>
+  `${summarizeAlvReturnVerdict({ periodKey, verdict, language })}\n\n${alvRouteCopyFor(language).confirm}`;
 
 // The ask payload is the ONLY conversation state source; the alv_returns row is
 // the ONLY verdict source. Flat state under payload.alv_return (the FI-6 lesson).
@@ -167,9 +218,12 @@ export const resolveAlvReturnInbound = async ({
   transmitImpl,
   submitReturn,
   resolveAsk,
-  sendText
+  sendText,
+  // The owner's language (preferredOwnerTemplateLanguage); absent ⇒ Finnish.
+  language = 'fi'
 } = {}) => {
   if (!flagActs) return { action: 'skipped', reason: 'flag_off' };
+  const copy = alvRouteCopyFor(language);
 
   const state = stateFromAsk({ ask });
   const text = clean(replyText);
@@ -186,7 +240,7 @@ export const resolveAlvReturnInbound = async ({
   if (!row || row.status !== 'draft_pending_confirmation') {
     // The row already reached a terminal (filed/cancelled) — the ask is stale.
     await closeAnsweredAsk('alv_return_stale_ask');
-    if (typeof sendText === 'function') await sendText({ text: 'Tämä ALV-ilmoitus on jo käsitelty.' });
+    if (typeof sendText === 'function') await sendText({ text: copy.stale });
     return { action: 'stale', alvReturnId: state.alv_return_id || null };
   }
 
@@ -227,12 +281,12 @@ export const resolveAlvReturnInbound = async ({
       // (Suomi.fi valtuudet), so the ask legitimately rests on them.
       if (typeof sendText === 'function') {
         const reason = error?.code === 'ALV_RETURN_FILING_OVERLAP'
-          ? filingOverlapText({ periodKey: row.period_key, error })
+          ? filingOverlapText({ periodKey: row.period_key, error, language })
           : error?.code === 'ALV_FILING_MANDATE_REQUIRED'
-          ? MANDATE_MISSING_TEXT
+          ? copy.mandateMissing
           : (error?.code === 'ALV_FILING_REJECTED' && error?.channelReason
-            ? `ALV-ilmoitusta ei hyväksytty: ${error.channelReason}\n\n${FILE_FAILED_TEXT}`
-            : FILE_FAILED_TEXT);
+            ? `${copy.rejected(error.channelReason)}\n\n${copy.fileFailed}`
+            : copy.fileFailed);
         await sendText({ text: reason });
       }
       return { action: 'file_failed', error: error?.code || error?.message || 'unknown', ask };
@@ -240,10 +294,10 @@ export const resolveAlvReturnInbound = async ({
     await closeAnsweredAsk('alv_return_filed');
     if (typeof sendText === 'function') {
       const payable = row.verdict?.alvReturn?.payable || 0;
-      const parts = [`ALV-ilmoitus (${row.period_key}) lähetetty Verohallinnolle.`];
-      if (row.verdict?.alvReturn?.nilReturn) parts.push('Nollailmoitus.');
-      else if (payable < 0) parts.push(`Palautusta odotettavissa ${euro(Math.abs(payable))}.`);
-      else parts.push(`Maksettavaa ${euro(payable)} — maksuohjeet OmaVerossa.`);
+      const parts = [copy.filed(row.period_key)];
+      if (row.verdict?.alvReturn?.nilReturn) parts.push(copy.filedNil);
+      else if (payable < 0) parts.push(copy.filedRefund(Math.abs(payable)));
+      else parts.push(copy.filedPayable(payable));
       await sendText({ text: parts.join(' ') });
     }
     return { action: 'confirm_and_file', authorityBasis, actorId, ...filed };
@@ -256,12 +310,12 @@ export const resolveAlvReturnInbound = async ({
     });
     await closeAnsweredAsk('alv_return_cancelled');
     if (typeof sendText === 'function') {
-      await sendText({ text: `ALV-ilmoitus (${row.period_key}) peruttu. Korjataan kirjanpito ja lasken sen uudelleen.` });
+      await sendText({ text: copy.cancelled(row.period_key) });
     }
     return { action: 'cancelled', alvReturn: cancelled };
   }
 
   // Neither yes nor no: a statutory filing takes only an explicit answer.
-  if (typeof sendText === 'function') await sendText({ text: NUDGE_CONFIRM });
+  if (typeof sendText === 'function') await sendText({ text: copy.nudge });
   return { action: 'nudge', reason: 'ambiguous_confirmation', ask };
 };
