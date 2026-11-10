@@ -60,6 +60,7 @@ import {
   providerRefused
 } from './providerTransport.js';
 import { validateStrictSchema } from './unifiedExtractorSchema.js';
+import { PROVIDER_FAULTS, providerFaultOfResponse } from './inngest/parseErrors.js';
 
 export const ANTHROPIC_EFFORT_LEVELS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -473,7 +474,7 @@ export const openAiStructuredRequest = ({
 export const typedLlmCallFailure = (provider, error) => {
   if (error?.providerFailure === true && typeof error.code === 'string') return error;
   if (error?.code === 'LLM_CALL_PROVIDER_ERROR') {
-    return classifyProviderStatus({
+    const typed = classifyProviderStatus({
       provider,
       status: error.status,
       // llmCall's `providerError` (the provider's own error object): its
@@ -481,6 +482,14 @@ export const typedLlmCallFailure = (provider, error) => {
       payload: { error: { ...(error.providerError || {}), message: error.providerError?.message || error.message } },
       attempts: error.telemetry?.attempt_count || 1
     });
+    // An account with no credit left is named as what it is, for either
+    // provider, by the one detector (inngest/parseErrors.js
+    // providerFaultOfResponse); the code — and so the retry posture — stays
+    // the one the status gives.
+    if (providerFaultOfResponse({ status: error.status, providerError: error.providerError }) === PROVIDER_FAULTS.NO_CREDIT) {
+      typed.reason = PROVIDER_FAULTS.NO_CREDIT;
+    }
+    return typed;
   }
   return classifyProviderThrow({ provider, error });
 };

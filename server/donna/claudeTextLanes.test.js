@@ -236,20 +236,23 @@ test('stop_reason is read before content: refusal and max_tokens are named failu
   assert.deepEqual(validateLaneSchema({ anyOf: [{ type: 'null' }, { type: 'string' }] }, 3), ['$: matches no anyOf branch']);
 });
 
-test('no credit, a bad key and a rate limit are recorded as what they are on Anthropic', () => {
-  const credit = classifyProviderStatus({ provider: 'anthropic', status: 400, payload: { error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } } });
+test('no credit, a bad key and a rate limit are recorded as what they are, on either provider', () => {
+  const failure = (provider, status, providerError) => typedLlmCallFailure(provider, Object.assign(new Error(providerError.message), {
+    code: 'LLM_CALL_PROVIDER_ERROR', status, providerError
+  }));
+  const credit = failure('anthropic', 400, { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' });
   assert.equal(credit.code, PROVIDER_FAILURE_CODES.REJECTED_REQUEST);
-  assert.equal(credit.reason, 'insufficient_credit');
+  assert.equal(credit.reason, 'no_credit');
   assert.equal(credit.owner, 'operator');
-  const billing = classifyProviderStatus({ provider: 'anthropic', status: 402, payload: { error: { type: 'billing_error', message: 'billing' } } });
-  assert.equal(billing.reason, 'insufficient_credit');
-  const key = classifyProviderStatus({ provider: 'anthropic', status: 401, payload: { error: { type: 'authentication_error', message: 'invalid x-api-key' } } });
+  assert.equal(failure('anthropic', 402, { type: 'billing_error', message: 'billing' }).reason, 'no_credit');
+  assert.equal(failure('openai', 429, { code: 'insufficient_quota', message: 'You exceeded your current quota' }).reason, 'no_credit', 'the same word for OpenAI');
+  const key = failure('anthropic', 401, { type: 'authentication_error', message: 'invalid x-api-key' });
   assert.equal(key.code, PROVIDER_FAILURE_CODES.UNAUTHORIZED);
-  const rate = classifyProviderStatus({ provider: 'anthropic', status: 429, payload: { error: { type: 'rate_limit_error', message: 'slow down' } } });
+  const rate = failure('anthropic', 429, { type: 'rate_limit_error', message: 'slow down' });
   assert.equal(rate.code, PROVIDER_FAILURE_CODES.RATE_LIMITED);
-  // OpenAI's own words are unchanged.
-  const quota = classifyProviderStatus({ provider: 'openai', status: 429, payload: { error: { code: 'insufficient_quota', message: 'quota' } } });
-  assert.equal(quota.reason, 'insufficient_quota');
+  assert.equal(rate.reason, 'rate_limit_error');
+  // The transport's own classification is unchanged.
+  assert.equal(classifyProviderStatus({ provider: 'openai', status: 429, payload: { error: { code: 'insufficient_quota', message: 'quota' } } }).reason, 'insufficient_quota');
 });
 
 test('llmCall reads a streamed answer back into one Message; a mid-stream error is a typed failure', async () => {
@@ -346,7 +349,7 @@ test('coding on Claude: refusal, output limit, no credit, bad key and rate limit
   const cases = [
     [{ status: 200, body: claudeMessage('{}', { stopReason: 'refusal', stopDetails: { type: 'refusal', category: null } }) }, PROVIDER_FAILURE_CODES.REFUSED, null],
     [{ status: 200, body: claudeMessage('{"suggestions":[', { stopReason: 'max_tokens' }) }, PROVIDER_FAILURE_CODES.OUTPUT_LIMIT, 'max_tokens'],
-    [{ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } } }, PROVIDER_FAILURE_CODES.REJECTED_REQUEST, 'insufficient_credit'],
+    [{ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } } }, PROVIDER_FAILURE_CODES.REJECTED_REQUEST, 'no_credit'],
     [{ status: 401, body: { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } } }, PROVIDER_FAILURE_CODES.UNAUTHORIZED, 'authentication_error'],
     [{ status: 429, body: { type: 'error', error: { type: 'rate_limit_error', message: 'rate limited' } } }, PROVIDER_FAILURE_CODES.RATE_LIMITED, 'rate_limit_error']
   ];
@@ -422,7 +425,7 @@ test('ask drafting on Claude: an empty question breaks the schema and is a provi
   providers.script('ask_drafting', { status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } } });
   await assert.rejects(
     draftClientAskMessage({ clientProfile: { jurisdiction: 'FI' }, codingItems: [CODING_ITEM] }),
-    (error) => error.code === 'ASK_PIPELINE_LLM_UNAVAILABLE' && error.provider_failure.reason === 'insufficient_credit' && error.provider_failure.provider === 'anthropic'
+    (error) => error.code === 'ASK_PIPELINE_LLM_UNAVAILABLE' && error.provider_failure.reason === 'no_credit' && error.provider_failure.provider === 'anthropic'
   );
 });
 

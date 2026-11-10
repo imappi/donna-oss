@@ -205,18 +205,7 @@ const providerErrorMessage = (payload, fallback) => {
   return typeof message === 'string' && message.trim() ? message.trim() : fallback;
 };
 
-// Out of credit is recorded as what it is. OpenAI already names it in its
-// error code (`insufficient_quota`, carried through as the reason below);
-// Anthropic answers a `billing_error`, or an `invalid_request_error` whose
-// message says the credit balance is too low — named `insufficient_credit`
-// here instead of the generic error type. The code (and so the retry
-// posture) stays the one the status gives; only the reason names the cause.
-const isAnthropicNoCredit = (payload) =>
-  String(payload?.error?.type ?? '').toLowerCase() === 'billing_error'
-  || /credit balance is too low/i.test(String(payload?.error?.message ?? ''));
-
 const providerErrorReason = (payload) => {
-  if (isAnthropicNoCredit(payload)) return 'insufficient_credit';
   const code = payload?.error?.code ?? payload?.error?.type;
   return typeof code === 'string' && code.trim() ? code.trim().slice(0, 80) : null;
 };
