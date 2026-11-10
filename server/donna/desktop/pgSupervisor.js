@@ -99,9 +99,11 @@ export const findPgBin = () => {
   );
 };
 
-// Host gate for the single Supabase-ism (M0a findings §2): migration 010
-// upserts into storage.buckets and drops policies on storage.objects.
-// Idempotent; both the supervised and the attached path run it on every boot.
+// The storage-schema stub for a GIVEN database (attachGivenPostgres below):
+// the same statements ensureLocalPostgres runs inline on the supervised path
+// and scripts/prepare_ci_host_postgres.js runs on CI's. Kept as a copy so
+// ensureLocalPostgres, a reviewed SQL boundary pinned in
+// memoryWriterRegistry.js, stays byte-identical.
 export const STORAGE_SCHEMA_STUB_SQL = `
       create schema if not exists storage;
       create table if not exists storage.buckets (
@@ -245,7 +247,15 @@ export const ensureLocalPostgres = ({
     // Host gate for the single Supabase-ism (M0a findings §2): migration 010
     // upserts into storage.buckets and drops policies on storage.objects.
     // Idempotent, so it runs on every boot.
-    psql(STORAGE_SCHEMA_STUB_SQL);
+    psql(`
+      create schema if not exists storage;
+      create table if not exists storage.buckets (
+        id text primary key, name text, public boolean,
+        file_size_limit bigint, allowed_mime_types text[]);
+      create table if not exists storage.objects (
+        id uuid default gen_random_uuid() primary key,
+        bucket_id text references storage.buckets(id), name text, metadata jsonb);
+    `);
   } catch (error) {
     stop();
     throw error;
