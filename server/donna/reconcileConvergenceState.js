@@ -62,7 +62,11 @@
 // cascades to reconciliation_status 'explained', and is read as 'auto_reconciled'
 // below. So matchHeldPendingAuthority is only ever true for a line the canary did
 // NOT cover — which still counts 'hanging' here (SURFACED, never laundered behind
-// a firm-ask), exactly as the strict metric requires.
+// a firm-ask), exactly as the strict metric requires. The persisted gather feeds
+// it from the line's own reconciliation_matches (collectHeldPendingAuthorityMatches)
+// and feeds hasCoveringAuthorityGrant from the grant surface's read-only coverage
+// check, so a coded line whose match is held reads hanging, never finished;
+// migration 174 marks a client's held lines whenever its grants change.
 
 import { assertVerdictTransactionBudgetActive, clearVerdictTransactionBudget } from './executionBudget.js';
 import { bindConvergenceConnection, unbindConvergenceConnection, withConvergenceTransaction, isConvergencePool, convergenceConnectionRecord } from './convergenceConnection.js';
@@ -742,6 +746,41 @@ export const collectUnappliedCascadeTxIds = (reconciliationMatchRows = []) => {
   return byTxId;
 };
 
+// The held-for-authority axis — the input `matchHeldPendingAuthority` reads.
+// A material match the model authorised on gates A–D that the materiality
+// ceiling (Gate E) alone holds rests at status 'suggested' with the persisted
+// receipt payload.authorization { band:'suggested', reasons:
+// ['above_materiality_ceiling'] }. It is a TRANSITION (a standing grant or a
+// person decides), never a resting state, so a coded line carrying one is not
+// finished by Donna however its coding axis reads.
+//
+// LOCK-STEP: the receipt shape is inlined (this module stays dependency-free,
+// like the ask-audience reader above); it is reconciliationLlmCore.js's
+// isMatchedPendingAuthority, and the convergence invariant test pins the two
+// equal. Only a LIVE 'suggested' row counts: a confirmed / auto_matched row was
+// decided, a rejected one is not live. Pure; tolerates raw DB rows or mapped
+// payloads. Returns Map<bank_transaction_id, match id[]>.
+const isHeldPendingAuthorityReceipt = (authorization) => {
+  if (!authorization || typeof authorization !== 'object') return false;
+  if (authorization.band !== 'suggested') return false;
+  const reasons = Array.isArray(authorization.reasons) ? authorization.reasons : [];
+  return reasons.length > 0 && reasons.every((r) => r === 'above_materiality_ceiling');
+};
+export const __isHeldPendingAuthorityReceipt = (authorization) => isHeldPendingAuthorityReceipt(authorization);
+
+export const collectHeldPendingAuthorityMatches = (reconciliationMatchRows = []) => {
+  const byTxId = new Map();
+  for (const row of Array.isArray(reconciliationMatchRows) ? reconciliationMatchRows : []) {
+    if (norm(row?.status) !== 'suggested') continue;
+    if (!isHeldPendingAuthorityReceipt(row?.payload?.authorization)) continue;
+    const txId = row.bank_transaction_id;
+    if (txId == null) continue;
+    if (!byTxId.has(txId)) byTxId.set(txId, []);
+    byTxId.get(txId).push(row.id ?? null);
+  }
+  return byTxId;
+};
+
 // NOTE ON THE SIGNATURE: `cascadeState` rides the EXISTING third-argument
 // options object rather than becoming a fourth parameter. firmDb.test.js
 // lint-pins the literal call `convergenceForReviewItem(item, tx, askContext)` at
@@ -761,7 +800,7 @@ const ledgerPostRefusedOf = (tx = {}) => {
   return String(holder.code || '').trim() || 'unknown';
 };
 
-export const convergenceForReviewItem = (item = {}, tx = {}, { hasOpenOwnerAsk = false, hasUndeliverableOwnerAsk = false, hasAnsweredOwnerAsk = false, hasOpenSeatAsk = false, hasAnsweredSeatAsk = false, hasOpenAgentAsk = false, cascadeState = null, processingScope = null } = {}) => {
+export const convergenceForReviewItem = (item = {}, tx = {}, { hasOpenOwnerAsk = false, hasUndeliverableOwnerAsk = false, hasAnsweredOwnerAsk = false, hasOpenSeatAsk = false, hasAnsweredSeatAsk = false, hasOpenAgentAsk = false, cascadeState = null, matchHeldPendingAuthority = false, hasCoveringAuthorityGrant = false, processingScope = null } = {}) => {
   const payload = item.payload || {};
   return deriveConvergenceState({
     processingScope,
@@ -780,10 +819,12 @@ export const convergenceForReviewItem = (item = {}, tx = {}, { hasOpenOwnerAsk =
     hasAnsweredSeatAsk,
     hasOpenAgentAsk,
     cascadeState,
+    matchHeldPendingAuthority,
+    hasCoveringAuthorityGrant,
   });
 };
 
-export const convergenceForTransaction = (tx = {}, { hasOpenOwnerAsk = false, hasUndeliverableOwnerAsk = false, hasAnsweredOwnerAsk = false, hasOpenSeatAsk = false, hasAnsweredSeatAsk = false, hasOpenAgentAsk = false, cascadeState = null, processingScope = null } = {}) =>
+export const convergenceForTransaction = (tx = {}, { hasOpenOwnerAsk = false, hasUndeliverableOwnerAsk = false, hasAnsweredOwnerAsk = false, hasOpenSeatAsk = false, hasAnsweredSeatAsk = false, hasOpenAgentAsk = false, cascadeState = null, matchHeldPendingAuthority = false, hasCoveringAuthorityGrant = false, processingScope = null } = {}) =>
   deriveConvergenceState({
     processingScope,
     codingState: codingStateOf({}, tx),
@@ -801,6 +842,8 @@ export const convergenceForTransaction = (tx = {}, { hasOpenOwnerAsk = false, ha
     hasAnsweredSeatAsk,
     hasOpenAgentAsk,
     cascadeState,
+    matchHeldPendingAuthority,
+    hasCoveringAuthorityGrant,
   });
 
 // Doc-first terminal drain (docs/donna-doc-first-terminal-drain-plan.md,
@@ -1370,7 +1413,7 @@ const chunk = (list, size) => {
 // One gathered transaction row → the feed-shaped inputs → the ONE derivation.
 // Exported so the consistency tests and the drift check compute exactly what
 // the writer writes.
-export const projectGatheredTransaction = (row = {}, { processingScope = null } = {}) => {
+export const projectGatheredTransaction = (row = {}, { processingScope = null, coveredHeldMatchIds = new Set() } = {}) => {
   const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
   const tx = {
     ...payload,
@@ -1403,6 +1446,7 @@ export const projectGatheredTransaction = (row = {}, { processingScope = null } 
     tx.bank_line_disposition = { ...disposition, lane: raw?.payload?.lane ?? disposition.lane ?? null };
   }
   const sets = collectOwnerAskSets(asArray(row.asks));
+  const held = collectHeldPendingAuthorityMatches(matches).get(tx.id) || [];
   const askContext = {
     processingScope,
     hasOpenOwnerAsk: sets.openOwnerAskTxIds.has(tx.id),
@@ -1411,7 +1455,13 @@ export const projectGatheredTransaction = (row = {}, { processingScope = null } 
     hasOpenSeatAsk: sets.openSeatAskTxIds.has(tx.id),
     hasAnsweredSeatAsk: sets.answeredSeatAskTxIds.has(tx.id),
     hasOpenAgentAsk: sets.openAgentAskTxIds.has(tx.id),
-    cascadeState: collectUnappliedCascadeTxIds(matches).get(tx.id) || null
+    cascadeState: collectUnappliedCascadeTxIds(matches).get(tx.id) || null,
+    // A held material match (see collectHeldPendingAuthorityMatches) hangs the
+    // line unless EVERY held match on it is covered by a standing grant that
+    // would act right now (coveredHeldMatchIds — read in the same gather by
+    // readCoveredHeldMatchIds below).
+    matchHeldPendingAuthority: held.length > 0,
+    hasCoveringAuthorityGrant: held.length > 0 && held.every((id) => id != null && coveredHeldMatchIds.has(id))
   };
   const items = asArray(row.review_items);
   const item = items.length
@@ -1489,10 +1539,30 @@ const projectNativeReviewRefusal = async (client,{firmId,transactionIds,error}) 
   const scope = nativeReviewRefusalDecision(error,{ boundary:'review_projection' });
   const processingScope = { ...scope, review_current:false, review_reason:scope.reason_code, pending:false };
   const result = await client.query(TRANSACTION_GATHER_SQL,[firmId,transactionIds]);
+  const coveredHeldMatchIds = await readCoveredHeldMatchIds(client, firmId, result.rows);
   return (result.rows || []).map(row => ({ target_type:'transaction',target_id:row.id,client_id:row.client_id,
-    derived:projectGatheredTransaction(row,{processingScope}),persisted:persistedOf(row),
+    derived:projectGatheredTransaction(row,{processingScope,coveredHeldMatchIds}),persisted:persistedOf(row),
     processing_scope:processingScope,
     projection_freshness:{ status:'incomplete',reason:scope.reason_code,pending_targets:0 } }));
+};
+
+// Coverage of the held matches on a set of gathered rows, read in the SAME
+// gather that feeds the rest of the projection (every persist path — the
+// per-row apply, the settle sweep, the nightly drift — and the native read
+// pass through computeConvergenceForTransactions). Rows with no held match
+// cost nothing. The covering-grant question is answered by the grant surface
+// itself (readHeldMatchGrantCoverage: the accept path's classifier and per-row
+// grant guard, read-only), imported lazily like the native readers above.
+const readCoveredHeldMatchIds = async (client, firmId, rows = []) => {
+  const held = [];
+  for (const row of asArray(rows)) {
+    for (const matchId of collectHeldPendingAuthorityMatches(asArray(row.matches)).get(row.id) || []) {
+      if (matchId != null) held.push({ clientId: row.client_id, matchId });
+    }
+  }
+  if (!held.length) return new Set();
+  const { readHeldMatchGrantCoverage } = await import('./reconciliationAuthorityRoutes.js');
+  return readHeldMatchGrantCoverage(client, { firmId, held });
 };
 
 // verdictOnly (the PERSIST paths: settle, write-through, nightly drift): the
@@ -1509,8 +1579,9 @@ export const computeConvergenceForTransactions = async (client, { firmId, transa
     const legacyIds = batch.filter(id=>!nativeIds.has(id));
     if (legacyIds.length) {
       const result = await client.query(TRANSACTION_GATHER_SQL, [firmId, legacyIds]);
+      const coveredHeldMatchIds = await readCoveredHeldMatchIds(client, firmId, result.rows);
       for (const row of result.rows || []) out.push({ target_type: 'transaction', target_id: row.id,
-        client_id: row.client_id, derived: projectGatheredTransaction(row), persisted: persistedOf(row) });
+        client_id: row.client_id, derived: projectGatheredTransaction(row, { coveredHeldMatchIds }), persisted: persistedOf(row) });
     }
     const byClient = new Map();
     for (const row of native) {
@@ -1526,8 +1597,9 @@ export const computeConvergenceForTransactions = async (client, { firmId, transa
             const scope = await readNativeVerdictScope({ client,firmId,clientId,transactionId:transactionIds[0] });
             const processingScope = { ...scope, review_current:false, review_reason:scope.reason_code, pending:false };
             const result = await client.query(TRANSACTION_GATHER_SQL,[firmId,transactionIds]);
+            const coveredHeldMatchIds = await readCoveredHeldMatchIds(client, firmId, result.rows);
             out.push(...(result.rows || []).map(row => ({ target_type:'transaction',target_id:row.id,client_id:row.client_id,
-              derived:projectGatheredTransaction(row,{processingScope}),persisted:persistedOf(row),processing_scope:processingScope })));
+              derived:projectGatheredTransaction(row,{processingScope,coveredHeldMatchIds}),persisted:persistedOf(row),processing_scope:processingScope })));
             continue;
           }
           current = await readNativeReviewContexts({ client,firmId,clientId,transactionIds });
@@ -1540,10 +1612,11 @@ export const computeConvergenceForTransactions = async (client, { firmId, transa
           out.push(...await projectNativeReviewRefusal(client,{firmId,transactionIds,error}));
           continue;
         }
+        const coveredHeldMatchIds = await readCoveredHeldMatchIds(client, firmId, current.snapshot.projectionRows);
         for (const row of current.snapshot.projectionRows) {
           const processingScope = current.contexts.get(row.id) || current.scope;
           out.push({ target_type:'transaction',target_id:row.id,client_id:row.client_id,
-            derived:projectGatheredTransaction(row,{processingScope}),persisted:persistedOf(row),
+            derived:projectGatheredTransaction(row,{processingScope,coveredHeldMatchIds}),persisted:persistedOf(row),
             processing_scope: processingScope,
             current_transaction: current.snapshot.windows.find(window=>window.transactionId===row.id)?.focal,
             projection_freshness: { status: current.snapshot.pendingTargets ? 'incomplete' : 'current',
