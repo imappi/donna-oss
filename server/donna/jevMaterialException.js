@@ -13,7 +13,7 @@ export async function decideJevMaterialException({ client, firmId, documentId, p
       where firm_id=$1 and id=$2 and parse_run_id=$3::uuid limit 1`, [firmId, documentId, parseRunId]);
     const document = result.rows[0];
     if (!document) return null; // The writer's same parse-run fence will reject stale work.
-    active = await jevDispositionEnabled(client, firmId, document.client_id);
+    active = await jevDispositionEnabled(client, firmId, document.client_id, undefined, { decidedBy: 'parse_exception_writer' });
     if (!active) return null;
     const criteria = {
       ask_owner: kind === 'totals_mismatch'
@@ -68,7 +68,7 @@ export async function recoverJevMaterialExceptionsInDb({firmId,limit=2,
     if(!(await client.query('select pg_try_advisory_lock(hashtextextended($1,0)) locked',[key])).rows[0]?.locked)return;
     try {
       const doc=(await client.query('select * from documents where firm_id=$1 and client_id=$2 and id=$3',[firmId,row.client_id,row.id])).rows[0];
-      if(!doc || !await jevDispositionEnabled(client,firmId,row.client_id))return;
+      if(!doc || !await jevDispositionEnabled(client,firmId,row.client_id,undefined,{decidedBy:'parse_exception_writer'}))return;
       const mapped=await readJevCase({client,firmId,clientId:row.client_id,documentId:row.id,evidenceOnly:true});
       const source=mapped.caseEvidence.documents.find(d=>d.id===row.id);
       const digest=hash({source:{...source,parse_summary:evidenceSummary(source.parse_summary)},checksum:doc.checksum_sha256,run:doc.parse_run_id});
