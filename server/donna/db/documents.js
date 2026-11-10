@@ -594,8 +594,10 @@ const computeSumBasedPaymentStatus = async ({ client, firmId, documentId, matche
   // The invoice's remaining due is total − lines − applied credits; a
   // reversed application (a rejected settlement, a deleted document) drops
   // out of the sum and the status reverts — the same revert-on-un-confirm
-  // law the match rows follow.
-  if (matchedObjectType === 'sales_invoice') {
+  // law the match rows follow. A supplier credit note the owner said was
+  // deducted from a bill's payment is the same record on the supplier side
+  // (creditNoteApplications.applyOwnerStatedSupplierCreditWithClient).
+  if (matchedObjectType === 'sales_invoice' || matchedObjectType === 'supplier_bill') {
     const creditResult = await client.query(
       `select coalesce(sum(amount), 0) as applied
          from document_credit_applications

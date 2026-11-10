@@ -39,7 +39,7 @@ import { clientAccountingBasisFromProfile, DEFAULT_FIRM_ID, getClientOwnerLangua
 import { deliverEvidenceAsksOnAllChannels, rowToClientEvidenceRequestPayload } from '../db/asks.js';
 import { rowToLedgerLinePayload } from '../db/ledger.js';
 import { getLedgerPeriodPreviewFromDb } from '../db/close.js';
-import { readRecognitionGapWithClient, recognitionStatement } from '../salesRecognitionGap.js';
+import { readRecognitionGapWithClient, recognitionStatement, ensureSettlementShortfallAsksWithClient } from '../salesRecognitionGap.js';
 
 // Every owner question these Finnish flows raise is delivered through the ONE
 // gated fan-out (db/asks.js deliverEvidenceAsksOnAllChannels, gated by
@@ -2418,7 +2418,8 @@ export const startFinlandAlvReturnFilingInDb = async ({
   liveOverlapImpl = null,
   // The owner's language: the one resolver over the client row ('en' on a
   // failed read), the language the owner-facing question is written in.
-  ownerLanguageImpl = null
+  ownerLanguageImpl = null,
+  shortfallAsksImpl = null
 } = {}) => {
   if (!clientId) {
     const error = new Error('Client id is required to start an ALV return filing.');
@@ -2466,6 +2467,13 @@ export const startFinlandAlvReturnFilingInDb = async ({
       driftBlocked: driftBlockers.length > 0,
       language
     });
+    // A sales payment short of its invoice with nothing recorded about why is
+    // its own question to the owner (bank fee or part-payment), never twice.
+    const unexplainedShortfalls = (computed.review?.unrecognizedSales?.items || []).some((i) => i.shortfall && i.on_nobody);
+    const shortfallAsks = unexplainedShortfalls
+      ? await (shortfallAsksImpl || ((args) => withFirmDbClient((client) => ensureSettlementShortfallAsksWithClient({ client, ...args }))))({
+        firmId, clientId, period: computed.review.unrecognizedSales.period, actorId })
+      : null;
     const createAsk = createAskImpl || createAlvReturnEvidenceRequestInDb;
     const ask = await createAsk({
       firmId,
@@ -2477,8 +2485,9 @@ export const startFinlandAlvReturnFilingInDb = async ({
     });
     const deliver = deliverAsksImpl
       || ((args) => withFirmDbClient((client) => deliverStatutoryAsks({ client, surface: 'finland_alv_return', ...args })));
-    await deliver({ firmId, clientId, evidenceRequestIds: [ask.id] });
-    return { action: 'escalated', blockers, ask, period: computed.period };
+    // The shortfall questions go out through the same gate as the escalation.
+    await deliver({ firmId, clientId, evidenceRequestIds: [ask.id, ...(shortfallAsks?.asked || [])] });
+    return { action: 'escalated', blockers, ask, period: computed.period, ...(shortfallAsks ? { shortfall_asks: shortfallAsks } : {}) };
   }
 
   const createDraft = createDraftImpl || createAlvReturnDraftInDb;

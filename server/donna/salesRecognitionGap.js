@@ -44,13 +44,27 @@
 // (rests part_settled_in_period). Same sum, same 1-cent epsilon as the
 // sum-based payment_status (db/documents.js).
 //
-// A supplier credit note has no persisted link to the bill it was deducted
-// from (document_credit_applications is written for customer credit notes
-// only). When a bill is paid net of such a credit, the census names the bill's
-// unpaid remainder and the credit note side by side and never infers the
-// deduction from amounts that happen to add up; the owner is asked about the
-// credit note on the supplier lane with its own question (deducted, refunded
-// or still open). Once an application row links the two, both are represented.
+// A supplier credit note deducted from a bill's payment is linked to the bill
+// only by a supplier-side credit application (document_credit_applications,
+// side 'supplier'). Donna never infers the deduction from amounts that happen
+// to add up: until the row exists the census names the bill's unpaid remainder
+// and the credit note side by side, and the owner is asked about the credit
+// note on the supplier lane with its own question (deducted, refunded or still
+// open). The owner's clear answer "deducted from bill X" is recorded as that
+// application (creditNoteApplications.applyOwnerStatedSupplierCreditWithClient,
+// the one credit-application writer and its checks), and both documents are
+// then represented. Recording it posts nothing.
+//
+// A sales payment short of its invoice is not guessed to be a fee. Donna
+// persists, per match, the bank line's amount and currency and the matcher's
+// hop labels (match_reason.hops); no fee amount. A shortfall counts as a bank
+// fee only through an amount-bearing record on the match
+// (payload.settlement_shortfall, kind 'bank_fee', in the invoice's currency).
+// Without one, the remainder stays named and the owner is asked "bank fee or
+// part-payment?" (ensureSettlementShortfallAsksWithClient, on the sales lane);
+// "bank fee" writes that record (recordOwnerStatedBankFeeWithClient) and the
+// invoice is represented net of it; "part-payment" is the lane's still-open
+// answer for the remainder.
 //
 // Both questions are written in the owner's language (preferredOwnerTemplateLanguage)
 // and invite the same two kinds of answer: how it was paid, or that it is
@@ -59,14 +73,17 @@
 // after stillOpen.recheckDays instead of sending a clarification.
 //
 // Keep-layer posture: read-only SQL plus pure classification; no model call.
+// The writes are the asks (the canonical ask primitive) and the two records an
+// owner answer settles (a credit application through its writer; the bank-fee
+// record on the match), each receipted. No ledger row is written here.
 
-import { invoiceNumbersOf } from './creditNoteApplications.js';
+import { invoiceNumbersOf, toCents, centsText, applyOwnerStatedSupplierCreditWithClient } from './creditNoteApplications.js';
 import { clientAccountingBasisFromProfile } from './db/clients.js';
 import { __createClientEvidenceRequestWithClient } from './db/asks.js';
 import { readClientConfigSnapshot, clientFlagActs } from './clientConfig.js';
 import { DOCUMENT_NO_LINE_DISPOSITION_FLAG_KEY } from './documentDispositionShape.js';
 import { toIsoDay } from './dates.js';
-import { preferredOwnerTemplateLanguage } from './db/channels.js';
+import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 
 export const SALES_RECOGNITION_ASK_LANE = 'sales_invoice_recognition';
 // Its purchase-side sibling: an uploaded supplier bill with no settling payment.
@@ -93,15 +110,8 @@ const day = (v) => (v ? toIsoDay(v) : null);
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 // Money as integer cents, read from the stored decimal text (numeric(14,2)
 // arrives from pg as a string) — never through a floating-point product.
-// A third decimal, if any, rounds half away from zero.
-export const toCents = (v) => {
-  if (v == null || v === '') return null;
-  const m = /^\s*([+-])?(\d+)(?:\.(\d*))?\s*$/.exec(String(v));
-  if (!m) return null;
-  const frac = `${m[3] || ''}000`;
-  const cents = Number(m[2]) * 100 + Number(frac.slice(0, 2)) + (Number(frac[2]) >= 5 ? 1 : 0);
-  return m[1] === '-' ? -cents : cents;
-};
+// One helper for the census and the credit-application writer.
+export { toCents };
 const fromCents = (c) => c / 100;
 // The tax share of a settled part, in cents: round half up of tax × part / gross.
 // BigInt keeps the product exact at any amount.
@@ -145,19 +155,38 @@ const sideOf = (side) => {
   return known;
 };
 
+// The bank fee a match records as part of its settlement, in cents, or 0. Only
+// an amount-bearing record counts (payload.settlement_shortfall: kind
+// 'bank_fee', a positive amount, in the document's currency); the matcher's
+// hop labels name no amount and are never read as one.
+export const recordedBankFeeCents = (match, currency) => {
+  const record = obj(obj(match?.payload).settlement_shortfall);
+  if (record.kind !== 'bank_fee') return 0;
+  if (String(record.currency || '').trim().toUpperCase() !== currency) return 0;
+  const cents = toCents(record.amount);
+  return cents != null && cents > 0 ? cents : 0;
+};
+
 // The part of a document the period's posted bank lines and credit
 // applications settle, in cents, or null when they settle it all (or when an
 // amount is not stated in the document's currency, so a part cannot be told
-// from the whole). Pure; read only from persisted amounts.
-const partSettledInPeriod = ({ doc, kind, decided, applications, inPeriod, journalsByTx }) => {
+// from the whole). A bank fee recorded on a posted line counts with it
+// (feeCents, feeMatchIds). Pure; read only from persisted amounts.
+const partSettledInPeriod = ({ doc, kind, decided, applications, inPeriod, journalsByTx, fees = null }) => {
   const grossCents = Math.abs(toCents(doc.total_amount) ?? 0);
   if (!grossCents) return null;
   const currency = String(doc.currency || '').trim().toUpperCase();
   const postedInPeriod = (m) => (journalsByTx.get(m.bank_transaction_id) || []).some(inPeriod);
   let settledCents = 0;
+  let feeCents = 0;
+  const feeMatchIds = [];
+  const ownMatchIds = [];
   const postedMatchIds = new Set();
+  // Every decided own line is posted in the period: nothing else is known to
+  // pay the rest (a later instalment answers it; no question about it).
+  let allOwnInPeriod = true;
   for (const m of decided) {
-    if (!postedInPeriod(m)) continue;
+    if (!postedInPeriod(m)) { if (m.matched_object_id === doc.id) allOwnInPeriod = false; continue; }
     postedMatchIds.add(m.id);
     // A line reached only through a credit application settles the other
     // document; the credit's own amount is counted from the application below.
@@ -169,6 +198,11 @@ const partSettledInPeriod = ({ doc, kind, decided, applications, inPeriod, journ
     const amount = toCents(own ? m.match_amount : reminder.principal_amount);
     if (amount == null) return null;
     settledCents += Math.abs(amount);
+    if (own) {
+      ownMatchIds.push(m.id);
+      const fee = recordedBankFeeCents(m, currency);
+      if (fee) { feeCents += fee; feeMatchIds.push(m.id); }
+    }
   }
   for (const a of applications) {
     if ((kind === 'credit_note' ? a.credit_document_id : a.invoice_document_id) !== doc.id) continue;
@@ -178,10 +212,14 @@ const partSettledInPeriod = ({ doc, kind, decided, applications, inPeriod, journ
     if (amount == null) return null;
     settledCents += Math.abs(amount);
   }
-  if (settledCents + PAID_EPSILON_CENTS >= grossCents) return null;
+  if (settledCents + feeCents + PAID_EPSILON_CENTS >= grossCents) {
+    if (fees && feeCents && settledCents + PAID_EPSILON_CENTS < grossCents) fees.set(doc.id, { cents: feeCents, match_ids: feeMatchIds });
+    return null;
+  }
+  settledCents += feeCents;
   const taxCents = doc.tax_amount != null ? Math.abs(toCents(doc.tax_amount) ?? 0) : 0;
   const remainingCents = grossCents - settledCents;
-  return { grossCents, settledCents, remainingCents, remainingTaxCents: taxCents - taxShareCents(taxCents, settledCents, grossCents) };
+  return { grossCents, settledCents, remainingCents, remainingTaxCents: taxCents - taxShareCents(taxCents, settledCents, grossCents), ownMatchIds, allOwnInPeriod };
 };
 
 // classifyRecognitionGap — pure. Every in-scope uploaded document of the side
@@ -219,6 +257,8 @@ export const classifyRecognitionGap = ({
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const items = [];
   const represented = [];
+  // Documents a recorded bank fee completes: represented net of that fee.
+  const fees = new Map();
 
   for (const doc of documents) {
     if (doc.document_type && doc.document_type !== spec.documentType) continue;
@@ -261,10 +301,12 @@ export const classifyRecognitionGap = ({
     // is not stated in the document's currency the census cannot tell a part
     // from the whole and keeps the whole document represented, as before.
     const partial = date && journalDates.some(inPeriod) && !(journalsByDoc.get(doc.id) || []).some(inPeriod)
-      ? partSettledInPeriod({ doc, kind, decided, applications, inPeriod, journalsByTx })
+      ? partSettledInPeriod({ doc, kind, decided, applications, inPeriod, journalsByTx, fees })
       : null;
     if (date && journalDates.some(inPeriod) && !partial) {
-      represented.push({ document_id: doc.id, by: 'settlement_journal' });
+      const fee = fees.get(doc.id);
+      represented.push({ document_id: doc.id, by: 'settlement_journal',
+        ...(fee ? { net_of_bank_fee: { amount: fromCents(fee.cents), match_ids: fee.match_ids } } : {}) });
       continue;
     }
 
@@ -311,6 +353,12 @@ export const classifyRecognitionGap = ({
       rests,
       ...(partial ? { remainder: { document_gross: fromCents(sign * partial.grossCents), settled_in_period: fromCents(sign * partial.settledCents),
         remaining_gross: gross, remaining_tax: tax } } : {}),
+      // A sales invoice paid short on its own posted lines, with nothing that
+      // says why and no other decided line for the rest: the shortfall the
+      // owner is asked about (bank fee or part-payment), in cents as stored
+      // text, and the lines it was short on.
+      ...(partial && side === 'sales' && kind === 'invoice' && partial.ownMatchIds.length && partial.allOwnInPeriod
+        ? { shortfall: { amount: centsText(partial.remainingCents), match_ids: partial.ownMatchIds } } : {}),
       settlement: { transaction_ids: txIds, journal_dates: journalDates },
       held_by: heldBy,
       on_nobody: heldBy.length === 0
@@ -396,10 +444,10 @@ export const readRecognitionGapWithClient = async ({ client, firmId, clientId, p
   )).rows;
   if (!documents.length) return both();
   const docIds = documents.map((d) => d.id);
-  // Credit applications are a sales-side writer today (creditNoteApplications.js);
-  // they never name a supplier bill, so the purchase side reads none. The read
-  // is not filtered by side: a supplier application, once written, nets the
-  // credit into its bill's posted line here without further change.
+  // Credit applications of both sides (creditNoteApplications.js): the AR
+  // matcher's customer credits and the owner-stated supplier credits. The
+  // read is not filtered by side: an application nets the credit into its
+  // document's posted line (or, with no line, into the period by date).
   const applications = (await client.query(
     `select a.credit_document_id, a.invoice_document_id, a.amount::text as amount, a.settlement_match_id,
             case when a.credit_document_id = any($3::text[]) then inv.document_date else cr.document_date end as counterpart_date
@@ -540,6 +588,31 @@ export const buildSupplierCreditNoteQuestion = ({ document = {}, language = 'en'
     + 'If it is still open, reply "still open".';
 };
 
+// The sales-side question for a payment short of its invoice when nothing
+// persisted says why (no bank fee recorded on the match). Donna does not
+// guess: the owner is asked whether the difference was a bank fee or a
+// part-payment. "Bank fee" is recorded on the match (the lane's bankFee
+// answer); "part-payment" is the lane's still-open answer for the remainder.
+export const buildSettlementShortfallQuestion = ({ document = {}, shortfall = {}, language = 'en' } = {}) => {
+  const short = amountText(shortfall.amount, document.currency, language);
+  const received = shortfall.settled != null ? amountText(shortfall.settled, document.currency, language) : null;
+  if (language === 'fi') {
+    return `${finnishHeader({ label: 'Myyntilasku', document, counterparty: document.customer_name })}: `
+      + `tälle laskulle kirjattu maksu oli ${short} laskua pienempi${received ? ` (saatu ${received})` : ''}. `
+      + 'Donna ei tiedä, mistä erotus johtuu, joten se puuttuu toistaiseksi kauden myynnistä ja arvonlisäverosta. '
+      + 'Oliko erotus pankin palvelumaksu vai osamaksu? Jos se oli pankin palvelumaksu, vastaa "pankin palvelumaksu". '
+      + 'Jos asiakas maksoi vain osan ja loput on vielä maksamatta, vastaa "osamaksu".';
+  }
+  const number = printedInvoiceNumber(document) ? ` ${printedInvoiceNumber(document)}` : '';
+  const customer = document.customer_name ? ` to ${document.customer_name}` : '';
+  const date = day(document.document_date);
+  return `Sales invoice${number}${customer} (${amountText(document.total_amount, document.currency)}${date ? `, dated ${date}` : ''}): `
+    + `the payment recorded for it was ${short} short${received ? ` (${received} received)` : ''}. `
+    + 'Donna does not know why, so for now the difference is left out of that period\'s sales and VAT. '
+    + 'Was it a bank fee or a part-payment? If it was a bank fee, reply "bank fee". '
+    + 'If the customer paid only part and the rest is still unpaid, reply "part-payment".';
+};
+
 // How long an ask the owner answered "still unpaid" rests before the re-ask
 // clock asks again (its due_at). A month: the next monthly statement normally
 // arrives in that time, and a payment posted against the document closes the
@@ -556,7 +629,15 @@ const NO_SETTLEMENT_ASK_LANES = Object.freeze({
   sales_invoice: { lane: SALES_RECOGNITION_ASK_LANE, statsKey: 'sales_recognition_ask', buildQuestion: buildSalesRecognitionQuestion,
     recognition: 'unrecognised_uploaded_sales_invoice', refusal: 'not_an_uploaded_sales_invoice',
     stillOpen: Object.freeze({ meaning: 'the customer has not paid this sales invoice yet; the receivable is still open',
-      recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }) },
+      recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }),
+    // A sales invoice paid short with nothing recorded about why rides the
+    // same lane with its own question. It is asked about a document that has
+    // a decided bank line by design, so a live match does not make it moot.
+    shortfall: Object.freeze({ buildQuestion: buildSettlementShortfallQuestion, recognition: 'unexplained_settlement_shortfall',
+      matchedDocument: true,
+      stillOpen: Object.freeze({ meaning: 'the payment was a part-payment: the customer paid only part of this sales invoice and the rest is still unpaid',
+        recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }),
+      bankFee: Object.freeze({ meaning: 'the shortfall was a bank fee (the bank or payment service kept it), so the customer paid the invoice in full' }) }) },
   supplier_bill: { lane: SUPPLIER_BILL_SETTLEMENT_ASK_LANE, statsKey: 'supplier_bill_settlement_ask', buildQuestion: buildSupplierBillSettlementQuestion,
     recognition: 'unrecorded_uploaded_supplier_bill', refusal: 'not_an_uploaded_supplier_bill',
     stillOpen: Object.freeze({ meaning: 'the business has not paid this supplier bill yet; the payable is still open',
@@ -565,16 +646,36 @@ const NO_SETTLEMENT_ASK_LANES = Object.freeze({
     // its own meaning of "still open" (request_payload.recognition tells them apart).
     creditNote: Object.freeze({ buildQuestion: buildSupplierCreditNoteQuestion, recognition: 'unrecorded_uploaded_supplier_credit_note',
       stillOpen: Object.freeze({ meaning: 'the supplier has neither refunded this credit note nor had it deducted from a payment yet; the credit is still open',
-        recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }) }) }
+        recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }),
+      // "Deducted from bill X": recorded as a supplier credit application.
+      creditDeducted: Object.freeze({ meaning: 'the credit note was deducted from the payment of a supplier bill, and the owner names that bill by its number' }) }) }
 });
 export const noSettlementAskStatsKey = (documentType) => NO_SETTLEMENT_ASK_LANES[documentType]?.statsKey || null;
 // The "still unpaid" answer an ask's lane (request_payload.lane) accepts, or
 // null for every other lane. A credit-note ask (request_payload.recognition)
 // accepts "still open" in the credit note's sense.
-export const noSettlementAskStillOpen = (askLane, recognition = null) => {
+const askedKindOf = (askLane, recognition) => {
   const lane = Object.values(NO_SETTLEMENT_ASK_LANES).find((l) => l.lane === askLane);
   if (!lane) return null;
-  return lane.creditNote && recognition === lane.creditNote.recognition ? lane.creditNote.stillOpen : lane.stillOpen;
+  for (const sub of [lane.creditNote, lane.shortfall]) if (sub && recognition === sub.recognition) return sub;
+  return lane;
+};
+export const noSettlementAskStillOpen = (askLane, recognition = null) => askedKindOf(askLane, recognition)?.stillOpen || null;
+// The answers beyond "still open" that an ask's question invites, each with
+// what it means and the record it settles (read by the owner-reply reader,
+// documentDispositionLlm.runOwnerReplyRedisposition), or null:
+//   - creditDeducted: "deducted from bill X" (a supplier credit-note ask);
+//   - bankFee: "it was a bank fee" (a sales shortfall ask);
+//   - matchedDocument: the ask is about a document with a decided bank line,
+//     so that line does not make the ask moot.
+export const noSettlementAskLaneAnswers = (askLane, recognition = null) => {
+  const asked = askedKindOf(askLane, recognition);
+  if (!asked || !(asked.creditDeducted || asked.bankFee)) return null;
+  return Object.freeze({
+    ...(asked.creditDeducted ? { creditDeducted: asked.creditDeducted } : {}),
+    ...(asked.bankFee ? { bankFee: asked.bankFee } : {}),
+    matchedDocument: asked.matchedDocument === true
+  });
 };
 
 // The ask hook. Called where the runtime concludes that no supplied payment
@@ -627,4 +728,115 @@ export const ensureNoSettlementAskWithClient = async ({ client, firmId, clientId
     mintOutcome
   });
   return { minted: mintOutcome.minted ?? Boolean(request), reason, evidence_request_id: request?.id || null };
+};
+
+// The shortfall hook. For each sales invoice the census names as paid short on
+// its own posted lines in the period (item.shortfall) and that nobody holds,
+// the owner gets ONE question on the sales lane: bank fee or part-payment.
+// Called where the runtime turns the census into owner questions (the ALV
+// filing start, finland/statutoryDb.js). Not asked when a customer credit note
+// of the same customer is itself listed in the period (it may be what the
+// difference is; it is asked about on its own) or on a cash book. Never twice
+// per invoice. Returns { asked: [ids], skipped: [{ document_id, reason }] }.
+export const ensureSettlementShortfallAsksWithClient = async ({ client, firmId, clientId, period, actorId = 'system' } = {}) => {
+  const out = { asked: [], skipped: [] };
+  const lane = NO_SETTLEMENT_ASK_LANES.sales_invoice;
+  const snapshot = await readClientConfigSnapshot(client, { firmId, clientId });
+  if (!clientFlagActs({ flagKey: DOCUMENT_NO_LINE_DISPOSITION_FLAG_KEY, snapshot, envFallback: () => false })) return { ...out, reason: 'flag_off' };
+  const clientRow = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
+  if (!clientRow || basisOf(clientRow) !== 'accrual') return { ...out, reason: 'not_accrual' };
+  const { sales } = await readRecognitionGapWithClient({ client, firmId, clientId, period });
+  const creditCustomers = new Set(sales.items.filter((i) => i.kind === 'credit_note').map((i) => strip(i.customer)));
+  for (const item of sales.items) {
+    if (!item.shortfall) continue;
+    if (!item.on_nobody) { out.skipped.push({ document_id: item.document_id, reason: 'already_held' }); continue; }
+    if (creditCustomers.has(strip(item.customer))) { out.skipped.push({ document_id: item.document_id, reason: 'customer_credit_note_listed' }); continue; }
+    const prior = (await client.query(
+      `select id from client_evidence_requests
+        where firm_id = $1 and client_id = $2 and request_payload->>'document_id' = $3
+          and request_payload->>'lane' = $4 and request_payload->>'recognition' = $5
+        limit 1`,
+      [firmId, clientId, item.document_id, lane.lane, lane.shortfall.recognition]
+    )).rows[0];
+    if (prior) { out.skipped.push({ document_id: item.document_id, reason: 'already_asked' }); continue; }
+    const document = (await client.query(
+      `select id, document_type, customer_name, total_amount::text as total_amount, currency, document_date, reference_number, structured_reference, parse_summary
+         from documents where firm_id = $1 and client_id = $2 and id = $3`,
+      [firmId, clientId, item.document_id]
+    )).rows[0];
+    if (!document) continue;
+    const shortfall = { amount: item.shortfall.amount, currency: item.currency, match_ids: item.shortfall.match_ids,
+      settled: centsText(toCents(document.total_amount) - toCents(item.shortfall.amount)), period: sales.period };
+    const mintOutcome = {};
+    const request = await __createClientEvidenceRequestWithClient({
+      client, firmId, clientId, documentId: item.document_id,
+      question: lane.shortfall.buildQuestion({ document, shortfall, language: preferredOwnerTemplateLanguage(clientRow.profile, clientRow) }),
+      evidenceType: SALES_RECOGNITION_ASK_EVIDENCE_TYPE,
+      actorId,
+      markTransactionNeedsClient: false,
+      requestContext: { lane: lane.lane, reason: 'settlement_shortfall', recognition: lane.shortfall.recognition, shortfall },
+      mintOutcome
+    });
+    if (request?.id && (mintOutcome.minted ?? true)) out.asked.push(request.id);
+    else out.skipped.push({ document_id: item.document_id, reason: 'collapsed_onto_live_ask' });
+  }
+  return out;
+};
+
+// The owner said a supplier credit note was deducted from bill X: recorded as
+// a supplier credit application by the one credit-application writer, with
+// its checks. A refusal records nothing.
+export const recordOwnerStatedCreditDeductionWithClient = ({ client, firmId, clientId, documentId, billNumber, actorId, evidenceRequestId }) =>
+  applyOwnerStatedSupplierCreditWithClient({ client, firmId, clientId, creditDocumentId: documentId, billNumber, actorId, evidenceRequestId });
+
+// The owner said the shortfall they were asked about was a bank fee: the fee
+// is recorded on the match it was short on (payload.settlement_shortfall), the
+// amount-bearing record the census reads, with an audit receipt. Revalidated
+// under a row lock against the ask: the same single decided line, in the
+// invoice's currency, and the invoice still short by exactly the amount the
+// owner was asked about (integer cents from the stored decimals). Anything
+// else records nothing ({ recorded: false, reason }). Posts nothing.
+export const recordOwnerStatedBankFeeWithClient = async ({ client, firmId, clientId, documentId, request, actorId = 'system' }) => {
+  const asked = obj(obj(request?.request_payload).shortfall);
+  const askedCents = toCents(asked.amount);
+  const matchIds = Array.isArray(asked.match_ids) ? asked.match_ids : [];
+  if (askedCents == null || askedCents <= 0 || matchIds.length !== 1) return { recorded: false, reason: 'shortfall_not_on_one_line' };
+  const document = (await client.query(
+    `select id, document_type, payment_status, total_amount::text as total_amount, currency from documents
+      where firm_id = $1 and client_id = $2 and id = $3 for update`,
+    [firmId, clientId, documentId]
+  )).rows[0];
+  if (!document || document.document_type !== 'sales_invoice' || document.payment_status === 'credit_note') return { recorded: false, reason: 'not_a_sales_invoice' };
+  const currency = String(document.currency || '').trim().toUpperCase();
+  const decided = (await client.query(
+    `select m.id, m.match_amount::text as match_amount, m.payload, t.currency as bank_currency
+       from reconciliation_matches m
+       left join transactions t on t.firm_id = m.firm_id and t.id = m.bank_transaction_id
+      where m.firm_id = $1 and m.client_id = $2 and m.matched_object_id = $3 and m.status in ('confirmed', 'auto_matched')
+      order by m.id for update of m`,
+    [firmId, clientId, documentId]
+  )).rows;
+  const line = decided.find((m) => m.id === matchIds[0]);
+  if (!line) return { recorded: false, reason: 'line_no_longer_decided' };
+  if (String(line.bank_currency || '').trim().toUpperCase() !== currency) return { recorded: false, reason: 'cross_currency' };
+  if (decided.some((m) => toCents(m.match_amount) == null)) return { recorded: false, reason: 'amount_unstated' };
+  const credits = toCents((await client.query(
+    `select coalesce(sum(amount), 0)::text as applied from document_credit_applications
+      where firm_id = $1 and invoice_document_id = $2 and status = 'applied'`, [firmId, documentId])).rows[0]?.applied) ?? 0;
+  const fees = decided.reduce((sum, m) => sum + recordedBankFeeCents(m, currency), 0);
+  const short = (toCents(document.total_amount) ?? 0) - decided.reduce((sum, m) => sum + Math.abs(toCents(m.match_amount)), 0) - credits - fees;
+  if (short !== askedCents) return { recorded: false, reason: 'shortfall_changed' };
+  const record = { kind: 'bank_fee', amount: centsText(askedCents), currency, source: 'owner_reply',
+    evidence_request_id: request.id, actor_id: actorId, at: new Date().toISOString() };
+  await client.query(
+    `update reconciliation_matches set payload = coalesce(payload, '{}'::jsonb) || jsonb_build_object('settlement_shortfall', $4::jsonb), updated_at = now()
+      where firm_id = $1 and client_id = $2 and id = $3`,
+    [firmId, clientId, line.id, JSON.stringify(record)]
+  );
+  await client.query(
+    `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+     values ($1, $2, 'system', $3, 'reconciliation.settlement_shortfall_recorded', 'reconciliation_match', $4, $5::jsonb)`,
+    [firmId, clientId, actorId, line.id, JSON.stringify({ document_id: documentId, ...record })]
+  );
+  return { recorded: true, match_id: line.id, amount: record.amount };
 };

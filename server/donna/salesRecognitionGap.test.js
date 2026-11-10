@@ -3,7 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyRecognitionGap, recognitionStatement, recognitionDraftReason, buildSalesRecognitionQuestion, buildSupplierBillSettlementQuestion, buildSupplierCreditNoteQuestion, toCents,
-  noSettlementAskStillOpen, NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS, SALES_RECOGNITION_ASK_LANE, SUPPLIER_BILL_SETTLEMENT_ASK_LANE } from './salesRecognitionGap.js';
+  noSettlementAskStillOpen, NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS, SALES_RECOGNITION_ASK_LANE, SUPPLIER_BILL_SETTLEMENT_ASK_LANE,
+  noSettlementAskLaneAnswers, buildSettlementShortfallQuestion, recordedBankFeeCents } from './salesRecognitionGap.js';
 
 const FEB = { starts_on: '2025-02-01', ends_on: '2025-02-28' };
 const doc = (id, extra = {}) => ({ id, filename: `${id}.pdf`, document_type: 'sales_invoice', document_date: '2025-02-12', total_amount: 903.6, tax_amount: 183.6,
@@ -311,4 +312,59 @@ test('the supplier credit-note question asks deducted, refunded or still open, i
     noSettlementAskStillOpen(SUPPLIER_BILL_SETTLEMENT_ASK_LANE).meaning);
   // The sales lane has no credit-note question: customer credits are settled by their application.
   assert.equal(noSettlementAskStillOpen(SALES_RECOGNITION_ASK_LANE, 'unrecorded_uploaded_supplier_credit_note'), noSettlementAskStillOpen(SALES_RECOGNITION_ASK_LANE));
+});
+
+test('a sales shortfall is named with the lines it was short on; only an amount-bearing bank-fee record on the match settles it, never a hop label or a guess', () => {
+  const documents = [doc('fee', { total_amount: '1004.00', tax_amount: '204.00' })];
+  const short = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents, ...book([posted('tx-fee', 'fee', '1001.50', '2025-02-20')]) });
+  assert.deepEqual(short.items.map((i) => [i.document_id, i.rests, i.gross, i.tax, i.shortfall]),
+    [['fee', 'part_settled_in_period', 2.5, 0.51, { amount: '2.50', match_ids: ['m-tx-fee'] }]]);
+  // The matcher's hop label names no amount: still the same shortfall.
+  const hop = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents,
+    ...book([posted('tx-fee', 'fee', '1001.50', '2025-02-20', { payload: { match_reason: { hops: ['processor_fee'] } } })]) });
+  assert.deepEqual(hop.items.map((i) => i.shortfall.amount), ['2.50']);
+  // A later decided instalment pays the rest: no shortfall question about it.
+  const later = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents,
+    ...book([posted('tx-1', 'fee', '502.00', '2025-02-20'), posted('tx-2', 'fee', '502.00', '2025-03-20')]) });
+  assert.deepEqual(later.items.map((i) => [i.rests, i.gross, i.shortfall]), [['part_settled_in_period', 502, undefined]]);
+  // A recorded bank fee in the invoice's currency completes it: represented, net of the fee.
+  const record = (extra = {}) => ({ payload: { settlement_shortfall: { kind: 'bank_fee', amount: '2.50', currency: 'EUR', ...extra } } });
+  const fee = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents, ...book([posted('tx-fee', 'fee', '1001.50', '2025-02-20', record())]) });
+  assert.deepEqual([fee.items, fee.represented], [[], [{ document_id: 'fee', by: 'settlement_journal', net_of_bank_fee: { amount: 2.5, match_ids: ['m-tx-fee'] } }]]);
+  // A fee smaller than the shortfall leaves the rest named; a fee in another currency or of another kind counts for nothing.
+  const partFee = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents, ...book([posted('tx-fee', 'fee', '1001.50', '2025-02-20', record({ amount: '1.00' }))]) });
+  assert.deepEqual(partFee.items.map((i) => [i.gross, i.shortfall.amount]), [[1.5, '1.50']]);
+  for (const bad of [{ currency: 'USD' }, { kind: 'discount' }, { amount: 'n/a' }, { amount: '-2.50' }]) {
+    assert.equal(recordedBankFeeCents(record(bad), 'EUR'), 0, JSON.stringify(bad));
+  }
+  assert.equal(recordedBankFeeCents(record(), 'EUR'), 250);
+  // The purchase side names its remainder as before, without a shortfall question.
+  const purchase = classifyRecognitionGap({ side: 'purchase', basis: 'accrual', period: FEB, documents: [sbill('b', { total_amount: '248.00', tax_amount: '48.00' })],
+    ...book([posted('tx-b', 'b', '245.50', '2025-02-20')]) });
+  assert.deepEqual(purchase.items.map((i) => [i.rests, i.gross, i.shortfall]), [['part_settled_in_period', 2.5, undefined]]);
+});
+
+test('the lanes\' record-settling answers: "deducted from bill X" on a supplier credit-note ask, "bank fee" on a sales shortfall ask, nowhere else', () => {
+  const credit = noSettlementAskLaneAnswers(SUPPLIER_BILL_SETTLEMENT_ASK_LANE, 'unrecorded_uploaded_supplier_credit_note');
+  assert.match(credit.creditDeducted.meaning, /deducted from the payment of a supplier bill/);
+  assert.equal(credit.bankFee, undefined); assert.equal(credit.matchedDocument, false);
+  const shortfall = noSettlementAskLaneAnswers(SALES_RECOGNITION_ASK_LANE, 'unexplained_settlement_shortfall');
+  assert.match(shortfall.bankFee.meaning, /bank fee/); assert.equal(shortfall.matchedDocument, true);
+  assert.match(noSettlementAskStillOpen(SALES_RECOGNITION_ASK_LANE, 'unexplained_settlement_shortfall').meaning, /part-payment/);
+  assert.equal(noSettlementAskStillOpen(SALES_RECOGNITION_ASK_LANE, 'unexplained_settlement_shortfall').recheckDays, NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS);
+  for (const [lane, recognition] of [[SUPPLIER_BILL_SETTLEMENT_ASK_LANE, 'unrecorded_uploaded_supplier_bill'], [SALES_RECOGNITION_ASK_LANE, 'unrecognised_uploaded_sales_invoice'],
+    [SALES_RECOGNITION_ASK_LANE, 'unrecorded_uploaded_supplier_credit_note'], ['owner_reply_clarification', null], [undefined, null]]) {
+    assert.equal(noSettlementAskLaneAnswers(lane, recognition), null, `${lane}/${recognition}`);
+  }
+});
+
+test('the shortfall question asks bank fee or part-payment, in English and Finnish', () => {
+  const document = doc('fee', { total_amount: '1004.00', document_date: '2025-02-04', customer_name: 'Pankkikulu Oy', parse_summary: { references: [{ type: 'invoice_number', value: '1020' }] } });
+  const shortfall = { amount: '2.50', settled: '1001.50' };
+  assert.equal(buildSettlementShortfallQuestion({ document, shortfall }), 'Sales invoice 1020 to Pankkikulu Oy (1004.00 EUR, dated 2025-02-04): the payment recorded for it was 2.50 EUR short '
+    + '(1001.50 EUR received). Donna does not know why, so for now the difference is left out of that period\'s sales and VAT. Was it a bank fee or a part-payment? '
+    + 'If it was a bank fee, reply "bank fee". If the customer paid only part and the rest is still unpaid, reply "part-payment".');
+  const fi = buildSettlementShortfallQuestion({ document, shortfall, language: 'fi' });
+  assert.match(fi, /^Myyntilasku 1020 \(Pankkikulu Oy, 1004,00 EUR, päivätty 4\.2\.2025\): tälle laskulle kirjattu maksu oli 2,50 EUR laskua pienempi \(saatu 1001,50 EUR\)\. /);
+  assert.match(fi, /Oliko erotus pankin palvelumaksu vai osamaksu\? Jos se oli pankin palvelumaksu, vastaa "pankin palvelumaksu"\. .*vastaa "osamaksu"\.$/);
 });

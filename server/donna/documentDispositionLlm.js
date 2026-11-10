@@ -135,6 +135,19 @@ const DISPOSITIONS = new Set(['auto_explain', 'chase_evidence', 'needs_human']);
 // The owner-reply-only answer "it is still unpaid": never a verdict, never
 // stamped. Valid only on a lane that accepts it (ownerReply.stillOpen).
 export const OBLIGATION_OPEN = 'obligation_open';
+// The owner-reply-only answers that settle a RECORD rather than a verdict,
+// each valid only where the asking lane offers it (ownerReply.laneAnswers,
+// salesRecognitionGap.noSettlementAskLaneAnswers):
+//   - "credit_deducted": a supplier credit note was deducted from bill X (the
+//     model names X in "deducted_from_bill"); recorded as a credit application;
+//   - "shortfall_bank_fee": the payment's shortfall was a bank fee; recorded
+//     on the match.
+// A clear answer that cannot be recorded falls to the unclear path.
+export const CREDIT_DEDUCTED = 'credit_deducted';
+export const SHORTFALL_BANK_FEE = 'shortfall_bank_fee';
+const laneAnswerOffered = (disposition, ownerReply) =>
+  (disposition === CREDIT_DEDUCTED && Boolean(ownerReply?.laneAnswers?.creditDeducted))
+  || (disposition === SHORTFALL_BANK_FEE && Boolean(ownerReply?.laneAnswers?.bankFee));
 const MATERIALITIES = new Set(['immaterial', 'material']);
 const SETTLEMENT_CHANNELS = new Set(['cash', 'personal_card', 'uncovered_account', 'unknown']);
 
@@ -471,7 +484,8 @@ export const parseDocumentDispositionResponse = (text, {
   }
 
   const disposition = DISPOSITIONS.has(parsed.disposition)
-    || (parsed.disposition === OBLIGATION_OPEN && ownerReply?.stillOpen) ? parsed.disposition : 'needs_human';
+    || (parsed.disposition === OBLIGATION_OPEN && ownerReply?.stillOpen)
+    || laneAnswerOffered(parsed.disposition, ownerReply) ? parsed.disposition : 'needs_human';
   const materiality = MATERIALITIES.has(parsed.materiality) ? parsed.materiality : 'material';
   const expense_kind = typeof parsed.expense_kind === 'string'
     ? parsed.expense_kind.replace(/[^a-z0-9_]/gi, '').slice(0, 40) || 'unknown'
@@ -508,9 +522,14 @@ export const parseDocumentDispositionResponse = (text, {
       safe = 'needs_human';
       downgraded_from = 'auto_explain';
       coercedReason = 'owner_reply_unclear';
-    } else if (disposition === OBLIGATION_OPEN && confidence < confidenceFloor) {
+    } else if ((disposition === OBLIGATION_OPEN || disposition === CREDIT_DEDUCTED || disposition === SHORTFALL_BANK_FEE) && confidence < confidenceFloor) {
       safe = 'needs_human';
-      downgraded_from = OBLIGATION_OPEN;
+      downgraded_from = disposition;
+      coercedReason = 'owner_reply_unclear';
+    } else if (disposition === CREDIT_DEDUCTED && !String(parsed.deducted_from_bill || '').replace(/[^a-z0-9]/gi, '')) {
+      // "Deducted" without a bill Donna can look up is not recordable.
+      safe = 'needs_human';
+      downgraded_from = CREDIT_DEDUCTED;
       coercedReason = 'owner_reply_unclear';
     } else if (disposition === 'chase_evidence') {
       const laneChange = ownerReply.answeredEvidenceType === 'payment_method'
@@ -541,6 +560,8 @@ export const parseDocumentDispositionResponse = (text, {
   return {
     funding_source,
     disposition: safe,
+    // The bill the owner named, as printed (bounded); read only on that answer.
+    ...(safe === CREDIT_DEDUCTED ? { deducted_from_bill: String(parsed.deducted_from_bill).trim().slice(0, 40) } : {}),
     downgraded_from,
     materiality,
     expense_kind,
@@ -664,10 +685,19 @@ export const buildDocumentDispositionUserPrompt = ({ document, firmContext = nul
 // The asking lane may accept "it is still unpaid" as an answer
 // (salesRecognitionGap's stillOpen); the model is told so, and what it means
 // on that lane. Without it the prompt is the historical one, byte for byte.
-export const buildOwnerReplySystemPrompt = ({ stillOpen = null } = {}) => {
+export const buildOwnerReplySystemPrompt = ({ stillOpen = null, laneAnswers = null } = {}) => {
   const stillOpenLine = stillOpen
     ? `- "obligation_open": the owner says it is STILL UNPAID, i.e. ${stillOpen.meaning}. The question invited exactly this answer, so it is a clear, valid answer in any wording or language ("still unpaid", "not paid yet", "vielä maksamatta", "ei oo vielä maksettu"); it is not unclear and it settles nothing. Use "settlement_channel": "unknown". A partial payment, a dispute, or a payment the owner cannot place is not this; it is "needs_human".\n`
     : '';
+  // The lane's record-settling answers (salesRecognitionGap.noSettlementAskLaneAnswers).
+  const creditLine = laneAnswers?.creditDeducted
+    ? `- "${CREDIT_DEDUCTED}": the owner says ${laneAnswers.creditDeducted.meaning}. The question invited exactly this answer. Put the bill's number exactly as the owner wrote it in "deducted_from_bill" (e.g. "4730"). Use it only when the owner names one bill; "deducted, I think" with no bill, or two bills, is "needs_human".\n`
+    : '';
+  const feeLine = laneAnswers?.bankFee
+    ? `- "${SHORTFALL_BANK_FEE}": the owner says ${laneAnswers.bankFee.meaning}. The question invited exactly this answer, in any wording or language ("bank fee", "pankin palvelumaksu", "pankkikulu", "the bank took it").\n`
+    : '';
+  const extraDispositions = [stillOpen ? OBLIGATION_OPEN : null, laneAnswers?.creditDeducted ? CREDIT_DEDUCTED : null,
+    laneAnswers?.bankFee ? SHORTFALL_BANK_FEE : null].filter(Boolean).map((d) => ` | "${d}"`).join('');
   return `You triage a single parsed evidence DOCUMENT (a receipt, supplier bill, sales invoice, issued receipt, or payment confirmation) for a bookkeeping firm's client.
 
 The reconciliation matchers found NO bank line for this document, the firm asked the business OWNER how it settled, and the owner has now ANSWERED. Your job is to read the owner's answer and dispose of the document.
@@ -678,10 +708,10 @@ Choose exactly one disposition:
 - "auto_explain": the owner's answer clearly confirms the document settled OUTSIDE the visible bank feed — paid in cash ("settlement_channel": "cash") or on a personal card / with personal funds ("personal_card"). Take a clear statement at its word; do not second-guess it.
 - "chase_evidence": ONLY when the owner's answer names a business account or card whose statement the firm does not have — "settlement_channel" MUST be "uncovered_account" (this becomes a statement request). NEVER use this to re-ask how the document was paid.
 - "needs_human": the answer is unclear, contradictory, off-topic, or raises something a bookkeeper must read (e.g. "that was personal", "I think you have that twice", a dispute).
-${stillOpenLine}
+${stillOpenLine}${creditLine}${feeLine}
 Output a single JSON object with this exact shape, nothing else:
 {
-  "disposition": "auto_explain" | "chase_evidence" | "needs_human"${stillOpen ? ' | "obligation_open"' : ''},
+  "disposition": "auto_explain" | "chase_evidence" | "needs_human"${extraDispositions},${laneAnswers?.creditDeducted ? '\n  "deducted_from_bill": "<the bill number the owner named, only with ' + CREDIT_DEDUCTED + '>",' : ''}
   "materiality": "immaterial" | "material",
   "expense_kind": "<short snake_case kind, e.g. fuel, software_subscription, or unknown>",
   "settlement_channel": "cash" | "personal_card" | "uncovered_account" | "unknown",
@@ -1548,9 +1578,16 @@ export const runOwnerReplyRedisposition = async ({
   // The asking lane's "still unpaid" answer ({ meaning, recheckDays },
   // salesRecognitionGap.noSettlementAskStillOpen), or null where the lane has
   // none. The reader is told it is a valid answer; its consequence is below.
-  stillOpen = null
+  stillOpen = null,
+  // The asking lane's record-settling answers ({ creditDeducted?, bankFee?,
+  // matchedDocument }, salesRecognitionGap.noSettlementAskLaneAnswers) and the
+  // writers that record them ({ creditDeducted, bankFee }: async ({ client,
+  // firmId, clientId, documentId, request, billNumber, actorId }) →
+  // { recorded, ... }). Null where the lane has none.
+  laneAnswers = null,
+  laneRecorders = null
 } = {}) => {
-  const ownerReplyMode = { answeredEvidenceType, ...(stillOpen ? { stillOpen } : {}) };
+  const ownerReplyMode = { answeredEvidenceType, ...(stillOpen ? { stillOpen } : {}), ...(laneAnswers ? { laneAnswers } : {}) };
   const result = {
     stamped: false,
     settled: false,
@@ -1647,7 +1684,9 @@ export const runOwnerReplyRedisposition = async ({
       limit 1`,
     [firmId, clientId, documentId]
   );
-  if (liveMatch.rows.length) {
+  // A question asked ABOUT a matched document (a sales payment's shortfall)
+  // is not made moot by that match.
+  if (liveMatch.rows.length && !laneAnswers?.matchedDocument) {
     // INV-4: a live match outranks any verdict — the ask is moot and the
     // match is the terminal. Consume the answer by resolving the request.
     await client.query('begin');
@@ -1715,7 +1754,7 @@ export const runOwnerReplyRedisposition = async ({
         replyDocumentCount: Array.isArray(replyDocumentIds) ? replyDocumentIds.filter(Boolean).length : 0
       });
       const strongOwnerReply = () => proposeMatchesViaAnthropic({
-        systemPrompt: stillOpen ? buildOwnerReplySystemPrompt({ stillOpen }) : OWNER_REPLY_SYSTEM_PROMPT,
+        systemPrompt: stillOpen || laneAnswers ? buildOwnerReplySystemPrompt({ stillOpen, laneAnswers }) : OWNER_REPLY_SYSTEM_PROMPT,
         userPrompt: userPrompt + (jevEnabled ? `\nExtracted focal document: ${JSON.stringify(document.parse_summary || {})}\nLocal evidence inventory: ${JSON.stringify(localEvidence)}` : ''),
         candidateBankLines: [],
         model,
@@ -1734,7 +1773,8 @@ export const runOwnerReplyRedisposition = async ({
           ? withJevHandoff(await strongOwnerReply(), chosen.receipt)
           : { ...parseDocumentDispositionResponse(JSON.stringify(chosen.semantic), { confidenceFloor: 0, documentType:document.document_type, ownerReply: ownerReplyMode }), model: chosen.semantic.model, model_source: 'response', decision_engine: 'jev', jev_first: chosen.receipt };
       } else semantic = await strongOwnerReply();
-      if (!semantic || !(DISPOSITIONS.has(semantic.disposition) || (stillOpen && semantic.disposition === OBLIGATION_OPEN))) {
+      if (!semantic || !(DISPOSITIONS.has(semantic.disposition) || (stillOpen && semantic.disposition === OBLIGATION_OPEN)
+        || laneAnswerOffered(semantic.disposition, ownerReplyMode))) {
         semantic = safeDisposition(semantic?.unmatchable_reason || 'invalid_llm_response');
       }
     } catch (error) {
@@ -1828,6 +1868,57 @@ export const runOwnerReplyRedisposition = async ({
       });
     }
     return result;
+  }
+
+  // A record-settling answer on a lane that offers it: the record is written
+  // by its own writer (a supplier credit application; a bank fee on the
+  // match) and the ask resolves in the same transaction. Nothing is stamped
+  // or posted. When the writer refuses (no such bill, another supplier,
+  // nothing open, the shortfall moved), nothing is written and the answer
+  // takes the unclear path below, exactly as an unclear reply would.
+  if (semantic.disposition === CREDIT_DEDUCTED || semantic.disposition === SHORTFALL_BANK_FEE) {
+    const recorder = semantic.disposition === CREDIT_DEDUCTED ? laneRecorders?.creditDeducted : laneRecorders?.bankFee;
+    const kind = semantic.disposition === CREDIT_DEDUCTED ? 'owner_stated_credit_deduction' : 'owner_stated_bank_fee';
+    let recorded = null;
+    await client.query('begin');
+    try {
+      const current = (await client.query(
+        `select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3 and status = 'replied' for update`,
+        [firmId, clientId, evidenceRequestId]
+      )).rows[0];
+      if (current && recorder) {
+        // Resolve first, so the writer's own ask resolution leaves this one to us.
+        await resolveRequest({ disposition: semantic.disposition, via: kind });
+        recorded = await recorder({ client, firmId, clientId, documentId, request: current,
+          billNumber: semantic.deducted_from_bill || null, actorId, evidenceRequestId });
+      }
+      if (recorded?.recorded) {
+        await client.query(
+          `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+           values ($1, $2, 'system', $3, $4, 'client_evidence_request', $5, $6::jsonb)`,
+          [firmId, clientId, actorId, `evidence_request.${kind}`, evidenceRequestId, JSON.stringify({ document_id: documentId, ...recorded })]
+        );
+        await client.query('commit');
+        result.lane = { kind, ...recorded };
+        return result;
+      }
+      await client.query('rollback');
+      result.request_resolved = false;
+    } catch (error) {
+      await client.query('rollback');
+      result.request_resolved = false;
+      console.warn(`[${LOG_TAG}] owner-reply lane answer could not be recorded (request left replied)`, {
+        document_id: documentId, evidence_request_id: evidenceRequestId, error: error?.message || String(error)
+      });
+      result.skipped = 'lane_answer_record_failed';
+      return result;
+    }
+    // Not recordable: the unclear path, with the reason on the receipt.
+    semantic = { ...semantic, disposition: 'needs_human', downgraded_from: semantic.disposition,
+      unmatchable_reason: `owner_answer_not_recordable:${recorded?.refusals?.[0]?.code || recorded?.reason || 'no_recorder'}`.slice(0, 80) };
+    delete semantic.deducted_from_bill;
+    result.disposition = semantic.disposition;
+    result.lane_answer_refused = { kind, refusals: recorded?.refusals || [], reason: recorded?.reason || null };
   }
 
   // Stamp + flip, atomically: the verdict replaces the chase_evidence row
