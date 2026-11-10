@@ -35,13 +35,12 @@ test('a line settling a supplier bill is read on the bill date', () => {
   assert.deepEqual([receipt.status, receipt.on_date], ['registered', '2026-06-02']);
 });
 
-test('the treatments are offered only when the vocabulary has them; a country without a record gets no field', () => {
-  const notRegistered = { alv_registration: { status: 'not_registered' } };
-  const bare = taxRegistrationFactFor({ policy: { jurisdiction: 'fi', taxTreatmentOptions: ['ALV 25,5 %'] }, clientProfile: notRegistered, transaction: line('2026-06-02') });
-  assert.equal(bare.status, 'not_registered');
-  assert.equal(bare.treatments, undefined);
-  assert.doesNotMatch(bare.instruction, /Use tax_treatment/);
+test('the no-VAT treatments are offered on a not-registered line only, never added to the standing vocabulary; a country without a record gets no field', () => {
   const uk = taxRegistrationFactFor({ policy: gb, clientProfile: { vat_registration: { status: 'not_registered' } }, transaction: line('2026-06-02') });
   assert.deepEqual(uk.treatments, { purchase: 'No VAT (not VAT-registered)', sale: 'No VAT (not VAT-registered)' });
+  assert.match(uk.instruction, /Use tax_treatment 'No VAT \(not VAT-registered\)'/);
+  assert.equal(GB_VAT_TAX_TREATMENT_OPTIONS.includes('No VAT (not VAT-registered)'), false, 'the UK coding policy content is unchanged');
+  const registered = taxRegistrationFactFor({ policy: gb, clientProfile: { vat_registration: { status: 'registered', registered_from: '2020-01-01' } }, transaction: line('2026-06-02') });
+  assert.equal(registered.treatments, undefined, 'a registered line is not offered it');
   assert.equal(taxRegistrationFactFor({ policy: { jurisdiction: 'sg', taxTreatmentOptions: [] }, clientProfile: {}, transaction: line('2026-06-02') }), null);
 });

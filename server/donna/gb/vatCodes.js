@@ -177,8 +177,11 @@ export const gbVatDirectionForTransaction = (transaction = {}, coding = {}) => t
 // no output reverse-charge code yet (domestic-RC construction sales report net
 // in Box 6 with no output tax) — an honest gap that escalates rather than a
 // guessed code. The purchase side resolves VAT_REVERSE_CHARGE_20_INPUT.
-// The treatment of a business that is not VAT-registered on the line's date
-// (gb/taxVocabulary.js): it renders to no VAT code. Enrichment stamps it NONE
+// The treatment of a business that is not VAT-registered on the line's date.
+// It is not in the standing coder vocabulary (gb/taxVocabulary.js): the coder
+// is offered it only on a line whose registration fact says not registered
+// (the posting policy's taxRegistration.withoutTax; transactionLlm.js). It
+// renders to no VAT code. Enrichment stamps it NONE
 // (applyGbVatCodingToCoding) and the posting policy admits that NONE only
 // while the registration record says not registered on the date.
 export const GB_NOT_REGISTERED_TREATMENT = 'No VAT (not VAT-registered)';

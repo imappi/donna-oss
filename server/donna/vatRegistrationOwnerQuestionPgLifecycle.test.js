@@ -81,7 +81,7 @@ const GB = { currency: 'GBP', gross: 120, tax: 20, refusalCode: 'TRANSACTION_GB_
 // stubborn one keeps the printed rate (`'stubborn'`). The owner-reply reader
 // (Anthropic messages) returns `reading.current()`. Every coder input row is kept.
 const mockModels = (t, reading) => {
-  const counts = { coder: 0, reader: 0, inputs: [] };
+  const counts = { coder: 0, reader: 0, inputs: [], enums: [] };
   t.mock.method(globalThis, 'fetch', async (endpoint, init) => {
     const url = String(endpoint);
     if (url === 'https://api.anthropic.com/v1/messages') {
@@ -94,7 +94,9 @@ const mockModels = (t, reading) => {
     }
     assert.equal(url, 'https://api.openai.com/v1/responses');
     counts.coder += 1;
-    const input = JSON.parse(JSON.parse(init.body).input);
+    const body = JSON.parse(init.body);
+    counts.enums.push(body.text?.format?.schema?.properties?.suggestions?.items?.properties?.tax_treatment?.enum || null);
+    const input = JSON.parse(body.input);
     const suggestions = input.transactions.map(row => {
       counts.inputs.push(row);
       const sale = Number(row.money_in) > 0;
@@ -603,31 +605,33 @@ test('real PG (GB): after a "no", a new line is coded without VAT and posts, wit
   assert.equal(await registrationQuestions(pool, clientId), 1);
 });
 
-// The UK's no-VAT treatment is only for a business the record says is not
-// registered: a registered one is refused by name and sent back to the coder.
-test('real PG (GB): the no-VAT treatment is refused for a registered business; every VAT_ code is still refused for an unregistered one', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+// The UK's no-VAT treatment is not in the standing UK vocabulary: the coder is
+// offered it only in a request whose line the record says is not registered,
+// so a registered business's coder never sees it (the ledger's refusal of it
+// for a registered or unknown business is pinned in gb/postingPolicy.test.js).
+// Every VAT_ code is still refused for an unregistered business.
+test('real PG (GB): the no-VAT treatment is offered only for a not-registered line; every VAT_ code is still refused for an unregistered one', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
   const pool = await freshDb(t);
-  const registered = 'gb-registered-no-vat', unregistered = 'gb-unregistered-zero-rated';
+  const registered = 'gb-registered-offer', unregistered = 'gb-unregistered-zero-rated';
   await seedGb(pool, registered, { vat_registration: { status: 'registered', registered_from: '2020-01-01', vat_registration_number: 'GB123456789' } });
   await seedGb(pool, unregistered, { vat_registration: { status: 'not_registered' } });
-  const verdicts = { [registered]: 'No VAT (not VAT-registered)', [unregistered]: 'Zero-rated 0%' };
-  mockModels(t, { verdict: GB.verdict, coder: 'stubborn', current: answerWith('unclear') });
+  const counts = mockModels(t, { verdict: GB.verdict, current: answerWith('unclear'),
+    coder: (row) => row.id.startsWith(unregistered) ? 'stubborn' : 'follows' });
+  await addLine(pool, registered, GB, `${registered}-purchase`);
+  await batchSuggestTransactionCodingInDb({ firmId, clientIds: [registered] });
+  assert.equal(counts.enums.at(-1).includes('No VAT (not VAT-registered)'), false, 'a registered line is never offered it');
+  assert.equal(counts.inputs.at(-1).tax_registration.status, 'registered');
+  assert.equal(await journals(pool, `${registered}-purchase`), 1, 'posts with its VAT split as before');
+  // The unregistered client, with a coder that keeps a VAT_ code (zero-rated).
   t.mock.restoreAll();
-  t.mock.method(globalThis, 'fetch', async (endpoint, init) => {
-    const input = JSON.parse(JSON.parse(init.body).input);
-    const suggestions = input.transactions.map(row => ({ transaction_id: row.id, ...GB.verdict, tax_treatment: verdicts[row.id.replace(/-purchase$/, '')], confidence: 'high', evidence_required: false,
-      auto_explain_limit: 5000, reasoning: 'Fixture.', posting_requirement: 'single_account', document_allocations: [], ask_client_question: '' }));
-    return { ok: true, status: 200, json: async () => ({ output_text: JSON.stringify({ suggestions, group_summary: [] }) }) };
-  });
-  for (const clientId of [registered, unregistered]) {
-    await addLine(pool, clientId, GB, `${clientId}-purchase`);
-    await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
-    assert.equal(await journals(pool, `${clientId}-purchase`), 0);
-  }
-  assert.equal((await lineRow(pool, `${registered}-purchase`)).payload.ledger_post_refusal?.code, 'TRANSACTION_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED');
-  const zero = (await lineRow(pool, `${unregistered}-purchase`)).payload.ledger_post_refusal;
-  assert.equal(zero?.code, 'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED');
-  assert.equal(zero.details.vat_code, 'VAT_ZR_INPUT');
+  const zero = mockModels(t, { verdict: { ...GB.verdict, tax_treatment: 'Zero-rated 0%' }, coder: 'stubborn', current: answerWith('unclear') });
+  await addLine(pool, unregistered, GB, `${unregistered}-purchase`);
+  await batchSuggestTransactionCodingInDb({ firmId, clientIds: [unregistered] });
+  assert.equal(zero.enums.at(-1).includes('No VAT (not VAT-registered)'), true, 'offered on the not-registered line');
+  assert.equal(await journals(pool, `${unregistered}-purchase`), 0);
+  const refused = (await lineRow(pool, `${unregistered}-purchase`)).payload.ledger_post_refusal;
+  assert.equal(refused?.code, 'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED');
+  assert.equal(refused.details.vat_code, 'VAT_ZR_INPUT');
 });
 
 test('real PG (FI): a supplier bill refused for registration on its own date is asked about and released by the answer', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {

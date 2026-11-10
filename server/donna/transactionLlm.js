@@ -617,8 +617,8 @@ const ownerTransactionVerdictFor = ({ suggestion = {}, transaction = {}, ownerPo
 // the bill's when the line settles a supplier bill (the bill carries the
 // expense; the posting policy reads its registration on the bill's date).
 // On a date the record says not registered the coder is told the fact as the
-// country words it and the country's no-VAT treatments (when its vocabulary
-// offers them): it charges and deducts no VAT, and the gross is the cost or
+// country words it and the country's no-VAT treatments, which the contract
+// admits for that line only: it charges and deducts no VAT, and the gross is the cost or
 // the revenue. This is knowledge Donna applies, never an owner question. The
 // coder picks the treatment; the posting policy still decides. null for a
 // country that declares no registration record.
@@ -633,14 +633,24 @@ export const taxRegistrationFactFor = ({ policy, clientProfile = {}, transaction
   try { status = rule.onDate({ profile: clientProfile || {}, onDate }); } catch { status = { registered: null, reason: 'registration_unavailable' }; }
   const state = status?.registered === true ? 'registered' : status?.registered === false ? 'not_registered' : 'unknown';
   if (state !== 'not_registered') return { status: state, on_date: onDate, reason: status?.reason || null, ...(billDate ? { date_of: 'supplier_bill' } : {}) };
-  const options = policy?.taxTreatmentOptions || [];
+  // The country's treatments are offered here, and the coder's contract
+  // admits them for this line only (taxOptionsForLine): a standing vocabulary
+  // need not list a treatment that is valid only while not registered.
   const { purchase, sale } = rule.withoutTax.treatments;
-  const offered = options.includes(purchase) && options.includes(sale);
   return { status: state, on_date: onDate, reason: status?.reason || null, ...(billDate ? { date_of: 'supplier_bill' } : {}),
-    ...(offered ? { treatments: { purchase, sale } } : {}),
-    instruction: `${String(rule.withoutTax.instruction({ onDate }) || '').trim()}${offered
-      ? ` Use tax_treatment '${purchase}' for a purchase or other cost and '${sale}' for a sale or other income. A treatment that charges or deducts VAT cannot post on this date.` : ''}`.slice(0, 700) };
+    treatments: { purchase, sale },
+    instruction: `${String(rule.withoutTax.instruction({ onDate }) || '').trim()} Use tax_treatment '${purchase}' for a purchase or other cost and '${sale}' for a sale or other income. A treatment that charges or deducts VAT cannot post on this date.`.slice(0, 700) };
 };
+// The tax treatments a line may be coded with: the policy's standing
+// vocabulary, plus the country's no-VAT treatments on a line whose fact says
+// not registered (and only there; the policy's content is unchanged).
+const registrationTreatmentsFor = (policy, clientProfile, transaction) => {
+  const fact = taxRegistrationFactFor({ policy, clientProfile, transaction });
+  return fact?.treatments ? [fact.treatments.purchase, fact.treatments.sale] : [];
+};
+const withTreatments = (options, extra) => extra.length ? [...new Set([...options, ...extra])] : options;
+const taxOptionsForLine = (options, policy, clientProfile, transaction) =>
+  withTreatments(options, registrationTreatmentsFor(policy, clientProfile, transaction));
 // The coder input field: absent for a country without a registration record,
 // so its request keeps its exact shape.
 const taxRegistrationInputFor = (policy, clientProfile, transaction) => {
@@ -664,6 +674,7 @@ const taxRegistrationReceiptFor = ({ policy, clientProfile, transaction, taxTrea
 const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, taxOptions, clientProfile) => {
   const policy = requireCodingPolicyForClient(clientProfile, { businessDate: transaction.date ?? transaction.transaction_date ?? null });
   suggestion = decodeNativeCodingChoice(policy.nativeMenu, suggestion);
+  taxOptions = taxOptionsForLine(taxOptions, policy, clientProfile, transaction);
   const fallback = policy.nativeMenu ? { contact: '', tax_treatment: policy.uncertainTaxTreatment, confidence: 'low', materiality: 'normal', proposed_account: policy.suspenseAccountName }
     : makeDeterministicTransactionSuggestion({ transaction, clientProfile, xeroAccounts: accountOptions.map((name) => ({ name })), reason: '' });
   const fallbackAccount = accountOptions.includes(fallback.proposed_account)
@@ -1306,7 +1317,12 @@ export const suggestTransactionCodingBatch = async ({
   }, policy.nativeMenu);
 
   const batchCallInstructions = instructionsForPolicy(policy, instructionsForChartMode(clientProfile, batchInstructions));
-  const batchSchema = buildBatchSuggestionSchema(policy.nativeMenu ? policy.nativeMenu.choices.map(choice => choice.handle) : accountOptions, taxOptions, ownerTypeOptions);
+  // One schema for the request: the standing vocabulary, plus the no-VAT
+  // treatment when some line of it is not registered. Each line is admitted
+  // its own set when its answer is read (sanitizeSuggestion).
+  const requestTaxOptions = withTreatments(taxOptions, cleanTransactions.flatMap((transaction, index) =>
+    registrationTreatmentsFor(policies[index], clientProfile, transaction)));
+  const batchSchema = buildBatchSuggestionSchema(policy.nativeMenu ? policy.nativeMenu.choices.map(choice => choice.handle) : accountOptions, requestTaxOptions, ownerTypeOptions);
 
   let parsed = null;
   // What the per-suggestion receipt claims about the call that produced it:
@@ -1455,7 +1471,8 @@ export const suggestTransactionCoding = async ({
 } = {}) => {
   const policy = requireCodingPolicyForClient(clientProfile, { businessDate: transaction.date ?? transaction.transaction_date ?? null });
   const accountOptions = accountOptionsForClient(xeroAccounts, { ...clientProfile, codingPolicy: policy });
-  const taxOptions = policy.taxTreatmentOptions;
+  // The standing vocabulary, plus the no-VAT treatment on a not-registered line.
+  const taxOptions = taxOptionsForLine(policy.taxTreatmentOptions, policy, clientProfile, transaction);
   const ownerTypeOptions = (policy.ownerTransactionPolicy ? ['', ...policy.ownerTransactionPolicy.types] : null);
   if (jevEnabled) {
     const input = nativeCodingPromptProjection({

@@ -27,10 +27,6 @@ test('GB VAT treatment set is pinned', () => {
   // that existed as posting codes with no expressible verdict — 'EU
   // acquisition' and 'VAT blocked (no reclaim)', the latter a pre-staging
   // requirement (design-donna-gb-input-vat-boxes-4-7.md §3).
-  // Re-pinned 2026-11-10 (deliberate): 'No VAT (not VAT-registered)', the
-  // treatment of a business not VAT-registered on the line's date. It renders
-  // to no VAT code and posts only while the record says not registered
-  // (gb/postingPolicy.js).
   assert.deepEqual(GB_VAT_TAX_TREATMENT_OPTIONS, [
     'VAT 20%',
     'VAT 5%',
@@ -40,7 +36,6 @@ test('GB VAT treatment set is pinned', () => {
     'Reverse charge',
     'EU acquisition',
     'VAT blocked (no reclaim)',
-    'No VAT (not VAT-registered)',
     'VAT check'
   ]);
 });

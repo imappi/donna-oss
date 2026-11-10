@@ -28,6 +28,7 @@
 
 import { summarizeCheckReport } from './operatorContract.js';
 import { classifyTaxCodeForJurisdiction, classifyTaxCodeForPolicy, jurisdictionVocabulary } from './taxCodeJurisdiction.js';
+import { withoutTaxTreatmentsFor } from './postingPolicy.js';
 
 const TOLERANCE = 0.01;
 const mkCheck = (name, status, detail = null) => ({ name, status, detail });
@@ -163,7 +164,9 @@ export const taxJurisdictionCheck = (taxCode, jurisdiction, { codingPolicy = nul
   if (taxCode == null || String(taxCode).trim() === '') return null;
   if (policyError) return mkCheck('tax_code_jurisdiction', 'fail', policyError.code || 'coding_policy_unavailable');
   if (codingPolicy) {
-    const valid = classifyTaxCodeForPolicy(codingPolicy, taxCode) === 'valid';
+    // The country's no-VAT treatment (offered only on a not-registered line) is its own label.
+    const valid = classifyTaxCodeForPolicy(codingPolicy, taxCode) === 'valid'
+      || withoutTaxTreatmentsFor(codingPolicy.jurisdiction).includes(String(taxCode).trim());
     return mkCheck('tax_code_jurisdiction', valid ? 'pass' : 'fail', valid ? null : `tax code '${String(taxCode).trim()}' is not valid for policy ${codingPolicy.policyId}@${codingPolicy.policyVersion}`);
   }
   const verdict = classifyTaxCodeForJurisdiction(taxCode, jurisdiction);

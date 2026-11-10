@@ -58,6 +58,19 @@ const validTaxRegistration = (rule) => Boolean(rule) && typeof rule === 'object'
   && nonemptyString(rule.profileField) && stringList(rule.recordLockedCodes) && validWithoutTax(rule.withoutTax)
   && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice'].every((key) => typeof rule[key] === 'function');
 
+// The country's no-VAT treatment labels (withoutTax.treatments), for the
+// policy-vocabulary checks: a coder may propose one only on a line whose
+// registration fact says not registered (transactionLlm.js admits it there),
+// so it is a valid label of that country although the standing vocabulary
+// does not list it. Whether it may post on the line's date is the posting
+// policy's decision. [] for a country without a registration declaration.
+export const withoutTaxTreatmentsFor = (jurisdiction) => {
+  try {
+    const treatments = resolvePostingPolicy({ jurisdiction }).taxRegistration?.withoutTax?.treatments;
+    return treatments ? [...new Set([treatments.purchase, treatments.sale])] : [];
+  } catch { return []; }
+};
+
 // Validate the selected declaration and its exact explicit capabilities. A malformed
 // handler never becomes an implicit no-op, and unsupported is different from missing.
 const validateDefinition = (definition, country) => {
