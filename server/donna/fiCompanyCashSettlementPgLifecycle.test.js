@@ -100,6 +100,9 @@ const boot = async (runToken, { gb = false, funding = 'company_cash', bankRows =
     // Coverage spans the receipt's date; the receipt's own line is absent
     // unless a scenario says otherwise.
     await uploadBank(bankRows || [['03.02.2025', 'TILISIIRTO VUOKRA HELMIKUU', 1200, currency], ['27.02.2025', 'TILISIIRTO SAHKO', 80, currency]], 'Tiliote-02.csv');
+    // Parsed before the receipt is uploaded: the two parses would otherwise
+    // race for the receipt's scripted extraction.
+    await app.tick({ functions: [PARSE] });
     app.providers.script('document_routing', [fiRoutingFixture('receipt')]);
     app.providers.script('unified_extraction', [extraction(currency)]);
     const receipt = await app.uploadDocument({ clientId, mimeType: 'application/pdf', documentType: 'receipt', filename: K01.filename,
