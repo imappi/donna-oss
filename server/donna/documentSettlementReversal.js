@@ -2,8 +2,9 @@
 // (docs/donna-settlement-answer-and-ledger-entry-plan.md §3's named follow-up,
 // built 2026-07-21; detection half: firmDb.applyDocumentPaymentStatusAfterMatch).
 //
-// THE POPULATION: documents the settlement lane booked as owner-funded
-// (payload.settlement_entry.journal_id — DR expense / CR owner funds 901)
+// THE POPULATION: documents the settlement lane booked as paid outside the
+// bank feed (payload.settlement_entry.journal_id — DR expense / CR owner
+// funds 901, or CR the market's cash account when the company's cash paid)
 // that NOW carry a settled bank-line match (confirmed/auto_matched): the
 // owner said "cash" and was wrong — the charge DID hit the feed. Left alone,
 // the settlement entry plus the coded bank line double-count the expense.
@@ -201,11 +202,18 @@ const recordPersonRequiredRefusal = async ({ client, firmId, clientId, document,
   return { recorded: true };
 };
 
+// The entry being reversed, as its own receipt names it: paid from the
+// owner's funds, or from the company's cash (documentSettlementFunding.js).
+const companyCashEntry = (settlementEntry) => settlementEntry?.funding_source === 'company_cash';
+const creditedAccountOf = (settlementEntry) => (companyCashEntry(settlementEntry)
+  ? settlementEntry?.settlement_account || 'company cash'
+  : settlementEntry?.owner_funds_account || 'owner funds');
+
 const reversalReasonFor = (document, match) => {
   const counterparty = document?.vendor_name || document?.customer_name || 'this receipt';
   return `Late bank line: ${counterparty} also settled through the bank feed `
     + `(match ${match?.match_id || 'unknown'}, bank line ${match?.bank_transaction_id || 'unknown'}). `
-    + `Reversing the owner-funds settlement entry so the expense books once, against the bank line.`;
+    + `Reversing the ${companyCashEntry(document?.settlement_entry) ? 'company-cash' : 'owner-funds'} settlement entry so the expense books once, against the bank line.`;
 };
 
 const buildReversalChecks = ({ settlementJournalRow, match }) => summarizeCheckReport([
@@ -251,7 +259,7 @@ const buildReversalProposalCard = ({ document, settlementEntry, match, checks, r
       after: {
         settlement_journal_id: settlementEntry?.journal_id || null,
         settlement_reversal: `Reversal journal of ${settlementEntry?.journal_id || 'the settlement entry'} `
-          + `(DR ${settlementEntry?.owner_funds_account || 'owner funds'} / CR ${settlementEntry?.expense_account || 'expense'} `
+          + `(DR ${creditedAccountOf(settlementEntry)} / CR ${settlementEntry?.expense_account || 'expense'} `
           + `${amount} ${document.currency || ''})`.trim()
       }
     }],
@@ -271,7 +279,9 @@ const buildReversalProposalCard = ({ document, settlementEntry, match, checks, r
       amount,
       currency: document.currency || '',
       expense_account: settlementEntry?.expense_account || null,
-      owner_funds_account: settlementEntry?.owner_funds_account || null,
+      ...(companyCashEntry(settlementEntry)
+        ? { funding_source: 'company_cash', settlement_account: settlementEntry?.settlement_account || null }
+        : { owner_funds_account: settlementEntry?.owner_funds_account || null }),
       settlement_channel: settlementEntry?.settlement_channel || null,
       authority_basis: SETTLEMENT_REVERSAL_AUTHORITY_BASIS,
       reason

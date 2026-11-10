@@ -4637,7 +4637,8 @@ export const __draftClientAskBatchWithClient = async ({
     currency: row.currency || '',
     date: row.document_date ? toIsoDay(row.document_date) : null,
     expense_account: row.settlement_entry?.expense_account || '',
-    settlement_channel: row.settlement_entry?.settlement_channel || ''
+    settlement_channel: row.settlement_entry?.settlement_channel || '',
+    funding_source: row.settlement_entry?.funding_source || 'owner'
   }));
   const settlementFyiDocumentIds = recordedSettlementLines.map((line) => line.document_id).filter(Boolean);
 
@@ -4659,6 +4660,7 @@ export const __draftClientAskBatchWithClient = async ({
     date: row.document_date ? toIsoDay(row.document_date) : null,
     expense_account: row.settlement_entry?.expense_account || '',
     settlement_channel: row.settlement_entry?.settlement_channel || '',
+    funding_source: row.settlement_entry?.funding_source || 'owner',
     bank_line_date: row.bank_line_date ? toIsoDay(row.bank_line_date) : null,
     bank_line_description: row.bank_line_description || ''
   }));
