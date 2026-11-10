@@ -191,7 +191,7 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
   });
   await t.test('unimplemented contract paths answer 501 in the error envelope', async () => {
     conformError(await api({ path: `/entities/${clientId}/chat`, token }), 501, 'NOT_IMPLEMENTED');
-    conformError(await api({ method: 'POST', path: '/notifications/registrations', token, body: { platform: 'ios', expo_push_token: 'x' } }), 501, 'NOT_IMPLEMENTED');
+    conformError(await api({ path: `/entities/${clientId}/activity`, token }), 501, 'NOT_IMPLEMENTED');
   });
 
   // ── Queue starts empty; status starts unchecked ─────────────────────────

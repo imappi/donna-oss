@@ -64,4 +64,9 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
   no-token / staff / foreign-entity / stale-candidate / replaced-ID (including
   a race) / non-Finnish / lookup refusals.
 
+- `mobilePushRegistrations.test.js` / `mobilePushRegistrationsPgLifecycle.test.js`
+  — device registrations (migration 170): validation, idempotency, a token
+  moving to another owner, removal, the not-yours 404, and registrations
+  ending with the owner's access (removal, client delete, collaborator row).
+
 `GAPS.md` lists what the contract asks for that Donna cannot say yet.
