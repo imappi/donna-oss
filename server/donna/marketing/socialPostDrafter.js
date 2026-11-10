@@ -10,7 +10,8 @@
 // result (the receipt), honest 503 when the provider is unavailable.
 
 import { BANDS, RECURRING_MONTHLY_PRICE, fmt } from '../../../src/lib/pricing.js';
-import { getOpenAiConfig, outputTextFromResponse } from './openAiConfig.js';
+import { llmCall } from '../llmCall.js';
+import { marketingFailureMessage, marketingKeyMissingMessage, marketingStructuredRequest, resolveMarketingProvider } from './openAiConfig.js';
 import { SOCIAL_CHAR_LIMIT_DEFAULT } from './socialPost.js';
 
 export const GENERATE_POSTS_DEFAULT = 5;
@@ -75,46 +76,33 @@ export const draftSocialPosts = async ({
   fetchImpl = fetch,
   openAiConfig = null
 } = {}) => {
-  const config = openAiConfig || getOpenAiConfig();
-  if (!config.apiKey) {
-    throw drafterUnavailable('OpenAI API key is not configured; the social drafter has no fallback copy by design.');
+  const resolved = resolveMarketingProvider({ openAiConfig });
+  if (!resolved.ok) {
+    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'social drafter'));
   }
   const wanted = Math.min(Math.max(1, Number(count) || GENERATE_POSTS_DEFAULT), GENERATE_POSTS_MAX);
 
-  const response = await fetchImpl('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
-      model: config.model,
+  let call;
+  try {
+    call = await llmCall(marketingStructuredRequest({
+      resolved,
       instructions: buildSocialPostInstructions({ maxChars, siteUrl, topicHint }),
       input: JSON.stringify({ posts_wanted: wanted }),
+      schemaName: 'marketing_social_posts',
+      schema: buildSocialBatchSchema(),
       store: false,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'marketing_social_posts',
-          strict: true,
-          schema: buildSocialBatchSchema()
-        }
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw drafterUnavailable(errorBody?.error?.message || `OpenAI social draft request failed with ${response.status}.`);
+      executionType: 'marketing_social_batch',
+      executionId: `posts:${wanted}`,
+      fetchImpl
+    }));
+  } catch (error) {
+    const message = marketingFailureMessage(resolved.provider, error);
+    if (!message) throw error;
+    throw drafterUnavailable(message);
   }
-
-  const payload = await response.json();
-  let parsed = null;
-  try {
-    parsed = JSON.parse(outputTextFromResponse(payload));
-  } catch {
-    throw drafterUnavailable('OpenAI returned an unreadable social batch.');
-  }
+  const parsed = call.result.parsed;
+  const payload = { model: call.result.model };
+  const config = { model: resolved.model };
 
   return {
     posts: (parsed.posts || []).slice(0, wanted).map((p) => ({

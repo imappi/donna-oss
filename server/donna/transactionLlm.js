@@ -6,7 +6,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
 import { llmCall } from './llmCall.js';
-import { shapeOpenAiCompatibleRequest } from './providerEndpoints.js';
+import { missingKeyNameFor, resolveTextLaneProvider, shapeOpenAiCompatibleRequest, TEXT_LANE_DEFAULT_MODELS } from './providerEndpoints.js';
+import { getLane } from './modelLanes.js';
+import { anthropicStructuredRequest, typedLlmCallFailure } from './structuredRequest.js';
 // The shared provider transport (2026-09-13): one deadline over headers +
 // body, capped by the worker's execution budget, and ONE typed failure for a
 // missing key, 401/403, 429/5xx, a reset socket, a hung request and an
@@ -94,6 +96,20 @@ const DEFAULT_MODEL = 'gpt-5.4';
 // the default openai path; any other qualified rung routes the deciding
 // call over the openai_compatible endpoint (Q9, the sole-model lab).
 export const CODING_DEFAULT_MODEL = DEFAULT_MODEL;
+// 2026-11-10 (owner's decision: Claude only): the coder is provider-agnostic
+// — Anthropic (claude-opus-5-5) when its key is present, OpenAI
+// (DEFAULT_MODEL above) only when no Anthropic key is configured;
+// OPENAI_MODEL stays the knob and may pin either family's id. A policy row
+// naming EITHER strong default keeps the default (resolved) path.
+export const CODING_ANTHROPIC_DEFAULT_MODEL = TEXT_LANE_DEFAULT_MODELS.anthropic;
+export const CODING_STRONG_DEFAULT_MODELS = Object.freeze([CODING_ANTHROPIC_DEFAULT_MODEL, DEFAULT_MODEL]);
+const CODING_PROVIDERS = getLane('transaction_coding').providers;
+// Effort `high`: the coding is applied to the books and resolves review
+// items — the intelligence-sensitive call of the text lanes. Both requests
+// stream (a 40-line batch with reasoning per line is long) under a longer
+// deadline than the default; the instructions are the cached prefix.
+const CODING_ANTHROPIC_EFFORT = 'high';
+const CODING_ANTHROPIC_TIMEOUT_MS = 300_000;
 
 let dotEnvCache = null;
 const merchantContextCache = new Map();
@@ -116,12 +132,19 @@ const readDotEnv = () => {
   return vars;
 };
 
+// Which provider codes, and with which model (providerEndpoints.js
+// resolveLaneProvider — the one resolver). `apiKey` / `model` keep the old
+// config shape so the OpenAI path below reads exactly as before.
 const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL || dotEnv.OPENAI_MODEL || DEFAULT_MODEL
-  };
+  const resolved = resolveTextLaneProvider({ providers: CODING_PROVIDERS, openAiDefaultModel: DEFAULT_MODEL, dotEnv: readDotEnv() });
+  return { ...resolved, apiKey: resolved.ok ? resolved.apiKey : '', model: resolved.model || DEFAULT_MODEL };
+};
+
+// The key-missing receipt names the provider the resolution was for (the
+// lane's first, Anthropic, when no key exists at all).
+const codingKeyMissing = (config) => {
+  const { provider, keyName } = missingKeyNameFor(config, CODING_PROVIDERS);
+  return providerFailureReceipt(providerKeyMissing(provider || 'anthropic', { keyName }));
 };
 
 const amountFor = (transaction = {}) => Number(transaction.money_in || transaction.money_out || transaction.amount || 0);
@@ -216,7 +239,7 @@ const autoExplainLimitForSuggestion = (suggestion = {}, transaction = {}) => {
 };
 
 const isProviderFailureReason = (reason = '') =>
-  /quota|billing|rate limit|rate_limit|insufficient_quota|api key|authentication|timeout|network|request failed|openai/i.test(String(reason || ''));
+  /quota|billing|rate limit|rate_limit|insufficient_quota|api key|authentication|timeout|network|request failed|openai|anthropic|declined the request|output limit/i.test(String(reason || ''));
 
 const displayReasonForFallback = (reason = '', transaction = {}) => {
   if (!reason) return 'Deterministic fallback suggestion.';
@@ -471,6 +494,38 @@ const openAiCodingCall = async ({ config, body, fetchImpl }) => {
     };
   }
   return { payload, text, parsed };
+};
+
+// The Anthropic coding call (2026-11-10): the SAME instructions, input and
+// schema as the OpenAI body, on the Messages API through the shared
+// envelope (structuredRequest.js). Same return contract as
+// openAiCodingCall: `{ payload, parsed }` (payload = the served model id and
+// response id) or `{ provider_failure }` — a refusal, an output cut at
+// max_tokens, no credit, a bad key, a rate limit, a timeout and an
+// unreadable or schema-breaking body all come back typed, never as a coding.
+const anthropicCodingCall = async ({ config, instructions: callInstructions, input, schema, executionId, maxTokens, fetchImpl }) => {
+  if (!config.apiKey) return { provider_failure: codingKeyMissing(config) };
+  try {
+    const { result } = await llmCall(anthropicStructuredRequest({
+      apiKey: config.apiKey,
+      model: config.model,
+      system: callInstructions,
+      user: JSON.stringify(input),
+      schema,
+      effort: CODING_ANTHROPIC_EFFORT,
+      maxTokens,
+      stream: true,
+      cacheSystem: true,
+      timeoutMs: CODING_ANTHROPIC_TIMEOUT_MS,
+      execution: { root: { type: 'transaction_coding', id: executionId } },
+      fetchImpl: fetchImpl || fetch
+    }));
+    return { payload: { model: result.model, id: result.response_id }, parsed: result.parsed };
+  } catch (error) {
+    const typed = typedLlmCallFailure('anthropic', error);
+    if (!typed) throw error;
+    return { provider_failure: typed.receipt() };
+  }
 };
 
 // Q9 (Kari's dated sole-model lab call, 2026-08-16): the coding lane's
@@ -1269,7 +1324,7 @@ export const suggestTransactionCodingBatch = async ({
         ...makeDeterministicTransactionSuggestion({ clientProfile, xeroAccounts, transaction })
       })),
       group_summary: [],
-      provider_failure: providerFailureReceipt(providerKeyMissing('openai', { keyName: 'OPENAI_API_KEY' }))
+      provider_failure: codingKeyMissing(config)
     };
   }
 
@@ -1365,7 +1420,17 @@ export const suggestTransactionCodingBatch = async ({
     // a timeout and an unreadable body all come back as the SAME
     // `provider_failure` contract: a TRANSPORT fact about this call, never
     // a coding verdict about the line — the writer persists nothing.
-    const call = await openAiCodingCall({
+    // Anthropic (2026-11-10) answers the same body's content when its key
+    // is the one resolved; OpenAI only otherwise.
+    const call = config.provider === 'anthropic' ? await anthropicCodingCall({
+      config,
+      instructions: batchCallInstructions,
+      input,
+      schema: batchSchema,
+      executionId: cleanTransactions[0]?.id || 'batch',
+      maxTokens: 64000,
+      fetchImpl
+    }) : await openAiCodingCall({
       config,
       fetchImpl,
       body: {
@@ -1394,7 +1459,10 @@ export const suggestTransactionCodingBatch = async ({
       };
     }
     parsed = call.parsed;
-    receipt = { source: 'openai_batch', model: config.model, response_id: call.payload.id || '', extra: {} };
+    receipt = config.provider === 'anthropic'
+      // The served model id (llmCall rail 5) and the provider choice.
+      ? { source: 'anthropic_batch', model: call.payload.model || config.model, response_id: call.payload.id || '', extra: { provider: 'anthropic', provider_source: config.source?.provider || null } }
+      : { source: 'openai_batch', model: config.model, response_id: call.payload.id || '', extra: {} };
   }
 
   const transactionsById = new Map(enrichedTransactions.map((transaction) => [transaction.id, transaction]));
@@ -1531,7 +1599,7 @@ export const suggestTransactionCoding = async ({
     // persists nothing and surfaces the cause.
     return {
       ...makeDeterministicTransactionSuggestion({ clientProfile, xeroAccounts, transaction: enrichedTransaction }),
-      provider_failure: providerFailureReceipt(providerKeyMissing('openai', { keyName: 'OPENAI_API_KEY' }))
+      provider_failure: codingKeyMissing(config)
     };
   }
 
@@ -1611,7 +1679,15 @@ export const suggestTransactionCoding = async ({
     };
   }
 
-  const call = await openAiCodingCall({
+  const call = config.provider === 'anthropic' ? await anthropicCodingCall({
+    config,
+    instructions: callInstructions,
+    input,
+    schema: suggestionSchema,
+    executionId: enrichedTransaction.id || 'transaction',
+    maxTokens: 32000,
+    fetchImpl
+  }) : await openAiCodingCall({
     config,
     fetchImpl,
     body: {
@@ -1639,11 +1715,12 @@ export const suggestTransactionCoding = async ({
     };
   }
   const { payload, parsed } = call;
+  const anthropic = config.provider === 'anthropic';
 
-  return sanitizeSuggestion(
+  const suggestion = sanitizeSuggestion(
     {
       ...parsed,
-      source: 'openai',
+      source: anthropic ? 'anthropic' : 'openai',
       model: payload.model || config.model,
       response_id: payload.id || ''
     },
@@ -1652,4 +1729,5 @@ export const suggestTransactionCoding = async ({
     taxOptions,
     clientProfile
   );
+  return anthropic ? { ...suggestion, provider: 'anthropic', provider_source: config.source?.provider || null } : suggestion;
 };

@@ -14,8 +14,10 @@
 import { BANDS, RECURRING_MONTHLY_PRICE, fmt } from '../../../src/lib/pricing.js';
 import { UNSUBSCRIBE_PLACEHOLDER } from './marketingOutbound.js';
 // Strong-model default + OPENAI_MODEL override + .env fallback — shared with
-// the dossier drafter (openAiConfig.js) so the convention lives in one place.
-import { getOpenAiConfig, outputTextFromResponse } from './openAiConfig.js';
+// the dossier drafter (openAiConfig.js) so the convention lives in one place;
+// since 2026-11-10 it also resolves the provider (Anthropic first).
+import { llmCall } from '../llmCall.js';
+import { marketingFailureMessage, marketingKeyMissingMessage, marketingStructuredRequest, resolveMarketingProvider } from './openAiConfig.js';
 
 // Segment-specific guidance: the waitlist stores WHY the gate said no, so the
 // nurture is honest about fit — kinder gate, never looser. The gates are an
@@ -91,49 +93,34 @@ const drafterUnavailable = (message) => {
 // `model` is the provider-RETURNED id (CLAUDE.md "the model id is part of the
 // receipt") — that is what gets stamped on the marketing_draft row.
 export const draftNurtureEmail = async ({ lead, fetchImpl = fetch, openAiConfig = null } = {}) => {
-  const config = openAiConfig || getOpenAiConfig();
-  if (!config.apiKey) {
-    throw drafterUnavailable('OpenAI API key is not configured; the nurture drafter has no fallback copy by design.');
+  const resolved = resolveMarketingProvider({ openAiConfig });
+  if (!resolved.ok) {
+    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'nurture drafter'));
   }
 
-  const response = await fetchImpl('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
-      model: config.model,
+  let call;
+  try {
+    call = await llmCall(marketingStructuredRequest({
+      resolved,
       instructions: buildNurtureInstructions(),
       input: JSON.stringify(buildNurtureInput(lead)),
+      schemaName: 'marketing_nurture_draft',
+      schema: buildDraftSchema(),
       store: false,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'marketing_nurture_draft',
-          strict: true,
-          schema: buildDraftSchema()
-        }
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw drafterUnavailable(errorBody?.error?.message || `OpenAI draft request failed with ${response.status}.`);
+      executionType: 'marketing_nurture_lead',
+      executionId: lead?.id || lead?.email,
+      fetchImpl
+    }));
+  } catch (error) {
+    const message = marketingFailureMessage(resolved.provider, error);
+    if (!message) throw error;
+    throw drafterUnavailable(message);
   }
-
-  const payload = await response.json();
-  let parsed = null;
-  try {
-    parsed = JSON.parse(outputTextFromResponse(payload));
-  } catch {
-    throw drafterUnavailable('OpenAI returned an unreadable nurture draft.');
-  }
+  const parsed = call.result.parsed;
 
   return {
     subject: String(parsed.subject || '').trim(),
     body: String(parsed.body || '').trim(),
-    model: payload.model || config.model
+    model: call.result.model || resolved.model
   };
 };

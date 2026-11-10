@@ -79,3 +79,15 @@ test('a blank override knob counts as unset; a DARK lane never names an override
   assert.match(dark.line, /openai DARK — no OPENAI_API_KEY/);
   assert.ok(!dark.line.includes('override'));
 });
+
+test('2026-11-10: the Anthropic-only appliance — every text lane is on the LIT Anthropic line', () => {
+  const r = buildModelLaneReceipt({ ANTHROPIC_API_KEY: 'sk-ant-x' });
+  assert.equal(r.anthropic, true);
+  assert.match(r.line, /anthropic LIT \(/);
+  for (const lane of ['coding (batch coder)', 'ask drafting', 'memory extraction', 'owner invoice commands', 'document chat', 'marketing drafters + reply reader']) {
+    assert.ok(MODEL_LANES.anthropic.includes(lane), lane);
+  }
+  assert.match(r.line, /openai DARK — no OPENAI_API_KEY \([^)]*the text lanes only when no Anthropic key is set/);
+  const pinned = buildModelLaneReceipt({ ANTHROPIC_API_KEY: 'sk-ant-x', OPENAI_MODEL: 'claude-opus-4-8' });
+  assert.match(pinned.line, /anthropic LIT — OPENAI_MODEL override: claude-opus-4-8 \(text lanes\)/);
+});

@@ -36,12 +36,57 @@
 //     of the receipt (CLAUDE.md).
 //  6. Retries are a TYPED count, not a log line.
 
-import { captureCloudProviderProvenance } from './cloudProviderProvenance.js';
-import { persistCloudDependencyEvidence } from './cloudDependencyEvidence.js';
+// The cloud-evidence modules are loaded when a call first retains evidence,
+// not at import: their graph (hostCertificateA.js and the stores behind it)
+// would otherwise put every module that imports the envelope into an import
+// cycle with the db layer (2026-11-10, when the text lanes moved onto it).
+let cloudEvidenceModules = null;
+const loadCloudEvidence = () => {
+  cloudEvidenceModules ||= Promise.all([
+    import('./cloudProviderProvenance.js'),
+    import('./cloudDependencyEvidence.js')
+  ]).then(([provenance, dependency]) => ({
+    captureCloudProviderProvenance: provenance.captureCloudProviderProvenance,
+    persistCloudDependencyEvidence: dependency.persistCloudDependencyEvidence
+  }));
+  return cloudEvidenceModules;
+};
 import { currentExecutionBudget } from './executionBudget.js';
 import { providerFetchWithDeadline } from './providerTransport.js';
+import { assembleAnthropicEventStream, statusForStreamError } from './anthropicEventStream.js';
 
 const nowMs = (now) => (typeof now === 'function' ? now() : Date.now());
+
+// The provider's own error classification (type/code strings, never the
+// body) rides on the thrown error so the caller's status classification
+// (providerTransport.js classifyProviderStatus) can name the cause — an
+// exhausted credit balance, a bad key — the way it does for its own fetches.
+const providerErrorFields = (payload) => {
+  const error = payload?.error;
+  if (!error || typeof error !== 'object') return null;
+  const pick = (value) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 80) : null);
+  const fields = { type: pick(error.type), code: pick(error.code) };
+  return fields.type || fields.code ? fields : null;
+};
+
+// A streamed request (`body.stream === true`) is read to its end and the
+// server-sent events reassembled into the one Message a non-streamed call
+// returns (anthropicEventStream.js); a JSON body (an error answered before
+// the stream began, or a recorded test response) reads as JSON. Measurement
+// stays the same either way: the payload this returns is what the rails see.
+const readPayload = async (response, streamed) => {
+  const contentType = String(response?.headers?.get?.('content-type') || '');
+  if (streamed && /event-stream/i.test(contentType) && typeof response.text === 'function') {
+    const { payload, error, complete } = assembleAnthropicEventStream(await response.text());
+    if (error) return { payload: { ...(payload || {}), error }, streamError: error };
+    if (!complete) {
+      const truncated = { type: 'api_error', message: 'the event stream ended before message_stop' };
+      return { payload: { ...(payload || {}), error: truncated }, streamError: truncated };
+    }
+    return { payload: payload || {}, streamError: null };
+  }
+  return { payload: await response.json(), streamError: null };
+};
 
 // The five prompt sections G3 names. Fixed vocabulary: a caller inventing a
 // sixth would silently fall out of the accounting, so unknown keys are recorded
@@ -191,14 +236,21 @@ export const llmCall = async ({
       // budget) is a typed failure and must surface as one — never "no
       // payload, status OK". Any other body-read error stays what it was:
       // an empty payload the status decides.
-      payload = await response.json().catch((error) => {
+      let streamError = null;
+      ({ payload, streamError } = await readPayload(response, body?.stream === true).catch((error) => {
         if (error?.providerFailure === true) throw error;
-        return {};
-      });
-      if (response.ok) { lastError = null; break; }
+        return { payload: {}, streamError: null };
+      }));
+      if (response.ok && !streamError) { lastError = null; break; }
       lastError = Object.assign(
         new Error(payload?.error?.message || `${provider || 'provider'} returned ${response.status}`),
-        { code: 'LLM_CALL_PROVIDER_ERROR', status: response.status }
+        {
+          code: 'LLM_CALL_PROVIDER_ERROR',
+          // A mid-stream error event after a 200 carries the status its
+          // type stands for (an overload mid-stream is a 529, not a 200).
+          status: streamError ? statusForStreamError(streamError.type) : response.status,
+          provider_error: providerErrorFields(payload)
+        }
       );
     } catch (error) {
       lastError = error;
@@ -230,7 +282,7 @@ export const llmCall = async ({
       // RAIL 1 — sizes only.
       prompt_sections: measureSections(sections),
       ok: !lastError && Boolean(response?.ok),
-      status: response?.status ?? null
+      status: lastError?.status ?? response?.status ?? null
     };
   } catch (telemetryError) {
     (logger || console).warn?.('[llmCall] telemetry capture failed; the call result is unaffected', {
@@ -242,6 +294,7 @@ export const llmCall = async ({
 
   const retainCloudProvenance = async (error = null) => {
     try {
+      const { captureCloudProviderProvenance, persistCloudDependencyEvidence } = await loadCloudEvidence();
       const evidence = captureCloudProviderProvenance({ url, headers, response, payload, error, observedAt: new Date(nowMs(now)).toISOString() });
       if (evidence) {
         if (telemetry) telemetry.cloud_dependency_evidence = evidence;

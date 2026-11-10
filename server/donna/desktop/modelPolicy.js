@@ -75,6 +75,19 @@ export const resolveQualifiedBackends = (policy, capability) => {
   return row.qualified || [];
 };
 
+// Which qualified backends of a capability can answer on THIS host: the
+// cloud ones whose key is present (key PRESENCE only, never the value).
+// 2026-11-10 (owner's decision: Donna runs on Claude only): with only an
+// Anthropic key every capability has a lit qualified backend — Anthropic is
+// listed first on every row; OpenAI is the alternative.
+const BACKEND_KEY_ENV = Object.freeze({ anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY' });
+export const resolveLitBackends = (policy, capability, env = process.env) =>
+  resolveQualifiedBackends(policy, capability)
+    .filter((backend) => {
+      const keyName = BACKEND_KEY_ENV[backend.provider];
+      return keyName ? String(env?.[keyName] || '').trim().length > 0 : false;
+    });
+
 // The current policy: Bridge. Provider-level in v0 — model-id pinning (and
 // deprecation dates, minimum runtime version) arrives with the signed feed;
 // today the concrete model ids stay where they already live, in the

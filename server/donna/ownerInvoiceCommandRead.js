@@ -28,12 +28,21 @@ import {
   buildCommandSchema
 } from './ownerInvoiceCommand.js';
 import { llmCall } from './llmCall.js';
+import { getLane } from './modelLanes.js';
+import { missingKeyNameFor, resolveTextLaneProvider } from './providerEndpoints.js';
+import { anthropicStructuredRequest, openAiResponsesText, typedLlmCallFailure } from './structuredRequest.js';
 
 // Reading an owner's sentence into the facts that become a real invoice to a
 // real counterparty is the load-bearing call on this lane — strong model by
-// default, OPENAI_MODEL stays the override knob. Same convention (and the same
-// deliberate local resolver) as askPipeline.js and outbound/replyIngestion.js.
+// default, OPENAI_MODEL stays the override knob (it may pin a claude-* id).
+// 2026-11-10 (owner's decision: Claude only): the lane is provider-agnostic —
+// Anthropic (claude-opus-5-5) when its key is present, OpenAI (this default)
+// only when no Anthropic key is configured. Effort `high`: one short owner
+// sentence becomes an invoice to a real counterparty, so depth is cheap here
+// and a misread is not.
 const DEFAULT_MODEL = 'gpt-5.4';
+const LANE_PROVIDERS = getLane('owner_invoice_command_read').providers;
+const ANTHROPIC_EFFORT = 'high';
 
 let dotEnvCache = null;
 const readDotEnv = () => {
@@ -54,26 +63,13 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL || dotEnv.OPENAI_MODEL || DEFAULT_MODEL
-  };
-};
+const resolveReader = ({ openAiConfig = null, env = process.env } = {}) => resolveTextLaneProvider({
+  providers: LANE_PROVIDERS, openAiDefaultModel: DEFAULT_MODEL, env, dotEnv: readDotEnv(), openAiConfig
+});
 
-export const isOwnerInvoiceCommandReaderConfigured = () => Boolean(getOpenAiConfig().apiKey);
+export const isOwnerInvoiceCommandReaderConfigured = () => resolveReader().ok;
 
-const outputTextFromResponse = (payload) => {
-  if (typeof payload?.output_text === 'string' && payload.output_text) return payload.output_text;
-  const chunks = [];
-  for (const item of payload?.output || []) {
-    for (const part of item?.content || []) {
-      if (typeof part?.text === 'string') chunks.push(part.text);
-    }
-  }
-  return chunks.join('');
-};
+const outputTextFromResponse = openAiResponsesText;
 
 // One owner sentence → one strict-schema reading. Returns
 // { reading, model, telemetry } with the RAW reading; the caller applies the
@@ -102,13 +98,54 @@ export const readOwnerInvoiceCommand = async ({
   // to the command without inventing a second identity.
   sourceMessageId = null
 } = {}) => {
-  const config = openAiConfig || getOpenAiConfig();
-  if (!config.apiKey) throw new Error('OPENAI_API_KEY is not configured');
+  const resolved = resolveReader({ openAiConfig });
+  if (!resolved.ok) {
+    const { keyName } = missingKeyNameFor(resolved, LANE_PROVIDERS);
+    throw new Error(`${keyName || 'ANTHROPIC_API_KEY'} is not configured`);
+  }
 
   const instructions = buildCommandInstructions();
   const input = buildCommandInput({ messageText, buyerCandidates, today });
   const schema = buildCommandSchema();
+  // MEASURED, then dropped — the envelope keeps sizes, never contents.
+  const sections = { system: instructions, tools: schema, context: buyerCandidates, history: messageText };
+  const execution = { root: { type: 'owner_invoice_command_message', id: sourceMessageId || 'unattributed' } };
 
+  if (resolved.provider === 'anthropic') {
+    let call;
+    try {
+      call = await llmCall(anthropicStructuredRequest({
+        apiKey: resolved.apiKey,
+        model: resolved.model,
+        system: instructions,
+        user: typeof input === 'string' ? input : JSON.stringify(input),
+        schema,
+        effort: ANTHROPIC_EFFORT,
+        maxTokens: 16000,
+        sections,
+        execution,
+        fetchImpl
+      }));
+    } catch (error) {
+      // THROWS, as the OpenAI path does: runOwnerInvoiceCommand settles the
+      // command REFUSED with this message as the receipt. The typed failure
+      // (a refusal, an output cut at max_tokens, no credit, a bad key, a
+      // rate limit) is named in it and rides along as `provider_failure`.
+      const typed = typedLlmCallFailure('anthropic', error);
+      if (!typed) throw error;
+      throw Object.assign(new Error(typed.message), { provider_failure: typed.receipt(), telemetry: error?.telemetry || null });
+    }
+    return {
+      reading: call.result.parsed,
+      // The id the API served (llmCall rail 5), never the configured one.
+      model: call.result.model || call.telemetry?.model || resolved.model,
+      provider: 'anthropic',
+      provider_source: resolved.source?.provider || null,
+      telemetry: call.telemetry
+    };
+  }
+
+  const config = { apiKey: resolved.apiKey, model: resolved.model };
   const { result, telemetry } = await llmCall({
     provider: 'openai',
     url: 'https://api.openai.com/v1/responses',
@@ -129,9 +166,8 @@ export const readOwnerInvoiceCommand = async ({
         }
       }
     },
-    // MEASURED, then dropped — the envelope keeps sizes, never contents.
-    sections: { system: instructions, tools: schema, context: buyerCandidates, history: messageText },
-    execution: { root: { type: 'owner_invoice_command_message', id: sourceMessageId || 'unattributed' } },
+    sections,
+    execution,
     parseResponse: (payload) => ({
       reading: JSON.parse(outputTextFromResponse(payload)),
       model: payload.model || config.model
@@ -139,5 +175,5 @@ export const readOwnerInvoiceCommand = async ({
     fetchImpl
   });
 
-  return { ...result, telemetry };
+  return { ...result, provider: 'openai', provider_source: resolved.source?.provider || null, telemetry };
 };

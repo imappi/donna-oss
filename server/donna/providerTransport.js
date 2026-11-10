@@ -52,7 +52,13 @@ export const PROVIDER_FAILURE_CODES = Object.freeze({
   TIMEOUT: 'PROVIDER_TIMEOUT',
   NETWORK: 'PROVIDER_NETWORK',
   INVALID_OUTPUT: 'PROVIDER_INVALID_OUTPUT',
-  SPEND_LIMIT: 'PROVIDER_SPEND_LIMIT'
+  SPEND_LIMIT: 'PROVIDER_SPEND_LIMIT',
+  // 2026-11-10 (the Claude-only text lanes): an HTTP 200 that carries no
+  // answer the lane may read. The Messages API names why it stopped
+  // (`stop_reason`); a refusal and a cut-off at max_tokens are each a
+  // provider fact with its own receipt, never a parse error or a verdict.
+  REFUSED: 'PROVIDER_REFUSED',
+  OUTPUT_LIMIT: 'PROVIDER_OUTPUT_LIMIT'
 });
 
 export const PROVIDER_FAILURE_OWNERS = Object.freeze(['operator', 'queue']);
@@ -162,6 +168,33 @@ export const providerInvalidOutput = (provider, { detail = null, status = 200, m
     owner: 'queue'
   });
 
+// The model declined the request (Messages API `stop_reason: "refusal"`).
+// Not retryable as the same request; no verdict exists. `category` is the
+// provider's stop_details category when it gave one (never content).
+export const providerRefused = (provider, { model = null, category = null } = {}) =>
+  new ProviderFailureError({
+    code: PROVIDER_FAILURE_CODES.REFUSED,
+    provider,
+    status: 200,
+    reason: category ? `refusal:${String(category).slice(0, 60)}` : 'refusal',
+    message: `${model || providerLabel(provider)} declined the request${category ? ` (${category})` : ''}.`,
+    retryable: false,
+    owner: 'operator'
+  });
+
+// The answer stopped at the request's max_tokens: whatever text exists is
+// incomplete and is not read. Retryable (the queue may re-ask).
+export const providerOutputLimit = (provider, { model = null, maxTokens = null } = {}) =>
+  new ProviderFailureError({
+    code: PROVIDER_FAILURE_CODES.OUTPUT_LIMIT,
+    provider,
+    status: 200,
+    reason: 'max_tokens',
+    message: `${model || providerLabel(provider)} stopped at the output limit${Number.isFinite(Number(maxTokens)) && maxTokens ? ` (${maxTokens} tokens)` : ''}; the answer is incomplete.`,
+    retryable: true,
+    owner: 'queue'
+  });
+
 // ── Classification ─────────────────────────────────────────────────────────
 // HTTP statuses where a retry can plausibly succeed (Anthropic 529 is its
 // Overloaded status; the rest are the standard slow-gateway family).
@@ -172,7 +205,18 @@ const providerErrorMessage = (payload, fallback) => {
   return typeof message === 'string' && message.trim() ? message.trim() : fallback;
 };
 
+// Out of credit is recorded as what it is. OpenAI already names it in its
+// error code (`insufficient_quota`, carried through as the reason below);
+// Anthropic answers a `billing_error`, or an `invalid_request_error` whose
+// message says the credit balance is too low — named `insufficient_credit`
+// here instead of the generic error type. The code (and so the retry
+// posture) stays the one the status gives; only the reason names the cause.
+const isAnthropicNoCredit = (payload) =>
+  String(payload?.error?.type ?? '').toLowerCase() === 'billing_error'
+  || /credit balance is too low/i.test(String(payload?.error?.message ?? ''));
+
 const providerErrorReason = (payload) => {
+  if (isAnthropicNoCredit(payload)) return 'insufficient_credit';
   const code = payload?.error?.code ?? payload?.error?.type;
   return typeof code === 'string' && code.trim() ? code.trim().slice(0, 80) : null;
 };

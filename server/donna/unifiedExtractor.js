@@ -53,7 +53,7 @@ import { buildClientIdentityPromptFragment } from './clientIdentityPrompt.js';
 import { buildCorrectionsPromptFragment } from './documentCorrections.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { normalizeIsoOrDayFirstDate, normalizeValidIsoDate, normalizeIsoCurrency } from './parsePrimitives.js';
-import { classifyModelProvenance } from './providerEndpoints.js';
+import { classifyModelProvenance, resolveLaneProvider } from './providerEndpoints.js';
 import { validateReceiptTotals } from './totalsValidation.js';
 import { extractionFailureForStatus } from './inngest/parseErrors.js';
 import { isDesktopHostEnv } from './desktop/hostPlaneSeed.js';
@@ -89,10 +89,6 @@ export const UNIFIED_EXTRACTOR_PROVIDERS = Object.freeze(['anthropic', 'openai']
 export const UNIFIED_EXTRACTOR_DEFAULT_MODELS = Object.freeze({
   anthropic: 'claude-opus-4-8',
   openai: 'gpt-5.4'
-});
-const PROVIDER_KEY_ENV = Object.freeze({
-  anthropic: 'ANTHROPIC_API_KEY',
-  openai: 'OPENAI_API_KEY'
 });
 
 // Env the module still reads — each in a class the flags rail permits:
@@ -151,49 +147,20 @@ export const unifiedExtractorServes = ({ documentType, env = process.env, hostCl
 // (only when it belongs to the resolved provider — a claude id never goes
 // to OpenAI), else the provider's strong default. Every choice is receipted
 // (`source`) so a silent downgrade is readable from the data.
-const inferProviderFromModel = (model) => {
-  const id = String(model || '').trim().toLowerCase();
-  if (!id) return null;
-  if (id.startsWith('claude')) return 'anthropic';
-  if (/^(gpt|o\d|chatgpt)/.test(id)) return 'openai';
-  return null;
-};
-
-export const resolveUnifiedProvider = ({ env = process.env, provider = null, model = null, keys = null } = {}) => {
-  const keyFor = (name) => String((keys && name in keys ? keys[name] : env?.[PROVIDER_KEY_ENV[name]]) || '').trim();
-  const envProvider = String(env?.[UNIFIED_EXTRACTOR_PROVIDER_ENV] || '').trim().toLowerCase();
-  const envModel = String(env?.[UNIFIED_EXTRACTOR_MODEL_ENV] || '').trim();
-  const requestedModel = String(model || '').trim() || null;
-
-  let chosen = null;
-  let providerSource = null;
-  if (provider) { chosen = String(provider).trim().toLowerCase(); providerSource = 'param'; }
-  else if (envProvider) { chosen = envProvider; providerSource = 'env'; }
-  else if (inferProviderFromModel(requestedModel || envModel)) {
-    chosen = inferProviderFromModel(requestedModel || envModel);
-    providerSource = 'model_id';
-  } else {
-    chosen = UNIFIED_EXTRACTOR_PROVIDERS.find((name) => keyFor(name)) || null;
-    providerSource = 'key_presence';
-  }
-  if (!chosen) return { ok: false, provider: null, model: null, apiKey: '', reason: 'no_provider_key', source: { provider: providerSource, model: null } };
-  if (!UNIFIED_EXTRACTOR_PROVIDERS.includes(chosen)) {
-    return { ok: false, provider: chosen, model: null, apiKey: '', reason: `unknown_provider:${chosen}`, source: { provider: providerSource, model: null } };
-  }
-  const apiKey = keyFor(chosen);
-  if (!apiKey) {
-    return { ok: false, provider: chosen, model: null, apiKey: '', reason: `no_provider_key:${chosen}`, source: { provider: providerSource, model: null } };
-  }
-  let resolvedModel = UNIFIED_EXTRACTOR_DEFAULT_MODELS[chosen];
-  let modelSource = 'default';
-  if (requestedModel) { resolvedModel = requestedModel; modelSource = 'param'; }
-  else if (envModel) {
-    const belongsTo = inferProviderFromModel(envModel);
-    if (!belongsTo || belongsTo === chosen) { resolvedModel = envModel; modelSource = 'env'; }
-    else modelSource = 'default_env_model_other_provider';
-  }
-  return { ok: true, provider: chosen, model: resolvedModel, apiKey, reason: null, source: { provider: providerSource, model: modelSource } };
-};
+// The resolver itself is shared (providerEndpoints.js resolveLaneProvider,
+// 2026-11-10): the text lanes moved onto both providers resolve by the same
+// rule, so it has one owner. This lane keeps its own env knobs and defaults.
+export const resolveUnifiedProvider = ({ env = process.env, provider = null, model = null, keys = null } = {}) =>
+  resolveLaneProvider({
+    providers: UNIFIED_EXTRACTOR_PROVIDERS,
+    defaultModels: UNIFIED_EXTRACTOR_DEFAULT_MODELS,
+    providerEnvKey: UNIFIED_EXTRACTOR_PROVIDER_ENV,
+    modelEnvKeys: [UNIFIED_EXTRACTOR_MODEL_ENV],
+    env,
+    provider,
+    model,
+    keys
+  });
 
 // ── prompt ─────────────────────────────────────────────────────────────
 // The system prompt's FIRST sentence is the lane signature the recorded

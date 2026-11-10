@@ -14,7 +14,7 @@ import {
   assessGraduation, deriveGateMetrics
 } from './graduationBar.js';
 import {
-  CURRENT_MODEL_POLICY, MODEL_POLICY_FORMAT, resolveQualifiedBackends, validateModelPolicy
+  CURRENT_MODEL_POLICY, MODEL_POLICY_FORMAT, resolveLitBackends, resolveQualifiedBackends, validateModelPolicy
 } from './modelPolicy.js';
 
 const blob = ({ model, fixtures = 100, fp = 0, fn = 0, errored = 0, suite = 'reconciliation' }) => ({
@@ -144,4 +144,12 @@ test('bridge state refuses a capability with no qualified cloud backend', () => 
 
 test('the default bar values are the documented scaffold placeholders', () => {
   assert.deepEqual(DEFAULT_GRADUATION_BAR, { gate1_parity_epsilon: 0, gate2_stated_delta: 0.1, min_fixtures: 20 });
+});
+
+test('2026-11-10: with only an Anthropic key every capability has a lit qualified backend, Anthropic first', () => {
+  for (const capability of GRADUATION_CAPABILITIES) {
+    assert.equal(resolveQualifiedBackends(CURRENT_MODEL_POLICY, capability)[0].provider, 'anthropic', capability);
+    assert.deepEqual(resolveLitBackends(CURRENT_MODEL_POLICY, capability, { ANTHROPIC_API_KEY: 'sk-ant-x', OPENAI_API_KEY: '' }), [{ provider: 'anthropic' }], capability);
+    assert.deepEqual(resolveLitBackends(CURRENT_MODEL_POLICY, capability, {}), [], `${capability}: no key, nothing lit`);
+  }
 });
