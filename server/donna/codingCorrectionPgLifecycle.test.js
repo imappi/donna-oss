@@ -376,6 +376,64 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'canary',actorId:'member',actorType:'firm_member',reason:'Restore synthetic correction authority'}));
  result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-refusal'));
  assert.equal(result.find(r=>r.transactionId==='contended-refusal').state,'completed',JSON.stringify(result));
+ // 6./7. A serialization failure or a deadlock in the REPEATABLE READ scan is
+ // the same transient condition as a held fence: never a blocked code. A second
+ // connection holds the case's row in an uncommitted update before the tick;
+ // the scan's snapshot predates it and its rotation update waits on that row.
+ const waitingOn=async pid=>{for(let i=0;i<400;i++){
+  if((await pool.query('select 1 from pg_stat_activity where $1=any(pg_blocking_pids(pid))',[pid])).rowCount)return;
+  await new Promise(r=>setTimeout(r,25));}throw new Error('the scan never waited on the held row');};
+ const holdRow=async id=>{const holder=await pool.connect();await holder.query('begin');
+  const pid=(await holder.query('select pg_backend_pid() as pid')).rows[0].pid;
+  await holder.query('update transactions set updated_at=updated_at where id=$1',[id]);return {holder,pid};};
+ //   6. The holder commits while the scan waits: 40001, could not serialize.
+ await seed('serialization-scan');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ beforeCase=await caseOf('serialization-scan');contendedCalls=calls;
+ {const {holder,pid}=await holdRow('serialization-scan');
+  try{const tick=recoverPostedCodingCorrectionsInDb(onlyCase('serialization-scan'));tick.catch(()=>{});
+   await waitingOn(pid);await holder.query('commit');result=await tick;}
+  finally{await holder.query('rollback').catch(()=>{});holder.release();}}
+ assert.deepEqual(await assertContended('serialization-scan',result,0),beforeCase,'a serialization failure leaves the case as it was');
+ assert.equal(calls,contendedCalls,'no model call is spent on a serialization failure');
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('serialization-scan'));
+ assert.equal(result.find(r=>r.transactionId==='serialization-scan').state,'completed',JSON.stringify(result));
+ //   7. The holder then asks for the scan's own lease: 40P01, deadlock detected.
+ // The holder's deadlock_timeout is longer, so the scan is the one aborted.
+ await seed('deadlock-scan');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ beforeCase=await caseOf('deadlock-scan');contendedCalls=calls;
+ {const {holder,pid}=await holdRow('deadlock-scan');
+  try{await holder.query("set deadlock_timeout='30s'");
+   const tick=recoverPostedCodingCorrectionsInDb(onlyCase('deadlock-scan'));tick.catch(()=>{});
+   await waitingOn(pid);
+   await holder.query("select pg_advisory_lock(hashtextextended('coding-correction:f:deadlock-scan',0))");
+   await holder.query('rollback');await holder.query('select pg_advisory_unlock_all()');result=await tick;}
+  finally{await holder.query('rollback').catch(()=>{});await holder.query('select pg_advisory_unlock_all()').catch(()=>{});holder.release();}}
+ assert.deepEqual(await assertContended('deadlock-scan',result,0),beforeCase,'a deadlock leaves the case as it was');
+ assert.equal(calls,contendedCalls,'no model call is spent on a deadlock');
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('deadlock-scan'));
+ assert.equal(result.find(r=>r.transactionId==='deadlock-scan').state,'completed',JSON.stringify(result));
+ //   A case stored before this rule as blocked:40001 is pending again on the
+ //   next contended tick, with no receipt, like a stored 55P03 (section 4).
+ await seed('serialization-legacy');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await pool.query(`update transactions set payload=jsonb_set(payload,'{coding_correction_required,recovery}',
+  '{"state":"blocked","code":"40001","details":null,"attempted_at":"2026-01-01T00:00:00.000Z"}'::jsonb) where id='serialization-legacy'`);
+ assert.equal(convergenceForTransaction(await tx('serialization-legacy')).reason,'posted_evidence_correction_blocked:40001');
+ release=await holdFence();
+ try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('serialization-legacy'));}finally{await release();}
+ await assertContended('serialization-legacy',result,0);
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('serialization-legacy'));
+ assert.equal(result.find(r=>r.transactionId==='serialization-legacy').state,'completed',JSON.stringify(result));
+ // 8. A programming error is neither transient nor a refusal: it is stored as
+ // an unexpected failure with its message, and the case is taken again.
+ await seed('unexpected-error');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ result=await recoverPostedCodingCorrectionsInDb({...onlyCase('unexpected-error'),suggestFn:async()=>{throw new TypeError('synthetic programming error');}});
+ assert.equal(result.find(r=>r.transactionId==='unexpected-error').code,'CODING_CORRECTION_FAILED',JSON.stringify(result));
+ stored=await caseOf('unexpected-error');
+ assert.equal(stored.recovery.state,'blocked');assert.equal(stored.recovery.details.message,'synthetic programming error');
+ assert.equal(stored.recovery.details.cause_name,'TypeError');assert.equal(await failureCount('unexpected-error'),1);
+ assert.equal(stored.recovery.attempts,0,'a programming error returns the reasoning slot it claimed');
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('unexpected-error'));
+ assert.equal(result.find(r=>r.transactionId==='unexpected-error').state,'completed',JSON.stringify(result));
 
  // A waiting owner case cannot consume the bounded clock's only slot forever.
  await seed('a-waiting',{amount:1245,incoming:false,document:false});

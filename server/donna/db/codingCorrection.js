@@ -14,7 +14,7 @@ import { hasJevResolvedCoding, JEV_DOCUMENT_ASK_SELECTIONS } from '../jevDecisio
 import { assertExecutionBudgetActive } from '../executionBudget.js';
 import { checkEntityReadinessAdmissionWithClient, EntityReadinessAdmissionError, evaluateRetainedProcessingScopeWithClient } from '../runtimeReadinessAdmission.js';
 import { withFirmDbClient } from './pool.js';
-import { isFenceContention } from './codingPolicyContext.js';
+import { isFenceContention, isUnexpectedFailure, unexpectedFailureDetails } from './codingPolicyContext.js';
 import { taxRegistrationRuleFor, taxRegistrationPeriodState } from './taxRegistrationChange.js';
 import { isTransactionSyncedToXero } from './xero.js';
 import { rowToTransactionPayload } from './transactions.js';
@@ -438,7 +438,12 @@ export async function recoverPostedCodingCorrectionsInDb({firmId,limit=3,runWork
         results.push({...scope,state:'contended',retryable:true});
         continue;
       }
-      const code=error.code || 'CODING_CORRECTION_FAILED',details=error.details || null;
+      // A named refusal is recorded as itself. An error with no business code
+      // (a raw SQLSTATE, a programming error) is recorded as what it is, an
+      // unexpected failure with its message, never under that raw code.
+      const unexpected=isUnexpectedFailure(error);
+      if(unexpected)console.error('[coding_correction] unexpected failure (case blocked, receipted)',{transaction_id:row.id,code:error?.code || null,message:error?.message || String(error),stack:error?.stack || null});
+      const code=unexpected?'CODING_CORRECTION_FAILED':error.code,details=unexpected?unexpectedFailureDetails(error):error.details || null;
       const state=needsReconsideration({code,details})?'failed':'blocked';
       await withFirmDbClient(async client=>{
         await client.query('begin');
