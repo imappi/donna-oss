@@ -59,7 +59,8 @@ test('every contract operation is either routed or answers NOT_IMPLEMENTED — n
     'POST /entities/{entityId}/documents/upload-intent',
     'POST /entities/{entityId}/documents/{documentId}/resolve-duplicate',
     'POST /entities/{entityId}/documents/{documentId}/retry',
-    'POST /entities/{entityId}/queue/cards/{cardId}/decision'
+    'POST /entities/{entityId}/queue/cards/{cardId}/decision',
+    'POST /me/deletion-request'
   ]);
   assert.equal(operations.length - implemented.length, NOT_IMPLEMENTED.length, 'one 501 entry per remaining operation');
 });

@@ -55,4 +55,10 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
   expired-token / admin-token refusals; every response validated against the
   contract.
 
+- `mobileDeletionRequest.test.js` / `mobileDeletionRequestPgLifecycle.test.js` —
+  `POST /me/deletion-request`: the server-written message in both languages,
+  one request per owner identity with its per-firm audit row, the repeat and
+  concurrent repeat, the refusals, and that no book, document, principal or
+  assignment changed.
+
 `GAPS.md` lists what the contract asks for that Donna cannot say yet.
