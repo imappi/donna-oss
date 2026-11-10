@@ -149,13 +149,15 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     // SG C4b R3: enclosing worker now authenticates existing accepted native sources under the existing fence. This resting-group SELECT, targets and count remain unchanged.
     // SG native fence (2026-09-28): the enclosing worker compares without a fence, takes the per-client row fence (NOWAIT) only before rewriting, and skips a contended or failed client for the tick. This resting-group SELECT, targets and count remain unchanged.
     // select t.* from transactions t where t.firm_id=$1 and t.client_id=$2 and __DYNAMIC_SQL__ order by t.id for update of t skip locked
-    ["recoverChangedCodingEvidenceInDb/callback","dynamic_sql","a4f64cea2c6a00babf9dee45632a529c727acc0b808bcd84413fd783cd7170fe",1,[]],
+    // Re-pinned 2026-11-10 (UK VAT posting checks): the resting-group SELECT, targets and count are unchanged; the enclosing body now reads the unresolved-treatment refusal codes from UNRESOLVED_TREATMENT_REFUSALS (FI and GB) instead of one Finnish literal. No memory target.
+    ["recoverChangedCodingEvidenceInDb/callback","dynamic_sql","26b220b2f23ac8c68c6fb75f7534196f458ddda99f304ee00798d99f9fe24efd",1,[]],
   ]),
   ...group("server/donna/db/ledger.js", "Reviewed source-read fences inside the existing posting writer. Interpolation selects only fixed FOR UPDATE clauses; settlement-row and transaction reads remain firm/client scoped. Accounting mutations still use the existing journal writer, with no memory mutation added.", [
     // select m.id as match_id, m.matched_line_id, m.status, dl.line_no, dl.description as row_label, dl.amount as row_net, dl.payload->'raw_extraction'->'settlement_row' as settlement_row, d.id as document_
     ["resolveSettlementRowSplit","dynamic_sql","a69ab2145d7ada16af8f0add9800370e3420d471c2ec3247fda33afaf4e3d6ce",1,[]],
     // select * from transactions where firm_id = $1 and client_id = $2 and id = $3__DYNAMIC_SQL__
-    ["prepareLedgerTransactionPosting","dynamic_sql","75b76fe816f68b4d4113859853c83b09576a3a196b00dff610624d2097d6f04e",1,[]],
+    // Re-pinned 2026-11-10 (UK VAT posting checks): the SELECT, targets and count are unchanged; the enclosing body now passes the posting context's profile to assertPostableTaxCoding. No memory target.
+    ["prepareLedgerTransactionPosting","dynamic_sql","eb68e8adda83631b22311bbe4d245ddb931dcce7cc6396e8a0cbddf0679d13aa",1,[]],
   ]),
   ...group("server/donna/jevMaterialException.js", "Reviewed evidence freshness SELECT under FOR SHARE NOWAIT. The table name comes only from the eight literal evidence table names in evidenceRows, and ids are parameters selected from the already scoped packet. No model-provided identifier or memory writer is admitted. Rehashed 2026-11-05: the owner body imports extractJson from ./extractJson.js instead of the retired ./runtime.js; the SELECT is unchanged.", [
     // select id from __DYNAMIC_SQL__ where firm_id=$1 and id=any($2::text[]) order by id for share nowait
@@ -970,7 +972,7 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/reconciliationDelegatedAuthorityMetrics.js", "Existing runtime SQL boundary in server/donna/reconciliationDelegatedAuthorityMetrics.js.", [
     // select count(*)::int as total, count(*) filter (where status = 'active')::int as active, count(*) filter (where status = 'revoked')::int as revoked, count(*) filter (where status = 'suspended')::int as suspended, count(*) filter (where use_ …
-    ["queryGrants", "dynamic_sql", "ddc0367eb1dfed918d80f07e2b3b9eeaa85dedf68cd78eec99f4252c9e9f8de1", 1, []],
+    ["queryGrants", "dynamic_sql", "4bc9b9c66769aa0be2b070de8d5321b0b08a6fe9e9f7cd4c90fb23ccd2a2ad6f", 1, []], // "used" now reads the accept receipts on reconciliation_matches (one owner for grant usage); still a read, no memory table.
     // select count(*)::int as total, count(*) filter (where status = 'suggested')::int as open, … from reconciliation_matches where … band = 'suggested' and reasons = ["above_materiality_ceiling"] …
     ["queryHeldMatches", "dynamic_sql", "b9fb5ffc731d8a2af657a938f42b3c619cc6b92a9e6c46a48669ae0f05965d08", 1, []],
     // select count(*)::int as count, coalesce(avg(match_amount), 0)::float as avg_amount, coalesce(array_agg(distinct payload->'authorization'->>'model') filter (where payload->'authorization'->>'model' is not null), '{}') as models from reconcil …

@@ -5,9 +5,11 @@
 //   - an overdue ask below the send ceiling is NUDGED through the first
 //     send's own fan-out: with OWNER_EMAIL_ASKS on, one email + one ledger
 //     row, and send_count moves only through the deliverer's bump;
-//   - no channel delivered: a portal-visible ask is a portal nudge (count +1,
-//     as before); an ask nobody can see escalates ('owner_unreachable')
-//     without inflating the count;
+//   - no channel delivered: a portal-visible ask is a portal reminder (no sent
+//     stamp moves — the portal is not a delivery; the step is recorded in
+//     request_payload.portal_reminders and counts toward escalation); an ask
+//     nobody can see escalates ('owner_unreachable') without inflating the
+//     count;
 //   - send containment / readiness refusal ⇒ nothing sent, nothing counted;
 //   - an overdue ask AT the ceiling is ESCALATED exactly once
 //     (request_payload.escalated_to_firm + due_at cleared + audit
@@ -105,7 +107,7 @@ await test('shadow: the would-run is receipted, nothing mutated', async () => {
   assert.ok(!hasCall(client, 'update client_evidence_requests'), 'nothing mutated at shadow');
 });
 
-await test('canary, no channel delivered, owner can see the portal: portal nudge — send_count +1, due_at advanced, audited', async () => {
+await test('canary, no channel delivered, owner can see the portal: portal reminder — no sent stamp, step recorded, due_at advanced, audited', async () => {
   const client = makeMockClient([
     notContained,
     cannedConfig(configRowAt('canary')),
@@ -120,11 +122,14 @@ await test('canary, no channel delivered, owner can see the portal: portal nudge
   assert.equal(out.portal, 1);
   assert.equal(out.delivered, 0);
   assert.equal(out.escalated, 0);
-  const nudge = client.calls.find((c) => c.sql.includes('set send_count = $3'));
-  assert.ok(nudge, 'portal nudge update ran');
-  assert.equal(nudge.params[2], 2, 'send_count 1 → 2');
-  assert.equal(nudge.params[4], new Date(NOW + 7 * 86400000).toISOString(), 'due_at advanced one interval');
-  assert.ok(hasCall(client, 'evidence_request.nudged'), 'nudge audited');
+  assert.ok(!client.calls.some((c) => /set send_count|last_sent_at =/.test(c.sql)), 'no sent stamp moves');
+  const nudge = client.calls.find((c) => c.sql.includes("'portal_reminders'"));
+  assert.ok(nudge, 'portal reminder update ran');
+  assert.equal(nudge.params[2], new Date(NOW + 7 * 86400000).toISOString(), 'due_at advanced one interval');
+  assert.deepEqual(JSON.parse(nudge.params[4]), [new Date(NOW).toISOString()], 'the step is recorded as a portal reminder');
+  const audit = client.calls.find((c) => c.sql.includes('evidence_request.nudged'));
+  assert.ok(audit, 'nudge audited');
+  assert.deepEqual([JSON.parse(audit.params[3]).surface, JSON.parse(audit.params[3]).send_count, JSON.parse(audit.params[3]).portal_reminder_count], ['portal', 1, 1]);
   assert.ok(!hasCall(client, 'due_at = null'), 'no escalation ran');
 });
 
@@ -184,6 +189,7 @@ await test('email channel on: the nudge is ONE real email, ONE ledger row, send_
   assert.equal(ledger[0].params[4], 'evr-1');
   assert.equal(h.sendCount(), 2, 'the deliverer bumped send_count once');
   assert.ok(!hasCall(h.client, 'set send_count = $3'), 'the sweep never bumps a delivered nudge itself');
+  assert.equal(JSON.parse(h.client.calls.find((c) => c.sql.includes('evidence_request.nudged')).params[3]).send_count, 2, 'the audit names the delivered count');
   const rearm = h.client.calls.find((c) => c.sql.includes('set due_at = $3'));
   assert.equal(rearm.params[2], new Date(NOW + 7 * 86400000).toISOString(), 'clock re-armed');
   const audit = h.client.calls.find((c) => c.sql.includes('evidence_request.nudged'));
@@ -279,7 +285,7 @@ await test('a poisoned row rolls back alone; the rest of the sweep continues', a
     portalRecipient,
     cannedOverdue([OVERDUE_ROW({ id: 'evr-bad' }), OVERDUE_ROW({ id: 'evr-good' })]),
     {
-      match: 'set send_count = $3',
+      match: "'portal_reminders'",
       rows: () => {
         if (!failedOnce) { failedOnce = true; throw new Error('boom'); }
         return [];
@@ -294,4 +300,30 @@ await test('a poisoned row rolls back alone; the rest of the sweep continues', a
   assert.equal(out.errors, 1);
   assert.equal(out.nudged, 1);
   assert.ok(callsMatching(client, 'rollback').length >= 1, 'poisoned row rolled back');
+});
+
+await test('portal reminders count toward escalation like the sends they replace; those before a "still unpaid" answer do not', async () => {
+  const twoPortal = { portal_reminders: ['2026-06-28T10:00:00.000Z', '2026-07-05T10:00:00.000Z'] };
+  const client = makeMockClient([
+    notContained,
+    cannedConfig(configRowAt('canary')),
+    cannedOverdue([
+      // one delivered send + two portal reminders, unanswered: the third step.
+      OVERDUE_ROW({ id: 'evr-portal-3', request_payload: twoPortal }),
+      // the same, but the owner answered "still unpaid" after the first portal reminder.
+      OVERDUE_ROW({ id: 'evr-portal-ack', request_payload: { ...twoPortal,
+        obligation_open_acknowledged: { at: '2026-06-30T10:00:00.000Z', send_count: 1 } } })
+    ]),
+    { match: 'to_regclass', rows: [{ present: 'x' }] },
+    { match: 'from bookkeeping_cases', rows: [{ id: 'case-9', status: 'open' }] },
+    portalRecipient
+  ]);
+  const out = await runAskReaskSweep({ client, firmId: 'firm-1', clientId: 'client-1', now: NOW,
+    deps: { deliver: darkFanout, evaluateAdmission: admitted } });
+  assert.equal(out.escalated, 1);
+  assert.equal(out.portal, 1);
+  const escalate = client.calls.find((c) => c.sql.includes('due_at = null'));
+  assert.ok(escalate.params.includes('evr-portal-3'));
+  const marker = JSON.parse(escalate.params.find((p) => typeof p === 'string' && p.includes('escalated_to_firm'))).escalated_to_firm;
+  assert.deepEqual([marker.reason, marker.send_count, marker.portal_reminder_count], ['owner_unresponsive', 1, 2]);
 });

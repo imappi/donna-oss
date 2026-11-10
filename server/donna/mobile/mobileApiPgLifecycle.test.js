@@ -320,6 +320,8 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
     [askId])).rows;
   assert.equal(audit.length, 1, JSON.stringify(audit));
   assert.deepEqual([audit[0].actor_type, audit[0].actor_id], ['client', IDENTITIES.owner.email], 'attributed to the owner');
+  assert.equal((await appliance.query('select metadata->>\'channel\' channel from audit_events where id = $1', [audit[0].id])).rows[0].channel, 'mobile',
+    'the reply writer’s row says the answer came from the phone');
   assert.ok(decided.receipt.audit_event_ids.includes(audit[0].id), 'the receipt is the writer’s own audit row');
   assert.deepEqual(decided.receipt.actor, { type: 'owner', terminal: 'mobile' });
   assert.deepEqual(decided.receipt.changes, [{ target: card.id, applied: true, error: null }]);
@@ -389,6 +391,40 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
   const flaggedAgain = conform('/entities/{entityId}/queue/cards/{cardId}/decision', 'POST',
     await api({ method: 'POST', path: `${fyiPath}/decision`, token, body: { type: 'veto_flag' } }));
   assert.deepEqual([flaggedAgain.applied, flaggedAgain.already], [false, 'flagged']);
+
+  // The decision writers' own audit rows carry the owner's note and the
+  // channel, in the decision's transaction, attributed to the owner.
+  const decisionAudit = async (resourceId, action) => (await appliance.query(
+    'select id::text id, actor_type, actor_id, metadata from audit_events where resource_id = $1 and action = $2 order by id',
+    [resourceId, action])).rows;
+  const [approvedRow] = await decisionAudit('action-held', 'outbound_action.approved');
+  assert.equal(approvedRow.metadata.channel, 'mobile');
+  assert.ok(approved.receipt.audit_event_ids.includes(approvedRow.id));
+  const [markedRow] = await decisionAudit('action-sent', 'outbound_action.marked_wrong');
+  assert.deepEqual([markedRow.actor_type, markedRow.actor_id, markedRow.metadata.note, markedRow.metadata.channel],
+    ['owner', IDENTITIES.owner.email, 'Wrong customer.', 'mobile'], JSON.stringify(markedRow));
+  assert.ok(flagged.receipt.audit_event_ids.includes(markedRow.id));
+  await insertAction('action-held-decline', 'hold_for_approval', 'hold_for_approval');
+  await insertAction('action-held-web', 'hold_for_approval', 'hold_for_approval');
+  const declinePath = `/entities/${clientId}/queue/cards/${encodeURIComponent('outbound_action:action-held-decline')}`;
+  const declined = conform('/entities/{entityId}/queue/cards/{cardId}/decision', 'POST', await api({
+    method: 'POST', path: `${declinePath}/decision`, token, body: { type: 'reject', note: '  This customer paid in cash last week.  ' }
+  }));
+  assert.deepEqual([declined.applied, declined.card.state], [true, 'rejected']);
+  const [cancelledRow] = await decisionAudit('action-held-decline', 'outbound_action.cancelled');
+  assert.deepEqual([cancelledRow.actor_type, cancelledRow.actor_id, cancelledRow.metadata.note, cancelledRow.metadata.channel],
+    ['owner', IDENTITIES.owner.email, 'This customer paid in cash last week.', 'mobile'], JSON.stringify(cancelledRow));
+  assert.ok(declined.receipt.audit_event_ids.includes(cancelledRow.id), 'the receipt is the row that holds the note');
+  // The web portal's owner, through the same firm route: the same note home,
+  // no channel.
+  const ownerWebToken = idp.openElsewhere('owner');
+  const webDecision = await appliance.api.request({ method: 'POST', path: '/api/donna/firms/outbound/owner-actions/decide',
+    headers: { authorization: `Bearer ${ownerWebToken}` },
+    body: { firm_id: firmId, client_id: clientId, action_id: 'action-held-web', decision: 'decline', note: 'Not this month.', channel: 'mobile' } });
+  assert.equal(webDecision.status, 200, webDecision.text);
+  const [webRow] = await decisionAudit('action-held-web', 'outbound_action.cancelled');
+  assert.equal(webRow.metadata.note, 'Not this month.');
+  assert.equal(webRow.metadata.channel, undefined, 'a body cannot claim the phone channel; the web row has none');
   const settled = conform('/entities/{entityId}/queue', 'GET', await api({ path: `/entities/${clientId}/queue`, token }));
   assert.equal(settled.needs_you_count, after.needs_you_count);
 

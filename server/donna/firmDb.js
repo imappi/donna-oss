@@ -471,6 +471,7 @@ export {
   __getTelegramDeliveryByMessageIdWithClient,
   __getWhatsAppDeliveryByMessageIdWithClient,
   __mintWhatsAppBindTokenWithClient,
+  __readAwaitingOwnerAskWithClient,
   __recordMessageDeliveryLedgerWithClient,
   __redeemWhatsAppBindTokenWithClient,
   __revokeWhatsAppBindingWithClient,

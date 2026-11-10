@@ -1980,7 +1980,11 @@ export const resolveClientEvidenceRequestInDb = async ({
   // out-of-band (phone / their own email / in person). Rides the SAME resolve
   // spine as a portal reply — recode, evidence link, loops inbox event — the
   // affordance is attribution plumbing, never a second reply pipeline.
-  answerSource = null
+  answerSource = null,
+  // The surface that carried the reply ('mobile' for the phone app), set by
+  // the route from the in-process request only; absent for the web portal.
+  // Audit attribution only.
+  channel = null
 } = {}) => {
   const cleanRequestId = String(evidenceRequestId || '').trim();
   const cleanReply = String(reply || '').trim();
@@ -2148,7 +2152,8 @@ export const resolveClientEvidenceRequestInDb = async ({
               reply: responsePayload.reply,
               responded_at: responsePayload.responded_at
             } : {}),
-            ...(cleanAnswerSource ? { answer_source: cleanAnswerSource } : {})
+            ...(cleanAnswerSource ? { answer_source: cleanAnswerSource } : {}),
+            ...(channel === 'mobile' ? { channel } : {})
           }),
           cleanNextReviewState ? 'evidence_request.resolve' : 'evidence_request.reply',
           actorType || 'system'
@@ -3244,12 +3249,14 @@ export const resendClientEvidenceRequestInDb = async ({
       };
     }
 
+    // The fan-out names what it delivered; the read below only reports the
+    // stamps the deliverers left (each delivering channel moves the count).
+    const delivered = Array.isArray(channelFanout?.delivered) && channelFanout.delivered.includes(row.id);
     const after = await client.query(
       'select send_count, last_sent_at from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
       [firmId, cleanRequestId]
     );
     const nextSendCount = Number(after.rows[0]?.send_count ?? priorSendCount);
-    const delivered = nextSendCount > priorSendCount;
 
     await client.query(
       `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
@@ -4717,6 +4724,11 @@ export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientI
     deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
   results.email = await attempt('email', () =>
     deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  // The asks at least one deliverer actually delivered (each deliverer reports
+  // the asks the provider accepted, the same ones it stamped). Callers read
+  // this instead of re-reading send_count.
+  results.delivered = [...new Set(['whatsapp', 'sms', 'telegram', 'email']
+    .flatMap((channel) => (Array.isArray(results[channel]?.delivered) ? results[channel].delivered : [])))];
   return results;
 };
 

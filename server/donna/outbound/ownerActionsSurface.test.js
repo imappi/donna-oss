@@ -20,7 +20,7 @@ import test from 'node:test';
 import {
   readOwnerActionsSurface, decideOwnerAction, editOwnerHeldDraft,
   actOnOwnerReceivableCase, markOwnerAutoSentWrong, reverseOwnerAutoSentPost,
-  setOwnerActionPartyLanguage
+  setOwnerActionPartyLanguage, normalizeOwnerNote
 } from './ownerActionsSurface.js';
 import {
   editHeldOutboundActionDraft, EDITABLE_DRAFT_RENDER_KEYS
@@ -282,6 +282,38 @@ test('unknown decision refuses with a 400', async () => {
     }),
     (error) => error.code === 'OUTBOUND_DECISION_UNKNOWN' && error.statusCode === 400
   );
+});
+
+test('a decline note and the channel land on the cancel writer’s own audit row; no note rides an approval', async () => {
+  const held = heldAction();
+  const client = makeClient({
+    actionById: held,
+    overrides: [
+      { match: "set status = 'cancelled'", rows: [{ ...held, status: 'cancelled', prior_status: 'hold_for_approval' }] },
+      { match: 'insert into outbound_earned_auto', rows: [{ id: 'ea-1', state: 'counting', clean_streak: 0 }] },
+      { match: "set status = 'stopped'", rows: [] }
+    ]
+  });
+  await decideOwnerAction(client, {
+    firmId: FIRM, clientId: CLIENT, actionId: held.id, decision: 'decline',
+    actorType: 'owner', actorId: 'owner@books.example', note: '  Paid in cash.  ', channel: 'mobile'
+  });
+  const cancelledCall = client.calls.find((c) => c.sql.toLowerCase().includes('insert into audit_events') && c.params?.[4] === 'outbound_action.cancelled');
+  const cancelled = { metadata: JSON.parse(cancelledCall.params[7]) };
+  assert.equal(cancelled.metadata.note, 'Paid in cash.');
+  assert.equal(cancelled.metadata.channel, 'mobile');
+  const begin = client.calls.findIndex((c) => c.sql.trim().toLowerCase() === 'begin');
+  const commit = client.calls.findIndex((c) => c.sql.trim().toLowerCase() === 'commit');
+  const auditAt = client.calls.findIndex((c) => c.sql.toLowerCase().includes('insert into audit_events') && c.params[4] === 'outbound_action.cancelled');
+  assert.ok(begin < auditAt && auditAt < commit, 'in the decision’s transaction');
+
+  await assert.rejects(decideOwnerAction(makeClient({ actionById: heldAction() }), {
+    firmId: FIRM, clientId: CLIENT, actionId: 'a-1', decision: 'approve', actorType: 'owner', note: 'Fine.'
+  }), (error) => error.code === 'OWNER_NOTE_NOT_ACCEPTED' && error.statusCode === 400);
+  assert.equal(normalizeOwnerNote(null), null);
+  assert.equal(normalizeOwnerNote('   '), null);
+  assert.throws(() => normalizeOwnerNote('x'.repeat(2001)), (error) => error.code === 'OWNER_NOTE_INVALID' && error.statusCode === 400);
+  assert.throws(() => normalizeOwnerNote(42), (error) => error.code === 'OWNER_NOTE_INVALID');
 });
 
 // ── The edit verb (D1 contract: the recorder lives at the writer) ────────────

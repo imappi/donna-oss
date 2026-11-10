@@ -85,6 +85,28 @@ export const createCloudPilotUpload = async ({ firmId, clientId, principal, buck
     }
   });
 
+// The file type and size the SERVER signed for one quarantine key, for a
+// register caller that holds no trusted copy (the phone contract's register
+// item carries neither; the adapter signed the intent a moment earlier).
+// createCloudPilotUpload wrote both from values it checked, under a key it
+// minted. Returned only for the newest intent of this exact key, version and
+// principal — the row validateCloudPilotRegistration reads — so nothing is
+// lifted from another person's upload. The registration check against this
+// row and the byte verification (size and SHA-256) are unchanged. Null when
+// no such intent exists (not a pilot book, or not this person's upload).
+export const readCloudUploadIntentFileFacts = async ({ query, firmId, clientId, key, principal }) => {
+  if (!firmId || !clientId || typeof key !== 'string' || !key.startsWith(`${firmId}/${clientId}/__quarantine__/`)) return null;
+  const type = principal?.principalType, id = principal?.principalId;
+  if (!type || !id) return null;
+  const intent = (await query(`select metadata from audit_events where firm_id=$1 and client_id=$2 and action=$3
+    and resource_type='evidence_upload' and resource_id=$4 order by id desc limit 1`,
+  [firmId, clientId, CLOUD_UPLOAD_INTENT_ACTION, key])).rows[0]?.metadata;
+  if (!intent || intent.version !== 'donna.cloud-evidence-intake.v1' || intent.key !== key
+    || intent.principal?.type !== type || intent.principal?.id !== id
+    || typeof intent.mime_type !== 'string' || !Number.isInteger(intent.size)) return null;
+  return { mime_type: intent.mime_type, size: intent.size };
+};
+
 export const validateCloudPilotRegistration = async ({ client,firmId,document,principal }) => {
   if (!await cloudPilotIntakeApplies(client,{firmId,clientId:document.client_id})) return null;
   const actor = cloudUploadPrincipal(principal);

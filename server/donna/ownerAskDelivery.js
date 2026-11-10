@@ -42,6 +42,14 @@ export const OWNER_SEND_REFUSED_ACTION = 'evidence_request.send_refused';
 // (replied, resolved, cancelled, merged away) is not to be sent again.
 export const AWAITING_OWNER_STATUSES = Object.freeze(['draft', 'open']);
 
+// A re-ask step that reached the owner only as a question waiting in the portal
+// (askReaskCadence.js). It is not a delivery, so it never moves send_count; the
+// sweep records it here (ISO timestamps, oldest first) and counts it toward the
+// escalation bound alongside the delivered sends.
+export const portalRemindersOf = (row) => (Array.isArray(row?.request_payload?.portal_reminders)
+  ? row.request_payload.portal_reminders.filter((at) => typeof at === 'string' && at)
+  : []);
+
 // The client-level decision. `{ allowed: true }`, or `{ allowed: false, code,
 // admission?, error? }`. Fail closed: an unreadable gate is a refusal, never a
 // send (the caller that must surface the raw error — the first send, inside its
@@ -164,7 +172,8 @@ const openFirmEscalationBlocker = async (client, { firmId, clientId, request, re
       objectType: 'client_evidence_request', objectId: request.id,
       reason: reason === 'owner_unreachable'
         ? 'owner_unreachable: no channel delivered and nobody can see the question in the portal; escalated to the firm queue.'
-        : `owner_unresponsive: no answer after ${request.send_count} sends; escalated to the firm queue.`
+        : `owner_unresponsive: no answer after ${request.send_count} sends${portalRemindersOf(request).length
+          ? ` and ${portalRemindersOf(request).length} portal reminders` : ''}; escalated to the firm queue.`
     });
     return true;
   } catch {
@@ -179,10 +188,12 @@ const openFirmEscalationBlocker = async (client, { firmId, clientId, request, re
 // holds no open transaction.
 export const escalateAskToFirmWithClient = async (client, { firmId, clientId, row, nowIso, reason }) => {
   const sendCount = Number(row.send_count || 0);
+  const portalReminderCount = portalRemindersOf(row).length;
   const escalation = {
     at: nowIso,
     reason,
     send_count: sendCount,
+    ...(portalReminderCount ? { portal_reminder_count: portalReminderCount } : {}),
     first_sent_at: row.first_sent_at ? new Date(row.first_sent_at).toISOString() : null
   };
   await client.query('begin');
@@ -255,13 +266,16 @@ export const deliverOwnerFollowUpWithClient = async ({
     return out;
   }
 
-  const after = await readAskStates(client, { firmId, clientId, ids: waiting });
+  // The fan-out names the asks a deliverer delivered; the re-read is only for
+  // the rest (still waiting, or answered while the fan-out ran).
+  const deliveredIds = new Set(Array.isArray(channelFanout?.delivered) ? channelFanout.delivered : []);
+  out.delivered = waiting.filter((id) => deliveredIds.has(id));
+  const rest = waiting.filter((id) => !deliveredIds.has(id));
+  const after = rest.length ? await readAskStates(client, { firmId, clientId, ids: rest }) : new Map();
   const undelivered = [];
-  for (const id of waiting) {
-    const prior = Number(before.get(id)?.send_count || 0);
+  for (const id of rest) {
     const now = after.get(id);
-    if (Number(now?.send_count ?? prior) > prior) out.delivered.push(id);
-    else if (AWAITING_OWNER_STATUSES.includes(now?.status)) undelivered.push(now);
+    if (AWAITING_OWNER_STATUSES.includes(now?.status)) undelivered.push(now);
     else out.skipped.push(id); // answered while the fan-out ran
   }
   if (!undelivered.length) return out;
