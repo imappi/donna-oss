@@ -61,7 +61,7 @@ const mintFor = async ({ profile, transaction = DEBIT }) => {
   const client = makeMockClient([
     { match: 'and id = $3', rows: [transaction] },
     { match: 'from clients where firm_id', rows: [{ id: 'client-1', company_name: 'Esimerkki Oy', legal_names: [], jurisdiction: 'FI' }] },
-    { match: 'select profile from clients', rows: [{ profile }] }
+    { match: 'select jurisdiction, profile from clients', rows: [{ profile }] }
   ]);
   const mints = [];
   const bodies = [];

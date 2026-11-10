@@ -370,8 +370,10 @@ const readPriorDispositionLane = async ({ client, firmId, clientId, transactionI
 // mint/audit so the per-line transaction rolls back.
 // The owner's language for a question this lane mints: one profile read
 // through the one resolver (the pure builder above takes the result).
-const readOwnerLanguage = async ({ client, firmId, clientId }) => preferredOwnerTemplateLanguage(
-  (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows?.[0]?.profile);
+const readOwnerLanguage = async ({ client, firmId, clientId }) => {
+  const row = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows?.[0];
+  return preferredOwnerTemplateLanguage(row?.profile, row);
+};
 
 const resolveNeedsHumanLane = async ({ client, firmId, clientId, transaction, semantic, direction, laneDeps = null }) => {
   const deps = { ...defaultNeedsHumanLaneDeps(), ...(laneDeps || {}) };

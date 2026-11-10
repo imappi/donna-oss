@@ -1183,14 +1183,14 @@ test('owner language — the second-round clarification questions, in Finnish an
 });
 
 test('owner language — both mint paths read the owner language from the client profile', async () => {
-  const sweepClient = makeMockClient([...sweepResponses({ candidates: [EXXON_DOC] }), { match: 'select profile from clients', rows: [{ profile: { jurisdiction: 'FI' } }] }]);
+  const sweepClient = makeMockClient([...sweepResponses({ candidates: [EXXON_DOC] }), { match: 'select jurisdiction, profile from clients', rows: [{ profile: { jurisdiction: 'FI' } }] }]);
   const sweepStubs = makeLaneStubs();
   await runDocumentDispositionForClient({
     client: sweepClient, firmId: 'firm-1', clientId: 'client-1', mode: 'shadow',
     apiKeyOverride: 'sk-test', fetchImpl: makeFetchOk(NEEDS_HUMAN), laneDeps: sweepStubs.laneDeps
   });
   assert.match(sweepStubs.mints[0].question, /^Kuitti \(Exxon, 41,20 USD, päivätty 14\.5\.2026, exxon-receipt\.pdf\): Mitä tämä tosite koskee/);
-  const replyClient = makeMockClient([...replyResponses(), { match: 'select profile from clients', rows: [{ profile: { locale: 'fi-FI' } }] }]);
+  const replyClient = makeMockClient([...replyResponses(), { match: 'select jurisdiction, profile from clients', rows: [{ profile: { locale: 'fi-FI' } }] }]);
   const replyStubs = makeLaneStubs();
   await runOwnerReplyRedisposition({
     ...REPLY_ARGS, client: replyClient, apiKeyOverride: 'sk-test', fetchImpl: makeFetchOk(NEEDS_HUMAN), laneDeps: replyStubs.laneDeps
@@ -1213,7 +1213,7 @@ test('owner language — the sweep prompt carries the owner language for owner_q
     const bodies = [];
     const stubs = makeLaneStubs();
     await runDocumentDispositionForClient({
-      client: makeMockClient([...sweepResponses({ candidates: [EXXON_DOC] }), { match: 'select profile from clients', rows: [{ profile }] }]),
+      client: makeMockClient([...sweepResponses({ candidates: [EXXON_DOC] }), { match: 'select jurisdiction, profile from clients', rows: [{ profile }] }]),
       firmId: 'firm-1', clientId: 'client-1', mode: 'shadow', apiKeyOverride: 'sk-test',
       fetchImpl: recordedProvider(reply, bodies), laneDeps: stubs.laneDeps
     });

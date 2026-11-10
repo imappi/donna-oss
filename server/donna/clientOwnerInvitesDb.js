@@ -86,8 +86,8 @@ const tx = async (db, fn) => {
 
 const loadClientRow = async (db, { firmId, clientId, lock = false }) => {
   const row = (await db.query(lock
-    ? 'select id, firm_id, company_name, profile from clients where firm_id = $1 and id = $2 for update'
-    : 'select id, firm_id, company_name, profile from clients where firm_id = $1 and id = $2',
+    ? 'select id, firm_id, company_name, jurisdiction, profile from clients where firm_id = $1 and id = $2 for update'
+    : 'select id, firm_id, company_name, jurisdiction, profile from clients where firm_id = $1 and id = $2',
   [firmId, clientId])).rows[0];
   if (!row) throw httpError(404, 'CLIENT_NOT_FOUND', 'Client not found.');
   return row;
@@ -242,7 +242,7 @@ export const inviteClientOwnerInDb = async ({ firmId, clientId, actorPrincipal, 
       token,
       emailContext: {
         companyName: client.company_name || client.profile?.companyName || '',
-        language: preferredOwnerTemplateLanguage({ ...(client.profile || {}), ...(language ? { locale: language } : {}) })
+        language: preferredOwnerTemplateLanguage({ ...(client.profile || {}), ...(language ? { locale: language } : {}) }, client)
       }
     };
   }));
@@ -276,7 +276,7 @@ export const resendClientOwnerInviteInDb = async ({ firmId, clientId, actorPrinc
       token,
       emailContext: {
         companyName: client.company_name || client.profile?.companyName || '',
-        language: preferredOwnerTemplateLanguage(client.profile || {})
+        language: preferredOwnerTemplateLanguage(client.profile || {}, client)
       }
     };
   }));

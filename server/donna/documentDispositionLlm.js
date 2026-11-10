@@ -317,8 +317,10 @@ export const buildOwnerReplyClarificationQuestion = ({ document = {}, answeredEv
 
 // The owner's language for a question this lane mints: one profile read, at the
 // mint, through the one resolver (the pure builders above take the result).
-const readOwnerLanguage = async ({ client, firmId, clientId }) => preferredOwnerTemplateLanguage(
-  (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows?.[0]?.profile);
+const readOwnerLanguage = async ({ client, firmId, clientId }) => {
+  const row = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows?.[0];
+  return preferredOwnerTemplateLanguage(row?.profile, row);
+};
 
 const countOwnerAsksForDocument = async ({ client, firmId, clientId, documentId, evidenceType }) => {
   const result = await client.query(

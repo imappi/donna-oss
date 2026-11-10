@@ -2354,17 +2354,18 @@ export const requireClientInFirm = async ({ client, firmId, clientId }) => {
 export { DEFAULT_FIRM_ID, DEMO_FIRM_ID };
 
 // The owner's language for code-side owner-channel copy (inbound acks, parse
-// summaries, topic reminders): the ONE resolver over the client's profile.
-// Never throws; 'en' when the row is missing or unreadable.
+// summaries, topic reminders): the ONE resolver over the client's profile and
+// its authoritative jurisdiction column. Never throws; 'en' when the row is
+// missing or unreadable.
 export const getClientOwnerLanguageInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId } = {}) => {
   if (!clientId) return OWNER_TEMPLATE_FALLBACK_LANGUAGE;
   try {
     return await withFirmDbClient(async (client) => {
       const result = await client.query(
-        'select profile from clients where firm_id = $1 and id = $2 limit 1',
+        'select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1',
         [firmId, clientId]
       );
-      return preferredOwnerTemplateLanguage(result.rows[0]?.profile);
+      return preferredOwnerTemplateLanguage(result.rows[0]?.profile, result.rows[0]);
     });
   } catch {
     return OWNER_TEMPLATE_FALLBACK_LANGUAGE;

@@ -11,7 +11,9 @@
 // The portal's client record at first paint is the firm snapshot's client:
 // the stored profile spread at the top level (server/donna/db/snapshot.js), so
 // the resolver reads the same `locale` / `language` / `preferredLanguage` /
-// `jurisdiction` keys here as it does on the server. No second language rule.
+// `jurisdiction` keys here as it does on the server, and the client's
+// authoritative jurisdiction column from `persisted_identity.jurisdiction`.
+// No second language rule.
 import { preferredOwnerTemplateLanguage } from '../../server/donna/ownerLanguage.js';
 import { resolveInterfaceLocale } from './localeRegistry.js';
 
@@ -20,7 +22,7 @@ const OWNER_LANGUAGE_INTERFACE_LOCALE = Object.freeze({ fi: 'fi', en: 'en' });
 
 export const portalDefaultInterfaceLocale = (client) => {
   if (!client || typeof client !== 'object') return null;
-  const locale = OWNER_LANGUAGE_INTERFACE_LOCALE[preferredOwnerTemplateLanguage(client)] || null;
+  const locale = OWNER_LANGUAGE_INTERFACE_LOCALE[preferredOwnerTemplateLanguage(client, client.persisted_identity)] || null;
   if (!locale) return null;
   const resolved = resolveInterfaceLocale(locale);
   return resolved.fallbackReason ? null : resolved.locale;
