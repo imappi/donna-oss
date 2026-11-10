@@ -177,6 +177,14 @@ export const gbVatDirectionForTransaction = (transaction = {}, coding = {}) => t
 // no output reverse-charge code yet (domestic-RC construction sales report net
 // in Box 6 with no output tax) — an honest gap that escalates rather than a
 // guessed code. The purchase side resolves VAT_REVERSE_CHARGE_20_INPUT.
+// The treatment of a business that is not VAT-registered on the line's date
+// (gb/taxVocabulary.js): it renders to no VAT code. Enrichment stamps it NONE
+// (applyGbVatCodingToCoding) and the posting policy admits that NONE only
+// while the registration record says not registered on the date.
+export const GB_NOT_REGISTERED_TREATMENT = 'No VAT (not VAT-registered)';
+export const isGbNotRegisteredTreatment = (taxTreatment = '') =>
+  String(taxTreatment || '').trim().toLowerCase().replace(/\s+/g, ' ') === GB_NOT_REGISTERED_TREATMENT.toLowerCase();
+
 export const resolveGbVatCodeForCoding = ({ taxType = '', taxTreatment = '', direction = '' } = {}) => {
   const explicit = String(taxType || '').trim().toUpperCase();
   if (BY_CODE.has(explicit)) return explicit;
@@ -268,6 +276,12 @@ export const gbVatControlAccountFromChart = (ledgerAccounts = [], role) => {
 export const applyGbVatCodingToCoding = ({ coding = {}, transaction = {}, controlAccount = null } = {}) => {
   const targetAccountCode = String(coding.xero_account_code || coding.account_code || '').trim();
   if (controlAccount?.code && targetAccountCode === String(controlAccount.code).trim()) {
+    return { ...coding, tax_type: 'NONE', xero_tax_type: 'NONE' };
+  }
+  // The not-registered treatment carries no VAT code: NONE, as a control
+  // settlement is stamped. An explicit VAT code on the coding still wins (and
+  // the posting policy refuses it for an unregistered business).
+  if (isGbNotRegisteredTreatment(coding.tax_treatment) && !BY_CODE.has(String(coding.tax_type || coding.xero_tax_type || '').trim().toUpperCase())) {
     return { ...coding, tax_type: 'NONE', xero_tax_type: 'NONE' };
   }
   const code = resolveGbVatCodeForCoding({

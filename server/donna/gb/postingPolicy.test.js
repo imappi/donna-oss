@@ -108,3 +108,51 @@ test('GB: the unresolved-treatment refusal joins the source re-check list beside
   assert.ok(POSTING_SOURCE_RECHECK_REFUSALS.includes('TRANSACTION_ALV_TREATMENT_UNRESOLVED'));
   assert.ok(POSTING_SOURCE_RECHECK_REFUSALS.includes('TRANSACTION_GB_VAT_TREATMENT_UNRESOLVED'));
 });
+
+// The UK's no-VAT treatment (not-registered lines post without VAT). Every
+// VAT_ code needs registration (assertGbVatRegistered, unchanged), so the
+// treatment renders to no VAT code: enrichment stamps NONE, and the policy
+// admits it only on a date the record says not registered.
+test('GB: the not-registered treatment stamps NONE and posts only while the record says not registered', () => {
+  const { withoutTax } = policy.taxRegistration;
+  const treatment = withoutTax.treatments.purchase;
+  assert.equal(treatment, 'No VAT (not VAT-registered)');
+  assert.equal(withoutTax.treatments.sale, treatment);
+  for (const [coding, transaction] of [[expense({ tax_treatment: treatment }), purchase], [revenue({ tax_treatment: treatment }), sale]]) {
+    const enriched = policy.adapter.enrichCoding({ coding, transaction, taxCodingEnabled: true });
+    assert.deepEqual([enriched.tax_type, enriched.xero_tax_type], ['NONE', 'NONE']);
+    assert.deepEqual(assertPostable({ coding: enriched, transaction, profile: notRegistered }), enriched);
+    assert.equal(policy.adapter.transactionSplit({ coding: enriched, transaction }), null, 'no VAT leg');
+    for (const [profile, reason] of [[registered, 'registered'], [{}, 'no_record']]) {
+      assert.throws(() => assertPostable({ coding: enriched, transaction, profile }), (error) =>
+        refusedWith('TRANSACTION_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED')(error) && error.details.registration_reason === reason);
+    }
+  }
+  assert.equal(withoutTax.needsRegistration({ taxTreatment: treatment, direction: 'in' }), false);
+  for (const label of ['VAT 20%', 'Zero-rated 0%', 'VAT exempt', 'Outside the scope of VAT', 'VAT blocked (no reclaim)']) {
+    assert.equal(withoutTax.needsRegistration({ taxTreatment: label, direction: 'in' }), true, label);
+  }
+});
+
+test('GB: the rule is not loosened: zero-rated, exempt and outside-scope codes still refuse for an unregistered business', () => {
+  for (const code of ['VAT_ZR_INPUT', 'VAT_EXEMPT_INPUT', 'VAT_OUTSIDE_SCOPE_INPUT', 'VAT_BLOCKED_INPUT']) {
+    assert.throws(() => assertPostable({ coding: expense({ tax_type: code, xero_tax_type: code }), transaction: purchase, profile: notRegistered }),
+      refusedWith('TRANSACTION_GB_VAT_REGISTRATION_REQUIRED'), code);
+  }
+  // An explicit VAT code beside the not-registered label still wins, and is refused.
+  const both = policy.adapter.enrichCoding({ coding: expense({ tax_type: 'VAT_SR_20_INPUT', tax_treatment: 'No VAT (not VAT-registered)' }), transaction: purchase, taxCodingEnabled: true });
+  assert.equal(both.tax_type, 'VAT_SR_20_INPUT');
+  assert.throws(() => assertPostable({ coding: both, transaction: purchase, profile: notRegistered }), refusedWith('TRANSACTION_GB_VAT_REGISTRATION_REQUIRED'));
+});
+
+test('GB: a supplier bill coded with the not-registered treatment posts gross AP only for an unregistered business', () => {
+  const document = { id: 'bill', document_date: '2026-06-02', total_amount: 120, tax_amount: 20 };
+  const chart = [{ code: '2200', name: 'Trade creditors', account_type: 'liability', normal_balance: 'credit', canonical_role: 'liability.accounts_payable', status: 'active' }];
+  const verdict = { account_code: '5000', account_name: 'Software subscriptions', tax_treatment: 'No VAT (not VAT-registered)' };
+  const posted = policy.adapter.supplierBillTaxPosting({ verdict, document, ledgerAccounts: chart, taxCodingEnabled: true, profile: notRegistered });
+  assert.deepEqual([posted.expenseTaxType, posted.alvSplit, posted.payablesAccount.code], ['NONE', null, '2200']);
+  for (const profile of [registered, {}]) {
+    assert.throws(() => policy.adapter.supplierBillTaxPosting({ verdict, document, ledgerAccounts: chart, taxCodingEnabled: true, profile }),
+      refusedWith('SUPPLIER_BILL_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED'));
+  }
+});

@@ -45,8 +45,17 @@ const stringList = (value) => Array.isArray(value) && value.every(nonemptyString
 // that mean "this recorded fact is locked" (recordLockedCodes, may be empty),
 // and the owner-facing wording of the follow-up (answerQuestion) and of the
 // one-line notice of what was recorded (recordedNotice).
+// On a date the record says the business is not registered, the country's
+// no-VAT treatment (withoutTax): the coder treatment for a purchase and for a
+// sale that posts with no VAT leg and no deduction, the coder-facing sentence
+// that states the fact (instruction), and the recogniser of a treatment that
+// the posting policy refuses for an unregistered business (needsRegistration). The coder's
+// contract (transactionLlm.js) tells the coder; the posting policy decides.
+const validWithoutTax = (rule) => Boolean(rule) && typeof rule === 'object' && Boolean(rule.treatments)
+  && nonemptyString(rule.treatments.purchase) && nonemptyString(rule.treatments.sale)
+  && ['instruction', 'needsRegistration'].every((key) => typeof rule[key] === 'function');
 const validTaxRegistration = (rule) => Boolean(rule) && typeof rule === 'object' && stringList(rule.refusalCodes)
-  && nonemptyString(rule.profileField) && stringList(rule.recordLockedCodes)
+  && nonemptyString(rule.profileField) && stringList(rule.recordLockedCodes) && validWithoutTax(rule.withoutTax)
   && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice'].every((key) => typeof rule[key] === 'function');
 
 // Validate the selected declaration and its exact explicit capabilities. A malformed

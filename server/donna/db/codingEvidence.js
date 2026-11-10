@@ -22,7 +22,7 @@ import { readClientCodingContextWithClient, isFenceContention, nativeSourceFence
 import { toIsoDay } from '../dates.js';
 import { codingSourceBusinessUseConflict, sourceBusinessUseQuestion, sourceBusinessUseFact } from '../sourceBusinessUse.js';
 import { hasJevResolvedCoding } from '../jevDecisionReceipt.js';
-import { CODING_EVIDENCE_RECONSIDERED_REFUSALS, UNRESOLVED_TREATMENT_REFUSALS, CODING_CONFLICT_MAX_RECONSIDERATIONS, CODING_RECONSIDERATION_CONTRACT, codingReconsiderationAttempts, unsettledTreatmentOnClearSource, refusedCrossWindowGroup, REFUSED_CROSS_WINDOW_GROUP_SQL, CROSS_WINDOW_GROUP_REFUSAL, recordCodingPolicyFailure, recordCodingPolicyRecovery, CODING_POLICY_FAILED_ACTION } from '../codingPolicyRecovery.js';
+import { CODING_EVIDENCE_RECONSIDERED_REFUSALS, UNRESOLVED_TREATMENT_REFUSALS, CODING_CONFLICT_MAX_RECONSIDERATIONS, CODING_RECONSIDERATION_CONTRACT, codingReconsiderationAttempts, codingReconsiderationsLeft, notRegisteredReconsiderationAttempts, refusedWhileNotRegistered, NOT_REGISTERED_MAX_RECONSIDERATIONS, unsettledTreatmentOnClearSource, refusedCrossWindowGroup, REFUSED_CROSS_WINDOW_GROUP_SQL, CROSS_WINDOW_GROUP_REFUSAL, recordCodingPolicyFailure, recordCodingPolicyRecovery, CODING_POLICY_FAILED_ACTION } from '../codingPolicyRecovery.js';
 
 // Derived routing metadata is not new source material. Keep the original
 // content digest compatible while still carrying family into the coding menu.
@@ -565,7 +565,13 @@ const reconsiderationFor = (row, current, refusal = row.payload.ledger_post_refu
   // Attempts count per case revision under the current coding contract; a
   // receipt from an earlier contract re-enters once (codingPolicyRecovery.js).
   const attempts = prior?.digest === revision ? codingReconsiderationAttempts(prior) : 0;
-  return { recodeRefusal, revision, attempts, exhausted: recodeRefusal && attempts >= CODING_CONFLICT_MAX_RECONSIDERATIONS };
+  // Refused on a date the record says not registered: one re-run with the
+  // refusal, counted on its own (codingPolicyRecovery.js).
+  const notRegistered = refusedWhileNotRegistered(refusal);
+  const notRegisteredAttempts = prior?.digest === revision ? notRegisteredReconsiderationAttempts(prior) : 0;
+  return { recodeRefusal, revision, attempts, notRegistered, notRegisteredAttempts,
+    exhausted: recodeRefusal && (notRegistered ? notRegisteredAttempts >= NOT_REGISTERED_MAX_RECONSIDERATIONS
+      : attempts >= CODING_CONFLICT_MAX_RECONSIDERATIONS) };
 };
 
 const requiresMatchedCodingReconsideration = (row, document, acceptedSourceChanged = null) => {
@@ -575,7 +581,7 @@ const requiresMatchedCodingReconsideration = (row, document, acceptedSourceChang
   if (row.payload.ledger_journal_id) return changed
     && row.payload.coding_correction_required?.current_evidence_digest !== codingEvidenceDigest(document);
   return changed || (requiresCodingReconsideration(row, document)
-    && codingReconsiderationAttempts(row.payload.coding_evidence_reconsideration) < CODING_CONFLICT_MAX_RECONSIDERATIONS);
+    && codingReconsiderationsLeft(row.payload.coding_evidence_reconsideration, row.payload.ledger_post_refusal));
 };
 
 // Presence selects bounded authentication work, never authority. Every unique
@@ -886,7 +892,7 @@ export const recoverChangedCodingEvidenceInDb = async ({ firmId, limit = 50, run
             continue;
           }
         }
-        const { recodeRefusal, revision, attempts, exhausted } = reconsiderationFor(row, current, refusal, groupConflicts.has(row.id));
+        const { recodeRefusal, revision, attempts, notRegistered, notRegisteredAttempts, exhausted } = reconsiderationFor(row, current, refusal, groupConflicts.has(row.id));
         if (exhausted) continue;
         // Evidence-pending waits for the source, not for another coding: recode
         // only once nothing is still parsing or still being matched.
@@ -900,7 +906,7 @@ export const recoverChangedCodingEvidenceInDb = async ({ firmId, limit = 50, run
         const recheck = recodeRefusal && UNRESOLVED_TREATMENT_REFUSALS.includes(refusal?.code) ? verifiedSourceRecheck(row) : null;
         await client.query(`update transactions set status='needs_review',
           payload=(payload - 'ai_suggestion' - 'ai_suggestion_status' - 'ledger_post_refusal' - 'accepted_coding_policy' - 'posting_recovery') || $4::jsonb, updated_at=now()
-          where firm_id=$1 and client_id=$2 and id=$3`, [firmId, clientId, row.id, JSON.stringify({coding_evidence_reconsideration:{digest:revision, contract:CODING_RECONSIDERATION_CONTRACT, attempts:recodeRefusal?attempts+1:0, reason:recodeRefusal?'coding_source_conflict':'source_evidence_changed'}, ...(recodeRefusal ? {posting_recovery:{...(recheck||{}),review:{...(recheck?.review||{}),source_validation:refusal?.details?.source_validation || null,previous_refusal:refusal,recovery:'recode_current_evidence'}}}: {})})]);
+          where firm_id=$1 and client_id=$2 and id=$3`, [firmId, clientId, row.id, JSON.stringify({coding_evidence_reconsideration:{digest:revision, contract:CODING_RECONSIDERATION_CONTRACT, attempts:recodeRefusal?attempts+1:0, ...(recodeRefusal && (notRegistered || notRegisteredAttempts) ? {not_registered_attempts:notRegistered?notRegisteredAttempts+1:notRegisteredAttempts} : {}), reason:recodeRefusal?'coding_source_conflict':'source_evidence_changed'}, ...(recodeRefusal ? {posting_recovery:{...(recheck||{}),review:{...(recheck?.review||{}),source_validation:refusal?.details?.source_validation || null,previous_refusal:refusal,recovery:'recode_current_evidence'}}}: {})})]);
         await applyCodingTransition(client, { firmId, clientId, transactionId: row.id, to: 'proposed' });
         recovered.push({ client_id: clientId, transaction_id: row.id });
       }

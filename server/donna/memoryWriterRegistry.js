@@ -150,7 +150,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     // SG native fence (2026-09-28): the enclosing worker compares without a fence, takes the per-client row fence (NOWAIT) only before rewriting, and skips a contended or failed client for the tick. This resting-group SELECT, targets and count remain unchanged.
     // select t.* from transactions t where t.firm_id=$1 and t.client_id=$2 and __DYNAMIC_SQL__ order by t.id for update of t skip locked
     // Re-pinned 2026-11-10 (UK VAT posting checks): the resting-group SELECT, targets and count are unchanged; the enclosing body now reads the unresolved-treatment refusal codes from UNRESOLVED_TREATMENT_REFUSALS (FI and GB) instead of one Finnish literal. No memory target.
-    ["recoverChangedCodingEvidenceInDb/callback","dynamic_sql","26b220b2f23ac8c68c6fb75f7534196f458ddda99f304ee00798d99f9fe24efd",1,[]],
+    // Re-pinned 2026-11-10 (not-registered lines post without VAT): the resting-group SELECT, targets and count are unchanged; the enclosing body now bounds a refusal on a date the record says not registered to one coder re-run (its own count on the clock's receipt, codingPolicyRecovery.js). No memory target.
+    ["recoverChangedCodingEvidenceInDb/callback","dynamic_sql","1d7673603a6c375338f221631ef28f797d2edb436d9614421ed590c099aaeb55",1,[]],
   ]),
   ...group("server/donna/db/ledger.js", "Reviewed source-read fences inside the existing posting writer. Interpolation selects only fixed FOR UPDATE clauses; settlement-row and transaction reads remain firm/client scoped. Accounting mutations still use the existing journal writer, with no memory mutation added.", [
     // select m.id as match_id, m.matched_line_id, m.status, dl.line_no, dl.description as row_label, dl.amount as row_net, dl.payload->'raw_extraction'->'settlement_row' as settlement_row, d.id as document_

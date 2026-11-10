@@ -27,6 +27,7 @@ import { canonicalMerchantPattern, conversionDetailFor, normalizeIntelText } fro
 import { requireCodingPolicyForClient, codingPolicyReceipt, CodingPolicyError } from './codingPolicy.js';
 import { decideJevCoding, SOURCE_DOCUMENT_QUESTION } from './jevCoding.js';
 import { resolvePostingPolicy } from './postingPolicy.js';
+import { toIsoDay } from './dates.js';
 import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 import { nativeCodingPromptProjection, accountChoicePrompt, decodeNativeCodingChoice, codingChoiceFailure } from './codingAccountChoices.js';
 
@@ -609,6 +610,57 @@ const ownerTransactionVerdictFor = ({ suggestion = {}, transaction = {}, ownerPo
   };
 };
 
+// The business's VAT/ALV registration on the date that governs this line,
+// read with the country's own reader (the posting policy's taxRegistration
+// declaration) from the record the client profile carries: registered, not
+// registered, or unknown (no usable record). The date is the line's own, or
+// the bill's when the line settles a supplier bill (the bill carries the
+// expense; the posting policy reads its registration on the bill's date).
+// On a date the record says not registered the coder is told the fact as the
+// country words it and the country's no-VAT treatments (when its vocabulary
+// offers them): it charges and deducts no VAT, and the gross is the cost or
+// the revenue. This is knowledge Donna applies, never an owner question. The
+// coder picks the treatment; the posting policy still decides. null for a
+// country that declares no registration record.
+export const taxRegistrationFactFor = ({ policy, clientProfile = {}, transaction = {} } = {}) => {
+  let rule = null;
+  try { rule = resolvePostingPolicy({ jurisdiction: policy?.jurisdiction }).taxRegistration; } catch { rule = null; }
+  if (!rule?.withoutTax) return null;
+  const document = transaction.matched_document || null;
+  const billDate = document?.document_type === 'supplier_bill' ? toIsoDay(document.document_date) : null;
+  const onDate = billDate || toIsoDay(transaction.date ?? transaction.transaction_date ?? null) || null;
+  let status;
+  try { status = rule.onDate({ profile: clientProfile || {}, onDate }); } catch { status = { registered: null, reason: 'registration_unavailable' }; }
+  const state = status?.registered === true ? 'registered' : status?.registered === false ? 'not_registered' : 'unknown';
+  if (state !== 'not_registered') return { status: state, on_date: onDate, reason: status?.reason || null, ...(billDate ? { date_of: 'supplier_bill' } : {}) };
+  const options = policy?.taxTreatmentOptions || [];
+  const { purchase, sale } = rule.withoutTax.treatments;
+  const offered = options.includes(purchase) && options.includes(sale);
+  return { status: state, on_date: onDate, reason: status?.reason || null, ...(billDate ? { date_of: 'supplier_bill' } : {}),
+    ...(offered ? { treatments: { purchase, sale } } : {}),
+    instruction: `${String(rule.withoutTax.instruction({ onDate }) || '').trim()}${offered
+      ? ` Use tax_treatment '${purchase}' for a purchase or other cost and '${sale}' for a sale or other income. A treatment that charges or deducts VAT cannot post on this date.` : ''}`.slice(0, 700) };
+};
+// The coder input field: absent for a country without a registration record,
+// so its request keeps its exact shape.
+const taxRegistrationInputFor = (policy, clientProfile, transaction) => {
+  const fact = taxRegistrationFactFor({ policy, clientProfile, transaction });
+  return fact ? { tax_registration: fact } : {};
+};
+// The fact on the coding's receipt, with whether the chosen treatment needs
+// registration (the country's recogniser), so the coding says which it is.
+const taxRegistrationReceiptFor = ({ policy, clientProfile, transaction, taxTreatment }) => {
+  const fact = taxRegistrationFactFor({ policy, clientProfile, transaction });
+  if (fact?.status !== 'not_registered') return null;
+  let rule = null;
+  try { rule = resolvePostingPolicy({ jurisdiction: policy.jurisdiction }).taxRegistration; } catch { rule = null; }
+  const direction = Number(transaction.money_out || 0) > 0 ? 'in' : Number(transaction.money_in || 0) > 0 ? 'out' : '';
+  let needsRegistration = null;
+  try { needsRegistration = Boolean(rule.withoutTax.needsRegistration({ taxType: '', taxTreatment, direction })); } catch { needsRegistration = null; }
+  return { status: fact.status, on_date: fact.on_date, reason: fact.reason, ...(fact.date_of ? { date_of: fact.date_of } : {}),
+    treatments: fact.treatments || null, treatment: taxTreatment || '', needs_registration: needsRegistration };
+};
+
 const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, taxOptions, clientProfile) => {
   const policy = requireCodingPolicyForClient(clientProfile, { businessDate: transaction.date ?? transaction.transaction_date ?? null });
   suggestion = decodeNativeCodingChoice(policy.nativeMenu, suggestion);
@@ -735,11 +787,16 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
   // the ledger refused because the business is not recorded as VAT/ALV
   // registered on its date reaches this contract again through the evidence
   // clock, with the refusal on posting_recovery (codingPolicyRecovery.js
-  // TAX_REGISTRATION_REFUSALS). No treatment the coder picks can post it —
+  // TAX_REGISTRATION_REFUSALS). When the record does not settle the date
+  // (no record, or none usable), no treatment the coder picks can post it —
   // only the registration record can — so the missing thing is the owner's
   // fact: whether, and from when, the business is registered. The line becomes
   // that owner question, in the owner's language (ownerLanguage.js), worded by
   // the country policy that raised the refusal (taxRegistration.ownerQuestion).
+  // When the record says NOT registered on the date, nothing is asked: Donna
+  // knows the treatment (no VAT, the gross is the cost or the revenue), the
+  // coder was told it (taxRegistrationFactFor) and is told it again with the
+  // refusal, and the clock re-runs it once (codingPolicyRecovery.js).
   // Scope: any country whose posting policy declares taxRegistration (FI, GB),
   // not only the source-tax countries the unsure-marker guard above serves —
   // the refusal comes from the registration record, not from the source.
@@ -761,6 +818,14 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
     let status;
     try { status=taxRegistration.onDate({ profile: clientProfile || {}, onDate: asOf }); } catch { status={ registered: null, reason: 'registration_unavailable' }; }
     if (status?.registered===true) return null;
+    // Not registered on the date: Donna knows the treatment (no VAT charged
+    // or deducted, the gross is the cost or the revenue), so this is never an
+    // owner question. The coder was told the fact (taxRegistrationFactFor)
+    // and is told it again with this refusal; its coding meets the posting
+    // policy as any other, which refuses a VAT-carrying code as before. Only
+    // a record the owner's own answer disputes (not recorded: locked, or it
+    // would remove registered days) still rests for a person.
+    if (status?.registered===false && !['record_locked','record_conflict'].includes(registrationAnswer?.state)) return null;
     const language=preferredOwnerTemplateLanguage(clientProfile || {}, { jurisdiction: clientProfile?.jurisdiction ?? policy.jurisdiction });
     return { receipt: { treatment: suggestion.tax_treatment || fallback.tax_treatment || '', constraint: 'tax_registration_unrecorded',
         refusal_code: registrationRefusal.code, as_of: asOf, registered: status?.registered ?? null, registration_reason: status?.reason || null,
@@ -770,6 +835,8 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
           receipt_id: registrationAnswer.receipt_id || null, state: registrationAnswer.state || null } } : {}) },
       question: String(taxRegistration.ownerQuestion({ language, lineLabel, onDate: asOf, registered: status?.registered ?? null }) || '').slice(0, 500) };
   })() : null;
+  const registrationFact=taxRegistrationReceiptFor({ policy, clientProfile, transaction,
+    taxTreatment: taxOptions.includes(suggestion.tax_treatment) ? suggestion.tax_treatment : fallback.tax_treatment });
   const unsureSourceQuestion=()=>{
     const doc=transaction.matched_document || {};
     const printed=transaction.posting_recovery?.review?.printed_summary || {};
@@ -849,6 +916,11 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
     ...(unresolvedTreatmentGuard?.constraint==='unsure_treatment_clear_source'?{remember_candidate:false,evidence_required:false,ask_client_question:'',
       tax_unresolved_guard:{...unresolvedTreatmentGuard,
         ...(unresolvedTreatmentGuard.model_asked?{suppressed_question:String(suggestion.ask_client_question).trim().slice(0, 500)}:{})}}:{}),
+    // On a date the record says not registered: the fact the coder was told,
+    // and whether its treatment needs registration. A coding made for that
+    // fact never becomes a standing merchant rule: the same merchant is coded
+    // with VAT once the business registers.
+    ...(registrationFact ? { tax_registration_fact: registrationFact, remember_candidate: false } : {}),
     // The registration question (above) outranks every tax guard: until the
     // record says registered on this date no tax treatment can post the line.
     ...(registrationGuard && !registrationGuard.receipt.owner_answered ? { tax_unresolved_guard: registrationGuard.receipt,
@@ -863,7 +935,7 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
         : registrationGuard.receipt.answer?.state==='record_locked'
         ? `The owner answered the VAT registration question, but the recorded registration is locked by pilot preparation and was not changed; a reviewed reapproval must record it before this line can post with VAT.`
         : registrationGuard.receipt.answer?.state==='recorded'
-          ? `The owner's answer is recorded: the business is not registered for VAT on ${registrationGuard.receipt.as_of || 'its date'}, so this line cannot post with VAT. It needs coding without a VAT deduction.`
+          ? `The owner's answer is recorded, but the record does not settle ${registrationGuard.receipt.as_of || 'this line\'s date'}; a person must complete the registration record before this line can post.`
           : `The owner answered the VAT registration question. Record the registration on the client profile (or correct the coding); the ledger posts this line only once the record says registered on ${registrationGuard.receipt.as_of || 'its date'}.`}`.trim().slice(0, 500) } : {})
   };
 };
@@ -1214,6 +1286,7 @@ export const suggestTransactionCodingBatch = async ({
       case_evidence: transaction.case_evidence || null,
       matched_document: matchedDocumentInputFor(transaction.matched_document),
       posting_recovery: transaction.posting_recovery?.review || null,
+      ...taxRegistrationInputFor(policies[cleanTransactions.findIndex((row) => row.id === transaction.id)] || policy, clientProfile, transaction),
       merchant_web_context: transaction.merchant_web_context,
       merchant_pattern_hint: canonicalMerchantPattern(`${transaction.description || ''} ${transaction.raw_description || ''} ${transaction.source_line || ''}`),
       client_reply_context: clientReplyContextInputFor(transaction.client_reply_context),
@@ -1396,6 +1469,7 @@ export const suggestTransactionCoding = async ({
         case_evidence: transaction.case_evidence || null,
         ...(transaction.correction_context ? {correction_context:transaction.correction_context} : {}),
       matched_document: matchedDocumentInputFor(transaction.matched_document), posting_recovery: transaction.posting_recovery?.review || null,
+        ...taxRegistrationInputFor(policy, clientProfile, transaction),
         client_reply_context: clientReplyContextInputFor(transaction.client_reply_context) },
       related_transactions: peerTransactions.filter(t => t.id !== transaction.id).map(t => ({ date: t.date, description: t.description,
         money_in: Number(t.money_in || 0), money_out: Number(t.money_out || 0), currency: t.account_currency || t.currency || '' })),
@@ -1464,6 +1538,7 @@ export const suggestTransactionCoding = async ({
       ...(enrichedTransaction.correction_context ? {correction_context:enrichedTransaction.correction_context} : {}),
       matched_document: matchedDocumentInputFor(enrichedTransaction.matched_document),
       posting_recovery: enrichedTransaction.posting_recovery?.review || null,
+      ...taxRegistrationInputFor(policy, clientProfile, enrichedTransaction),
       merchant_web_context: enrichedTransaction.merchant_web_context,
       client_reply_context: clientReplyContextInputFor(enrichedTransaction.client_reply_context)
     },

@@ -121,6 +121,31 @@ const FI_TAX_REGISTRATION = Object.freeze({
         ? 'We cannot record the VAT registration yet. Please tell us the exact date the registration started, or send a copy of the Tax Administration decision or a business register extract.'
         : 'Thanks for your reply. We could not tell from it whether the business is in the Finnish VAT register. Please answer yes or no, and if yes, the date the registration started.';
   },
+  // The other side of the rule above: on a date the record says the business
+  // is not registered, it charges no ALV and deducts none, whatever a
+  // supplier's receipt prints, and the gross amount is the cost or the
+  // revenue. This is Donna's knowledge, never an owner question. The shared
+  // coder contract (transactionLlm.js) tells the coder this fact and these
+  // treatments; the ledger still decides with alvCodeNeedsRegistration.
+  // Read from the code table (alvCodes.js), the two treatments that carry no
+  // tax box and no deduction:
+  //  - a purchase: 'Vähennyskelvoton ALV (osto)' → ALV_NONDEDUCTIBLE_INPUT.
+  //    The supplier's ALV is real but the buyer has no deduction right; the
+  //    gross stays on the expense, no 307 entry, no split, and its null rate
+  //    keeps every rate-gated guard aside. 'Ei ALV-käsittelyä' would relabel a
+  //    taxed purchase out of scope (the vocabulary's own FIK-V note).
+  //  - a sale: 'Ei ALV-käsittelyä' → ALV_OUT_OF_SCOPE. An unregistered seller's
+  //    sale is outside the ALV it accounts for: no 301–303 tax, and not
+  //    ALV_0_OUTPUT (a zero-rated sale reports its base in 309) or ALV_EXEMPT
+  //    (an exempt activity by its nature, whoever sells it).
+  withoutTax: Object.freeze({
+    treatments: Object.freeze({ purchase: 'Vähennyskelvoton ALV (osto)', sale: 'Ei ALV-käsittelyä' }),
+    instruction: ({ onDate = null } = {}) => `The business is not in the Finnish VAT register (arvonlisäverorekisteri) on ${toIsoDay(onDate) || 'this date'}. It charges no ALV on its sales and deducts no ALV on its purchases, whatever ALV a supplier's receipt or invoice prints: the gross amount is the cost or the revenue, with no ALV leg.`,
+    // The treatment the ledger refuses for an unregistered business (the rule
+    // above, on the code the treatment renders to).
+    needsRegistration: ({ taxType = '', taxTreatment = '', direction = '' } = {}) =>
+      alvCodeNeedsRegistration(resolveAlvCode({ taxType, taxTreatment, direction }))
+  }),
   recordedNotice: ({ language = 'fi', record = null } = {}) => {
     const from = record?.registered_from || '', until = record?.registered_until || '';
     if (language === 'fi') return `${record?.status === 'not_registered' ? 'Kirjasimme, että yritys ei ole arvonlisäverorekisterissä.'

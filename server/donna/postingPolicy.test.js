@@ -180,6 +180,18 @@ test('absent, inconsistent and malformed policies fail with typed errors, with n
   }
 });
 
+test('a tax-registration declaration must say what posting without VAT means for its country', () => {
+  for (const country of ['fi', 'gb']) {
+    const declared = POSTING_POLICY_REGISTRY[country].taxRegistration;
+    const { withoutTax: _withoutTax, ...missing } = declared;
+    for (const taxRegistration of [missing, { ...declared, withoutTax: { ...declared.withoutTax, treatments: { purchase: '', sale: 'x' } } },
+      { ...declared, withoutTax: { ...declared.withoutTax, needsRegistration: null } }]) {
+      assert.throws(() => resolvePostingPolicy({ jurisdiction: country, registry: { ...POSTING_POLICY_REGISTRY, [country]: { ...POSTING_POLICY_REGISTRY[country], taxRegistration } } }),
+        hasCode('posting_policy_invalid'));
+    }
+  }
+});
+
 test('a fixture country registers operations and code ownership without editing shared algorithms', () => {
   const fixture = { ...POSTING_POLICY_REGISTRY.au, jurisdiction: 'nz', policyId: 'nz_fixture_posting',
     nativeTaxCodePrefixes: ['NZ_FIXTURE_'], nativeTaxCodes: ['NZ_FIXTURE_INPUT'],
