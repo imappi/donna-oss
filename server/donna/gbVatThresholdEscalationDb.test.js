@@ -57,10 +57,10 @@ test('backward look exceeded: mints the deterministic per-year ask + audit in on
   const summary = await drainGbVatThresholdEscalations({
     client,
     asOf: '2026-07-27',
-    deliverAsksImpl: async (args) => { delivered.push(args); }
+    deliverAsksImpl: async (args) => { delivered.push(args); return { delivered: args.evidenceRequestIds }; }
   });
 
-  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 1, delivered: 1, skipped: 0, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 1, delivered: 1, held: 0, skipped: 0, errors: 0 });
   assert.deepEqual(delivered, [{
     firmId: 'firm-1', clientId: 'client-1', evidenceRequestIds: ['vat-threshold-firm-1-client-1-2026']
   }]);
@@ -125,7 +125,7 @@ test('a VAT-registered client (HMRC_MTD_VAT acting) is skipped — that is the r
   const summary = await drainGbVatThresholdEscalations({
     client, asOf: '2026-07-27', deliverAsksImpl: async () => {}
   });
-  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, skipped: 1, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 1, errors: 0 });
   assert.ok(!client.queries.some((q) => q.sql.includes('insert into client_evidence_requests')));
 });
 
@@ -151,7 +151,7 @@ test('below threshold: no ask, no audit, no delivery', async () => {
   const summary = await drainGbVatThresholdEscalations({
     client, asOf: '2026-07-27', deliverAsksImpl: async () => {}
   });
-  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, skipped: 0, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 0, errors: 0 });
   assert.ok(!client.queries.some((q) => q.sql.includes('insert into audit_events')));
 });
 
@@ -166,14 +166,14 @@ test('an already-open ask for the year is never re-nagged', async () => {
   const summary = await drainGbVatThresholdEscalations({
     client, asOf: '2026-07-27', deliverAsksImpl: async (a) => { delivered.push(a); }
   });
-  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 0, delivered: 0, skipped: 1, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 0, delivered: 0, held: 0, skipped: 1, errors: 0 });
   assert.equal(delivered.length, 0);
 });
 
 test('flag off everywhere ⇒ zero candidates ⇒ a clean no-op', async () => {
   const client = fakeClient({ candidates: [], snapshotFlags: {} });
   const summary = await drainGbVatThresholdEscalations({ client, asOf: '2026-07-27' });
-  assert.deepEqual(summary, { scanned: 0, exceeded: 0, minted: 0, delivered: 0, skipped: 0, errors: 0 });
+  assert.deepEqual(summary, { scanned: 0, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 0, errors: 0 });
 });
 
 test('the candidate sweep is bounded by the flag key and honours a firm filter', async () => {
@@ -226,4 +226,15 @@ test('a mint failure rolls back rather than leaving a half-written escalation', 
   assert.equal(summary.minted, 0);
   assert.ok(client.queries.some((q) => q.sql === 'rollback'));
   assert.ok(!client.queries.some((q) => q.sql === 'commit'));
+});
+
+test('the mint writes no sent stamp; a question the send gate held counts as held, never as delivered', async () => {
+  const client = fakeClient({ candidates: [CANDIDATE], snapshotFlags: ON, turnoverRow: { rolling_turnover: '95000.00', committed_next_30: '0' } });
+  const summary = await drainGbVatThresholdEscalations({
+    client, asOf: '2026-07-27', deliverAsksImpl: async () => ({ refused: 'INTERNAL_PILOT_SEND_DISABLED' })
+  });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 1, delivered: 0, held: 1, skipped: 0, errors: 0 });
+  const mint = client.queries.find((q) => q.sql.includes('insert into client_evidence_requests'));
+  assert.doesNotMatch(mint.sql, /first_sent_at|last_sent_at/, 'only a deliverer stamps a send');
+  assert.match(mint.sql, /, 0, 'system'\)/, 'minted with send_count 0');
 });
