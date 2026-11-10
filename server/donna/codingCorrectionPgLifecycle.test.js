@@ -301,6 +301,82 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'canary',actorId:'member',actorType:'firm_member',reason:'Fresh synthetic correction authority'}));
  result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});assert.equal(result[0].state,'completed',JSON.stringify(result));
 
+ // Lock contention is not an outcome. A second connection holds ledger_lines
+ // in SHARE UPDATE EXCLUSIVE, the mode autovacuum/ANALYZE takes, so the
+ // consumer's NOWAIT source fence (lockCodingSourceInputs) gets 55P03. At every
+ // fence the case stays pending as it was: no refusal code, no failure
+ // receipt, no attempt spent. The next tick after release reaches the outcome.
+ const holdFence=async()=>{const holder=await pool.connect();await holder.query('begin');
+  await holder.query('lock table ledger_lines in share update exclusive mode');
+  return async()=>{await holder.query('rollback');holder.release();};};
+ const onlyCase=id=>({firmId:'f',limit:100,runWorkerAdmissionFn:({transactionId,work})=>transactionId===id?work():{state:'busy'}});
+ const caseOf=async id=>(await tx(id)).payload.coding_correction_required;
+ const assertContended=async(id,res,before)=>{
+  const row=res.find(r=>r.transactionId===id),stored=await caseOf(id);
+  assert.equal(row.state,'contended',JSON.stringify({row,stored}));assert.equal(row.code,undefined,JSON.stringify(row));
+  assert.equal(stored.status,'pending');assert.ok(!['blocked','failed'].includes(stored.recovery?.state),JSON.stringify(stored));
+  assert.doesNotMatch(JSON.stringify(stored),/55P03/);
+  assert.equal(await failureCount(id),before,'contention mints no refusal receipt');
+  assert.doesNotMatch(convergenceForTransaction(await tx(id)).reason,/_correction_(blocked|failed):/);
+  return stored;
+ };
+ phase='allocation';
+ // 1. Held before the tick: the scan fence refuses before any claim or model call.
+ await seed('contended-scan');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ let release=await holdFence(),contendedCalls=calls,beforeCase=await caseOf('contended-scan');
+ try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-scan'));}finally{await release();}
+ assert.deepEqual(await assertContended('contended-scan',result,0),beforeCase,'the case is left exactly as it was');
+ assert.equal(calls,contendedCalls,'no model call is spent behind a held fence');
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-scan'));
+ assert.equal(result.find(r=>r.transactionId==='contended-scan').state,'completed',JSON.stringify(result));
+ // 2. Taken while the coder reasons: the decision fence refuses; the claim is
+ // returned, so the reconsideration budget is not spent on contention.
+ await seed('contended-decision');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ release=null;race=async()=>{release=await holdFence();};
+ try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-decision'));}finally{race=null;if(release)await release();}
+ let stored=await assertContended('contended-decision',result,0);
+ assert.equal(stored.recovery?.attempts,undefined,JSON.stringify(stored));
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-decision'));
+ assert.equal(result.find(r=>r.transactionId==='contended-decision').state,'completed',JSON.stringify(result));
+ // 3. Taken after the decision commits: the adjustment writer refuses; the
+ // saved decision stays ready and is replayed without another model call.
+ await seed('contended-write');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ release=null;
+ try{result=await recoverPostedCodingCorrectionsInDb({...onlyCase('contended-write'),runWorkerAdmissionFn:async({transactionId,work})=>{
+  if(transactionId!=='contended-write')return {state:'busy'};const staged=await work();release=await holdFence();return staged;}});}
+ finally{if(release)await release();}
+ stored=await assertContended('contended-write',result,0);
+ assert.equal(stored.recovery.state,'ready');assert.equal(stored.recovery.attempts,1);
+ assert.equal((await pool.query('select count(*)::int n from ledger_journals where correction_of_journal_id=$1',[stored.original_journal_id])).rows[0].n,0);
+ contendedCalls=calls;
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-write'));
+ assert.equal(result.find(r=>r.transactionId==='contended-write').state,'completed',JSON.stringify(result));
+ assert.equal(calls,contendedCalls,'the saved decision is replayed, not reasoned again');
+ // 4. A case stored before this rule with the raw code as its blocker is
+ // pending again: the next contended tick clears it without a receipt, and
+ // the next free tick produces the real outcome.
+ await seed('contended-legacy');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await pool.query(`update transactions set payload=jsonb_set(payload,'{coding_correction_required,recovery}',
+  '{"state":"blocked","code":"55P03","details":null,"attempted_at":"2026-01-01T00:00:00.000Z"}'::jsonb) where id='contended-legacy'`);
+ assert.equal(convergenceForTransaction(await tx('contended-legacy')).reason,'posted_evidence_correction_blocked:55P03');
+ release=await holdFence();
+ try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-legacy'));}finally{await release();}
+ await assertContended('contended-legacy',result,0);
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-legacy'));
+ assert.equal(result.find(r=>r.transactionId==='contended-legacy').state,'completed',JSON.stringify(result));
+ // 5. A real refusal under the same held fence is still recorded as itself.
+ await seed('contended-refusal');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'off',actorId:'member',actorType:'firm_member',reason:'Synthetic refusal under contention'}));
+ contendedCalls=calls;release=await holdFence();
+ try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-refusal'));}finally{await release();}
+ assert.equal(result.find(r=>r.transactionId==='contended-refusal').code,'CODING_CORRECTION_AUTHORITY_REQUIRED',JSON.stringify(result));
+ assert.equal((await caseOf('contended-refusal')).recovery.code,'CODING_CORRECTION_AUTHORITY_REQUIRED');
+ assert.equal(await failureCount('contended-refusal'),1);assert.equal(calls,contendedCalls);
+ assert.equal(convergenceForTransaction(await tx('contended-refusal')).reason,'posted_evidence_correction_blocked:CODING_CORRECTION_AUTHORITY_REQUIRED');
+ await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'canary',actorId:'member',actorType:'firm_member',reason:'Restore synthetic correction authority'}));
+ result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-refusal'));
+ assert.equal(result.find(r=>r.transactionId==='contended-refusal').state,'completed',JSON.stringify(result));
+
  // A waiting owner case cannot consume the bounded clock's only slot forever.
  await seed('a-waiting',{amount:1245,incoming:false,document:false});
  await recoverChangedCodingEvidenceInDb({firmId:'f'});phase='ask';
