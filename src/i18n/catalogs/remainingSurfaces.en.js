@@ -424,6 +424,7 @@ export const PORTAL_DETAIL_MESSAGES = Object.freeze({
   'portal.reply.skip': 'Skip for now',
   'portal.reply.sendNoteEvidence': 'Send note + evidence',
   'portal.reply.sendEvidence': 'Send evidence',
+  'portal.answered.title': 'What Donna did with your answers',
   'portal.reply.sendNote': 'Send note',
   'portal.setup.progress': 'Finish setting up · step {current} of {total}',
   'portal.setup.later': 'Later',

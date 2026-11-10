@@ -43,11 +43,13 @@ const stringList = (value) => Array.isArray(value) && value.every(nonemptyString
 // (taxRegistrationReply.js): the profile key of the one record, the country's
 // own normaliser behind recordFromAnswer, the profile-writer refusal codes
 // that mean "this recorded fact is locked" (recordLockedCodes, may be empty),
-// and the owner-facing wording of the follow-up (answerQuestion) and of the
-// one-line notice of what was recorded (recordedNotice).
+// and the owner-facing wording of the follow-up (answerQuestion), of the
+// one-line notice of what was recorded (recordedNotice, with or without its
+// invitation to reply) and of the line that says nothing was recorded
+// (notRecordedNotice).
 const validTaxRegistration = (rule) => Boolean(rule) && typeof rule === 'object' && stringList(rule.refusalCodes)
   && nonemptyString(rule.profileField) && stringList(rule.recordLockedCodes)
-  && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice'].every((key) => typeof rule[key] === 'function');
+  && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice', 'notRecordedNotice'].every((key) => typeof rule[key] === 'function');
 
 // Validate the selected declaration and its exact explicit capabilities. A malformed
 // handler never becomes an implicit no-op, and unsupported is different from missing.
