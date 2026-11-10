@@ -1927,6 +1927,9 @@ export const postLedgerAdjustment = async ({
   reason,
   lines = [],
   reverseOriginal = true,
+  // The digest a LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN refusal names, sent
+  // only after a person has read what the adjustment moves.
+  acknowledgeFiledReturnDigest = null,
   signal
 } = {}) => {
   if (!clientId) throw new Error('postLedgerAdjustment: clientId is required');
@@ -1943,7 +1946,8 @@ export const postLedgerAdjustment = async ({
       journal_date: journalDate,
       reason,
       lines,
-      reverse_original: reverseOriginal
+      reverse_original: reverseOriginal,
+      ...(acknowledgeFiledReturnDigest ? { acknowledge_filed_return_digest: acknowledgeFiledReturnDigest } : {})
     }),
     signal
   });

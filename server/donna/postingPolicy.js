@@ -58,6 +58,10 @@ const stringList = (value) => Array.isArray(value) && value.every(nonemptyString
 // query function, for a posted line whose registration basis changed
 // (db/taxRegistrationChange.js). A country without a filed-return record
 // declares none.
+// Optional returnLineKey(line): what the country's VAT return reads of one
+// ledger line (a string key), or null when it reads nothing of it. The
+// adjustment writer nets a journal's lines by it (ledgerCorrectionLines.js
+// correctionReturnMovement). Without it, a line's tax code is the key.
 const validWithoutTax = (rule) => Boolean(rule) && typeof rule === 'object' && Boolean(rule.treatments)
   && nonemptyString(rule.treatments.purchase) && nonemptyString(rule.treatments.sale)
   && ['instruction', 'needsRegistration'].every((key) => typeof rule[key] === 'function');
@@ -78,7 +82,8 @@ const validTaxRegistration = (rule) => Boolean(rule) && typeof rule === 'object'
   && nonemptyString(rule.profileField) && stringList(rule.recordLockedCodes) && validWithoutTax(rule.withoutTax)
   && validSalesSourceShowsTax(rule.salesSourceShowsTax, rule.refusalCodes)
   && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice', 'notRecordedNotice'].every((key) => typeof rule[key] === 'function')
-  && (!Object.hasOwn(rule, 'filedReturnOn') || typeof rule.filedReturnOn === 'function');
+  && (!Object.hasOwn(rule, 'filedReturnOn') || typeof rule.filedReturnOn === 'function')
+  && (!Object.hasOwn(rule, 'returnLineKey') || typeof rule.returnLineKey === 'function');
 
 // The country's no-VAT treatment labels (withoutTax.treatments), for the
 // policy-vocabulary checks: a coder may propose one only on a line whose

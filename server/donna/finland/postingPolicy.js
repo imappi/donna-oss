@@ -11,6 +11,7 @@ import { assertSalesSourceTaxRegistration, assertTaxSourceEvidence } from '../ta
 import { ALV_REGISTRATION_STATUSES, normalizeAlvRegistrationProfile, resolveAlvRegistrationAsOf } from './alvRegistration.js';
 import { isRegistrationRecord } from '../sellerRegistration.js';
 import { toIsoDay } from '../dates.js';
+import { alvReturnLineKey } from './alvReturn.js';
 
 const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const refuse = (code, message, details) => { throw Object.assign(new Error(message), { code, statusCode: 409, ...(details ? { details } : {}) }); };
@@ -166,6 +167,10 @@ const FI_TAX_REGISTRATION = Object.freeze({
   // filed return stays filed), read when a posted line's registration basis
   // changed (db/taxRegistrationChange.js): nothing is adjusted into it. The
   // caller passes its own query function; this module holds no connection.
+  // What the ALV return builder reads of a ledger line (alvReturn.js): the
+  // adjustment writer refuses, or asks a person, only when a journal's lines
+  // change what a filed return reads (db/ledger.js postLedgerAdjustmentInDb).
+  returnLineKey: alvReturnLineKey,
   filedReturnOn: async ({ query, firmId, clientId, onDate }) => (await query(
     `select id, period_key from alv_returns where firm_id = $1 and client_id = $2 and status = 'filed'
       and starts_on <= $3::date and ends_on >= $3::date order by starts_on, id limit 1`, [firmId, clientId, onDate])).rows[0] || null,

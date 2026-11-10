@@ -7,6 +7,9 @@
 import { planRefundGroup } from '../jevRefundGroup.js';
 import { resolveDocumentAllocation } from './documentAllocation.js';
 import { assertCurrentCodingEvidence, autonomousCoding, CODING_EVIDENCE_REFUSAL_CODES } from './codingEvidence.js';
+import { taxRegistrationRuleFor, taxRegistrationPeriodState } from './taxRegistrationChange.js';
+import { correctionReturnMovement } from '../ledgerCorrectionLines.js';
+import { hash } from '../jevEvidenceContract.js';
 
 import { loadTaxPostingContext, readTaxPostingEvidence, taxFactsDigest } from './taxPostingFacts.js';
 import { readPostingAdmissionWithClient, requirePostingAdmission } from '../postingAdmissionRegistry.js';
@@ -4282,6 +4285,12 @@ export {
   insertLedgerCorrectionJournal as __insertLedgerCorrectionJournal
 };
 
+// The actors Donna's own callers post adjustments as: the late-bank-line
+// reversal and the other system producers ('system'), and the autonomous
+// coding correction ('coding_correction'). Neither acknowledges a filed VAT
+// return or closes a case on a person's behalf.
+const AUTOMATIC_ADJUSTMENT_ACTORS = new Set(['', 'system', 'coding_correction']);
+
 export const postLedgerAdjustmentInDb = async ({
   firmId = DEFAULT_FIRM_ID,
   clientId,
@@ -4292,7 +4301,8 @@ export const postLedgerAdjustmentInDb = async ({
   lines = [],
   reverseOriginal = true,
   actorId = 'system',
-  codingCorrection = null
+  codingCorrection = null,
+  filedReturnAcknowledgement = null
 } = {}) => {
   if (!clientId) {
     const error = new Error('Client id is required for a ledger adjustment.');
@@ -4383,10 +4393,80 @@ export const postLedgerAdjustmentInDb = async ({
         : originalCurrency;
       const normalizedLines = lines.map((line) => normalizeCorrectionLine(line, currency, originalCurrency));
       for (const line of normalizedLines) assertLedgerCurrencyMatches(line.currency, currency, 'adjustment line', { retained: currency === originalCurrency });
+      const reversalLines = originalJournal && reverseOriginal !== false ? originalLines.map(reverseLedgerLine) : [];
+      // What a filed VAT return protects is the figures it read, not the
+      // period's books: filing does not lock the close period, and entries
+      // the return does not read (a year-end accrual or depreciation with no
+      // tax code) are dated into it as on any open date. The period state of
+      // the adjustment's own date and of the journal it corrects comes from
+      // the one reader the correction consumer uses
+      // (taxRegistrationPeriodState: a locked close period; a VAT return the
+      // country records as filed, null where the country keeps no record).
+      // What this adjustment moves in what a return reads is the reversal
+      // plus the replacement (or the manual lines), netted by the country's
+      // own read of a line (taxRegistration.returnLineKey, the return
+      // builder's; else the tax code). Both rules below use that one
+      // movement.
+      const periodCompany = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
+      const periodRule = taxRegistrationRuleFor(periodCompany?.jurisdiction || periodCompany?.profile?.jurisdiction);
+      const taxMoved = correctionReturnMovement([...reversalLines, ...normalizedLines], periodRule?.returnLineKey || undefined);
+      const datePeriod = await taxRegistrationPeriodState({ client, firmId, clientId, rule: periodRule, onDate: resolvedDate });
+      // Dated inside a filed return and changing what it reads: refused, with
+      // no acknowledgement path. The correction is dated in an open period
+      // (and, for a journal in the filed return, acknowledged below).
+      if (datePeriod.return_filed && taxMoved.length) {
+        const error = new Error(`Adjustment journal date ${resolvedDate} falls inside the filed VAT return ${datePeriod.filed_return_period || datePeriod.filed_return_id}, and this adjustment changes what that return reads: `
+          + `${taxMoved.map((row) => `${row.key} ${row.amount.toFixed(2)} ${row.currency}`.trim()).join(', ')}. `
+          + 'Date it in an open period instead; a correction of a journal in the filed return is then posted with a person\'s acknowledgement.');
+        error.statusCode = 409;
+        error.code = 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN';
+        error.details = { journal_date: resolvedDate, filed_return_id: datePeriod.filed_return_id,
+          filed_return_period: datePeriod.filed_return_period, tax_moved: taxMoved };
+        throw error;
+      }
+      const datedInFiledReturn = datePeriod.return_filed
+        ? { filed_return_id: datePeriod.filed_return_id, filed_return_period: datePeriod.filed_return_period } : null;
+      // The corrected journal's own period. An adjustment dated in an open
+      // period moves its difference into the open period's return. When the
+      // corrected journal sits in a filed VAT return and what that return
+      // reads moves, whether it may be corrected in a later return is a
+      // person's decision: the writer refuses and says what would move, and
+      // posts only with an authenticated person's acknowledgement of exactly
+      // that movement. Donna's own callers never carry one.
+      let correctsPeriod = null;
+      if (originalJournal) {
+        const originalDate = ledgerDateOnly(originalJournal.journal_date);
+        const period = await taxRegistrationPeriodState({ client, firmId, clientId, rule: periodRule, onDate: originalDate });
+        correctsPeriod = { journal_date: originalDate, close_period_locked: period.locked, close_period_id: period.close_period_id,
+          return_filed: period.return_filed, filed_return_id: period.filed_return_id, filed_return_period: period.filed_return_period,
+          tax_moved: taxMoved };
+        if (period.return_filed && taxMoved.length) {
+          const acknowledgementDigest = hash({ original_journal_id: originalJournal.id, journal_date: originalDate,
+            filed_return_id: period.filed_return_id, tax_moved: taxMoved });
+          const offered = codingCorrection ? null : filedReturnAcknowledgement;
+          const acknowledged = Boolean(offered) && offered.digest === acknowledgementDigest
+            && offered.principal_type === 'firm_member' && Boolean(offered.acknowledged_by)
+            && offered.acknowledged_by === actorId && !AUTOMATIC_ADJUSTMENT_ACTORS.has(actorId);
+          if (!acknowledged) {
+            const error = new Error(`The corrected journal (${originalDate}) is in the filed VAT return ${period.filed_return_period || period.filed_return_id}, and this adjustment changes what that return reads: `
+              + `${taxMoved.map((row) => `${row.key} ${row.amount.toFixed(2)} ${row.currency}`.trim()).join(', ')}. `
+              + `Dated ${resolvedDate}, the difference lands in that period's return. A person must acknowledge this before it posts.`);
+            error.statusCode = 409;
+            error.code = 'LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN';
+            error.details = { reason: offered ? 'acknowledgement_does_not_match' : 'acknowledgement_required',
+              original_journal_id: originalJournal.id, original_journal_date: originalDate, journal_date: resolvedDate,
+              filed_return_id: period.filed_return_id, filed_return_period: period.filed_return_period,
+              close_period_locked: period.locked, close_period_id: period.close_period_id,
+              tax_moved: taxMoved, acknowledgement_digest: acknowledgementDigest };
+            throw error;
+          }
+          correctsPeriod.filed_return_acknowledgement = { acknowledged_by: offered.acknowledged_by,
+            principal_type: offered.principal_type, digest: acknowledgementDigest, acknowledged_at: postedAt };
+        }
+      }
       const correctionKey = ledgerRecordId('correction', firmId, clientId, originalJournal?.id || transactionId || 'manual', postedAt);
       const journals = [];
       if (originalJournal && reverseOriginal !== false) {
-        const reversalLines = originalLines.map(reverseLedgerLine);
         for (const line of reversalLines) assertLedgerCurrencyMatches(line.currency, originalCurrency, 'original journal line', { retained: true });
         journals.push(await insertLedgerCorrectionJournal({
           client,
@@ -4441,6 +4521,8 @@ export const postLedgerAdjustmentInDb = async ({
             reason: cleanReason,
             journal_date: resolvedDate,
             correction_journal_ids: journals.map((journal) => journal.ledger_journal_id),
+            ...(correctsPeriod ? { corrects_period: correctsPeriod } : {}),
+            ...(datedInFiledReturn ? { dated_in_filed_return: datedInFiledReturn } : {}),
             ...(recovery ? { authority_basis: recovery.authority, model: recovery.suggestion.model,
               decision_digest: codingCorrection.decision_digest, verified_no_change: !lines.length } : {})
           })
@@ -4452,9 +4534,17 @@ export const postLedgerAdjustmentInDb = async ({
           journalIds: journals.map(journal => journal.ledger_journal_id) });
       } else if (originalJournal) {
         const {completeCodingEvidenceCorrectionWithClient} = await import('./codingEvidence.js');
-        await completeCodingEvidenceCorrectionWithClient({client,firmId,clientId,
+        const closedByChat = await completeCodingEvidenceCorrectionWithClient({client,firmId,clientId,
           transactionId:transactionId || originalJournal.source_id,originalJournalId:originalJournal.id,
           correctionJournalIds:journals.map(journal=>journal.ledger_journal_id),actorId});
+        // A person's full reversal and replacement of the journal a
+        // registration case is about is the decision that case waits on.
+        if (!closedByChat && reverseOriginal !== false && !AUTOMATIC_ADJUSTMENT_ACTORS.has(actorId)) {
+          const { closeRegistrationCaseByPersonAdjustmentWithClient } = await import('./codingCorrection.js');
+          await closeRegistrationCaseByPersonAdjustmentWithClient({ client, firmId, clientId,
+            transactionId: transactionId || originalJournal.source_id, originalJournalId: originalJournal.id,
+            correctionJournalIds: journals.map((journal) => journal.ledger_journal_id), actorId, reason: cleanReason });
+        }
       }
       await client.query('commit');
       // INT-6 — auto-suspend-on-export-correction (producer side; plan §2

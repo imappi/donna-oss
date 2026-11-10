@@ -175,6 +175,39 @@ const lineAccountType = (line, accountsById, accountsByCode) => {
   return resolveAccount(line.account_code)?.account_type || null;
 };
 
+// alvReturnLineKey(line) — what the return builder below reads of one ledger
+// line, or null when the builder reads nothing of it. The same branches, in
+// the same order, as the builder's line walk:
+// - a role-marked ALV control leg (alv_output / alv_input_deductible): the
+//   control cross-check;
+// - a known ALV code that the builder reports (return_boxes), or that sits on
+//   a control account or the wrong side (incompatible_tax_lines);
+// - an uncoded revenue line (uncoded_revenue_lines blocker);
+// - an uncoded movement on an ALV control account (unmarkedControlMovement).
+// Not read: an exempt, out-of-scope or non-deductible code on a compatible
+// account, and any other uncoded line. An uncoded expense line only adds to
+// the uncodedExpenseLineCount note, never to a figure or a blocker.
+// The adjustment writer (db/ledger.js, through the posting policy's
+// taxRegistration.returnLineKey) nets a journal's lines by this key to tell
+// whether it changes what a filed return reads.
+export const alvReturnLineKey = (line = {}) => {
+  const role = String(line.role || '').trim();
+  if (role === 'alv_output' || role === 'alv_input_deductible') return `control_leg:${role}`;
+  const accountType = lineAccountType(line, new Map(), new Map());
+  const accountCode = String(line.account_code || '');
+  const code = String(line.tax_type || '').trim().toUpperCase();
+  if (!code || !KNOWN_ALV_CODES.has(code)) {
+    if (accountType === 'revenue') return 'uncoded_revenue';
+    if (accountType === 'expense') return null;
+    return ALV_ACCOUNT_CODES.has(accountCode) ? `control_account:${accountCode}` : null;
+  }
+  const entry = resolveAlvEntry(code);
+  const incompatible = ALV_ACCOUNT_CODES.has(accountCode)
+    || (entry.direction === 'out' && accountType === 'expense')
+    || (entry.direction === 'in' && accountType === 'revenue');
+  return incompatible || entry.return_boxes ? `tax_code:${code}` : null;
+};
+
 // buildAlvReturnFromLedgerLines({ period, lines, accounts }) — the FI-3 aggregation.
 //
 // `period` is a resolveAlvPeriod result (or a key string); `lines` are POSTED
