@@ -14,6 +14,7 @@ import { hasJevResolvedCoding, JEV_DOCUMENT_ASK_SELECTIONS } from '../jevDecisio
 import { assertExecutionBudgetActive } from '../executionBudget.js';
 import { checkEntityReadinessAdmissionWithClient, EntityReadinessAdmissionError, evaluateRetainedProcessingScopeWithClient } from '../runtimeReadinessAdmission.js';
 import { withFirmDbClient } from './pool.js';
+import { taxRegistrationRuleFor, taxRegistrationPeriodState } from './taxRegistrationChange.js';
 import { isTransactionSyncedToXero } from './xero.js';
 import { rowToTransactionPayload } from './transactions.js';
 import { loadClientOwnBankAccounts } from './clients.js';
@@ -90,6 +91,18 @@ async function readInputs({client,firmId,clientId,transactionId}) {
     previous_revision_digest: requirement.native_registration.previous?.revision_digest || null,
     current_revision_digest: requirement.native_registration.current?.revision_digest || null
   });
+  // A registration change on a line in a locked period or a filed VAT return
+  // (db/taxRegistrationChange.js): nothing is posted into it, and an
+  // adjustment dated today would restate a closed VAT position by Donna's own
+  // hand. Read live, so a reopened period is consumed as any other case.
+  if (requirement.status==='pending' && requirement.tax_registration) {
+    const company=(await client.query('select jurisdiction,profile from clients where firm_id=$1 and id=$2',[firmId,clientId])).rows[0];
+    const period=await taxRegistrationPeriodState({client,firmId,clientId,
+      rule:taxRegistrationRuleFor(company?.jurisdiction || company?.profile?.jurisdiction),onDate:requirement.tax_registration.on_date});
+    if (period.locked || period.return_filed) fail('CODING_CORRECTION_TAX_PERIOD_CLOSED',{
+      reason:period.return_filed?'vat_return_filed':'close_period_locked',on_date:requirement.tax_registration.on_date,
+      close_period_id:period.close_period_id,filed_return_id:period.filed_return_id});
+  }
   if (requirement.status!=='pending' || !transaction.ledger_journal_id
     || transaction.ledger_journal_id!==requirement.original_journal_id
     || transaction.accepted_coding_evidence || transaction.ai_suggestion_status!=='auto_applied'

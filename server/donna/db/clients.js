@@ -2131,15 +2131,32 @@ export const updateClientProfileInDb = async ({
         }
       }
 
+      // A change to the country's VAT/ALV registration record: which posted
+      // lines it contradicts (db/taxRegistrationChange.js), named on this
+      // receipt in this transaction. Nothing is rewritten here; the existing
+      // correction case (codingEvidence.js) opens on each watched line.
+      let taxRegistrationChange = null;
+      {
+        const { taxRegistrationRuleFor, postedLinesAffectedByRegistrationChange } = await import('./taxRegistrationChange.js');
+        const jurisdictionNow = (await client.query('select jurisdiction from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0]?.jurisdiction;
+        const rule = taxRegistrationRuleFor(jurisdictionNow || updated.rows[0].profile?.jurisdiction);
+        if (rule?.profileField && Object.prototype.hasOwnProperty.call(stampedPatch, rule.profileField)) {
+          const { autonomousCoding } = await import('./codingEvidence.js');
+          taxRegistrationChange = await postedLinesAffectedByRegistrationChange({ client, firmId, clientId,
+            jurisdiction: jurisdictionNow || updated.rows[0].profile?.jurisdiction, before: priorProfile,
+            after: updated.rows[0].profile || {}, autonomous: autonomousCoding });
+        }
+      }
+
       await client.query(
         `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
          values ($1, $2, $5, $3, 'client.profile.update', 'client', $2, $4::jsonb)`,
         [firmId, clientId, actorId, JSON.stringify({ keys: Object.keys(stampedPatch), previous_values: previousValues,
-          ...(legalNamesChange ? { legal_names: legalNamesChange } : {}), ...(nativeRegistrationReceipt ? { native_registration: nativeRegistrationReceipt } : {}), ...(countryFactsInvalidated ? { country_facts_invalidated: countryFactsInvalidated } : {}), ...(accountingProfileReceipt ? { accounting_profile: accountingProfileReceipt } : {}), ...(fiIntakeFirstFill ? { fi_intake_first_fill: fiIntakeFirstFill } : {}), ...(channel === 'mobile' ? { channel } : {}) }), profileAuditActorType({ actorId, principal, nativeRegistrationReceipt })]
+          ...(legalNamesChange ? { legal_names: legalNamesChange } : {}), ...(taxRegistrationChange ? { tax_registration_change: taxRegistrationChange } : {}), ...(nativeRegistrationReceipt ? { native_registration: nativeRegistrationReceipt } : {}), ...(countryFactsInvalidated ? { country_facts_invalidated: countryFactsInvalidated } : {}), ...(accountingProfileReceipt ? { accounting_profile: accountingProfileReceipt } : {}), ...(fiIntakeFirstFill ? { fi_intake_first_fill: fiIntakeFirstFill } : {}), ...(channel === 'mobile' ? { channel } : {}) }), profileAuditActorType({ actorId, principal, nativeRegistrationReceipt })]
       );
 
       await client.query(manageTransaction ? 'commit' : 'release savepoint client_profile_update');
-      return { client_id: clientId, keys: Object.keys(stampedPatch) };
+      return { client_id: clientId, keys: Object.keys(stampedPatch), ...(taxRegistrationChange ? { tax_registration_change: taxRegistrationChange } : {}) };
     } catch (error) {
       await client.query(manageTransaction ? 'rollback' : 'rollback to savepoint client_profile_update');
       if (!manageTransaction) await client.query('release savepoint client_profile_update');
