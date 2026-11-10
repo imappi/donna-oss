@@ -101,6 +101,17 @@ test('real PG: operator projection retains exact causes through retry, dead lett
     assert.equal(await clearReconciliationProviderFailureWithClient({ client, firmId, clientId, documentId: 'bill' }), false);
     assert.equal((await read()).length, 1, 'only the independently unresolved coding failure remains');
     assert.deepEqual(await read(), await read(), 'repeated reads are idempotent');
+    // A batch the job's budget could not hold is not sent: its receipt keeps
+    // request_attempts 0 through the writer and the read model, and stays a
+    // recorded, retryable failure on the queue (0 is a count, not "no failure").
+    await client.query("insert into transactions(id,firm_id,client_id,description,status,payload) values('line-floor',$1,$2,'Synthetic fuel','needs_review','{}')", [firmId, clientId]);
+    const notStarted = new ProviderFailureError({ code: 'PROVIDER_TIMEOUT', provider: 'anthropic', reason: 'execution_budget_insufficient', retryable: true, owner: 'queue' });
+    await recordCodingProviderFailureWithClient({ client, firmId, clientId, transactionIds: ['line-floor'], failure: { ...notStarted.receipt(), request_attempts: 0 } });
+    const floor = (await read()).find((r) => r.source_id === 'line-floor');
+    assert.deepEqual([floor.code, floor.reason, floor.owner, floor.retryable, floor.attempts, floor.request_attempts],
+      ['PROVIDER_TIMEOUT', 'execution_budget_insufficient', 'queue', true, 1, 0]);
+    assert.equal((await read()).length, 2, 'the not-started line is a recorded failure');
+    assert.equal(rows.find((r) => r.lane === 'coding').request_attempts, 1, 'a call that was made still counts its request');
     for (const table of ['ledger_journals', 'client_evidence_requests', 'reconciliation_matches']) {
       assert.equal(Number((await client.query(`select count(*) from ${table} where client_id=$1`, [clientId])).rows[0].count), 0);
     }

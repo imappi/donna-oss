@@ -49,6 +49,7 @@ const en = Object.freeze({
   "operator.providerFailure.cause.PROVIDER_UNAVAILABLE": "The provider service is unavailable.",
   "operator.providerFailure.cause.PROVIDER_REJECTED_REQUEST": "The provider rejected the request.",
   "operator.providerFailure.cause.PROVIDER_TIMEOUT": "The provider operation exceeded its deadline.",
+  "operator.providerFailure.cause.PROVIDER_TIMEOUT.execution_budget_insufficient": "Not started: the job did not have enough time left for this step. The next run continues it.",
   "operator.providerFailure.cause.PROVIDER_NETWORK": "The connection to the provider failed.",
   "operator.providerFailure.cause.PROVIDER_INVALID_OUTPUT": "The provider returned an unreadable response.",
   "operator.providerFailure.cause.unknown": "A provider failure was recorded.",

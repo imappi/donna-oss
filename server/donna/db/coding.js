@@ -599,7 +599,9 @@ export const recordCodingProviderFailureWithClient = async ({ client, firmId = D
       : (failure.retryable === false ? 'operator' : 'queue'),
     // How many requests the failed operation itself made (the transport's
     // retries) — distinct from `attempts` below, the number of failed runs.
-    request_attempts: Math.max(1, Number(failure.attempts) || 1)
+    // 0 only when the receipt says no request was made (a batch the job's
+    // budget could not hold was not sent); the failure is recorded the same.
+    request_attempts: failure.request_attempts === 0 ? 0 : Math.max(1, Number(failure.attempts) || 1)
   };
   let prior = [];
   await client.query('begin');

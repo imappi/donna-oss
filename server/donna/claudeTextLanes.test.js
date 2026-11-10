@@ -665,7 +665,10 @@ test('inside a worker the batch coder lives past the transport default to its ow
   const before = sent.length;
   const short = await inWorker(CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS - 1_000, () => suggestTransactionCodingBatch({ clientProfile: { jurisdiction: 'fi' }, transactions: [TX, TX2] }));
   assert.equal(short.provider_failure?.code, 'PROVIDER_TIMEOUT');
-  assert.equal(short.provider_failure?.reason, 'execution_budget_exhausted');
+  assert.equal(short.provider_failure?.reason, 'execution_budget_insufficient', 'its own reason: not a timed-out call');
+  assert.equal(short.provider_failure?.request_attempts, 0, 'no request was made');
+  assert.equal(short.provider_failure?.retryable, true, 'retryable, as a cut call is');
+  assert.equal(short.provider_failure?.owner, 'queue', 'on the queue, as a cut call is');
   assert.equal(sent.length, before, 'nothing was sent');
   // The single-line coder (one line, seconds) is not held to the batch floor.
   const single = await inWorker(CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS - 1_000, () => suggestTransactionCoding({ clientProfile: { jurisdiction: 'fi' }, transaction: TX }));
