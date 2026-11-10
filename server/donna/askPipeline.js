@@ -24,7 +24,7 @@ import { resolve as resolvePath } from 'node:path';
 
 import { assignExclusiveCitableEvidence } from './localEvidenceInventory.js';
 // The one owner-language resolver (also behind the WhatsApp template choice).
-import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
+import { ownerClientCountry, preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 // The shared provider transport (2026-09-13): one deadline over headers +
 // body, capped by the worker's execution budget, and ONE typed failure for
 // a missing key, 401/403, 429/5xx, a reset socket, a hung request and an
@@ -354,7 +354,10 @@ export const buildAskDraftInput = ({
   return ({
   client: {
     name: clientProfile.companyName || clientProfile.company_name || '',
-    jurisdiction: clientProfile.jurisdiction || '',
+    // The client's country by the resolver's own rule (ownerLanguage.js): the
+    // jurisdiction column wins, the profile value only when the column is
+    // empty, and no country when the two disagree.
+    jurisdiction: ownerClientCountry(clientProfile.persisted_identity?.jurisdiction, clientProfile.jurisdiction),
     entity_type: clientProfile.entityType || '',
     accounting_currency:
       clientProfile.accountingCurrency || clientProfile.baseCurrency || clientProfile.defaultCurrency || '',

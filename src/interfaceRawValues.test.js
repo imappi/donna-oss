@@ -3,18 +3,21 @@
 // for real (esbuild bundle + jsdom + react-dom/client, the
 // reconciliationAuthorityUi.test.js pattern) in English and in Finnish:
 //   1. the upload tray's document-type argument ({documentType});
-//   2. the ask-client prompt's {businessUse} and {transaction} phrases;
+//   2. the ask-client prompt's {businessUse} and {transaction} phrases, which
+//      follow the client owner's language (interfaceRawValuesFollowups.test.js
+//      covers an owner whose language differs from the interface's);
 //   3. stored status codes (a ledger journal's status in the owner's book
 //      view, a chat action's status in the firm feed);
 //   4. the portal's "loading your books" screen, shown before the client is
 //      known, follows the portal's language instead of always English;
 //   5. an authority grant with no example vendor name.
-// Nothing sent to the server changes: the ask-client draft and the grant
-// requests are asserted unchanged.
+// The grant requests are asserted unchanged; the ask-client draft is the
+// previewed text (since the follow-up to #49, both are one text).
 import test, { before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
@@ -56,7 +59,11 @@ before(async () => {
     requests.push({ url: address, ...init });
     return responder ? responder(address, init) : new Response('{}', { status: 404 });
   };
-  directory = await mkdtemp(resolve('.interface-raw-values-test-'));
+  // The bundle is written to the system temp directory, never the repository
+  // root; a node_modules link beside it lets its external imports resolve. The
+  // after() hook removes the directory (link included, never its target).
+  directory = await mkdtemp(join(tmpdir(), 'interface-raw-values-test-'));
+  await symlink(resolve('node_modules'), join(directory, 'node_modules'), 'dir');
   await build({
     stdin: {
       contents: [
@@ -108,9 +115,13 @@ for (const locale of LOCALES) {
 }
 
 // ── 2. Ask-client prompt: {businessUse} and {transaction} ─────────────────
-const askArtifact = (moneyIn) => ({
+// The owner's language here matches the interface language: a Finnish (FI)
+// company for Finnish, no client record (the resolver's English) for English.
+const OWNER_FOR = { fi: { id: 'client-synthetic', persisted_identity: { jurisdiction: 'FI' } }, en: null };
+const askArtifact = (moneyIn, locale = 'en') => ({
   type: 'transaction',
   data: {
+    client: OWNER_FOR[locale],
     previewMode: 'action-cards',
     previewMessages: [],
     previewAppliableActionTypes: [],
@@ -121,14 +132,15 @@ const askArtifact = (moneyIn) => ({
   }
 });
 const askPill = () => [...document.querySelectorAll('button[title]')].find((b) => /Hi —|Hei!/.test(b.title));
+const PREVIEW_PREFIX = { en: 'To the client, in English: ', fi: 'Asiakkaalle suomeksi: ' };
 const ASK_EXPECTED = {
   en: { expense: /confirm whether it’s a business expense\?/, income: /confirm whether it’s business income\?/, subject: /quick check on (the .+ transaction|this transaction) on .+ for / },
   fi: { expense: /Onko kyseessä liiketoiminnan kulu\?/, income: /Onko kyseessä liiketulo\?/, subject: /Tarkistaisin vielä (tapahtuman .+|tämän tapahtuman) \(.+, .+\)\./ }
 };
 for (const locale of LOCALES) {
-  test(`ask-client prompt (${locale}): the business-use and transaction phrases read in the interface language; the draft sent is unchanged`, async () => {
+  test(`ask-client prompt (${locale}): the business-use and transaction phrases read in the owner's language; the draft is the previewed text`, async () => {
     for (const moneyIn of [false, true]) {
-      await render(React.createElement(m.TransactionArtifact, { artifact: askArtifact(moneyIn), setArtifact: () => {} }), { locale });
+      await render(React.createElement(m.TransactionArtifact, { artifact: askArtifact(moneyIn, locale), setArtifact: () => {} }), { locale });
       const pill = askPill();
       assert.ok(pill, 'the ask-client pill renders');
       assert.match(pill.title, ASK_EXPECTED[locale][moneyIn ? 'income' : 'expense']);
@@ -137,8 +149,9 @@ for (const locale of LOCALES) {
       await act(async () => pill.click());
       await flush();
       const draft = document.querySelector('textarea')?.value || '';
-      // The composer draft is what Send transmits: it stays exactly as before.
-      assert.match(draft, moneyIn ? /confirm whether it's business income\? Thanks!$/ : /confirm whether it's a business expense\? Thanks!$/);
+      // The composer draft is what Send transmits: exactly the previewed text.
+      assert.ok(pill.title.startsWith(PREVIEW_PREFIX[locale]), pill.title);
+      assert.equal(draft, pill.title.slice(PREVIEW_PREFIX[locale].length));
       await act(async () => root.unmount());
       root = null;
     }

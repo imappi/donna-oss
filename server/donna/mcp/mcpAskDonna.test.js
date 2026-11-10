@@ -93,6 +93,7 @@ const makeDeps = ({ modelReply, assembled = {}, overrides = {} } = {}) => {
     onOwnerMessagePersisted: async (input) => { sidecars.push(['intent', input]); return { status: 'skipped' }; },
     onOwnerTurnMemoryShadow: async (input) => { sidecars.push(['memory', input]); return { status: 'skipped' }; },
     withFirmDbClient: poison('withFirmDbClient'),
+    getOwnerLanguage: async () => 'en',
     now: () => new Date('2026-09-14T10:00:00.000Z'),
     warn: () => {},
     ...overrides
@@ -406,6 +407,37 @@ test('portal link with no base URL configured: the honest named instruction, nev
   assert.doesNotMatch(result.text, /https?:\/\//);
   assert.equal(result.portal_link.status, 'no_base_url');
   assert.equal(shares[0].status, 'no_base_url');
+});
+
+test('portal link: the deterministic lines follow the owner\'s language (the one resolver, read per client); the model\'s own text is kept', async () => {
+  const languageReads = [];
+  const reply = async ({ text, env }) => {
+    const { deps } = makeDeps({
+      modelReply: { text, actions: [SHARE_ACTION] },
+      assembled: { selfKnowledge: ARMED_PACK },
+      overrides: {
+        env,
+        recordOwnerPortalLinkShare: async () => {},
+        getOwnerLanguage: async (input) => { languageReads.push(input); return 'fi'; }
+      }
+    });
+    return (await run(deps, { entity_id: 'client-a', message: 'Missä portaalilinkki on?' })).text;
+  };
+  assert.equal(await reply({ text: '', env: {} }),
+    'En pysty lähettämään toimivaa linkkiä juuri nyt, koska portaalin verkko-osoitetta ei ole vielä asetettu minun päässäni. '
+    + 'Avaa Donna-portaalisi ja mene kohtaan What I still need from you. '
+    + 'Kaikki avoimet kysymyksesi ja puuttuvat asiakirjat löytyvät sieltä.');
+  assert.equal(await reply({ text: '', env: { PUBLIC_APP_URL: 'https://app.donna.test' } }),
+    'Tässä on portaalilinkkisi. Avoimet kysymyksesi ja puuttuvat asiakirjat löytyvät kohdasta What I still need from you.\nhttps://app.donna.test/client/client-a#list');
+  assert.equal(await reply({ text: 'Tässä linkki.', env: { PUBLIC_APP_URL: 'https://app.donna.test' } }), 'Tässä linkki.\nhttps://app.donna.test/client/client-a#list');
+  assert.deepEqual(languageReads[0], { firmId: 'firm-1', clientId: 'client-a' });
+  // A failed language read degrades to English, never a throw.
+  const { deps } = makeDeps({
+    modelReply: { text: '', actions: [SHARE_ACTION] },
+    assembled: { selfKnowledge: ARMED_PACK },
+    overrides: { env: {}, recordOwnerPortalLinkShare: async () => {}, getOwnerLanguage: async () => { throw new Error('down'); } }
+  });
+  assert.match((await run(deps)).text, /^I can't send a working link right now/);
 });
 
 test('portal link NOT armed: a model emission of share_portal_link is sanitized out; no link, no share receipt, text untouched (the pre-slice-4 behaviour)', async () => {
