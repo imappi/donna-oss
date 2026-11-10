@@ -1043,6 +1043,12 @@ export const MOUNTED_SURFACE_MESSAGES = Object.freeze({
   'mounted.financial.waitingProviderKey': 'No {code} on this installation: not read yet. It is read once the key is added.',
   'mounted.financial.waitingProviderKeyRefused': '{provider} refused {code}: not read yet. It is read once the key is fixed.',
   'mounted.financial.waitingProviderCredit': '{provider} has no credit left on this account: not read yet. It is read once credit is added.',
+  // A firm member's ledger adjustment (seat ask, Mentions lane): Donna's
+  // settlement-entry reversal refused because the entry is in a filed VAT return.
+  'mounted.financial.ledgerAdjustmentAsk.settlementReversal': 'Reverse {journal} for {document} ({amount} {currency}): bank line {date} {transaction} also paid it.',
+  'mounted.financial.ledgerAdjustmentAsk.restatesFiledReturn': 'Donna did not post the reversal: the entry is in the filed VAT return {period}, and reversing it changes what that return reads ({detail}).',
+  'mounted.financial.ledgerAdjustmentAsk.dateInFiledReturn': 'Donna did not post the reversal: it would be dated inside the filed VAT return {period} and change what it reads ({detail}).',
+  'mounted.financial.ledgerAdjustmentAsk.todo': 'Post the reversal of {journal} as a ledger adjustment and acknowledge the filed return change. This closes when the reversal is posted.',
   'mounted.financial.waitingProvider': '{provider} could not be reached: not read yet. It is read once it answers.',
   'mounted.financial.noBankLine': 'No bank line yet',
   'mounted.financial.openDocument': 'Open document {document} — {status}',

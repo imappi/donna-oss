@@ -503,7 +503,9 @@ const createClientEvidenceRequestWithClient = async ({
   // 122 — the live-ask collapse is AUDIENCE-SCOPED (including the legacy
   // per-artifact fallback clauses): asking the owner and asking a colleague
   // about one anchor are two live questions, so a new seat ask must never
-  // collapse onto — or reword — the owner's open question.
+  // collapse onto — or reword — the owner's open question. An isolated
+  // evidence type (ISOLATED_ASK_EVIDENCE_TYPES) is its own question on the
+  // anchor: it neither collapses onto another live ask there nor absorbs one.
   const openExisting = await client.query(
     `select *
      from client_evidence_requests
@@ -511,7 +513,7 @@ const createClientEvidenceRequestWithClient = async ({
        and client_id = $2
        and status in ('draft', 'open', 'replied')
        and audience = $8
-       and (($9::text <> 'ae_vat_business_use' and evidence_type <> 'ae_vat_business_use') or evidence_type = $9)
+       and ((not ($9::text = any($10::text[])) and not (evidence_type = any($10::text[]))) or evidence_type = $9)
        and (
          ($6::text <> '' and canonical_anchor = $6 and coalesce(blocker_code, '') = $7)
          or ($3::text <> '' and transaction_id = $3)
@@ -523,7 +525,7 @@ const createClientEvidenceRequestWithClient = async ({
     [
       firmId, cleanClientId,
       transaction?.id || '', reviewItem?.id || cleanReviewItemId || '', document?.id || '',
-      canonicalAnchor, blockerCode, askAudience, cleanEvidenceType
+      canonicalAnchor, blockerCode, askAudience, cleanEvidenceType, [...ISOLATED_ASK_EVIDENCE_TYPES]
     ]
   );
   const existing = openExisting.rows[0] || null;
@@ -558,7 +560,7 @@ const createClientEvidenceRequestWithClient = async ({
         where firm_id = $1
           and client_id = $2
           and audience = $8
-       and (($9::text <> 'ae_vat_business_use' and evidence_type <> 'ae_vat_business_use') or evidence_type = $9)
+       and ((not ($9::text = any($10::text[])) and not (evidence_type = any($10::text[]))) or evidence_type = $9)
           and (
             ($6::text <> '' and canonical_anchor = $6 and coalesce(blocker_code, '') = $7)
             or ($3::text <> '' and transaction_id = $3)
@@ -568,7 +570,7 @@ const createClientEvidenceRequestWithClient = async ({
       [
         firmId, cleanClientId,
         transaction?.id || '', reviewItem?.id || cleanReviewItemId || '', document?.id || '',
-        canonicalAnchor, blockerCode, askAudience, cleanEvidenceType
+        canonicalAnchor, blockerCode, askAudience, cleanEvidenceType, [...ISOLATED_ASK_EVIDENCE_TYPES]
       ]
     );
     generation = Number(generationResult.rows[0]?.generation || 0);
@@ -818,6 +820,18 @@ const createClientEvidenceRequestWithClient = async ({
 // The dbClient-injectable test seam (house `__` idiom). Pins the F-19
 // id-determinism contract without going through withFirmDbClient.
 export { createClientEvidenceRequestWithClient as __createClientEvidenceRequestWithClient };
+
+// A firm member must post (and, for a filed VAT return, acknowledge) a ledger
+// adjustment: a seat ask on the bank line, answered only by the adjustment
+// journal its producer names (documentSettlementReversal.js resolves it by id
+// when the reversal exists). Coding or posting the line does not answer it.
+export const LEDGER_ADJUSTMENT_ASK_EVIDENCE_TYPE = 'ledger_adjustment';
+// Evidence types whose ask is its own question on an anchor: the live-ask
+// collapse above never merges them with another ask on the same line.
+export const ISOLATED_ASK_EVIDENCE_TYPES = Object.freeze(['ae_vat_business_use', LEDGER_ADJUSTMENT_ASK_EVIDENCE_TYPE]);
+// Asks only their named answer closes: the transaction-wide resolver below
+// leaves them open unless the caller names their ids.
+const ANSWERED_ONLY_BY_ID_EVIDENCE_TYPES = Object.freeze([LEDGER_ADJUSTMENT_ASK_EVIDENCE_TYPE]);
 
 // Physical counts are a typed subject of the existing ask lifecycle. The
 // inventory owner holds its scope fence and authority in this transaction;
@@ -1242,6 +1256,7 @@ export const resolveOpenEvidenceRequestsForTransaction = async ({
      where firm_id = $1 and client_id = $2 and transaction_id = $3
        and status in ('draft', 'open', 'replied')
        and ($6::text[] is null or id = any($6::text[]))
+       and ($6::text[] is not null or not (evidence_type = any($7::text[])))
      returning id`,
     [
       firmId,
@@ -1253,7 +1268,8 @@ export const resolveOpenEvidenceRequestsForTransaction = async ({
         resolution_note: note || 'Superseded by applied coding.',
         resolved_at: new Date().toISOString()
       }),
-      evidenceRequestIds
+      evidenceRequestIds,
+      [...ANSWERED_ONLY_BY_ID_EVIDENCE_TYPES]
     ]
   );
   const resolvedIds = result.rows.map((row) => row.id);

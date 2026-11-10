@@ -248,6 +248,7 @@ const linkJournal = async (tx, { firmId, clientId, attemptId, ledgerJournalId, r
 // fire AFTER their SELECTs succeed, so the txn stays usable).
 const LOCKED_PERIOD_CODES = new Set(['LEDGER_LOCKED_PERIOD_IMMUTABLE', 'LEDGER_ADJUSTMENT_DATE_LOCKED']);
 const BALANCE_CODE = 'LEDGER_CORRECTION_UNBALANCED';
+const FILED_RETURN_CODE = 'LEDGER_JOURNAL_DATE_IN_FILED_RETURN';
 
 // ── The core executor (§9) ─────────────────────────────────────────────────────
 export const postInventoryJournalWithinTransaction = async (tx, params = {}) => {
@@ -435,6 +436,17 @@ export const postInventoryJournalWithinTransaction = async (tx, params = {}) => 
         firmId, clientId, actorId, operationId, postingKind, postingBasisVersion, valuationRunId, proposalHash,
         outcome: 'blocked_locked_period', reasonCode: err.code, waiterType: 'accountant_operator',
         nextAction: 'post a dated adjustment journal into an open period', dryRun: false, detail: { message: err.message }
+      });
+    }
+    // Dated inside a filed VAT return and changing what it reads (the shared
+    // journal guard, db/ledger.js): whether it belongs in a corrected return
+    // for that period or in a later one is a person's decision.
+    if (err?.code === FILED_RETURN_CODE) {
+      return recordRefusal(tx, {
+        firmId, clientId, actorId, operationId, postingKind, postingBasisVersion, valuationRunId, proposalHash,
+        reasonCode: err.code, waiterType: 'accountant_operator',
+        nextAction: 'decide whether this belongs in a corrected return for the filed period or in a later return', dryRun: false,
+        detail: { message: err.message, ...(err.details || {}) }
       });
     }
     if (err?.code === BALANCE_CODE) {

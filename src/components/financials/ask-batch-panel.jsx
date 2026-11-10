@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useIntl } from 'react-intl';
+import { ledgerAdjustmentAskMessages } from '../../lib/ledgerAdjustmentAskView.js';
 import ProviderFailurePanel from './provider-failure-panel.jsx';
 
 import { draftFirmAskBatch, fetchFirmAskBatches, fetchMentionNotifications, formatFirmError, markMentionNotificationsRead } from '../../lib/firmApi.js';
@@ -128,6 +130,7 @@ const AskBatchPanel = ({
   showWaitingRows = true,
   embedded = false
 }) => {
+  const intl = useIntl();
   const [batchState, setBatchState] = useState(() => ({
     clientId,
     batches: cachedBatches,
@@ -398,18 +401,31 @@ const AskBatchPanel = ({
       {mentionCount > 0 && (
         <section style={BANK_FEED_SECTION_STYLE}>
           <SectionHeading label="Mentions" count={mentionCount} />
-          {laneAsks.map((ask) => (
+          {laneAsks.map((ask) => {
+            // A ledger adjustment a firm member must post renders its stored
+            // facts through the catalog, in full; any other ask its question.
+            const adjustment = ledgerAdjustmentAskMessages(ask);
+            const adjustmentText = adjustment
+              ? adjustment.map((message) => intl.formatMessage({ id: message.id }, message.values)).join(' ')
+              : null;
+            return (
             <div key={ask.id} style={BANK_FEED_ROW_STYLE}>
               <span style={BANK_FEED_DATE_STYLE}>{shortDate(ask.created_at) || '—'}</span>
-              <span style={{ ...BANK_FEED_PRIMARY_STYLE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {ask.question || 'A colleague asked you a question.'}
+              <span
+                style={adjustmentText
+                  ? { ...BANK_FEED_PRIMARY_STYLE, whiteSpace: 'normal' }
+                  : { ...BANK_FEED_PRIMARY_STYLE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                data-ask-kind={adjustmentText ? 'ledger_adjustment' : undefined}
+              >
+                {adjustmentText || ask.question || 'A colleague asked you a question.'}
               </span>
               <span aria-hidden="true" />
               <span style={{ ...BANK_FEED_TRAILING_CELL_STYLE, display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                 <span style={bankFeedPillStyle('warm')}>Waiting on you</span>
               </span>
             </div>
-          ))}
+            );
+          })}
           {laneUnread.map((row) => (
             <div key={row.id} style={BANK_FEED_ROW_STYLE}>
               <span style={BANK_FEED_DATE_STYLE}>{shortDate(row.created_at) || '—'}</span>
