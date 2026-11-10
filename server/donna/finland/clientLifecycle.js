@@ -2,11 +2,16 @@
 // writer's existing transaction; its locks, savepoint and audit contract remain intact.
 import { assertFinlandLegalFormNotMutatedAfterPosting, finlandEntityType, isFinlandLegalFormConversion, isFinlandOsakeyhtio } from './entity.js';
 import { readFinnishProfileIntakeWithClient, assertFinnishProfileIntakeMutableWithClient } from './profileIntake.js';
+import { canonicalFinnishBusinessId } from './businessId.js';
 import { mintForm5OyQuarantineBlocker } from './statutoryBlocker.js';
 
 export const FI_CLIENT_LIFECYCLE = Object.freeze({
   entityAxis: finlandEntityType,
   profileIntake: Object.freeze({ read: readFinnishProfileIntakeWithClient, assertMutable: assertFinnishProfileIntakeMutableWithClient }),
+  // The business register identifier: canonical form or null. Pure; reached
+  // through clientLifecycleRegistry.resolveClientLifecycle by market-neutral
+  // callers (the mobile business register), never imported from here.
+  registryIdentifier: Object.freeze({ canonical: canonicalFinnishBusinessId }),
   async beforeIdentityWrite({ client, firmId, clientId, storedEntityType, incomingEntityType }) {
     if (isFinlandLegalFormConversion(storedEntityType, incomingEntityType)) {
       const posted = await client.query(

@@ -46,21 +46,28 @@ test('every contract operation is either routed or answers NOT_IMPLEMENTED — n
   const implemented = Object.entries(states).filter(([, state]) => state === 'implemented').map(([key]) => key).sort();
   assert.deepEqual(implemented, [
     'DELETE /auth/sessions/current',
+    'DELETE /notifications/registrations/{registrationId}',
+    'GET /entities/{entityId}/business-setup',
     'GET /entities/{entityId}/documents',
     'GET /entities/{entityId}/documents/parse-status',
     'GET /entities/{entityId}/documents/{documentId}',
     'GET /entities/{entityId}/queue',
     'GET /entities/{entityId}/queue/cards/{cardId}',
+    'GET /entities/{entityId}/settings',
     'GET /entities/{entityId}/status',
     'GET /me',
     'POST /auth/sessions',
     'POST /auth/sessions/refresh',
+    'POST /entities/{entityId}/business-setup',
     'POST /entities/{entityId}/documents/register',
     'POST /entities/{entityId}/documents/upload-intent',
     'POST /entities/{entityId}/documents/{documentId}/resolve-duplicate',
     'POST /entities/{entityId}/documents/{documentId}/retry',
     'POST /entities/{entityId}/queue/cards/{cardId}/decision',
-    'POST /me/deletion-request'
+    'POST /entities/{entityId}/settings',
+    'POST /me/deletion-request',
+    'POST /notifications/registrations',
+    'PUT /entities/{entityId}/onboarding/profile'
   ]);
   assert.equal(operations.length - implemented.length, NOT_IMPLEMENTED.length, 'one 501 entry per remaining operation');
 });
