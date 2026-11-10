@@ -179,9 +179,9 @@ test('real PG + real HTTP: a firm grants, uses, suspends, re-activates, revokes 
   const projection = async (txId) => (await withFirmDbClient((client) => computeConvergenceForTransactions(client, { firmId: FIRM, transactionIds: [txId] })))[0].derived;
   // Held for authority = a HANGING line whose live match is held only by the
   // materiality gate (the persisted affirmative gate receipt). The projection's
-  // gather does not feed its matchHeldPendingAuthority input today (it reports
-  // these lines under their reconciliation_status reason), so the count is
-  // read from the receipt, joined to the projected state.
+  // gather feeds its matchHeldPendingAuthority input from the same receipt, so
+  // an uncovered held line projects matched_pending_authority_no_grant; the
+  // count is read from the receipt, joined to the projected state.
   const heldCount = async (clientId) => {
     const { rows } = await pool.query(`select m.bank_transaction_id, m.payload from reconciliation_matches m
       where m.firm_id=$1 and m.client_id=$2 and m.status='suggested'`, [FIRM, clientId]);
@@ -210,9 +210,8 @@ test('real PG + real HTTP: a firm grants, uses, suspends, re-activates, revokes 
   assert.deepEqual(m1.payload.authorization.reasons, ['above_materiality_ceiling']);
   assert.deepEqual(m1.payload.authorization.gates, { A: true, B: true, C: true, D: true, E: false });
   await isHanging(q1.txId);
-  // Pinned as found: the projection names the line's reconciliation_status,
-  // not matched_pending_authority_no_grant (its gather never sets that input).
-  assert.equal((await projection(q1.txId)).reason, 'reconciliation_status:pending');
+  // The gather feeds the held input: the line hangs on authority, by name.
+  assert.equal((await projection(q1.txId)).reason, 'matched_pending_authority_no_grant');
   assert.equal(await heldCount(A), 1);
 
   // ── 2. Refusals, then a confirm that is one-time only ───────────────────────

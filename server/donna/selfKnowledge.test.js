@@ -269,6 +269,30 @@ test('composePortalLinkReply: model text + the REAL link, or the honest instruct
   assert.ok(!degraded.includes('http'), 'no dead link in the degrade copy');
 });
 
+test('composePortalLinkReply follows the owner language; the English lines stay byte-identical', () => {
+  const link = { status: 'sent', url: 'https://app.books.example/client/c#list' };
+  // English pinned verbatim (the pre-language copy).
+  assert.equal(portalLinkDefaultText(), 'Here is your portal link. Your open questions and missing documents are under What I still need from you.');
+  assert.equal(portalLinkUnavailableText(), "I can't send a working link right now: the portal web address isn't configured on my side yet. Open your Donna portal and go to the section called What I still need from you. Your open questions and missing documents are all listed there.");
+  assert.equal(composePortalLinkReply({ text: '', link, language: 'en' }), composePortalLinkReply({ text: '', link }));
+  // A Finnish owner reads Finnish deterministic lines (English before this change).
+  assert.equal(
+    composePortalLinkReply({ text: '', link, language: 'fi' }),
+    'Tässä on portaalilinkkisi. Avoimet kysymyksesi ja puuttuvat asiakirjat löytyvät kohdasta What I still need from you.\nhttps://app.books.example/client/c#list'
+  );
+  const degraded = composePortalLinkReply({ text: 'Tässä.', link: { status: 'no_base_url', url: null }, language: 'fi' });
+  assert.equal(degraded, portalLinkUnavailableText('fi'));
+  assert.match(degraded, /^En pysty lähettämään toimivaa linkkiä/);
+  assert.ok(!degraded.includes('http'), 'no dead link in the Finnish degrade copy either');
+  // The model's own text is never rewritten, in either language.
+  assert.equal(composePortalLinkReply({ text: 'Ole hyvä.', link, language: 'fi' }), 'Ole hyvä.\nhttps://app.books.example/client/c#list');
+  // Anything but 'fi' is English.
+  assert.equal(composePortalLinkReply({ text: '', link, language: 'sv' }), composePortalLinkReply({ text: '', link }));
+  for (const copy of [portalLinkDefaultText('fi'), portalLinkUnavailableText('fi')]) {
+    assert.ok(!copy.includes('—') && !copy.includes('–'), `no em/en dash in: ${copy}`);
+  }
+});
+
 test('outbound capabilities resolve from the config snapshot exactly like every other flag-gated entry', () => {
   const states = resolveOwnerCapabilityStates({
     snapshot: { OUTBOUND_DUNNING: { stage: 'canary', source: 'test' } },

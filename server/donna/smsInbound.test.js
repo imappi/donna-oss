@@ -158,6 +158,22 @@ test("the invited 'not sure' keyword keeps the question open in both languages",
   }
 });
 
+test('a Finnish word that contains "kohta" is an answer; "kohta" on its own still defers', async () => {
+  for (const [body, expectedStatus, deferred] of [
+    ['henkilökohtainen Ref: 23DEF456', 'reply_saved', false],
+    ['yksityiskohta Ref: 23DEF456', 'reply_saved', false],
+    ['lähetän kohta Ref: 23DEF456', 'topic_open', true],
+    ['palaan asiaan huomenna Ref: 23DEF456', 'topic_open', true]
+  ]) {
+    const topics = [];
+    const { deps, calls } = makeDeps({ openByRef: openAsk, deps: { ...fiOwner, recordEvidenceTopicTurn: async (args) => { topics.push(args); return { ok: true }; } } });
+    const result = await processSmsInboundMessage({ from: '+15551234567', firmId: 'firm', env: envOn, deps, message: { MessageSid: `SM.kohta.${body}`, Body: body } });
+    assert.equal(result.status, expectedStatus, body);
+    assert.equal(calls.resolved.length, deferred ? 0 : 1, body);
+    if (deferred) assert.equal(topics[0].topicState.last_assessment.outcome, 'defer_later', body);
+  }
+});
+
 test('SMS HELP/STOP: the Finnish copy invites LOPETA, and LOPETA / APUA are accepted', async () => {
   assert.equal(isSmsStop('lopeta'), true);
   assert.equal(isSmsHelp(' apua '), true);
@@ -176,4 +192,13 @@ test('SMS HELP/STOP: the Finnish copy invites LOPETA, and LOPETA / APUA are acce
   const enTexts = [];
   await handleSmsComplianceCommand({ body: 'HELP', from: '+15551234567', bindings: [binding], deps: { ...enOwner, sendText: async (args) => { enTexts.push(args); } } });
   assert.equal(enTexts[0].text, "It's Donna. This line is for quick bookkeeping questions and receipts. Reply STOP to disconnect.");
+});
+
+test('SMS texts sent before a client is known are bilingual; the connected line follows the redeemed client', async () => {
+  const { smsConnectedText, buildSmsInboundCopy } = await import('./channels/smsInbound.js');
+  assert.equal(SMS_INBOUND_COPY.unbound, "Yhdistä tekstiviestit ensin Donna-portaalistasi, niin hoidan tämän. / Connect SMS from your Donna portal first, then I'll pick this up.");
+  assert.equal(buildSmsInboundCopy({ language: 'fi' }).unbound, SMS_INBOUND_COPY.unbound);
+  assert.equal(smsConnectedText('en'), 'Got it. SMS is connected.');
+  assert.equal(smsConnectedText('fi'), 'Selvä, tekstiviestit on nyt yhdistetty.');
+  assert.equal(smsConnectedText(null), 'Selvä, tekstiviestit on nyt yhdistetty. / Got it. SMS is connected.');
 });

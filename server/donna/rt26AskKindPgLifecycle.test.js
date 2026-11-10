@@ -174,7 +174,8 @@ test(
       const unknownAsks = await asksFor(seed, 'tx-unknown');
       assert.equal(unknownAsks.length, 1);
       assert.equal(unknownAsks[0].evidence_type, 'business_purpose', 'an unnamed line asks the fact question');
-      assert.match(unknownAsks[0].question, /^We could not tell what the EUR 300\.00 paid/);
+      // The client is Finnish (jurisdiction column), so the code-built question is Finnish.
+      assert.match(unknownAsks[0].question, /^Maksu tililtä \(300,00 EUR, 14\.2\.2025, "MOBILEPAY 1234567"\): Emme tunnistaneet/);
       assert.equal((await txRow(seed, 'tx-unknown')).convergence_state, 'on_owner');
 
       // A pre-existing medium-confidence coding can say no evidence needed

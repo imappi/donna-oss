@@ -57,3 +57,40 @@ test('owner lifecycle keeps exactly one ask and resolves posted, cancelled, and 
   assert.equal(stale.action, 'stale');
   assert.equal(resolved.at(-1).resolutionNote, 'gb_opening_balance_stale');
 });
+
+test('GB opening-balance owner questions follow the owner language; English and the reply word unchanged', async () => {
+  const run = async (args) => {
+    const created = [];
+    const deps = { actorId: 'owner-1', createAsk: async (row) => { created.push(row); return { id: 'ask-next', ...row }; }, resolveAsk: async () => {} };
+    const original = { id: 'ask-1', evidence_type: GB_OPENING_BALANCE_ASK_KIND, request_payload: { kind: GB_OPENING_BALANCE_ASK_KIND } };
+    const result = await resolveGbOpeningBalanceInbound({ firmId: 'firm-1', clientId: 'client-1', ask: original, ...deps, ...args });
+    return { result, question: created[0].question };
+  };
+  // Confirm request: a Finnish owner read the English line before this change.
+  assert.equal((await run({ intake })).question, 'Please confirm this GBP opening trial balance by replying “yes”.');
+  const fiConfirm = await run({ intake, language: 'fi' });
+  assert.equal(fiConfirm.question, 'Vahvista tämä avaava tase (GBP) vastaamalla “yes”.');
+  // The word the Finnish line invites is the word the route reads.
+  const invited = fiConfirm.question.match(/“([^”]+)”/u)[1];
+  const posted = [];
+  const confirmed = await resolveGbOpeningBalanceInbound({
+    firmId: 'firm-1', clientId: 'client-1', ask: fiConfirm.result.ask, replyText: invited, currentFiscalPeriodId: 'fy-gb-1', language: 'fi',
+    actorId: 'owner-1', authorityBasis: { source: 'owner_confirmation', providerMessageId: 'msg-1', phoneHash: 'phone-1' },
+    resolveAsk: async () => {}, postImpl: async (row) => { posted.push(row); return { journal_id: 'journal-1' }; }
+  });
+  assert.equal(confirmed.action, 'confirm_and_post');
+  assert.equal(posted.length, 1);
+
+  // Intake questions: the inbound path sends no intake, so the declaration ask.
+  assert.equal((await run({})).question, 'Please provide the GBP opening trial balance with each line mapped to a canonical role.');
+  assert.equal((await run({ language: 'fi' })).question, 'Lähetä avaava tase punnissa (GBP) niin, että jokainen rivi on liitetty tilin rooliin.');
+  const ambiguous = { ...intake, chart: [...chart, { ...chart[0], code: 'B2' }] };
+  assert.equal((await run({ intake: ambiguous })).question, 'Please map one account for each missing or ambiguous role: asset.cash.');
+  assert.equal((await run({ intake: ambiguous, language: 'fi' })).question, 'Liitä yksi tili jokaiseen puuttuvaan tai epäselvään rooliin: asset.cash.');
+  const mismatched = { ...intake, chart: [...chart, { code: 'R1', name: 'Debtors', account_type: 'asset', normal_balance: 'debit', canonical_role: 'asset.accounts_receivable' }], declaredLines: [...intake.declaredLines, { canonical_role: 'asset.accounts_receivable', debit: 0, credit: 0 }], openReceivables: [{ amount_gbp: 12.5 }] };
+  assert.equal((await run({ intake: mismatched })).question, 'Please reconcile the open_receivables difference of GBP 12.50.');
+  const fiMismatch = await run({ intake: mismatched, language: 'fi' });
+  assert.equal(fiMismatch.question, 'Täsmäytä kohdan open_receivables erotus, 12,50 GBP.');
+  // The persisted verdict is the same in both languages.
+  assert.equal(fiMismatch.result.verdict.code, 'GB_OPENING_BALANCE_CONTROL_MISMATCH');
+});

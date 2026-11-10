@@ -87,10 +87,14 @@ export const refreshGrant = async (getConfig, { refreshToken }) => {
   return tokenPairFrom(result.json);
 };
 
-// Revokes the session's refresh tokens at the provider. Best-effort by design
-// on the refusal path (a staff sign-in is refused whether or not this lands).
+// Revokes ONLY the session of the token in hand at the provider. The scope is
+// explicit: the provider's logout defaults to every session of the user, which
+// would sign an owner out of the web portal when they sign out on the phone,
+// and end a staff member's web session when the phone refuses them.
+// Best-effort by design on the refusal path (a staff sign-in is refused
+// whether or not this lands).
 export const revokeSession = async (getConfig, accessToken) => {
-  const result = await gotrue(getConfig, 'logout', { bearer: accessToken });
+  const result = await gotrue(getConfig, 'logout?scope=local', { bearer: accessToken });
   return result.ok || result.status === 401;
 };
 
