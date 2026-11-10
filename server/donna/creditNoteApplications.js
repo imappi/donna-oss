@@ -32,6 +32,17 @@
 // amount. No ledger row is written here (INV-1: the settlement journal is the
 // bank line's, through the named posting writer; an uploaded credit note is
 // never journaled on its own).
+//
+// Two sides, one record and one writer (CREDIT_SIDES). The customer side is
+// the AR matcher's: a customer credit note reduces a sales invoice. The
+// supplier side is the owner's word: a supplier credit note the owner says
+// was deducted from a supplier bill's payment
+// (`applyOwnerStatedSupplierCreditWithClient`, reached from the owner-reply
+// reader on the recognition census's credit-note question). Both sides go
+// through the same eligibility (same client, same counterparty, same
+// currency, availability, linkage), the same lock-and-revalidate and the same
+// receipted insert; only the document types, the counterparty column and the
+// matched-object type differ.
 
 import { createHash } from 'node:crypto';
 import { documentSourceComponents } from './documentAllocationComponents.js';
@@ -69,8 +80,48 @@ export const CREDIT_REFUSAL_CODES = Object.freeze({
   STALE: 'credit_note_stale',
   CONFLICT: 'credit_application_conflict',
   BANK_CURRENCY: 'credit_bank_currency_mismatch',
-  AMBIGUOUS: 'ambiguous_credit_notes'
+  AMBIGUOUS: 'ambiguous_credit_notes',
+  // The supplier side: the counterparty is the vendor.
+  VENDOR_MISMATCH: 'credit_vendor_mismatch',
+  VENDOR_UNKNOWN: 'credit_vendor_unknown',
+  // A document of the wrong side (a customer credit note on a supplier bill, …).
+  SIDE_MISMATCH: 'credit_side_mismatch',
+  // The owner named a bill Donna does not hold, or a number two bills share.
+  BILL_NOT_FOUND: 'credit_bill_not_found',
+  BILL_AMBIGUOUS: 'credit_bill_ambiguous'
 });
+// The two sides of a credit application. documentTypes: the documents an
+// application may name on that side (both the credit note and the document it
+// reduces); party: the column naming the counterparty that must correspond;
+// matchedObjectType: the reconciliation match type of the reduced document's
+// bank lines (its sum-based payment_status, db/documents.js).
+export const CREDIT_SIDES = Object.freeze({
+  customer: Object.freeze({ documentTypes: Object.freeze(['sales_invoice', 'issued_receipt']), party: 'customer_name', matchedObjectType: 'sales_invoice' }),
+  supplier: Object.freeze({ documentTypes: Object.freeze(['supplier_bill']), party: 'vendor_name', matchedObjectType: 'supplier_bill' })
+});
+const creditSideOf = (side = 'customer') => {
+  const known = CREDIT_SIDES[side];
+  if (!known) throw Object.assign(new Error(`Unknown credit application side: ${side}`), { code: 'CREDIT_SIDE_INVALID' });
+  return known;
+};
+// Money as integer cents from the stored decimal text (numeric(14,2) arrives
+// from pg as a string), never through a floating-point product. A third
+// decimal, if any, rounds half away from zero. Null when not a decimal.
+export const toCents = (v) => {
+  if (v == null || v === '') return null;
+  const m = /^\s*([+-])?(\d+)(?:\.(\d*))?\s*$/.exec(String(v));
+  if (!m) return null;
+  const frac = `${m[3] || ''}000`;
+  const cents = Number(m[2]) * 100 + Number(frac.slice(0, 2)) + (Number(frac[2]) >= 5 ? 1 : 0);
+  return m[1] === '-' ? -cents : cents;
+};
+// Integer cents back to the decimal text a numeric column stores.
+export const centsText = (cents) => {
+  const sign = cents < 0 ? '-' : '';
+  const a = Math.abs(cents);
+  return `${sign}${Math.trunc(a / 100)}.${String(a % 100).padStart(2, '0')}`;
+};
+
 export const CREDIT_LINKAGE = Object.freeze({
   LINKED: 'linked',
   UNLINKED: 'unlinked',
@@ -192,7 +243,8 @@ export const classifyCreditLinkage = ({ credit, invoice, siblingInvoices = [] } 
 // Returns { eligible, reasons:[code], linkage, remaining }. Fail-closed: any
 // unproven identity axis makes the credit ineligible for THIS invoice (it then
 // retains its existing generic document workflow; it is never silently subtracted).
-export const classifyCreditNoteEligibility = ({ invoice, credit, siblingInvoices = [] } = {}) => {
+export const classifyCreditNoteEligibility = ({ invoice, credit, siblingInvoices = [], side = 'customer' } = {}) => {
+  const spec = creditSideOf(side);
   const reasons = [];
   // Credit notes may print a signed reduction or a positive credit amount.
   // Their explicit document status supplies direction; retain the signed
@@ -202,10 +254,17 @@ export const classifyCreditNoteEligibility = ({ invoice, credit, siblingInvoices
   if (String(credit?.payment_status || '') !== CREDIT_NOTE_PAYMENT_STATUS) reasons.push(CREDIT_REFUSAL_CODES.NOT_ELIGIBLE);
   const cur = normalizeCurrency(credit?.currency);
   if (!cur || cur !== normalizeCurrency(invoice?.currency)) reasons.push(CREDIT_REFUSAL_CODES.CURRENCY_MISMATCH);
-  if (!normalizeCustomerIdentity(credit?.customer_name) || !normalizeCustomerIdentity(invoice?.customer_name)) {
-    reasons.push(CREDIT_REFUSAL_CODES.CUSTOMER_UNKNOWN);
-  } else if (!customerNamesCorrespond(credit.customer_name, invoice.customer_name)) {
-    reasons.push(CREDIT_REFUSAL_CODES.CUSTOMER_MISMATCH);
+  // Both documents must be of this side when their type is known.
+  if ([invoice?.document_type, credit?.document_type].some((t) => t && !spec.documentTypes.includes(t))) {
+    reasons.push(CREDIT_REFUSAL_CODES.SIDE_MISMATCH);
+  }
+  const [unknownCode, mismatchCode] = side === 'supplier'
+    ? [CREDIT_REFUSAL_CODES.VENDOR_UNKNOWN, CREDIT_REFUSAL_CODES.VENDOR_MISMATCH]
+    : [CREDIT_REFUSAL_CODES.CUSTOMER_UNKNOWN, CREDIT_REFUSAL_CODES.CUSTOMER_MISMATCH];
+  if (!normalizeCustomerIdentity(credit?.[spec.party]) || !normalizeCustomerIdentity(invoice?.[spec.party])) {
+    reasons.push(unknownCode);
+  } else if (!customerNamesCorrespond(credit[spec.party], invoice[spec.party])) {
+    reasons.push(mismatchCode);
   }
   const linkage = classifyCreditLinkage({ credit, invoice, siblingInvoices });
   if (linkage === CREDIT_LINKAGE.OTHER_INVOICE) reasons.push(CREDIT_REFUSAL_CODES.OTHER_INVOICE);
@@ -473,14 +532,16 @@ const LIVE_APPLIED_SQL = `
     from document_credit_applications
    where firm_id = $1 and credit_document_id = any($2::text[]) and status = 'applied'`;
 
-export const lockAndRevalidateCreditNotes = async ({ client, firmId, invoice, plan } = {}) => {
+export const lockAndRevalidateCreditNotes = async ({ client, firmId, invoice, plan, side = 'customer' } = {}) => {
+  const spec = creditSideOf(side);
   const applications = plan?.applications || [];
   if (!applications.length) return { ok: true, applications: [], refusals: [] };
   const invoiceResult = await client.query(LOCK_INVOICE_SQL, [firmId, invoice.id]);
   const liveInvoice = invoiceResult.rows?.[0];
   if (!liveInvoice || !plan.invoice_snapshot
       || JSON.stringify(evidenceSnapshot(liveInvoice)) !== JSON.stringify(plan.invoice_snapshot)
-      || ['credit_note', 'void'].includes(liveInvoice.payment_status)) {
+      || ['credit_note', 'void'].includes(liveInvoice.payment_status)
+      || (liveInvoice.document_type && !spec.documentTypes.includes(liveInvoice.document_type))) {
     return { ok: false, applications: [], invoice_fresh: false,
       refusals: applications.map((a) => ({ credit_document_id: a.credit_document_id, code: CREDIT_REFUSAL_CODES.STALE })) };
   }
@@ -514,6 +575,8 @@ export const lockAndRevalidateCreditNotes = async ({ client, firmId, invoice, pl
     const then = app.snapshot || now;
     const same = JSON.stringify(now) === JSON.stringify(then)
       && row.client_id === liveInvoice.client_id && row.firm_id === liveInvoice.firm_id
+      && spec.documentTypes.includes(row.document_type)
+      && customerNamesCorrespond(row[spec.party], liveInvoice[spec.party])
       && now.payment_status === CREDIT_NOTE_PAYMENT_STATUS
       && now.duplicate_of == null && now.parse_status === 'completed';
     if (!same) { refusals.push({ credit_document_id: app.credit_document_id, code: CREDIT_REFUSAL_CODES.STALE }); continue; }
@@ -531,7 +594,7 @@ export const lockAndRevalidateCreditNotes = async ({ client, firmId, invoice, pl
   // model reasoned over, so the whole selection stands down (the settlement
   // then decides on the bank line alone; the receipt names every refusal).
   if (refusals.length) return { ok: false, applications: [], refusals, accepted_before_refusal: accepted };
-  const settlement = await client.query(INVOICE_SETTLED_SQL, [firmId, invoice.id]);
+  const settlement = await client.query(INVOICE_SETTLED_SQL, [firmId, invoice.id, spec.matchedObjectType]);
   const settled = settlement.rows?.[0];
   const alreadyApplied = accepted.filter((a) => a.already_applied).reduce((sum, a) => sum + a.amount, 0);
   const livePrior = round2(num(settled?.settled_by_lines) + num(settled?.settled_by_credits) - alreadyApplied);
@@ -560,7 +623,7 @@ const CREDIT_LIVE_TOTAL_SQL = `
 const INVOICE_SETTLED_SQL = `
   select d.total_amount,
          coalesce((select sum(m.match_amount) from reconciliation_matches m
-                    where m.firm_id = d.firm_id and m.matched_object_type = 'sales_invoice'
+                    where m.firm_id = d.firm_id and m.matched_object_type = $3
                       and m.matched_object_id = d.id and m.status in ('confirmed', 'auto_matched')), 0) as settled_by_lines,
          coalesce((select sum(a.amount) from document_credit_applications a
                     where a.invoice_document_id = d.id and a.status = 'applied'), 0) as settled_by_credits
@@ -673,8 +736,10 @@ const resolveDocumentAsks = async ({ client, firmId, clientId, documentId, types
 //     of both documents (RT-13, same transaction).
 export const applyCreditApplicationsWithClient = async ({
   client, firmId, clientId, invoice, applications = [],
-  settlementMatchId = null, actorId = 'system', model = null, authority = null, source = CREDIT_NOTE_APPLICATION_SOURCE
+  settlementMatchId = null, actorId = 'system', model = null, authority = null, source = CREDIT_NOTE_APPLICATION_SOURCE,
+  side = 'customer'
 } = {}) => {
+  const spec = creditSideOf(side);
   const out = { applied: [], already_applied: [], invoice_payment_status: null, credit_notes_settled: [], invoice_settled_by_credits: false, asks_resolved: [] };
   if (!client || !firmId || !clientId || !invoice?.id) return out;
   await assertEntityReadinessAdmissionWithClient({
@@ -689,6 +754,7 @@ export const applyCreditApplicationsWithClient = async ({
     const id = makeCreditApplicationId({ clientId, creditDocumentId: app.credit_document_id, invoiceDocumentId: invoice.id, generation });
     const receipt = {
       source,
+      side,
       credit_ref: app.credit_ref || null,
       linkage: app.linkage || null,
       snapshot: app.snapshot || null,
@@ -697,20 +763,21 @@ export const applyCreditApplicationsWithClient = async ({
       policy_version: CREDIT_NOTE_APPLICATION_POLICY_VERSION
     };
     await client.query(INSERT_APPLICATION_SQL, [
-      id, firmId, clientId, app.credit_document_id, invoice.id, app.amount, normalizeCurrency(invoice.currency) || null,
+      // The stored decimal text when the caller computed it in cents.
+      id, firmId, clientId, app.credit_document_id, invoice.id, app.amount_text ?? app.amount, normalizeCurrency(invoice.currency) || null,
       settlementMatchId, actorId, JSON.stringify(receipt)
     ]);
     await client.query(AUDIT_SQL, [
       firmId, clientId, actorId, 'reconciliation.credit_note_applied', app.credit_document_id,
       JSON.stringify({
         application_id: id, credit_document_id: app.credit_document_id, invoice_document_id: invoice.id,
-        amount: app.amount, currency: normalizeCurrency(invoice.currency) || null,
+        amount: app.amount_text ?? app.amount, currency: normalizeCurrency(invoice.currency) || null, side,
         settlement_match_id: settlementMatchId, linkage: app.linkage || null, authority: authority || null, model: model || null
       })
     ]);
     await client.query(APPEND_APPLICATION_RECEIPT_SQL, [
       firmId, app.credit_document_id,
-      JSON.stringify([{ application_id: id, invoice_document_id: invoice.id, amount: app.amount, settlement_match_id: settlementMatchId, at: new Date().toISOString() }])
+      JSON.stringify([{ application_id: id, invoice_document_id: invoice.id, amount: app.amount_text ?? app.amount, settlement_match_id: settlementMatchId, at: new Date().toISOString() }])
     ]);
     out.applied.push({ application_id: id, credit_document_id: app.credit_document_id, amount: app.amount });
     touched.add(app.credit_document_id);
@@ -739,8 +806,8 @@ export const applyCreditApplicationsWithClient = async ({
   }
 
   // The invoice: sum-based status now counts credits (db/documents.js).
-  await applyDocumentPaymentStatusAfterMatch({ client, firmId, matchId: settlementMatchId, matchedObjectType: 'sales_invoice', documentId: invoice.id });
-  const settled = await client.query(INVOICE_SETTLED_SQL, [firmId, invoice.id]);
+  await applyDocumentPaymentStatusAfterMatch({ client, firmId, matchId: settlementMatchId, matchedObjectType: spec.matchedObjectType, documentId: invoice.id });
+  const settled = await client.query(INVOICE_SETTLED_SQL, [firmId, invoice.id, spec.matchedObjectType]);
   const s = settled.rows?.[0];
   if (s) {
     const total = num(s.total_amount);
@@ -757,7 +824,9 @@ export const applyCreditApplicationsWithClient = async ({
         out.invoice_settled_by_credits = true;
         await settleDocumentAsExplained({
           client, firmId, clientId, documentId: invoice.id, lane: INVOICE_CREDITED_IN_FULL_LANE, model, actorId,
-          reasoning: 'Invoice credited in full by the customer credit note(s); nothing remains due and no bank line is expected.',
+          reasoning: side === 'supplier'
+            ? 'Supplier bill credited in full by the supplier credit note(s); nothing remains due and no bank line is expected.'
+            : 'Invoice credited in full by the customer credit note(s); nothing remains due and no bank line is expected.',
           receipt: { credited_total: byCredits, credit_document_ids: [...touched] }
         });
       }
@@ -802,10 +871,14 @@ const afterReversal = async ({ client, firmId, rows, reason, actorId }) => {
     await client.query(CLEAR_HOLDER_SQL, [firmId, creditId, CREDIT_NOTE_APPLIED_LANE]);
     await client.query(SUPERSEDE_EVALUATION_SQL, [firmId, DOCUMENT_NO_LINE_DISPOSITION_TARGET_TYPE, creditId, JSON.stringify({ superseded_by: 'credit_application_reversed', reason }), CREDIT_NOTE_APPLIED_LANE]);
   }
+  // The reduced document's own match type: a supplier bill recomputes as one.
+  const invoiceTypes = new Map((await client.query(`select id, document_type from documents where firm_id = $1 and id = any($2::text[])`,
+    [firmId, invoices])).rows.map((r) => [r.id, r.document_type]));
   for (const invoiceId of invoices) {
     await client.query(CLEAR_HOLDER_SQL, [firmId, invoiceId, INVOICE_CREDITED_IN_FULL_LANE]);
     await client.query(SUPERSEDE_EVALUATION_SQL, [firmId, DOCUMENT_NO_LINE_DISPOSITION_TARGET_TYPE, invoiceId, JSON.stringify({ superseded_by: 'credit_application_reversed', reason }), INVOICE_CREDITED_IN_FULL_LANE]);
-    await applyDocumentPaymentStatusAfterMatch({ client, firmId, matchId: null, matchedObjectType: 'sales_invoice', documentId: invoiceId });
+    const matchedObjectType = CREDIT_SIDES.supplier.documentTypes.includes(invoiceTypes.get(invoiceId)) ? CREDIT_SIDES.supplier.matchedObjectType : CREDIT_SIDES.customer.matchedObjectType;
+    await applyDocumentPaymentStatusAfterMatch({ client, firmId, matchId: null, matchedObjectType, documentId: invoiceId });
   }
   for (const row of rows) {
     await client.query(AUDIT_SQL, [
@@ -997,3 +1070,103 @@ export async function reverseReminderSettlementWithClient({client,firmId,matchId
   await applyConvergenceStateBestEffort(client,{firmId,documentIds:ids},{logTag:'reminderSettlement'});
   return reversed;
 }
+
+// ── the supplier side: the owner says which bill a credit was deducted from ──
+// The recognition census asks the owner about a supplier credit note the books
+// do not recognise (salesRecognitionGap.buildSupplierCreditNoteQuestion); one
+// clear answer is "it was deducted from bill X". The owner's word names the
+// pair; the runtime decides whether it can be recorded, with the same checks
+// as the customer side and nothing inferred from amounts:
+//   - the credit note is a live, completed supplier credit note of this client;
+//   - bill X is exactly one live, completed supplier bill of this client whose
+//     printed number is X (BILL_NOT_FOUND / BILL_AMBIGUOUS otherwise);
+//   - the eligibility of the pair (classifyCreditNoteEligibility, supplier
+//     side): same vendor, same currency, the credit not dated before the bill,
+//     not citing another bill, not exhausted;
+//   - the amount is the smaller of what the credit has left and what the bill
+//     still owes after its decided bank lines and applied credits, in integer
+//     cents from the stored decimals; nothing open is NOT_NEEDED;
+//   - then the shared lock-and-revalidate and the shared receipted insert.
+// The application rides the bill's bank line when the bill has exactly one
+// decided match (the payment the credit was netted from); otherwise it rides
+// no line. Returns { recorded, application_id?, bill_document_id?, refusals }.
+// A refusal records nothing; the caller keeps the answer on its unclear path.
+const SUPPLIER_CREDIT_SQL = `
+  select id, firm_id, client_id, document_type, vendor_name, customer_name, document_date, total_amount::text as total_amount_text,
+         total_amount, currency, reference_number, structured_reference, parse_summary, payment_status, parse_status, duplicate_of,
+         coalesce((select sum(a.amount) from document_credit_applications a
+                    where a.credit_document_id = d.id and a.status = 'applied'), 0)::text as applied_total_text
+    from documents d
+   where d.firm_id = $1 and d.client_id = $2 and d.id = $3`;
+const SUPPLIER_BILLS_SQL = `
+  select d.id, d.firm_id, d.client_id, d.document_type, d.vendor_name, d.customer_name, d.document_date, d.total_amount::text as total_amount_text,
+         d.total_amount, d.currency, d.reference_number, d.structured_reference, d.parse_summary, d.payment_status, d.parse_status, d.duplicate_of
+    from documents d
+   where d.firm_id = $1 and d.client_id = $2
+     and d.document_type = 'supplier_bill'
+     and d.payment_status not in ('credit_note', 'void')
+     and d.parse_status = 'completed'
+     and d.duplicate_of is null
+     and d.total_amount is not null and d.total_amount > 0
+   order by d.document_date desc nulls last, d.id desc
+   limit 2000`;
+const BILL_DECIDED_MATCHES_SQL = `
+  select id, match_amount::text as match_amount from reconciliation_matches
+   where firm_id = $1 and client_id = $2 and matched_object_type = 'supplier_bill'
+     and matched_object_id = $3 and status in ('confirmed', 'auto_matched')
+   order by id`;
+const BILL_APPLIED_CREDITS_SQL = `
+  select coalesce(sum(amount), 0)::text as applied from document_credit_applications
+   where firm_id = $1 and invoice_document_id = $2 and status = 'applied'`;
+
+export const applyOwnerStatedSupplierCreditWithClient = async ({
+  client, firmId, clientId, creditDocumentId, billNumber, actorId = 'system', evidenceRequestId = null
+} = {}) => {
+  const refuse = (code) => ({ recorded: false, refusals: [{ credit_document_id: creditDocumentId || null, code }] });
+  if (!client || !firmId || !clientId || !creditDocumentId) return refuse(CREDIT_REFUSAL_CODES.NOT_ELIGIBLE);
+  const credit = (await client.query(SUPPLIER_CREDIT_SQL, [firmId, clientId, creditDocumentId])).rows[0];
+  if (!credit || credit.document_type !== 'supplier_bill' || credit.payment_status !== CREDIT_NOTE_PAYMENT_STATUS
+    || credit.parse_status !== 'completed' || credit.duplicate_of) return refuse(CREDIT_REFUSAL_CODES.NOT_ELIGIBLE);
+  const wanted = stripNonAlnum(billNumber);
+  if (wanted.length < 3) return refuse(CREDIT_REFUSAL_CODES.BILL_NOT_FOUND);
+  const bills = (await client.query(SUPPLIER_BILLS_SQL, [firmId, clientId])).rows;
+  const named = bills.filter((b) => invoiceNumbersOf(b).some((n) => numbersCorrespond(n, wanted)));
+  if (!named.length) return refuse(CREDIT_REFUSAL_CODES.BILL_NOT_FOUND);
+  if (named.length > 1) return refuse(CREDIT_REFUSAL_CODES.BILL_AMBIGUOUS);
+  const bill = named[0];
+
+  // Cents from the stored decimals: what the credit has left, what the bill owes.
+  const creditLeft = Math.abs(toCents(credit.total_amount_text) ?? 0) - (toCents(credit.applied_total_text) ?? 0);
+  const matches = (await client.query(BILL_DECIDED_MATCHES_SQL, [firmId, clientId, bill.id])).rows;
+  if (matches.some((m) => toCents(m.match_amount) == null)) return refuse(CREDIT_REFUSAL_CODES.STALE);
+  const byLines = matches.reduce((s, m) => s + Math.abs(toCents(m.match_amount)), 0);
+  const byCredits = toCents((await client.query(BILL_APPLIED_CREDITS_SQL, [firmId, bill.id])).rows[0]?.applied) ?? 0;
+  const billOpen = (toCents(bill.total_amount_text) ?? 0) - byLines - byCredits;
+
+  const verdict = classifyCreditNoteEligibility({ invoice: bill, credit: { ...credit, applied_total: centsText(toCents(credit.applied_total_text) ?? 0) },
+    siblingInvoices: bills, side: 'supplier' });
+  if (!verdict.eligible) return { recorded: false, bill_document_id: bill.id, refusals: verdict.reasons.map((code) => ({ credit_document_id: credit.id, code })) };
+  if (billOpen <= 1) return { recorded: false, bill_document_id: bill.id, refusals: [{ credit_document_id: credit.id, code: CREDIT_REFUSAL_CODES.NOT_NEEDED }] };
+  const amountCents = Math.min(creditLeft, billOpen);
+  if (amountCents <= 1) return { recorded: false, bill_document_id: bill.id, refusals: [{ credit_document_id: credit.id, code: CREDIT_REFUSAL_CODES.EXHAUSTED }] };
+
+  const settlementMatchId = matches.length === 1 ? matches[0].id : null;
+  const plan = {
+    applications: [{ credit_document_id: credit.id, amount: Number(centsText(amountCents)), amount_text: centsText(amountCents),
+      credit_ref: null, linkage: verdict.linkage, snapshot: creditSnapshot(credit) }],
+    invoice_snapshot: evidenceSnapshot(bill),
+    prior_settled: Number(centsText(byLines + byCredits)),
+    tol: DEFAULT_ABS_TOL
+  };
+  const authority = { basis: 'owner_stated_credit_deduction', evidence_request_id: evidenceRequestId, actor_id: actorId, bill_number: String(billNumber).slice(0, 40) };
+  return withCreditApplicationTransaction(client, async () => {
+    const live = await lockAndRevalidateCreditNotes({ client, firmId, invoice: bill, plan, side: 'supplier' });
+    if (!live.ok) return { recorded: false, bill_document_id: bill.id, refusals: live.refusals };
+    const out = await applyCreditApplicationsWithClient({ client, firmId, clientId, invoice: bill, applications: live.applications,
+      settlementMatchId, actorId, authority, source: 'owner_reply', side: 'supplier' });
+    const applied = out.applied[0] || null;
+    return { recorded: true, bill_document_id: bill.id, application_id: applied?.application_id || null,
+      already_applied: !applied, amount: centsText(amountCents), settlement_match_id: settlementMatchId,
+      bill_payment_status: out.invoice_payment_status, refusals: [] };
+  });
+};

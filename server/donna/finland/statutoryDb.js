@@ -40,7 +40,7 @@ import { rowToClientEvidenceRequestPayload } from '../db/asks.js';
 import { rowToLedgerLinePayload } from '../db/ledger.js';
 import { getLedgerPeriodPreviewFromDb } from '../db/close.js';
 import { deliverWhatsAppEvidenceAsksAfterSend } from '../db/channels.js';
-import { readRecognitionGapWithClient, recognitionStatement } from '../salesRecognitionGap.js';
+import { readRecognitionGapWithClient, recognitionStatement, ensureSettlementShortfallAsksWithClient } from '../salesRecognitionGap.js';
 
 
 const dayBeforeIso = (iso) => {
@@ -2241,7 +2241,8 @@ export const startFinlandAlvReturnFilingInDb = async ({
   flagActsImpl = null,
   createDraftImpl = null,
   createAskImpl = null,
-  scopeDriftImpl = null
+  scopeDriftImpl = null,
+  shortfallAsksImpl = null
 } = {}) => {
   if (!clientId) {
     const error = new Error('Client id is required to start an ALV return filing.');
@@ -2285,6 +2286,13 @@ export const startFinlandAlvReturnFilingInDb = async ({
         ? 'Kirjanpidossa on toimintaa, jonka ALV-käsittely tarkistetaan ennen lähetystä (mm. rakennusalan käännetty ALV) — selvitän sen kanssasi.'
         : ''
     ].filter(Boolean).join(' ');
+    // A sales payment short of its invoice with nothing recorded about why is
+    // its own question to the owner (bank fee or part-payment), never twice.
+    const unexplainedShortfalls = (computed.review?.unrecognizedSales?.items || []).some((i) => i.shortfall && i.on_nobody);
+    const shortfallAsks = unexplainedShortfalls
+      ? await (shortfallAsksImpl || ((args) => withFirmDbClient((client) => ensureSettlementShortfallAsksWithClient({ client, ...args }))))({
+        firmId, clientId, period: computed.review.unrecognizedSales.period, actorId })
+      : null;
     const createAsk = createAskImpl || createAlvReturnEvidenceRequestInDb;
     const ask = await createAsk({
       firmId,
@@ -2296,8 +2304,8 @@ export const startFinlandAlvReturnFilingInDb = async ({
     });
     const deliver = deliverAsksImpl
       || ((args) => withFirmDbClient((client) => deliverWhatsAppEvidenceAsksAfterSend({ client, ...args })));
-    await deliver({ firmId, clientId, evidenceRequestIds: [ask.id] });
-    return { action: 'escalated', blockers, ask, period: computed.period };
+    await deliver({ firmId, clientId, evidenceRequestIds: [ask.id, ...(shortfallAsks?.asked || [])] });
+    return { action: 'escalated', blockers, ask, period: computed.period, ...(shortfallAsks ? { shortfall_asks: shortfallAsks } : {}) };
   }
 
   const createDraft = createDraftImpl || createAlvReturnDraftInDb;
