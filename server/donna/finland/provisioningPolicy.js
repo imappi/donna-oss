@@ -9,7 +9,7 @@
 // seeder takes each aliased row's role FROM the palette, so chart and menu
 // cannot disagree, and the posting paths resolve a palette name to its coded
 // row through the alias (db/ledger.js). Pure data, no writer.
-import { buildOyChart } from './tilikartta.js';
+import { buildOyChart, resolveAccount } from './tilikartta.js';
 import { isFinlandOsakeyhtio } from './entity.js';
 
 export const FI_OY_BIRTH_CHART_ID = 'fi_oy_tilikartta';
@@ -72,8 +72,9 @@ const STATUTORY_ROLES = Object.freeze({
 
 // Not born: the bank/cash rows (the bank leg resolves or mints a bank
 // account per currency at first posting; one seeded bank row would pin every
-// currency to it), GRNI (seeded only with inventory accounting) and the
-// inventory-change presentation row the perpetual ledger never posts to.
+// currency to it — FI_POSTING_ACCOUNTS below says what that mint is), GRNI
+// (seeded only with inventory accounting) and the inventory-change
+// presentation row the perpetual ledger never posts to.
 const NOT_BORN = new Set(['1900', '1910', '2880', '4090']);
 
 // Donna's operational clearing accounts. Not KPA statement lines: clearing and
@@ -103,7 +104,44 @@ export const FI_OY_BIRTH_CHART = Object.freeze({
     })))
 });
 
+// The bank and cash accounts a Finnish book posts to, minted at first posting
+// by the market-neutral mint (donnaLedgerWriteback.js, through
+// provisioningPolicyRegistry.resolveMarketPostingAccounts) — never seeded, so
+// each currency gets its own row. Every field comes from the tilikartta.js
+// rows; nothing here invents a code.
+//   - bank, book currency (a Finnish kirjanpito is kept in euros):
+//     the chart's own 1910 Pankkitili, cash/bank role, KPA group
+//     'Rahat ja pankkisaamiset'.
+//   - bank, a further currency: the chart declares ONE bank row, and a second
+//     code for it would be invented here. The further currency gets its own
+//     row in the same statutory group with the chart's Finnish name and the
+//     currency in the name (the row is keyed on that name, so it is one
+//     stable row per currency), and no code until the chart itself declares
+//     one. A further bank account in the SAME currency is not distinguished:
+//     the bank leg has no account identity to mint on (it only uses a
+//     statement's bank hint to choose among rows that already exist).
+//   - cash: the chart's 1900 Käteinen raha (the company's cash box). It is
+//     never the bank leg of a statement line; a bank line or a cash-paid
+//     document the coder books to the cash box posts to it.
+const chartPostingAccount = (code) => {
+  const row = resolveAccount(code);
+  return Object.freeze({ code: row.code, name: row.name_fi, account_type: row.account_type,
+    normal_balance: row.normal_balance, canonical_role: 'asset.cash', statutory_group: row.statutory_group });
+};
+const FI_BANK_ACCOUNT = chartPostingAccount('1910');
+const FI_CASH_ACCOUNT = chartPostingAccount('1900');
+export const FI_BOOK_CURRENCY = 'EUR';
+export const FI_POSTING_ACCOUNTS = Object.freeze({
+  bankAccount: ({ currency = '' } = {}) => {
+    const code = String(currency || '').trim().toUpperCase();
+    if (!code || code === FI_BOOK_CURRENCY) return Object.freeze({ ...FI_BANK_ACCOUNT, currency: FI_BOOK_CURRENCY });
+    return Object.freeze({ ...FI_BANK_ACCOUNT, code: null, name: `${FI_BANK_ACCOUNT.name} · ${code}`, currency: code });
+  },
+  cashAccount: () => FI_CASH_ACCOUNT
+});
+
 export const FI_PROVISIONING_POLICY = Object.freeze({
+  postingAccounts: FI_POSTING_ACCOUNTS,
   // Toiminimi books keep the palette chart until their own chart is composed.
   birthChart: ({ entityType } = {}) => (isFinlandOsakeyhtio({ entity_type: entityType }) ? FI_OY_BIRTH_CHART : null)
 });

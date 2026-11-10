@@ -49,7 +49,7 @@ for (const jurisdiction of ['fi', 'FI']) test(`real PG: ordinary one-line ${juri
  for(const f of fixtures){
   const rows=await journal(f.id);assert.equal(rows.length,f.tax?3:2,`${f.id} reaches the ordinary named writer`);
   const amount=f.net+f.tax;
-  assert.deepEqual(rows.map(l=>[l.account_name,Number(l.debit),Number(l.credit)]),f.incoming?[['Business Checking · EUR',amount,0],[f.account,0,f.net],['Suoritettava arvonlisävero',0,f.tax]]:f.tax?[[f.account,f.net,0],['Vähennettävä arvonlisävero',f.tax,0],['Business Checking · EUR',0,amount]]:[[f.account,amount,0],['Business Checking · EUR',0,amount]]);
+  assert.deepEqual(rows.map(l=>[l.account_name,Number(l.debit),Number(l.credit)]),f.incoming?[['Pankkitili',amount,0],[f.account,0,f.net],['Suoritettava arvonlisävero',0,f.tax]]:f.tax?[[f.account,f.net,0],['Vähennettävä arvonlisävero',f.tax,0],['Pankkitili',0,amount]]:[[f.account,amount,0],['Pankkitili',0,amount]]);
   assert.equal(rows[0].payload.coding_representation?.to,'single_account');
   const retained=(await pool.query('select payload from transactions where id=$1',[f.id])).rows[0].payload.ai_suggestion;
   assert.equal(retained.posting_requirement,'document_allocation');

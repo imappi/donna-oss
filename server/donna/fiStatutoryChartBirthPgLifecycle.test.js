@@ -188,15 +188,17 @@ test('real HTTP + PG: a fresh hosted Oy is born with the coded Finnish statutory
         from ledger_lines l join ledger_accounts a on a.id=l.account_id join ledger_journals j on j.id=l.journal_id
         where j.firm_id=$1 and j.client_id=$2 and j.source_id=$3 order by l.line_no`, [firmId, clientId, source])).rows
         .map((row) => [row.account_code, row.account_name, row.code, Number(row.debit), Number(row.credit)]);
-      assert.deepEqual(await posted('rent'), [['7000', 'Vuokrakulut', '7000', 1450, 0], [null, 'Business Checking · EUR', null, 0, 1450]]);
+      assert.deepEqual(await posted('rent'), [['7000', 'Vuokrakulut', '7000', 1450, 0], ['1910', 'Pankkitili', '1910', 0, 1450]]);
       // ALV split: the net base on the born expense row, the input VAT on 2940.
       assert.deepEqual(await posted('paper'), [['7740', 'Toimistotarvikkeet ja -kulut', '7740', 100, 0],
-        ['2940', 'Vähennettävä arvonlisävero', '2940', 25.5, 0], [null, 'Business Checking · EUR', null, 0, 125.5]]);
-      assert.deepEqual(await posted('withholding'), [['2945', 'Ennakonpidätys- ja sosiaaliturvamaksuvelat', '2945', 332.88, 0], [null, 'Business Checking · EUR', null, 0, 332.88]]);
-      assert.deepEqual(await posted('loan'), [['9200', 'Korkokulut', '9200', 67.98, 0], ['2620', 'Lainat rahoituslaitoksilta', '2620', 344.37, 0], [null, 'Business Checking · EUR', null, 0, 412.35]]);
+        ['2940', 'Vähennettävä arvonlisävero', '2940', 25.5, 0], ['1910', 'Pankkitili', '1910', 0, 125.5]]);
+      assert.deepEqual(await posted('withholding'), [['2945', 'Ennakonpidätys- ja sosiaaliturvamaksuvelat', '2945', 332.88, 0], ['1910', 'Pankkitili', '1910', 0, 332.88]]);
+      assert.deepEqual(await posted('loan'), [['9200', 'Korkokulut', '9200', 67.98, 0], ['2620', 'Lainat rahoituslaitoksilta', '2620', 344.37, 0], ['1910', 'Pankkitili', '1910', 0, 412.35]]);
       // No code-less English duplicate was minted beside a born row.
       const after = (await seed.query('select code,name from ledger_accounts where firm_id=$1 and client_id=$2', [firmId, clientId])).rows;
-      assert.deepEqual(after.filter((row) => !row.code).map((row) => row.name), ['Business Checking · EUR']);
+      // The bank leg is the chart's own 1910, minted at first posting.
+      assert.deepEqual(after.filter((row) => !row.code).map((row) => row.name), []);
+      assert.deepEqual(after.filter((row) => row.code === '1910').map((row) => row.name), ['Pankkitili']);
       assert.equal(after.length, chart.length + 1);
 
       // 5. The handoff mapping works from the codes: every born P&L account

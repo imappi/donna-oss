@@ -107,7 +107,39 @@ const unrecognizedHint = (view, gap) => {
   return [view.lead, ...rows].join(' ');
 };
 
+// Postings of the period whose correction case is open (server
+// postedCorrectionGap.js). The figures above still include them as posted; the
+// hint names each line, its case reason and, for a case that cannot move
+// because its own period is locked or its return filed, that a person makes
+// the correction. The count is the server's; the list may be bounded.
+const OPEN_CORRECTION_REASONS = {
+  posted_source_evidence_changed: 'tosite muuttui kirjauksen jälkeen',
+  posted_registration_evidence_changed: 'rekisteröintitieto muuttui kirjauksen jälkeen',
+  posted_tax_registration_changed: 'ALV-rekisteröinti on nyt toinen kuin kirjattaessa',
+  posted_source_identity_unresolved: 'tositteen yritys on selvittämättä',
+  posted_allocation_account_conflict: 'tili ei sovi tositteeseen',
+  posted_source_business_use_conflict: 'tositteen mukaan yksityinen tai osittain yksityinen',
+  posted_revenue_source_required: 'myynnin tosite puuttuu',
+  posted_statutory_source_required: 'viranomaisen päätös tai ilmoitus puuttuu'
+};
+const openCorrectionsHint = (gap) => {
+  const items = Array.isArray(gap?.items) ? gap.items : [];
+  const count = num(gap?.count) || items.length;
+  const rows = items.map((item) => {
+    const closed = item.recovery?.code === 'CODING_CORRECTION_TAX_PERIOD_CLOSED' || item.next_action === 'person_corrects_closed_period';
+    return `${item.journal_date ? fiDate(item.journal_date) : 'päiväys puuttuu'} (tapahtuma ${item.transaction_id}, kirjaus ${item.journal_id}): ${OPEN_CORRECTION_REASONS[item.reason] || item.reason || 'korjaus avoinna'}${closed ? ' — kausi on lukittu tai ilmoitettu, korjauksen tekee ihminen' : ''}.`;
+  });
+  return [
+    `${count} tämän kauden kirjauksella on avoin korjaus. Luvut ovat kirjanpidon mukaiset, mutta ilmoitus odottaa, kunnes korjaukset on tehty tai suljettu:`,
+    ...rows,
+    gap?.truncated ? `Näytetään ${items.length} / ${count}.` : ''
+  ].filter(Boolean).join(' ');
+};
+
 export const alvBlockerView = (code, review = null) => {
+  if (code === 'open_coding_corrections') {
+    return { code, severity: 'blocker', label: 'Kauden kirjauksia korjataan', hint: openCorrectionsHint(review?.openCodingCorrections) };
+  }
   const recognition = RECOGNITION_VIEWS[code];
   if (recognition) {
     return { code, severity: 'blocker', label: recognition.label, hint: unrecognizedHint(recognition, review?.[recognition.reviewKey]) };

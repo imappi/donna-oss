@@ -81,7 +81,8 @@ test('a GB client dispatches to the GB preparation, current period resolved by t
   const { envelope, client } = await dispatch({ answers: [
     [/select jurisdiction, profile from clients/, { rows: [{ jurisdiction: 'GB', profile: { vat_registration: GB_REGISTRATION } }] }],
     [/from vat_periods/, { rows: [GB_PERIOD_ROW] }],
-    [/from ledger_lines/, { rows: GB_LINES }]
+    [/from ledger_lines/, { rows: GB_LINES }],
+    [/from transactions t/, { rows: [] }]
   ] });
   assert.equal(envelope.surface_acts, true);
   assert.equal(envelope.refusal, null);
