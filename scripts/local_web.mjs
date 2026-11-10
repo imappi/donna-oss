@@ -12,8 +12,13 @@
 //   node scripts/local_web.mjs
 //
 // Env (all optional):
-//   DONNA_LOCAL_WEB_PORT  web port (default 5173, loopback only)
+//   DONNA_LOCAL_WEB_PORT  web port (default 5173)
 //   DONNA_DESKTOP_PORT    runtime port to forward /api/ to (default 8787)
+//   DONNA_API_HOST        listen address (default 127.0.0.1, loopback only),
+//                         the same setting the runtime binds; the compose
+//                         start sets 0.0.0.0 inside its container and
+//                         publishes the port on the host's loopback only.
+//                         /api/ is always forwarded to 127.0.0.1.
 
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
@@ -144,13 +149,15 @@ if (isDirectRun) {
   }
   const webPort = Number(process.env.DONNA_LOCAL_WEB_PORT || 5173);
   const runtimePort = Number(process.env.DONNA_DESKTOP_PORT || 8787);
+  const listenHost = process.env.DONNA_API_HOST || '127.0.0.1';
   const server = createLocalWebServer({ distDir, runtimePort });
   server.on('error', (error) => {
-    console.error(`[local-web] could not listen on 127.0.0.1:${webPort}: ${error.message}`);
+    console.error(`[local-web] could not listen on ${listenHost}:${webPort}: ${error.message}`);
     process.exit(1);
   });
-  server.listen(webPort, '127.0.0.1', () => {
-    console.log(`[local-web] Donna web app on http://127.0.0.1:${webPort}/firms (API forwarded to 127.0.0.1:${runtimePort})`);
+  server.listen(webPort, listenHost, () => {
+    const bound = listenHost === '127.0.0.1' ? '' : `; listening on ${listenHost}:${webPort}`;
+    console.log(`[local-web] Donna web app on http://127.0.0.1:${webPort}/firms (API forwarded to 127.0.0.1:${runtimePort}${bound})`);
   });
   const stop = () => server.close(() => process.exit(0));
   process.on('SIGINT', stop);
