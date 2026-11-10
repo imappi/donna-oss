@@ -291,18 +291,51 @@ export const detectRicherPositionHints = ({ ownerMessage = '', extractedLines = 
   return hints;
 };
 
-const groupLabel = (kind) => {
+const groupLabel = (kind, language = 'en') => {
   const g = STATUTORY_GROUPS[kind];
-  return g ? `${g.name_en} (${g.name_fi})` : kind;
+  if (!g) return kind;
+  return language === 'fi' ? g.name_fi : `${g.name_en} (${g.name_fi})`;
 };
 
-const hintsQuestion = (hints) => {
-  const labels = [...new Set(hints.map((h) => groupLabel(h.kind)))];
-  return [
-    'Before I set your opening balance from just the bank balance, do you also have any of these at the switch date?',
-    `In particular: ${labels.join('; ')}.`,
-    "Tell me the amounts and I'll include them; if it really is just the bank balance, confirm and I'll set it."
-  ].join(' ');
+const fiAmount = (value) => Number(value).toFixed(2).replace('.', ',');
+
+// The owner questions, per owner language (preferredOwnerTemplateLanguage, passed
+// in by the caller as `language`). English is the historical copy, unchanged;
+// anything but 'fi' gets it. The Finnish asks invite the same replies the
+// route already reads ("kyllä", "vain pankkitili", figures).
+const OPENING_INTAKE_QUESTIONS = Object.freeze({
+  en: Object.freeze({
+    richer: (labels) => [
+      'Before I set your opening balance from just the bank balance, do you also have any of these at the switch date?',
+      `In particular: ${labels.join('; ')}.`,
+      "Tell me the amounts and I'll include them; if it really is just the bank balance, confirm and I'll set it."
+    ].join(' '),
+    bankBalanceMissing: () => "What was the balance on your business bank account on the day you switched to Donna? I'll open your books from there once you confirm it's the only opening position.",
+    cashOnly: (amount, currency) => `Is your only opening position the bank balance of ${amount.toFixed(2)} ${currency}? No outstanding invoices, unpaid bills, loans, equipment, or prior-year profit? Confirm and I'll open your books from it.`,
+    unextractable: () => "I couldn't read the opening balances from that document. Could you upload a clearer copy of your accountant's closing balance sheet, or tell me the figures directly?",
+    unmapped: (names) => `I extracted your opening balances but couldn't confidently place these on the Finnish chart: ${names.join(', ')}. Which statutory account do they belong to?`,
+    noPositions: () => "I read the document but didn't find any opening balance-sheet positions. Could you confirm your accountant's closing figures?",
+    unbalanced: (debit, credit, currency) => `The opening figures I extracted don't balance — assets ${debit.toFixed(2)} ${currency} against liabilities + equity ${credit.toFixed(2)} ${currency}. Could you confirm the correct figures?`
+  }),
+  fi: Object.freeze({
+    richer: (labels) => [
+      'Ennen kuin teen avaavan taseen pelkän pankkisaldon perusteella: onko sinulla vaihtopäivänä myös jotain näistä?',
+      `Erityisesti: ${labels.join('; ')}.`,
+      'Kerro summat, niin otan ne mukaan. Jos kyse on tosiaan vain pankkisaldosta, vahvista se, niin teen taseen sen pohjalta.'
+    ].join(' '),
+    bankBalanceMissing: () => 'Mikä oli yrityksesi pankkitilin saldo sinä päivänä, kun siirryit Donnaan? Avaan kirjanpitosi siitä, kun vahvistat, että se on ainoa avaava eräsi.',
+    cashOnly: (amount, currency) => `Onko pankkitilin saldo ${fiAmount(amount)} ${currency} ainoa avaava eräsi? Ei avoimia myyntilaskuja, maksamattomia laskuja, lainoja, laitteita tai edellisen vuoden voittoa? Vahvista, niin avaan kirjanpitosi sen pohjalta.`,
+    unextractable: () => 'En saanut luettua avaavia saldoja tuosta asiakirjasta. Voisitko lähettää selkeämmän kopion tilitoimistosi tilinpäätöksen taseesta tai kertoa luvut suoraan?',
+    unmapped: (names) => `Luin avaavat saldosi, mutta en osannut varmasti sijoittaa näitä tilikarttaan: ${names.join(', ')}. Mille tilille ne kuuluvat?`,
+    noPositions: () => 'Luin asiakirjan, mutta en löytänyt siitä avaavan taseen eriä. Voisitko vahvistaa tilitoimistosi tilinpäätösluvut?',
+    unbalanced: (debit, credit, currency) => `Lukemani avaavat luvut eivät täsmää: vastaavaa ${fiAmount(debit)} ${currency}, vastattavaa ${fiAmount(credit)} ${currency}. Voisitko vahvistaa oikeat luvut?`
+  })
+});
+const intakeQuestionsFor = (language) => OPENING_INTAKE_QUESTIONS[language] || OPENING_INTAKE_QUESTIONS.en;
+
+const hintsQuestion = (hints, language = 'en') => {
+  const labels = [...new Set(hints.map((h) => groupLabel(h.kind, language)))];
+  return intakeQuestionsFor(language).richer(labels);
 };
 
 // ---------------------------------------------------------------------------------
@@ -319,6 +352,10 @@ const hintsQuestion = (hints) => {
 export const classifyOpeningIntake = (input = {}) => {
   const currency = String(input.currency || OPENING_BALANCE_CURRENCY).trim().toUpperCase();
   const entityType = input.entityType || 'toiminimi';
+  // The owner's language only words the escalation question; the verdict,
+  // reason and details are the same in every language.
+  const language = input.language === 'fi' ? 'fi' : 'en';
+  const questions = intakeQuestionsFor(language);
 
   const escalate = (reason, question, extra = {}) => ({
     terminal: 'escalate',
@@ -339,13 +376,13 @@ export const classifyOpeningIntake = (input = {}) => {
   if (input.source === 'bank_only') {
     const hints = detectRicherPositionHints({ ownerMessage: input.ownerMessage, extractedLines: input.extractedLines });
     if (hints.length) {
-      return escalate('richer_position_suspected', hintsQuestion(hints), { hints });
+      return escalate('richer_position_suspected', hintsQuestion(hints, language), { hints });
     }
     const amount = round2(input.bankBalance);
     if (!(amount > 0)) {
       return escalate(
         'bank_balance_missing',
-        "What was the balance on your business bank account on the day you switched to Donna? I'll open your books from there once you confirm it's the only opening position.",
+        questions.bankBalanceMissing(),
         { details: { bank_balance: input.bankBalance ?? null } }
       );
     }
@@ -354,7 +391,7 @@ export const classifyOpeningIntake = (input = {}) => {
     if (!input.confirmedCashOnly) {
       return escalate(
         'awaiting_cash_only_confirmation',
-        `Is your only opening position the bank balance of ${amount.toFixed(2)} ${currency}? No outstanding invoices, unpaid bills, loans, equipment, or prior-year profit? Confirm and I'll open your books from it.`,
+        questions.cashOnly(amount, currency),
         { details: { bank_balance: amount } }
       );
     }
@@ -366,7 +403,7 @@ export const classifyOpeningIntake = (input = {}) => {
   if (!parsed.ok) {
     return escalate(
       'tb_unextractable',
-      "I couldn't read the opening balances from that document. Could you upload a clearer copy of your accountant's closing balance sheet, or tell me the figures directly?",
+      questions.unextractable(),
       { details: { unextractable_reason: parsed.unextractable_reason || 'invalid_llm_response' } }
     );
   }
@@ -379,7 +416,7 @@ export const classifyOpeningIntake = (input = {}) => {
       .filter(Boolean);
     return escalate(
       'unmapped_accounts',
-      `I extracted your opening balances but couldn't confidently place these on the Finnish chart: ${names.join(', ')}. Which statutory account do they belong to?`,
+      questions.unmapped(names),
       { details: { unmapped } }
     );
   }
@@ -387,7 +424,7 @@ export const classifyOpeningIntake = (input = {}) => {
   if (!openingLines.length) {
     return escalate(
       'no_opening_positions',
-      "I read the document but didn't find any opening balance-sheet positions. Could you confirm your accountant's closing figures?",
+      questions.noPositions(),
       { details: null }
     );
   }
@@ -396,7 +433,7 @@ export const classifyOpeningIntake = (input = {}) => {
   if (Math.abs(round2(debit - credit)) >= 0.01) {
     return escalate(
       'tb_unbalanced',
-      `The opening figures I extracted don't balance — assets ${debit.toFixed(2)} ${currency} against liabilities + equity ${credit.toFixed(2)} ${currency}. Could you confirm the correct figures?`,
+      questions.unbalanced(debit, credit, currency),
       { details: { total_debit: debit, total_credit: credit } }
     );
   }
@@ -574,10 +611,11 @@ export const runTrialBalanceIntake = async ({
   apiKey,
   model = DEFAULT_INTAKE_MODEL,
   fetchImpl,
-  transport
+  transport,
+  language = 'en'
 } = {}) => {
   const parsed = await extractOpeningTrialBalance({ documentText, firmContext, entityType, apiKey, model, fetchImpl, transport });
-  return classifyOpeningIntake({ source: 'trial_balance', parsed, entityType, model: parsed.model, currency, memo });
+  return classifyOpeningIntake({ source: 'trial_balance', parsed, entityType, model: parsed.model, currency, memo, language });
 };
 
 // ---------------------------------------------------------------------------------

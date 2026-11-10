@@ -265,3 +265,75 @@ test('ambiguous confirmation nudge does NOT resolve the ask (stays open on the o
   assert.equal(result.action, 'nudge');
   assert.equal(resolved.length, 0);
 });
+
+// ── The owner's language on the opening-balance lane ─────────────────────────
+// A Finnish owner read English route and intake lines before this change. The
+// English output is pinned verbatim; the Finnish replies invited are ones the
+// route already reads.
+import { classifyOpeningIntake } from './openingBalanceIntake.js';
+
+test('opening-balance lane: a Finnish owner gets the Finnish summary, nudge and fallback question', async () => {
+  const sent = [];
+  const fi = await resolveOpeningBalanceInbound(baseArgs({
+    language: 'fi',
+    runTrialBalanceIntakeImpl: async () => proposalVerdict,
+    sendText: async ({ text }) => sent.push(text)
+  }));
+  assert.equal(fi.ask.summary, '• 1910 Pankkitili: 4200,00 EUR\n• 2050 Oma pääoma: 4200,00 EUR\nYhteensä: 4200,00 EUR');
+  assert.equal(sent[0], `${fi.ask.summary}\n\nVahvista vastaamalla “kyllä”, niin kirjaan avaavan taseen.`);
+
+  const en = await resolveOpeningBalanceInbound(baseArgs({ runTrialBalanceIntakeImpl: async () => proposalVerdict }));
+  assert.equal(en.ask.summary, '• 1910 Pankkitili — 4200.00 EUR\n• 2050 Oma pääoma — 4200.00 EUR\nTotal: 4200.00 EUR');
+
+  const confirmAsk = baseAsk({ phase: 'confirm_request', verdict: proposalVerdict });
+  const nudgeFi = await resolveOpeningBalanceInbound(baseArgs({ ask: confirmAsk, replyText: 'hmm', language: 'fi' }));
+  assert.equal(nudgeFi.text, 'Vastaa “kyllä”, jos haluat, että kirjaan tämän avaavan taseen. Jos jokin on väärin, lähetä korjatut luvut.');
+  const nudgeEn = await resolveOpeningBalanceInbound(baseArgs({ ask: confirmAsk, replyText: 'hmm' }));
+  assert.equal(nudgeEn.text, 'Please reply “kyllä” or “yes” if you want me to post this opening balance. If anything is wrong, send the corrected figures instead.');
+
+  const fallbackFi = await resolveOpeningBalanceInbound(baseArgs({ language: 'fi', runTrialBalanceIntakeImpl: async () => ({ terminal: 'escalate' }) }));
+  assert.equal(fallbackFi.ask.question, 'Voisitko tarkentaa avaavan taseen lukuja?');
+  const fallbackEn = await resolveOpeningBalanceInbound(baseArgs({ runTrialBalanceIntakeImpl: async () => ({ terminal: 'escalate' }) }));
+  assert.equal(fallbackEn.ask.question, 'Could you clarify your opening balance figures?');
+});
+
+test('opening-balance lane: the owner language reaches the intake on both paths', async () => {
+  const seen = [];
+  await resolveOpeningBalanceInbound(baseArgs({ language: 'fi', runTrialBalanceIntakeImpl: async (input) => { seen.push(input.language); return proposalVerdict; } }));
+  await resolveOpeningBalanceInbound(baseArgs({
+    language: 'fi', documentText: '', replyText: 'Pankkitilillä 5000 euroa, vain pankkitili',
+    classifyOpeningIntakeImpl: (input) => { seen.push(input.language); return proposalVerdict; }
+  }));
+  await resolveOpeningBalanceInbound(baseArgs({ runTrialBalanceIntakeImpl: async (input) => { seen.push(input.language); return proposalVerdict; } }));
+  assert.deepEqual(seen, ['fi', 'fi', 'en']);
+});
+
+test('classifyOpeningIntake words every escalation in the owner language; English unchanged', () => {
+  const ask = (input) => classifyOpeningIntake(input).escalation;
+  const cases = [
+    [{ source: 'bank_only', bankBalance: 0 }, 'bank_balance_missing',
+      "What was the balance on your business bank account on the day you switched to Donna? I'll open your books from there once you confirm it's the only opening position.",
+      'Mikä oli yrityksesi pankkitilin saldo sinä päivänä, kun siirryit Donnaan? Avaan kirjanpitosi siitä, kun vahvistat, että se on ainoa avaava eräsi.'],
+    [{ source: 'bank_only', bankBalance: 5000.5 }, 'awaiting_cash_only_confirmation',
+      "Is your only opening position the bank balance of 5000.50 EUR? No outstanding invoices, unpaid bills, loans, equipment, or prior-year profit? Confirm and I'll open your books from it.",
+      'Onko pankkitilin saldo 5000,50 EUR ainoa avaava eräsi? Ei avoimia myyntilaskuja, maksamattomia laskuja, lainoja, laitteita tai edellisen vuoden voittoa? Vahvista, niin avaan kirjanpitosi sen pohjalta.'],
+    [{ source: 'bank_only', bankBalance: 5000, ownerMessage: 'pankkitili ja pankkilaina' }, 'richer_position_suspected',
+      "Before I set your opening balance from just the bank balance, do you also have any of these at the switch date? In particular: Long-term liabilities (Pitkäaikainen vieras pääoma). Tell me the amounts and I'll include them; if it really is just the bank balance, confirm and I'll set it.",
+      'Ennen kuin teen avaavan taseen pelkän pankkisaldon perusteella: onko sinulla vaihtopäivänä myös jotain näistä? Erityisesti: Pitkäaikainen vieras pääoma. Kerro summat, niin otan ne mukaan. Jos kyse on tosiaan vain pankkisaldosta, vahvista se, niin teen taseen sen pohjalta.'],
+    [{ source: 'trial_balance', parsed: { ok: false } }, 'tb_unextractable',
+      "I couldn't read the opening balances from that document. Could you upload a clearer copy of your accountant's closing balance sheet, or tell me the figures directly?",
+      'En saanut luettua avaavia saldoja tuosta asiakirjasta. Voisitko lähettää selkeämmän kopion tilitoimistosi tilinpäätöksen taseesta tai kertoa luvut suoraan?'],
+    [{ source: 'trial_balance', parsed: { ok: true, lines: [] } }, 'no_opening_positions',
+      "I read the document but didn't find any opening balance-sheet positions. Could you confirm your accountant's closing figures?",
+      'Luin asiakirjan, mutta en löytänyt siitä avaavan taseen eriä. Voisitko vahvistaa tilitoimistosi tilinpäätösluvut?']
+  ];
+  for (const [input, reason, english, finnish] of cases) {
+    const en = ask(input);
+    const fi = ask({ ...input, language: 'fi' });
+    assert.equal(en.reason, reason);
+    assert.equal(en.question, english, `English pinned for ${reason}`);
+    assert.equal(fi.reason, reason, 'the language never changes the verdict');
+    assert.deepEqual(fi.details, en.details);
+    assert.equal(fi.question, finnish, `Finnish for ${reason}`);
+  }
+});

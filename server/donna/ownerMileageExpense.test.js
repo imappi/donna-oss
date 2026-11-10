@@ -52,6 +52,46 @@ test('buildOwnerMileageJournal creates a balanced owner-stated mileage journal f
   assert.match(built.consequence, /computed at the current mileage rate/);
 });
 
+test('the booked line follows the owner language; English and the receipt wording stay byte-identical', () => {
+  const action = { miles: 50, purpose: 'asiakaskäynti Tampereella', date: '2026-07-15', confidence: 'high' };
+  const fi = buildOwnerMileageJournal({ action, clientProfile: { jurisdiction: 'FI' }, accounts, language: 'fi' });
+  assert.equal(fi.status, 'ready');
+  // A Finnish owner was sent the English line before this change.
+  assert.equal(fi.ownerConsequence, 'Kirjasin 80,47 km (asiakaskäynti Tampereella): 44,26 EUR nykyisellä kilometrikorvauksella.');
+  // The receipt's operator_words stay English whatever the owner reads.
+  assert.equal(fi.consequence, 'Booked: 80.47 kms for asiakaskäynti Tampereella, EUR 44.26 computed at the current mileage rate.');
+  const en = buildOwnerMileageJournal({ action, clientProfile: { jurisdiction: 'FI' }, accounts });
+  assert.equal(en.ownerConsequence, en.consequence, 'English owner: the line is the historical one');
+  const gb = buildOwnerMileageJournal({ action: { ...action, miles: 1, purpose: 'bank' }, clientProfile: { jurisdiction: 'GB' }, accounts });
+  assert.equal(gb.ownerConsequence, 'Booked: 1 mile for bank, GBP 0.45 computed at the current mileage rate.');
+  const gbFi = buildOwnerMileageJournal({ action: { ...action, miles: 1, purpose: 'pankki' }, clientProfile: { jurisdiction: 'GB' }, accounts, language: 'fi' });
+  assert.equal(gbFi.ownerConsequence, 'Kirjasin 1 maili (pankki): 0,45 GBP nykyisellä mailikorvauksella.');
+  // The journal itself does not depend on the language.
+  assert.deepEqual(fi.journal, en.journal);
+});
+
+test('recordOwnerMileageExpenseInDb returns the owner-language line and keeps the receipt English', async () => {
+  const receipts = [];
+  const client = { query: async (sql, params = []) => {
+    if (sql.includes('from clients')) return { rows: [{ id: 'client-1', jurisdiction: 'FI', profile: {} }] };
+    if (sql.includes('from ledger_accounts')) return { rows: accounts };
+    if (sql.includes('insert into audit_events')) return { rows: [{ id: 'audit-1' }] };
+    if (sql.includes('insert into apply_receipts')) { receipts.push(params); return { rows: [] }; }
+    return { rows: [] };
+  } };
+  const run = (language) => recordOwnerMileageExpenseInDb({
+    firmId: 'firm-1', clientId: 'client-1', actorId: 'owner-1', sourceMessageId: `tg-${language}`, model: 'model-x', language,
+    action: { type: 'record_mileage', miles: 50, purpose: 'asiakaskäynti', date: '2026-07-15', confidence: 'high' },
+    deps: { withFirmDbClient: async (fn) => fn(client), writeValidatedJournal: async () => ({ ledger_journal_id: 'journal-1', ledger_status: 'posted', ledger_line_count: 2, ledger_amount: 44.26, ledger_currency: 'EUR' }) }
+  });
+  const fi = await run('fi');
+  assert.equal(fi.consequence, 'Kirjasin 80,47 km (asiakaskäynti): 44,26 EUR nykyisellä kilometrikorvauksella.');
+  const en = await run('en');
+  assert.equal(en.consequence, 'Booked: 80.47 kms for asiakaskäynti, EUR 44.26 computed at the current mileage rate.');
+  const operatorWords = receipts.map((params) => JSON.stringify(params)).map((raw) => raw.includes('Booked: 80.47 kms'));
+  assert.deepEqual(operatorWords, [true, true], 'both receipts carry the English operator words');
+});
+
 test('recordOwnerMileageExpenseInDb posts through injected named writer, audit, and apply receipt', async () => {
   const calls = [];
   const client = { query: async (sql, params = []) => {

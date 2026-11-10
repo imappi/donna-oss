@@ -695,9 +695,17 @@ const isOwnerTemplateLanguageUnavailable = (result) => {
 // Send an owner template in the preferred language; on a language-unavailable
 // error only, retry in English. Returns the result plus the language actually
 // sent. A 132001 rejection means the message was NOT delivered, so the retry
-// cannot double-send.
+// cannot double-send. A template whose parameters depend on the language (the
+// period fallback) passes `bodyParametersFor(languageCode)` instead of
+// `bodyParameters`, so each attempt carries parameters in the language of the
+// template actually sent.
 const deliverOwnerTemplateWithLanguageFallback = async ({ deliverOwnerMessage, channel, recipient, template, preferredLanguage }) => {
-  const attempt = (languageCode) => deliverOwnerMessage({ channel, recipient, template: { ...template, languageCode } });
+  const { bodyParametersFor, ...fixed } = template;
+  const attempt = (languageCode) => deliverOwnerMessage({ channel, recipient, template: {
+    ...fixed,
+    ...(typeof bodyParametersFor === 'function' ? { bodyParameters: bodyParametersFor(languageCode) } : {}),
+    languageCode
+  } });
   const primary = await attempt(preferredLanguage);
   if (primary?.ok || preferredLanguage === OWNER_TEMPLATE_FALLBACK_LANGUAGE || !isOwnerTemplateLanguageUnavailable(primary)) {
     return { result: primary, languageCode: preferredLanguage, fellBack: false };
@@ -813,7 +821,6 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
     const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
     if (!request) { notAwaiting.push(askId); continue; }
-    const period = askPeriodFor(request, preferredLanguage);
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
       // Sensitive-identifier ask: never send over WhatsApp — record a visible
@@ -837,7 +844,8 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
       recipient: { phone_e164: binding.phone_e164 },
       template: {
         name: 'donna_evidence_ask_v1',
-        bodyParameters: [period, safeQuestion.text, shortAskRef(request.id)],
+        // The period fallback follows the template language actually sent.
+        bodyParametersFor: (languageCode) => [askPeriodFor(request, languageCode), safeQuestion.text, shortAskRef(request.id)],
         metadata: { ask_id: request.id, client_id: clientId }
       },
       preferredLanguage
