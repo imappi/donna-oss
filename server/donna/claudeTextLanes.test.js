@@ -36,7 +36,7 @@ import { distillFirmFactsFromEvent } from './firmFacts.js';
 import { readOwnerInvoiceCommand } from './ownerInvoiceCommandRead.js';
 import { buildCommandSchema } from './ownerInvoiceCommand.js';
 import { classifyOwnerReply } from './outbound/replyIngestion.js';
-import { generateDocumentChatReply } from './documentChat.js';
+import { generateDocumentChatReply, DOCUMENT_CHAT_RESPONSE_SCHEMA } from './documentChat.js';
 import { draftNurtureEmail } from './marketing/nurtureDrafter.js';
 import { draftProspectDossier } from './marketing/dossierDrafter.js';
 import { triageInboundMessage, draftInboundReply } from './marketing/replyDrafter.js';
@@ -91,6 +91,17 @@ const claudeMessage = (parsed, { model = 'claude-opus-5-5', stopReason = 'end_tu
 
 const claudeReply = (parsed, options) => ({ status: 200, body: claudeMessage(parsed, options) });
 
+// The answer as the structured tool call (schemas over the grammar limits).
+const claudeToolReply = (input, { model = 'claude-opus-5-5', stopReason = 'tool_use', name = 'structured_answer' } = {}) => ({
+  status: 200,
+  body: {
+    id: 'msg_synthetic_tool', type: 'message', role: 'assistant', model,
+    content: [{ type: 'thinking', thinking: '', signature: 'sig' }, { type: 'tool_use', id: 'toolu_1', name, input }],
+    stop_reason: stopReason, stop_details: null,
+    usage: { input_tokens: 120, output_tokens: 30, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+  }
+});
+
 // A schema-valid value for any lane schema: the first enum value, a
 // non-empty string, zero, false, an empty array, null where null is allowed.
 const sampleFor = (schema) => {
@@ -123,12 +134,18 @@ const scriptCapture = (providers, lane, answer) => {
   return bodies;
 };
 
-const assertClaudeRequestShape = (body, { effort }) => {
+const assertClaudeRequestShape = (body, { effort, delivery = 'output_format' }) => {
   assert.equal(body.model, 'claude-opus-5-5', 'the lane default on Anthropic');
   assert.deepEqual(body.thinking, { type: 'adaptive' }, 'adaptive thinking; never disabled, never a budget');
   assert.equal(body.output_config.effort, effort, 'effort is explicit per lane');
-  assert.equal(body.output_config.format.type, 'json_schema', 'structured output, not forced tool use');
-  assert.equal(body.tool_choice, undefined, 'no forced tool_choice (rejected on claude-opus-5-5)');
+  if (delivery === 'output_format') {
+    assert.equal(body.output_config.format.type, 'json_schema', 'structured output, not forced tool use');
+    assert.equal(body.tool_choice, undefined, 'no tool_choice at all');
+  } else {
+    assert.equal(body.output_config.format, undefined, 'over the grammar limits: no output_config.format');
+    assert.deepEqual(body.tool_choice, { type: 'auto' }, 'never forced (rejected on claude-opus-5-5)');
+    assert.equal(body.tools.filter((tool) => tool.name === 'structured_answer').length, 1, 'one answer tool');
+  }
   for (const field of ['temperature', 'top_p', 'top_k', 'fallbacks']) assert.equal(body[field], undefined, `no ${field}`);
   assert.equal(body.messages.at(-1).role, 'user', 'no assistant prefill');
   assert.ok(Number.isInteger(body.max_tokens) && body.max_tokens >= 16000, 'max_tokens has room');
@@ -435,13 +452,14 @@ test('owner invoice command on Claude: the raw reading and the served model; a r
   claudeOnly(t);
   const providers = withProviders(t);
   const reading = sampleFor(buildCommandSchema());
-  const bodies = scriptCapture(providers, 'owner_invoice_command_read', claudeReply(reading));
+  // 19 union-typed parameters: over the grammar limit, so the answer is the tool call.
+  const bodies = scriptCapture(providers, 'owner_invoice_command_read', claudeToolReply(reading));
   const result = await readOwnerInvoiceCommand({ messageText: 'Invoice Esimerkki Oy 100 euros for consulting', buyerCandidates: [{ id: 'p-1', display_name: 'Esimerkki Oy' }], sourceMessageId: 'msg-src-1' });
   assert.deepEqual(result.reading, reading);
   assert.equal(result.model, 'claude-opus-5-5');
   assert.equal(result.provider, 'anthropic');
   assert.equal(result.telemetry.root_execution.id, 'msg-src-1');
-  assertClaudeRequestShape(bodies[0], { effort: 'high' });
+  assertClaudeRequestShape(bodies[0], { effort: 'high', delivery: 'tool' });
   assert.match(bodies[0].messages[0].content, /OWNER MESSAGE/);
 
   providers.reset();
@@ -474,7 +492,7 @@ test('the outbound reply reader on Claude: the verdict and the served model; pro
 test('document chat on Claude: the turns keep their order and roles; actions are proposals; failures keep the union', async (t) => {
   claudeOnly(t);
   const providers = withProviders(t);
-  const bodies = scriptCapture(providers, 'document_chat', claudeReply({ text: 'The total is 12.40 EUR.', actions: [] }));
+  const bodies = scriptCapture(providers, 'document_chat', claudeToolReply({ text: 'The total is 12.40 EUR.', actions: [] }));
   const reply = await generateDocumentChatReply({
     context: { document: { filename: 'kuitti.pdf', total: 12.4 } },
     history: [{ role: 'user', content: 'Hi' }, { role: 'assistant', content: 'Hello' }],
@@ -484,12 +502,16 @@ test('document chat on Claude: the turns keep their order and roles; actions are
   assert.equal(reply.model, 'claude-opus-5-5');
   assert.equal(reply.provider, 'anthropic');
   const body = bodies[0];
-  assertClaudeRequestShape(body, { effort: 'medium' });
+  assertClaudeRequestShape(body, { effort: 'medium', delivery: 'tool' });
+  assert.deepEqual(body.tools.find((tool) => tool.name === 'structured_answer').input_schema, DOCUMENT_CHAT_RESPONSE_SCHEMA, 'the whole unchanged schema');
   assert.deepEqual(body.messages.map((m) => m.role), ['user', 'user', 'assistant', 'user']);
   assert.match(body.messages[0].content[0].text, /WORKSPACE_CONTEXT/);
   assert.equal(body.messages.at(-1).content[0].text, 'What is the total?');
 
   providers.reset();
+  providers.script('document_chat', claudeReply({ text: 'prose JSON is not the answer', actions: [] }));
+  const prose = await generateDocumentChatReply({ context: {}, userMessage: 'x' });
+  assert.deepEqual([prose.kind, prose.code], ['failed', 'parse_error'], 'no tool call is a named failure; text is never read');
   providers.script('document_chat', { status: 200, body: claudeMessage('{}', { stopReason: 'refusal' }) });
   const refused = await generateDocumentChatReply({ context: {}, userMessage: 'x' });
   assert.deepEqual([refused.kind, refused.code], ['failed', 'anthropic_refused']);
@@ -554,25 +576,26 @@ test('a nullable enum goes on the wire as anyOf; the lane schema keeps its spell
   assert.equal(validateLaneSchema(lane, { direction: 'sideways' }).length, 1);
 });
 
-test('past 16 union parameters, only the excess nullable properties go optional on the wire; the reader restores their nulls', async (t) => {
-  const { anthropicRequestSchema, countUnionParameters } = await import('./structuredRequest.js');
-  const { DOCUMENT_CHAT_RESPONSE_SCHEMA } = await import('./documentChat.js');
-  const { wire, optionalNulls } = anthropicRequestSchema(DOCUMENT_CHAT_RESPONSE_SCHEMA);
-  assert.equal(optionalNulls, true);
-  assert.equal(countUnionParameters(wire), 16, 'exactly at the limit, not below it');
-  const laneItem = DOCUMENT_CHAT_RESPONSE_SCHEMA.properties.actions.items;
-  const wireItem = wire.properties.actions.items;
-  const optional = laneItem.required.filter((name) => !wireItem.required.includes(name));
-  assert.equal(optional.length, 2, 'two of 18 nullable fields became optional');
-  // Small schemas are untouched.
-  assert.equal(anthropicRequestSchema(SCHEMA).optionalNulls, false);
+test('one delivery rule: within the grammar limits output_config.format, over them one non-strict tool with tool_choice auto', async (t) => {
+  const { schemaDeliveryFor, STRUCTURED_OUTPUT_LIMITS } = await import('./structuredRequest.js');
+  assert.deepEqual(STRUCTURED_OUTPUT_LIMITS, { unionParameters: 16, optionalProperties: 24 });
+  assert.equal(schemaDeliveryFor(SCHEMA).delivery, 'output_format');
+  const chat = schemaDeliveryFor(DOCUMENT_CHAT_RESPONSE_SCHEMA);
+  assert.equal(chat.delivery, 'tool');
+  assert.ok(chat.unionParameters > 16, `document chat: ${chat.unionParameters} unions`);
+  const manyOptional = { type: 'object', additionalProperties: false, required: [],
+    properties: Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`f${i}`, { type: 'string' }])) };
+  assert.equal(schemaDeliveryFor(manyOptional).delivery, 'tool', '25 optional properties is over the limit');
 
-  claudeOnly(t);
-  const providers = withProviders(t);
-  const action = sampleFor(laneItem);
-  for (const name of optional) delete action[name];
-  providers.script('document_chat', claudeReply({ text: 'Proposed.', actions: [action] }));
-  const reply = await generateDocumentChatReply({ context: {}, userMessage: 'Leave a note.' });
-  assert.equal(reply.kind, 'ok', JSON.stringify(reply));
-  for (const name of optional) assert.equal(reply.actions[0][name], null, `${name}: absent on the wire, null in the answer`);
+  const read = readAnthropicStructured({ schema: DOCUMENT_CHAT_RESPONSE_SCHEMA, delivery: 'tool' });
+  const action = sampleFor(DOCUMENT_CHAT_RESPONSE_SCHEMA.properties.actions.items);
+  assert.deepEqual(read(claudeToolReply({ text: 'ok', actions: [action] }).body).parsed, { text: 'ok', actions: [action] });
+  assert.throws(() => read(claudeMessage({ text: 'ok', actions: [] })), (error) => error.code === PROVIDER_FAILURE_CODES.INVALID_OUTPUT && /not given as the structured tool call/.test(error.message));
+  assert.throws(() => read(claudeToolReply({ text: 'ok' }).body), (error) => error.code === PROVIDER_FAILURE_CODES.INVALID_OUTPUT && /actions: required/.test(error.message));
+  assert.throws(() => read(claudeToolReply({ text: 'ok', actions: [] }, { stopReason: 'max_tokens' }).body), (error) => error.code === PROVIDER_FAILURE_CODES.OUTPUT_LIMIT);
+
+  // Document and image blocks ride before the text of the one user turn.
+  const options = anthropicStructuredRequest({ apiKey: 'k', model: 'claude-opus-5-5', system: 's', user: 'Extract.', schema: SCHEMA, effort: 'low',
+    content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'JVBERi0=' } }], execution: { root: { type: 't', id: 'doc' } } });
+  assert.deepEqual(options.body.messages[0].content.map((block) => block.type), ['document', 'text']);
 });
