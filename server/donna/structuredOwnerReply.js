@@ -2,7 +2,8 @@ import { assertCurrentOwnerReply } from './ownerReplyIdentity.js';
 import { normalizeJurisdictionKey } from './taxCodeJurisdiction.js';
 import { resolveStructuredOwnerReplyAdapter } from './statutoryRegistry.js';
 import { interpretOwnerReply } from './ownerReplyInterpreter.js';
-import { recordEvidenceTopicTurnInDb, loadReplyDocumentsWithContent } from './db/asks.js';
+import { recordEvidenceTopicTurnInDb, loadReplyDocumentsWithContent, restoreUnrecordedCorrectionWithClient } from './db/asks.js';
+import { CORRECTION_OUTCOMES, correctionNotRecordedNotice, correctionOf } from './ownerReplyCorrection.js';
 import { recordOwnerReplyProcessingReceipt } from './ownerReplyProcessingReceipt.js';
 import { ownerNoticeFromOutcome, recordOwnerNoticeWithClient } from './ownerReplyNotice.js';
 const refuse = (code, message) => { throw Object.assign(new Error(message), { code }); };
@@ -45,7 +46,7 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
   // Read the authenticated source receipt, not the worker/retry principal.
   const actor = (await client.query(`select actor_id, actor_type from audit_events
     where firm_id = $1 and client_id = $2 and resource_type = 'client_evidence_request' and resource_id = $3
-      and action = 'evidence_request.reply' and metadata->>'reply_key' = $4 order by id desc limit 1`,
+      and action in ('evidence_request.reply', 'evidence_request.correction') and metadata->>'reply_key' = $4 order by id desc limit 1`,
   [firmId, clientId, request.id, expectedReplyKey])).rows[0];
   if (!actor?.actor_id || !['client', 'firm', 'owner', 'user', 'member'].includes(actor.actor_type)) {
     refuse('OWNER_REPLY_ACTOR_UNAVAILABLE', 'The exact answer has no authenticated source actor.');
@@ -56,7 +57,17 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
     ...(request.response_payload?.document_ids || [])].filter(Boolean))];
   const documents = await loadReplyDocumentsWithContent({ client, firmId, clientId, documentIds });
   if (documents.length !== documentIds.length) refuse('OWNER_REPLY_SOURCE_INVALID', 'An answer document does not belong to this client.');
-  const context = { ask_id: request.id, reply_key: expectedReplyKey, ...askContext(request), client: profile, documents };
+  // A correction to the answer the closed question holds
+  // (ownerReplyCorrection.js): read only by an adapter that declares it can,
+  // with the earlier answer beside the new text so "a later date" has its
+  // reference; never turned into a clarification turn (the earlier answer
+  // stands until a correction is recorded); and the question goes back as it
+  // was when the adapter records nothing.
+  const correction = correctionOf(request);
+  if (correction && adapter.readsCorrections !== true) refuse('OWNER_REPLY_KIND_UNSUPPORTED', 'This question kind does not read corrections.');
+  const context = { ask_id: request.id, reply_key: expectedReplyKey, ...askContext(request), client: profile, documents,
+    ...(correction ? { correction_of_earlier_answer: { earlier_reply: correction.earlier_reply ?? null,
+      earlier_replied_at: correction.earlier_responded_at || null } } : {}) };
   // Optional adapter contract (FI-03): `settle` answers from the evidence alone
   // (no model call; the writer re-validates it under the commit locks), and
   // `maxClarifications` bounds the clarification turns — past the bound the
@@ -116,15 +127,40 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
       if (!exhaustedAlready) await adapter.exhaust?.({ client, firmId, request: current, actorId: actor.actor_id, actorType: actor.actor_type });
       return clarify(await adapter.exhaustedQuestion({ client, firmId, request: current }), true);
     };
-    if (interpretation.needsClarification) {
+    if (correction && interpretation.needsClarification) {
+      outcome = { recorded: false, correction_unclear: true, drivenAction: 'owner_correction_unclear' };
+    } else if (interpretation.needsClarification) {
       outcome = await boundedClarify(adapter.clarificationQuestion && interpretation.model
         ? await adapter.clarificationQuestion({ client, firmId, request: current }) : interpretation.clarification);
     } else {
       outcome = await adapter.apply({ client, firmId, request: current, expectedReplyKey,
         actorId: actor.actor_id, actorType: actor.actor_type, answer: interpretation.answer,
-        interpretation: { model: interpretation.model, promptVersion: interpretation.promptVersion, confidence: interpretation.confidence } });
+        interpretation: { model: interpretation.model, promptVersion: interpretation.promptVersion, confidence: interpretation.confidence },
+        ...(correction ? { correction } : {}) });
       // A writer may find at commit that the answer cannot be applied as given.
-      if (outcome?.needsClarification) outcome = await boundedClarify(outcome.clarification);
+      if (outcome?.needsClarification) {
+        outcome = correction ? { recorded: false, correction_unclear: true, drivenAction: 'owner_correction_unclear' }
+          : await boundedClarify(outcome.clarification);
+      }
+    }
+    // A correction the adapter did not record (its writer left the question
+    // waiting): the question goes back to its closed state, and the owner is
+    // told the earlier answer stands.
+    let correctionOutcome = null;
+    if (correction) {
+      const restored = await restoreUnrecordedCorrectionWithClient({ client, firmId, clientId, evidenceRequestId: request.id,
+        replyKey: expectedReplyKey, actorId: actor.actor_id, actorType: actor.actor_type,
+        reason: outcome?.correction_unclear ? 'unclear' : outcome?.drivenAction || adapter.action });
+      correctionOutcome = restored ? CORRECTION_OUTCOMES.notRecorded : CORRECTION_OUTCOMES.recorded;
+      if (restored) {
+        // In-band: the earlier answer stands. Where the closed question shows
+        // what was recorded (the portal's answered questions), it keeps
+        // showing the earlier answer's statement, which is still true.
+        const notice = correctionNotRecordedNotice({ profile: currentProfile?.profile, client: currentProfile });
+        const earlierStatement = typeof current.response_payload?.owner_notice_statement === 'string'
+          && current.response_payload.owner_notice_reply_key === correction.earlier_reply_key ? current.response_payload.owner_notice_statement : null;
+        outcome = { ...outcome, owner_notice: notice, owner_notice_statement: earlierStatement || notice };
+      }
     }
     const clarified = Boolean(outcome?.needsClarification);
     // The line the lane wrote for the owner about this answer, kept on the
@@ -135,11 +171,12 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
       structured_answer: interpretation.answer, confidence: interpretation.confidence,
       driven_action: outcome?.clarificationExhausted ? 'owner_clarification_exhausted' : clarified ? 'owner_clarification' : outcome?.superseded ? 'owner_reply_superseded' : outcome?.drivenAction || adapter.action,
       clarification: clarified ? outcome.clarification : interpretation.clarification, actor_id: actor.actor_id, actor_type: actor.actor_type,
-      ...(interpretation.settledBy ? { settled_by: interpretation.settledBy } : {}) };
+      ...(interpretation.settledBy ? { settled_by: interpretation.settledBy } : {}),
+      ...(correction ? { correction: { ...correction, outcome: correctionOutcome } } : {}) };
     await recordOwnerReplyProcessingReceipt({ client, firmId, clientId, evidenceRequestId: request.id,
       actorId: actor.actor_id, actorType: actor.actor_type, processing, metadata: { authority_basis: 'persisted_owner_answer',
         evidence_request_id: request.id, reply_turn_id: expectedReplyKey } });
     await client.query('commit');
-    return { applied: !clarified, ...outcome, processing };
+    return { applied: !clarified, ...outcome, processing, ...(correction ? { correction: { outcome: correctionOutcome } } : {}) };
   } catch (error) { await client.query('rollback'); throw error; }
 };

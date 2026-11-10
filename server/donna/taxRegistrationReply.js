@@ -42,6 +42,13 @@
 //   with and without its invitation to reply; the worker keeps it on the
 //   answered question (ownerReplyNotice.js).
 //
+// - A reply after the question closed is a correction to the answer it holds
+//   (ownerReplyCorrection.js; this adapter declares readsCorrections). It is
+//   read and checked exactly as an answer, and both receipts carry the
+//   correction (the earlier answer, who and when). One that records nothing
+//   stamps no line: every line keeps the earlier answer's stamp and state, and
+//   the worker puts the question back as it was.
+//
 // The country specifics (record key, normaliser, wording) come from the
 // country posting policy's taxRegistration declaration; nothing here knows a
 // country. No static database imports: the statutory registry imports this
@@ -186,7 +193,7 @@ const stampLines = async ({ client, firmId, clientId, request, rule, profile, re
 };
 
 export const applyTaxRegistrationAnswer = async ({ client, firmId, request, actorId, actorType, answer, interpretation = {},
-  today = toUtcIsoDay(new Date()) }) => {
+  correction = null, today = toUtcIsoDay(new Date()) }) => {
   assertQuestionOfClient(request);
   const clientId = request.client_id;
   const row = await readClient(client, firmId, clientId);
@@ -233,9 +240,12 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
       values ($1, $2, $3, $4, 'tax_registration.owner_answer_not_recorded', 'client', $2, $5::jsonb) returning id`,
     [firmId, clientId, actorType || 'client', actorId, JSON.stringify({ evidence_request_id: request.id, answered_by: answeredBy,
       profile_field: rule.profileField, record: before, proposed: record, refusal: locked, reason: locked.code, reading,
-      line_ids: lines.map((line) => line.id), rests_on: conflict ? 'firm_record_correction' : 'firm_reapproval_workflow' })])).rows[0].id;
+      line_ids: lines.map((line) => line.id), rests_on: correction ? 'earlier_answer_stands' : conflict ? 'firm_record_correction' : 'firm_reapproval_workflow',
+      ...(correction ? { correction } : {}) })])).rows[0].id;
     const state = conflict ? 'record_conflict' : 'record_locked';
-    const stamped = await stampLines({ client, firmId, clientId, request, rule, profile: row.profile || {}, receiptId: String(receipt), state, lines });
+    // A correction that records nothing leaves every line as the earlier
+    // answer left it: its stamp is the one the coder must keep reading.
+    const stamped = correction ? [] : await stampLines({ client, firmId, clientId, request, rule, profile: row.profile || {}, receiptId: String(receipt), state, lines });
     // The owner is told, in their language, that nothing was recorded and a
     // person must check it; never that it was recorded. The line invites no
     // reply, so it is its own statement (ownerReplyNotice.js).
@@ -256,7 +266,7 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
     profile_field: rule.profileField, before, after, changed, outcome: changed ? 'recorded' : 'confirmed_record', reading, owner_notice: ownerNotice, language,
     // The undo: write the prior record back through the same profile writer.
     undo: { profile_patch: { [rule.profileField]: before } },
-    line_ids: lines.map((line) => line.id),
+    line_ids: lines.map((line) => line.id), ...(correction ? { correction } : {}),
     // The posted lines this answer contradicts (the profile writer's
     // receipt carries the same list); each opens the existing correction case.
     ...(written?.tax_registration_change ? { posted_lines_affected: written.tax_registration_change } : {}) })])).rows[0].id;
@@ -301,6 +311,8 @@ export const taxRegistrationReplyAdapter = Object.freeze({
   maxClarifications: 1,
   // Past the bound a later reply is still read: the owner may send the date.
   readsAfterExhaustion: true,
+  // A reply after the question closed is read as a correction (ownerReplyCorrection.js).
+  readsCorrections: true,
   answerSchema,
   instructions: `This ask is whether the business is registered for VAT (the register the question names) and from what date. Return registered "yes" only when the owner clearly says the business is registered, "no" only when they clearly say it is not, otherwise "unclear". registered_from is the date the registration took effect, only when the owner states a full calendar date (day, month and year); a month or year alone, "a while ago", or a date you would have to infer from the question, today, incorporation, a filing or any legal default is null. registered_until is set only when the owner states that the registration ended, and only as a full stated date; otherwise null. Never guess a date. Do not ask for anything else.`,
   validateAnswer: validateTaxRegistrationAnswer,
