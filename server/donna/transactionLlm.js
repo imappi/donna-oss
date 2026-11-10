@@ -20,10 +20,12 @@ import {
   classifyProviderStatus,
   classifyProviderThrow,
   providerFailureReceipt,
+  providerBudgetReserveMs,
   providerFetchWithDeadline,
   providerInvalidOutput,
   providerKeyMissing
 } from './providerTransport.js';
+import { remainingExecutionBudgetMs } from './executionBudget.js';
 import { extractJson } from './extractJson.js';
 import { canonicalMerchantPattern, conversionDetailFor, normalizeIntelText } from './transactionIntel.js';
 import { requireCodingPolicyForClient, codingPolicyReceipt, CodingPolicyError } from './codingPolicy.js';
@@ -111,6 +113,13 @@ const CODING_PROVIDERS = getLane('transaction_coding').providers;
 // deadline than the default; the instructions are the cached prefix.
 const CODING_ANTHROPIC_EFFORT = 'high';
 const CODING_ANTHROPIC_TIMEOUT_MS = 300_000;
+// The least job budget a Claude batch call is started with. A 10-line batch
+// took 81–82 s on the appliance harness (2026-11-10, effort high, streamed);
+// a call started with less is cut by the budget before it can answer, and
+// billed for nothing. Below this the batch is not sent: the round stops with
+// the same typed PROVIDER_TIMEOUT (execution_budget_exhausted) a cut call
+// would have left, and the next job, with a fresh budget, codes the rest.
+export const CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS = 120_000;
 
 let dotEnvCache = null;
 const merchantContextCache = new Map();
@@ -522,8 +531,13 @@ const openAiCodingCall = async ({ config, body, fetchImpl }) => {
 // response id) or `{ provider_failure }` — a refusal, an output cut at
 // max_tokens, no credit, a bad key, a rate limit, a timeout and an
 // unreadable or schema-breaking body all come back typed, never as a coding.
-const anthropicCodingCall = async ({ config, instructions: callInstructions, input, schema, executionId, maxTokens, fetchImpl }) => {
+const anthropicCodingCall = async ({ config, instructions: callInstructions, input, schema, executionId, maxTokens, minBudgetMs = 0, fetchImpl }) => {
   if (!config.apiKey) return { provider_failure: codingKeyMissing(config) };
+  const remaining = remainingExecutionBudgetMs();
+  if (minBudgetMs > 0 && remaining !== null && remaining - providerBudgetReserveMs() < minBudgetMs) {
+    const error = classifyProviderThrow({ provider: 'anthropic', error: null, timedOut: true, reason: 'execution_budget_exhausted' });
+    return { provider_failure: error.receipt() };
+  }
   try {
     const { result } = await llmCall(anthropicStructuredRequest({
       apiKey: config.apiKey,
@@ -1486,6 +1500,7 @@ export const suggestTransactionCodingBatch = async ({
       schema: batchSchema,
       executionId: cleanTransactions[0]?.id || 'batch',
       maxTokens: 64000,
+      minBudgetMs: CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS,
       fetchImpl
     }) : await openAiCodingCall({
       config,

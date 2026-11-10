@@ -31,7 +31,7 @@ import { assembleAnthropicEventStream } from './anthropicEventStream.js';
 import { createExecutionBudget, runWithExecutionBudget } from './executionBudget.js';
 import { classifyProviderStatus, PROVIDER_FAILURE_CODES } from './providerTransport.js';
 import { getLane } from './modelLanes.js';
-import { suggestTransactionCoding, suggestTransactionCodingBatch } from './transactionLlm.js';
+import { suggestTransactionCoding, suggestTransactionCodingBatch, CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS } from './transactionLlm.js';
 import { resolveCodingPolicy } from './codingPolicy.js';
 import { draftClientAskMessage, buildAskMessageSchema } from './askPipeline.js';
 import { distillFirmFactsFromEvent } from './firmFacts.js';
@@ -646,7 +646,7 @@ const slowStream = (delayMs, answer, sent = []) => async (_url, init) => {
 
 const inWorker = (budgetMs, fn) => runWithExecutionBudget(createExecutionBudget({ timeoutMs: budgetMs, label: 'parse-document#test' }), fn);
 
-test('inside a worker the batch coder lives past the transport default to its own wall; a budget shorter than the wall wins', async (t) => {
+test('inside a worker the batch coder lives past the transport default to its own wall; with too little budget left it sends nothing', async (t) => {
   claudeOnly(t);
   setEnv(t, { PROVIDER_REQUEST_TIMEOUT_MS: '60', PROVIDER_BUDGET_RESERVE_MS: '0' });
   const realFetch = globalThis.fetch;
@@ -655,18 +655,22 @@ test('inside a worker the batch coder lives past the transport default to its ow
   // A reply three times slower than the transport default: read, because the
   // coder's own wall (300 s) is the deadline, not the default.
   globalThis.fetch = slowStream(200, codingAnswer, sent);
-  const batch = await inWorker(120_000, () => suggestTransactionCodingBatch({ clientProfile: { jurisdiction: 'fi' }, transactions: [TX, TX2] }));
+  const batch = await inWorker(300_000, () => suggestTransactionCodingBatch({ clientProfile: { jurisdiction: 'fi' }, transactions: [TX, TX2] }));
   assert.equal(batch.provider_failure, undefined, JSON.stringify(batch.provider_failure));
   assert.deepEqual(batch.suggestions.map((suggestion) => suggestion.source), ['anthropic_batch', 'anthropic_batch']);
   assert.equal(sent[0].stream, true, 'the coder request that leaves is streamed');
-  // The same reply under a budget shorter than the reply: the budget cuts the
-  // call, typed, on the coder's failure receipt.
-  globalThis.fetch = slowStream(4_000, codingAnswer);
-  const started = Date.now();
-  const cut = await inWorker(2_500, () => suggestTransactionCodingBatch({ clientProfile: { jurisdiction: 'fi' }, transactions: [TX, TX2] }));
-  assert.equal(cut.provider_failure?.code, 'PROVIDER_TIMEOUT');
-  assert.equal(cut.provider_failure?.reason, 'execution_budget_exhausted');
-  assert.ok(Date.now() - started < 3_900, 'cut at the budget, not at the reply');
+  // A job with less budget left than a batch needs: no request is sent (a
+  // started call would be cut and billed for nothing); the round stops with
+  // the typed receipt a cut call would have left.
+  const before = sent.length;
+  const short = await inWorker(CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS - 1_000, () => suggestTransactionCodingBatch({ clientProfile: { jurisdiction: 'fi' }, transactions: [TX, TX2] }));
+  assert.equal(short.provider_failure?.code, 'PROVIDER_TIMEOUT');
+  assert.equal(short.provider_failure?.reason, 'execution_budget_exhausted');
+  assert.equal(sent.length, before, 'nothing was sent');
+  // The single-line coder (one line, seconds) is not held to the batch floor.
+  const single = await inWorker(CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS - 1_000, () => suggestTransactionCoding({ clientProfile: { jurisdiction: 'fi' }, transaction: TX }));
+  assert.equal(single.provider_failure, undefined);
+  assert.equal(single.source, 'anthropic');
 });
 
 test('the lane\'s wall is the one deadline on both providers, inside a worker and outside one', async (t) => {
@@ -696,6 +700,9 @@ test('the lane\'s wall is the one deadline on both providers, inside a worker an
       await assert.rejects(() => run(() => call(600, 250)),
         (error) => error.code === 'PROVIDER_TIMEOUT' && error.reason === 'request_timeout', `${name} ${where}: past the wall, a typed timeout`);
     }
+    // A budget shorter than the wall wins: the call is cut at the budget.
+    await assert.rejects(() => inWorker(300, () => call(600, 400)),
+      (error) => error.code === 'PROVIDER_TIMEOUT' && error.reason === 'execution_budget_exhausted', `${name}: the budget, not the wall`);
     // In a worker, a lane that names no wall keeps the transport default.
     await assert.rejects(() => inWorker(120_000, () => call(150, null)), (error) => error.code === 'PROVIDER_TIMEOUT', `${name}: no wall, the default`);
   }
