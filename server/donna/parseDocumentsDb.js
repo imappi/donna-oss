@@ -7,6 +7,7 @@
 
 import { validateCloudPilotRegistration, releaseCloudPilotRegistration, lockUploadClientInFirm } from './cloudEvidenceIntake.js';
 import { requireClientInFirm } from './db/clients.js';
+import { settleSupersededDeadParseJobsWithClient } from './desktop/localJobQueue.js';
 import { assertEvidenceUploadReference, fetchEvidenceObjectBytes } from './evidenceStorage.js';
 import { assertExecutionBudgetActive } from './executionBudget.js';
 import { decideJevMaterialException, exceptionOwnerAskAllowed, exceptionPendingLane } from './jevMaterialException.js';
@@ -1009,6 +1010,14 @@ export const __retryParseRunsWithClient = async ({ client, firmId, documentIds =
         continue;
       }
       if (update.rows.length) {
+        // The superseded run's dead parse job (the appliance queue's receipt
+        // of its spent budget) is settled with this retry, in this
+        // transaction, and named on the retry's receipt — as migration 186
+        // settles it for its own re-admissions. Host A already accounts for
+        // it by the document's new run; settling it keeps the queue honest.
+        const cancelledDeadJobIds = await settleSupersededDeadParseJobsWithClient({
+          client, firmId, documentId: update.rows[0].id, currentRunId: parseRunId
+        });
         await audit(client, {
           firmId,
           clientId: update.rows[0].client_id,
@@ -1017,7 +1026,8 @@ export const __retryParseRunsWithClient = async ({ client, firmId, documentIds =
           metadata: {
             parse_run_id: parseRunId,
             previous_status: row.parse_status,
-            previous_run_id: previousRunId
+            previous_run_id: previousRunId,
+            cancelled_dead_job_ids: cancelledDeadJobIds
           }
         });
         rows.push({ ...rowToThinParseStatus(update.rows[0]), parse_run_id: parseRunId });
