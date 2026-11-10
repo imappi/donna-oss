@@ -1,18 +1,22 @@
 // Country-owned owner-reply adapters. Keep text-only refusals, writer injection,
 // mandates, sender authority and delivery receipts identical to the channel path.
-import { isInvoiceIssuanceAsk, resolveInvoiceIssuanceInbound } from './invoiceIssuanceRoute.js';
-import { isAlvReturnAsk, resolveAlvReturnInbound } from './alvReturnRoute.js';
+import { invoiceRouteCopyFor, isInvoiceIssuanceAsk, resolveInvoiceIssuanceInbound } from './invoiceIssuanceRoute.js';
+import { alvRouteCopyFor, isAlvReturnAsk, resolveAlvReturnInbound } from './alvReturnRoute.js';
 import { isOpeningBalanceAsk, resolveOpeningBalanceInbound } from './openingBalanceRoute.js';
 export { startInvoiceIssuance } from './invoiceIssuanceRoute.js';
 export { sniffEInvoiceXml, FINLAND_EINVOICE_RECEIVE_FLAG_KEY, receiveEInvoiceDocument } from './verkkolaskuReceive.js';
 export { createIlmoitinSubmitAlvReturn } from './omavero/submitAlvReturn.js';
+
+// The owner's language is the channel's (config.language, the one resolver's
+// answer); absent, these Finnish lanes keep their Finnish copy.
+const routeLanguage = (config) => (config?.language === 'en' ? 'en' : 'fi');
 
 const runInvoiceIssuanceReply = async ({ descriptor, sendText, from, config, deps, firmId, anchor, ask, text, message, actorId, env, recordLedger }) => {
     // Invoice-issuance asks are text-only conversations (kyllä / ei / a correction).
     // A media reply must NOT fall through to the generic evidence path — that would
     // resolve the confirm ask without any confirmation.
     if (descriptor) {
-      await sendText({ to: from, text: config.copy.invoiceTextOnly || 'Vastaa tekstillä: “kyllä”, “ei” tai korjaus.' });
+      await sendText({ to: from, text: config.copy.invoiceTextOnly || invoiceRouteCopyFor(routeLanguage(config)).textOnly });
       return { status: 'nudged', reason: 'invoice_issuance_media' };
     }
     const invoiceFlagActs = typeof deps.invoiceIssuanceFlagActs === 'function'
@@ -82,7 +86,8 @@ const runInvoiceIssuanceReply = async ({ descriptor, sendText, from, config, dep
       resolveAsk: deps.resolveInvoiceIssuanceAsk,
       sendText: ({ text: outbound, ask: outboundAsk }) => sendText({ to: from, text: outbound, ask: outboundAsk }),
       apiKey: env.ANTHROPIC_API_KEY,
-      fetchImpl: deps.fetchImpl
+      fetchImpl: deps.fetchImpl,
+      language: routeLanguage(config)
     });
     await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: anchor.askId, provider_payload: { inbound: { type: 'text', anchor: anchor.source, invoice_issuance: result.action } } } });
     return { status: 'invoice_issuance', askId: anchor.askId, result };
@@ -94,7 +99,7 @@ const runAlvReturnReply = async ({ descriptor, sendText, from, config, deps, fir
     // ei). A media reply must NOT fall through to the generic evidence path —
     // that would resolve the confirm ask without any confirmation.
     if (descriptor) {
-      await sendText({ to: from, text: config.copy.alvReturnTextOnly || 'Vastaa tekstillä: “kyllä” tai “ei”.' });
+      await sendText({ to: from, text: config.copy.alvReturnTextOnly || alvRouteCopyFor(routeLanguage(config)).textOnly });
       return { status: 'nudged', reason: 'alv_return_media' };
     }
     const alvFlagActs = typeof deps.alvFilingFlagActs === 'function'
@@ -122,7 +127,8 @@ const runAlvReturnReply = async ({ descriptor, sendText, from, config, deps, fir
         ? (payload) => deps.submitAlvReturn({ ...payload, firmId, clientId: anchor.clientId })
         : deps.submitAlvReturn,
       resolveAsk: deps.resolveAlvReturnAsk,
-      sendText: ({ text: outbound, ask: outboundAsk }) => sendText({ to: from, text: outbound, ask: outboundAsk })
+      sendText: ({ text: outbound, ask: outboundAsk }) => sendText({ to: from, text: outbound, ask: outboundAsk }),
+      language: routeLanguage(config)
     });
     await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: anchor.askId, provider_payload: { inbound: { type: 'text', anchor: anchor.source, alv_return: result.action } } } });
     return { status: 'alv_return', askId: anchor.askId, result };

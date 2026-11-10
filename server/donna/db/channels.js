@@ -14,7 +14,7 @@ import { askAffordances, renderAskAffordanceTail } from '../askIdentity.js';
 // live in selfKnowledge.js (the Keep layer's single home for owner portal-link
 // delivery). selfKnowledge.js is a leaf module (registry + config + identity
 // imports only), so this import cannot cycle back into firmDb.
-import { OWNER_PORTAL_LINK_FLAG_KEY, recordOwnerPortalLinkShare, resolveOwnerPortalLink, SENSITIVE_ASK_NOTICE_TEMPLATE, SENSITIVE_ASK_NOTICE_VERSION, SENSITIVE_ASK_WA_ITEM_PARAM, SENSITIVE_ASK_WA_TEMPLATE, sensitiveAskPortalNoticeText } from '../selfKnowledge.js';
+import { OWNER_PORTAL_LINK_FLAG_KEY, recordOwnerPortalLinkShare, resolveOwnerPortalLink, SENSITIVE_ASK_NOTICE_TEMPLATE, SENSITIVE_ASK_NOTICE_VERSION, SENSITIVE_ASK_WA_TEMPLATE, sensitiveAskPortalNoticeText, sensitiveAskWaItemParam } from '../selfKnowledge.js';
 import { smsEnvAllowsClient } from '../channels/sms.js';
 import { buildTelegramAskDigestText, TELEGRAM_ASK_DIGEST_TEMPLATE, telegramEnvAllowsClient } from '../channels/telegram.js';
 import { OWNER_TEMPLATE_FALLBACK_LANGUAGE, preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
@@ -765,7 +765,7 @@ export const deliverSensitiveAskPortalNotice = async ({
       deliverOwnerMessage,
       channel: OWNER_CHANNELS.WHATSAPP,
       recipient: { phone_e164: binding.phone_e164 },
-      template: { name: templateName, bodyParameters: [SENSITIVE_ASK_WA_ITEM_PARAM, askRef], metadata: { ask_id: request.id, client_id: clientId } },
+      template: { name: templateName, bodyParametersFor: (languageCode) => [sensitiveAskWaItemParam(languageCode), askRef], metadata: { ask_id: request.id, client_id: clientId } },
       preferredLanguage
     }));
   } else {

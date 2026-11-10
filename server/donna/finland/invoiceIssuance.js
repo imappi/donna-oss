@@ -434,6 +434,45 @@ export const buildCreditNoteArtifacts = ({
   };
 };
 
+// The owner questions the invoice and credit-note gates ask, per owner language
+// (preferredOwnerTemplateLanguage, passed in as `language`). A Finnish lane: an
+// absent language keeps the historical Finnish copy, unchanged.
+const ISSUANCE_INTAKE_COPY = Object.freeze({
+  fi: Object.freeze({
+    creditUnreadable: 'En saanut hyvitysohjeesta selvää — kerro minkä laskun hyvitän ja kuinka paljon (esim. "hyvitä lasku 2026001").',
+    missingOriginal: 'Minkä laskun haluat hyvittää? Kerro laskun numero (esim. "hyvitä lasku 2026001").',
+    unknownOriginal: (number) => `En löytänyt lähetettyä laskua numerolla ${number}. Tarkista numero, niin teen hyvityslaskun.`,
+    originalNotIssued: (number) => `Laskua ${number} ei ole lähetetty, joten sitä ei voi hyvittää.`,
+    creditInvalid: (errors) => `Hyvityslaskussa on korjattavaa: ${errors}`,
+    invoiceUnreadable: 'En saanut laskutusohjeesta selvää — kerro kenelle laskutetaan, mistä ja kuinka paljon (esim. "laskuta Asiakas Oy 500 € konsultoinnista").',
+    incomplete: 'Kerro vielä kenelle laskutetaan ja mistä summasta (esim. "laskuta Asiakas Oy 500 € konsultoinnista").',
+    missingSellerBusinessId: 'Tarvitsen oman Y-tunnuksesi laskua varten — mikä se on?',
+    missingSellerIban: 'Mille IBAN-tilille lasku maksetaan? Kerro tilinumerosi.',
+    missingBuyerEmail: 'Mihin sähköpostiosoitteeseen lähetän laskun?',
+    invoiceInvalid: (errors) => `Laskussa on korjattavaa: ${errors}`,
+    unknownQuote: (number) => `En löytänyt tarjousta numerolla ${number}. Tarkista tarjouksen numero.`,
+    quoteAlreadyInvoiced: (number) => `Tarjous ${number} on jo laskutettu.`,
+    quoteNotSent: (number, status) => `Tarjousta ${number} ei ole lähetetty, joten sitä ei voi laskuttaa (tila: ${status}).`
+  }),
+  en: Object.freeze({
+    creditUnreadable: 'I couldn\'t make out the credit instructions. Tell me which invoice to credit and how much (for example "credit invoice 2026001").',
+    missingOriginal: 'Which invoice do you want to credit? Tell me the invoice number (for example "credit invoice 2026001").',
+    unknownOriginal: (number) => `I couldn't find a sent invoice with the number ${number}. Please check the number and I will make the credit note.`,
+    originalNotIssued: (number) => `Invoice ${number} has not been sent, so it can't be credited.`,
+    creditInvalid: (errors) => `The credit note needs fixing: ${errors}`,
+    invoiceUnreadable: 'I couldn\'t make out the invoice instructions. Tell me who to invoice, for what and how much (for example "invoice Asiakas Oy 500 € for consulting").',
+    incomplete: 'Tell me who to invoice and the amount (for example "invoice Asiakas Oy 500 € for consulting").',
+    missingSellerBusinessId: 'I need your own Business ID (Y-tunnus) for the invoice. What is it?',
+    missingSellerIban: 'Which IBAN account should the invoice be paid to? Tell me your account number.',
+    missingBuyerEmail: 'Which email address should I send the invoice to?',
+    invoiceInvalid: (errors) => `The invoice needs fixing: ${errors}`,
+    unknownQuote: (number) => `I couldn't find a quote with the number ${number}. Please check the quote number.`,
+    quoteAlreadyInvoiced: (number) => `Quote ${number} has already been invoiced.`,
+    quoteNotSent: (number, status) => `Quote ${number} has not been sent, so it can't be invoiced (status: ${status}).`
+  })
+});
+const issuanceIntakeCopyFor = (language) => ISSUANCE_INTAKE_COPY[language] || ISSUANCE_INTAKE_COPY.fi;
+
 // ---------------------------------------------------------------------------------
 // classifyCreditNoteIssuance — DETERMINISTIC (the credit-note twin of
 // classifyInvoiceIssuance). The caller supplies the resolved original row (or
@@ -445,11 +484,13 @@ export const classifyCreditNoteIssuance = ({
   originalRow = null,
   priorCreditedTotal = 0,
   today = null,
-  timestamp = null
+  timestamp = null,
+  language = 'fi'
 } = {}) => {
+  const copy = issuanceIntakeCopyFor(language);
   today = today || (timestamp ? String(timestamp).slice(0, 10) : null);
   if (!parsed.ok || parsed.unextractable_reason) {
-    return { terminal: 'escalate', escalation: { reason: parsed.unextractable_reason || 'unreadable', question: 'En saanut hyvitysohjeesta selvää — kerro minkä laskun hyvitän ja kuinka paljon (esim. "hyvitä lasku 2026001").' }, model: parsed.model || null };
+    return { terminal: 'escalate', escalation: { reason: parsed.unextractable_reason || 'unreadable', question: copy.creditUnreadable }, model: parsed.model || null };
   }
   if (parsed.intent !== 'credit_note') return { terminal: 'not_invoice', model: parsed.model || null };
 
@@ -457,13 +498,13 @@ export const classifyCreditNoteIssuance = ({
 
   const originalNumber = parsed.credit?.original_invoice_number || null;
   if (!isNonEmptyString(originalNumber)) {
-    return ask('missing_original_invoice', 'Minkä laskun haluat hyvittää? Kerro laskun numero (esim. "hyvitä lasku 2026001").');
+    return ask('missing_original_invoice', copy.missingOriginal);
   }
   if (!originalRow) {
-    return ask('unknown_original_invoice', `En löytänyt lähetettyä laskua numerolla ${originalNumber}. Tarkista numero, niin teen hyvityslaskun.`);
+    return ask('unknown_original_invoice', copy.unknownOriginal(originalNumber));
   }
   if (originalRow.status !== 'issued' || (originalRow.kind || 'invoice') !== 'invoice') {
-    return ask('original_not_issued', `Laskua ${originalNumber} ei ole lähetetty, joten sitä ei voi hyvittää.`);
+    return ask('original_not_issued', copy.originalNotIssued(originalNumber));
   }
 
   // KEEP-layer dry run with a placeholder number (the real number is allocated
@@ -478,7 +519,7 @@ export const classifyCreditNoteIssuance = ({
     timestamp
   });
   if (!dryRun.ok) {
-    return ask('credit_note_invalid', `Hyvityslaskussa on korjattavaa: ${dryRun.errors.join('; ')}`);
+    return ask('credit_note_invalid', copy.creditInvalid(dryRun.errors.join('; ')));
   }
   return {
     terminal: 'credit_draft',
@@ -501,27 +542,28 @@ export const classifyCreditNoteIssuance = ({
 //   { terminal: 'draft', intent, artifacts, model }              — confirm-ready
 // The escalation asks ONE targeted question (the thing only the owner can answer).
 // ---------------------------------------------------------------------------------
-export const classifyInvoiceIssuance = ({ parsed = {}, sellerContext = {}, today = null, timestamp = null, alvContext = null } = {}) => {
+export const classifyInvoiceIssuance = ({ parsed = {}, sellerContext = {}, today = null, timestamp = null, alvContext = null, language = 'fi' } = {}) => {
+  const copy = issuanceIntakeCopyFor(language);
   today = today || (timestamp ? String(timestamp).slice(0, 10) : null);
   if (!parsed.ok || parsed.unextractable_reason) {
-    return { terminal: 'escalate', escalation: { reason: parsed.unextractable_reason || 'unreadable', question: 'En saanut laskutusohjeesta selvää — kerro kenelle laskutetaan, mistä ja kuinka paljon (esim. "laskuta Asiakas Oy 500 € konsultoinnista").' }, model: parsed.model || null };
+    return { terminal: 'escalate', escalation: { reason: parsed.unextractable_reason || 'unreadable', question: copy.invoiceUnreadable }, model: parsed.model || null };
   }
   if (parsed.intent !== 'invoice') return { terminal: 'not_invoice', model: parsed.model || null };
 
   const ask = (reason, question) => ({ terminal: 'escalate', escalation: { reason, question }, intent: parsed, model: parsed.model || null });
 
   if (!isNonEmptyString(parsed.buyer_name) || !(parsed.lines || []).length || !(parsed.lines || []).every((l) => isNonEmptyString(l.description) && Number.isFinite(l.unit_price) && l.unit_price > 0)) {
-    return ask('incomplete_instruction', 'Kerro vielä kenelle laskutetaan ja mistä summasta (esim. "laskuta Asiakas Oy 500 € konsultoinnista").');
+    return ask('incomplete_instruction', copy.incomplete);
   }
   const sellerBusinessId = sellerContext.businessId || parsed.seller_business_id;
   if (!ovtFromBusinessId(sellerBusinessId) && !sellerContext.eInvoiceAddress) {
-    return ask('missing_seller_business_id', 'Tarvitsen oman Y-tunnuksesi laskua varten — mikä se on?');
+    return ask('missing_seller_business_id', copy.missingSellerBusinessId);
   }
   if (!isNonEmptyString(sellerContext.iban || parsed.seller_iban)) {
-    return ask('missing_seller_iban', 'Mille IBAN-tilille lasku maksetaan? Kerro tilinumerosi.');
+    return ask('missing_seller_iban', copy.missingSellerIban);
   }
   if (!isEmail(parsed.buyer_email)) {
-    return ask('missing_buyer_email', 'Mihin sähköpostiosoitteeseen lähetän laskun?');
+    return ask('missing_buyer_email', copy.missingBuyerEmail);
   }
   // No buyer-Y-tunnus gate (D-FI10-P1): a buyer without one is a consumer — the
   // draft takes the PDF lane inside buildIssuanceArtifacts instead of escalating.
@@ -538,7 +580,7 @@ export const classifyInvoiceIssuance = ({ parsed = {}, sellerContext = {}, today
     alvContext
   });
   if (!dryRun.ok) {
-    return ask('artifact_invalid', `Laskussa on korjattavaa: ${dryRun.errors.join('; ')}`);
+    return ask('artifact_invalid', copy.invoiceInvalid(dryRun.errors.join('; ')));
   }
   return { terminal: 'draft', intent: parsed, artifacts: dryRun.artifacts, model: parsed.model || null };
 };
@@ -568,8 +610,11 @@ export const runInvoiceIssuanceIntake = async ({
   transport,
   resolveCreditContext = null,
   quotesEnabled = false,
-  resolveQuoteContext = null
+  resolveQuoteContext = null,
+  // The owner's language for the escalation questions; absent ⇒ Finnish.
+  language = 'fi'
 } = {}) => {
+  const copy = issuanceIntakeCopyFor(language);
   const parsed = await extractInvoiceIntent({ messageText, priorDraft, sellerContext, today, alvActive: alvContext?.alvActive === true, apiKey, model, fetchImpl, transport });
   if (parsed.ok && parsed.intent === 'credit_note') {
     let creditContext = { originalRow: null, priorCreditedTotal: 0 };
@@ -582,19 +627,20 @@ export const runInvoiceIssuanceIntake = async ({
       originalRow: creditContext.originalRow || null,
       priorCreditedTotal: creditContext.priorCreditedTotal || 0,
       today,
-      timestamp
+      timestamp,
+      language
     });
   }
   if (parsed.ok && (parsed.intent === 'quote' || parsed.intent === 'quote_decline')) {
     if (!quotesEnabled) return { terminal: 'not_invoice', model: parsed.model || null };
     if (parsed.intent === 'quote') {
-      return classifyQuoteIssuance({ parsed, sellerContext, today, timestamp });
+      return classifyQuoteIssuance({ parsed, sellerContext, today, timestamp, language });
     }
     let quoteRow = null;
     if (parsed.quote?.number && typeof resolveQuoteContext === 'function') {
       quoteRow = ((await resolveQuoteContext({ quoteNumber: parsed.quote.number })) || {}).quoteRow || null;
     }
-    return classifyQuoteDecline({ parsed, quoteRow });
+    return classifyQuoteDecline({ parsed, quoteRow, language });
   }
   // C-1 conversion: an invoice intent referencing an accepted quote pre-fills
   // from the PERSISTED quote draft (D-C1-5). With quotes disabled the reference
@@ -603,15 +649,15 @@ export const runInvoiceIssuanceIntake = async ({
     const quoteRow = ((await resolveQuoteContext({ quoteNumber: parsed.from_quote_number })) || {}).quoteRow || null;
     const askQuote = (reason, question) => ({ terminal: 'escalate', escalation: { reason, question }, intent: parsed, model: parsed.model || null });
     if (!quoteRow) {
-      return askQuote('unknown_quote', `En löytänyt tarjousta numerolla ${parsed.from_quote_number}. Tarkista tarjouksen numero.`);
+      return askQuote('unknown_quote', copy.unknownQuote(parsed.from_quote_number));
     }
     if (quoteRow.status !== 'sent') {
       return askQuote('quote_not_convertible', quoteRow.status === 'converted'
-        ? `Tarjous ${quoteRow.draft?.quote?.quoteNumber || parsed.from_quote_number} on jo laskutettu.`
-        : `Tarjousta ${quoteRow.draft?.quote?.quoteNumber || parsed.from_quote_number} ei ole lähetetty, joten sitä ei voi laskuttaa (tila: ${quoteRow.status}).`);
+        ? copy.quoteAlreadyInvoiced(quoteRow.draft?.quote?.quoteNumber || parsed.from_quote_number)
+        : copy.quoteNotSent(quoteRow.draft?.quote?.quoteNumber || parsed.from_quote_number, quoteRow.status));
     }
     const merged = mergeQuoteIntoInvoiceIntent({ parsed, quoteRow });
-    const verdict = classifyInvoiceIssuance({ parsed: merged, sellerContext, today, timestamp, alvContext });
+    const verdict = classifyInvoiceIssuance({ parsed: merged, sellerContext, today, timestamp, alvContext, language });
     if (verdict.terminal === 'draft') {
       // The link the issue transaction flips on, plus the read-time expiry
       // note the confirm summary STATES (expired quotes still convert on the
@@ -624,7 +670,7 @@ export const runInvoiceIssuanceIntake = async ({
     }
     return verdict;
   }
-  return classifyInvoiceIssuance({ parsed, sellerContext, today, timestamp, alvContext });
+  return classifyInvoiceIssuance({ parsed, sellerContext, today, timestamp, alvContext, language });
 };
 
 // ---------------------------------------------------------------------------------

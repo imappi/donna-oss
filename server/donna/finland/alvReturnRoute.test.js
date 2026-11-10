@@ -228,3 +228,49 @@ test('flag off → skipped; the basis builder stamps the owner-confirmation sour
   assert.equal(basis.providerMessageId, 'wamid.reply-1');
   assert.equal(basis.phoneHash, 'ph-1');
 });
+
+// ── The owner's language on the ALV lane ─────────────────────────────────────
+// A Finnish company whose owner chose English read every line of this lane in
+// Finnish. The language is the one resolver's (passed in); absent ⇒ Finnish.
+test('ALV lane: a Finnish company whose owner chose English reads the confirm question and every reply in English', async () => {
+  assert.equal(alvReturnConfirmQuestion({ periodKey: '2026-06', verdict: footedVerdict(), language: 'en' }),
+    'VAT return, tax period 2026-06\nVAT payable 102.00 €.\nVAT on sales 127.50 € · Deductible VAT 25.50 €.\n\n'
+    + 'Reply “yes” to confirm and I will file the return with the Finnish Tax Administration. Reply “no” to cancel.');
+  assert.equal(summarizeAlvReturnVerdict({ periodKey: '2026-06', verdict: footedVerdict({ payable: -50 }), language: 'en' }).split('\n')[1], 'VAT to be refunded 50.00 €.');
+  assert.equal(summarizeAlvReturnVerdict({ periodKey: '2026-06', verdict: footedVerdict({ nil: true }), language: 'en' }),
+    'VAT return, tax period 2026-06\nNo VAT activity in the period, so this is a nil return.');
+
+  const run = async (store, replyText, extra = {}) => resolveAlvReturnInbound({
+    firmId: 'firm-1', clientId: 'client-1', ask, replyText, message, phoneHash: 'ph-1', actorId: 'owner-1', flagActs: true,
+    language: 'en', ...store.deps, ...extra
+  });
+  // The invited words are ones the route reads: "yes" files, "no" cancels.
+  const filed = makeStore();
+  assert.equal((await run(filed, 'yes', { submitReturn: async () => ({ channel: 'omavero_test', submission_id: 'SUB-1' }) })).action, 'confirm_and_file');
+  assert.deepEqual(filed.sent, ['VAT return (2026-06) filed with the Finnish Tax Administration. 102.00 € to pay. The payment instructions are in OmaVero.']);
+  const cancelled = makeStore();
+  assert.equal((await run(cancelled, 'no')).action, 'cancelled');
+  assert.deepEqual(cancelled.sent, ["VAT return (2026-06) cancelled. Let's fix the books and I will calculate it again."]);
+  const nudged = makeStore();
+  await run(nudged, 'maybe later');
+  assert.deepEqual(nudged.sent, ['Reply “yes” and I will file the VAT return with the Finnish Tax Administration, or “no” and I will cancel it.']);
+  const failed = makeStore();
+  await run(failed, 'yes');
+  assert.deepEqual(failed.sent, ['Filing the VAT return did not go through. Reply “yes” and I will try again, or “no” and I will cancel the return.']);
+  const noMandate = makeStore();
+  noMandate.mandate = null;
+  await run(noMandate, 'yes', { submitReturn: async () => ({ channel: 'omavero_test', submission_id: 'SUB-2' }) });
+  assert.match(noMandate.sent[0], /^I can't file the VAT return yet: the Suomi\.fi authorisation/);
+  const stale = makeStore();
+  stale.row.status = 'filed';
+  await run(stale, 'yes');
+  assert.deepEqual(stale.sent, ['This VAT return has already been handled.']);
+  for (const store of [filed, cancelled, nudged, failed, noMandate, stale]) {
+    assert.doesNotMatch(store.sent.join(' '), /[äö]|Vastaa|ALV-ilmoitus/, 'no Finnish reaches the English owner');
+  }
+
+  // Absent a language the lane keeps its Finnish copy, unchanged.
+  const fi = makeStore();
+  await resolveAlvReturnInbound({ firmId: 'firm-1', clientId: 'client-1', ask, replyText: 'hmm', message, phoneHash: 'ph-1', actorId: 'owner-1', flagActs: true, ...fi.deps });
+  assert.deepEqual(fi.sent, ['Vastaa “kyllä” niin lähetän ALV-ilmoituksen Verohallinnolle, tai “ei” niin perun sen.']);
+});

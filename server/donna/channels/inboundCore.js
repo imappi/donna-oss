@@ -96,7 +96,8 @@ const INBOUND_CORE_COPY = Object.freeze({
     savedCodingPending: 'Your answer is saved. Coding has not finished yet.',
     bookedPosted: "It's on your books now — reply if that's not right.",
     bookedNotPosted: "Reply if that's not right.",
-    booked: (account, tail) => `Got it — booked to ${account}. ${tail}`
+    booked: (account, tail) => `Got it — booked to ${account}. ${tail}`,
+    followUpSent: 'Thanks. I sent you a follow-up question.'
   }),
   fi: Object.freeze({
     chatUnavailable: 'En pysty juuri nyt vastaamaan kirjanpidon perusteella. Kokeile hetken päästä uudelleen.',
@@ -109,7 +110,8 @@ const INBOUND_CORE_COPY = Object.freeze({
     savedCodingPending: 'Vastauksesi on tallessa. Kirjaus ei ole vielä valmis.',
     bookedPosted: 'Se on nyt kirjanpidossasi. Vastaa, jos se ei ole oikein.',
     bookedNotPosted: 'Vastaa, jos se ei ole oikein.',
-    booked: (account, tail) => `Selvä, kirjasin tämän tilille ${account}. ${tail}`
+    booked: (account, tail) => `Selvä, kirjasin tämän tilille ${account}. ${tail}`,
+    followUpSent: 'Kiitos. Lähetin sinulle vielä tarkentavan kysymyksen.'
   })
 });
 
@@ -377,7 +379,7 @@ export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language 
     // fan-out (ownerReplyRecovery.js): acknowledge, do not send it twice.
     const followUp = recode.follow_up_delivery;
     if (Array.isArray(followUp?.delivered) && followUp.delivered.length) {
-      return 'Thanks. I sent you a follow-up question.';
+      return copy.followUpSent;
     }
     // The one owner-send gate (ownerAskDelivery.js) holds QUESTIONS to the
     // owner; it does not silence Donna's answer to a message the owner sent.
@@ -517,7 +519,9 @@ export const maybeStartInvoiceIssuance = async ({ message, from, firmId, env = p
     phoneHash: anchor.phoneHash,
     sendText: ({ text: outbound, ask }) => deps.sendText({ to: from, text: outbound, ask }),
     apiKey: env.ANTHROPIC_API_KEY,
-    fetchImpl: deps.fetchImpl
+    fetchImpl: deps.fetchImpl,
+    // The owner's language (the one resolver, above); absent ⇒ the lane's Finnish.
+    ...(config.language ? { language: config.language } : {})
   });
   if (result.action === 'not_invoice' || result.action === 'skipped') {
     await deps.sendText({ to: from, text: config.copy.unanchored });
