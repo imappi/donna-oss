@@ -39,7 +39,9 @@
 //     whose binding counted per-candidate errors it records nowhere else
 //     (`summary.errors > 0`), or whose pack would not load (`unloadable[]`);
 //   - canonical_role_resolution: a client whose run threw and rolled back
-//     (`clients[].status === 'error'`).
+//     (`clients[].status === 'error'`);
+//   - evidence_topic_reminders: a reminder whose work threw (`errors`, with
+//     `error_details[]`): a send or its stamp that no ledger row records.
 //
 // Deliberately NOT read (item-level, each with its own receipt and owner):
 //   - coding_convergence's `errors` sum (top level and per firm): it also
@@ -58,8 +60,9 @@
 //   - storage_orphans `refused`: a key outside the book, kept and receipted,
 //     refused again every day by design;
 //   - canonical_role_resolution `model_error` / `refused`, evidence-topic
-//     reminders `failed` (it also counts unbound / dark-channel skips, and a
-//     provider rejection has its failed ledger row), reconcile `errors` and
+//     reminders `failed` (a provider rejection, which has its failed ledger
+//     row) and their skips (`unbound`, `channel_off`, `withheld_sensitive`,
+//     `not_awaiting`: nothing was sent and nothing needs doing), reconcile `errors` and
 //     coding_auto_post's per-line counters (operator-invoked, per-line receipts).
 // Tasks that throw (stuck, drain …) already fail the request. The read-only
 // diagnostics task reports its own read errors and is left alone.
@@ -123,6 +126,14 @@ export const parseCronSummaryFailures = (summary) => {
           failures.push({ task, bucket: item.bucket, error: `${Number(item.delete_errors)} orphan delete(s) failed${first?.error ? `: ${first.error}` : ''}` });
         }
         if (Number(item?.audit_failures) > 0) failures.push({ task, bucket: item.bucket, error: `${Number(item.audit_failures)} cleanup audit receipt(s) failed` });
+      }
+    }
+    if (task === 'evidence_topic_reminders' && Number(value.errors) > 0) {
+      const details = Array.isArray(value.error_details) ? value.error_details : [];
+      if (details.length) {
+        for (const item of details) failures.push({ task, ...(item?.evidence_request_id ? { evidence_request_id: item.evidence_request_id } : {}), error: String(item?.error || 'reminder_error') });
+      } else {
+        failures.push({ task, error: `${Number(value.errors)} reminder(s) threw` });
       }
     }
     if (task === 'canonical_role_resolution') {

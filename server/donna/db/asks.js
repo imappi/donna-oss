@@ -1833,6 +1833,9 @@ export const recordEvidenceTopicTurnInDb = async ({
   actorId = 'client',
   actorType = 'client',
   replyAuthority = null,
+  // 'mobile' when the phone adapter carried the turn (the route reads
+  // req.donnaChannel only); attribution on the audit row, absent otherwise.
+  channel = null,
   withFirmDbClientFn = withFirmDbClient
 } = {}) => {
   const cleanRequestId = String(evidenceRequestId || '').trim();
@@ -1882,6 +1885,26 @@ export const recordEvidenceTopicTurnInDb = async ({
         error.code = 'OPEN_EVIDENCE_REQUEST_NOT_FOUND';
         throw error;
       }
+      // The turn's receipt, in the same transaction: who replied, what Donna
+      // made of it, and the topic as it stood before (null when there was
+      // none), so the row alone can undo the turn. The question stays open, so
+      // this is neither evidence_request.reply nor .resolve.
+      const lastTurn = Array.isArray(guardedTopic.turns) ? guardedTopic.turns.at(-1) || null : null;
+      await client.query(
+        `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+         values ($1, $2, $3, $4, 'evidence_request.topic_turn', 'client_evidence_request', $5, $6::jsonb)`,
+        [firmId, row.client_id, actorType || 'system', actorId, row.id, JSON.stringify({
+          transaction_id: row.transaction_id,
+          ...(authority ? { authority_basis: authority } : {}),
+          topic_status: guardedTopic.status || null,
+          outcome: guardedTopic.last_assessment?.outcome || null,
+          inbound_message_id: lastTurn?.inbound_message_id || null,
+          document_ids: Array.isArray(lastTurn?.document_ids) ? lastTurn.document_ids : [],
+          reply_excerpt: lastTurn?.reply_excerpt || null,
+          previous_evidence_topic: target.request_payload?.evidence_topic ?? null,
+          ...(channel === 'mobile' ? { channel } : {})
+        })]
+      );
       await client.query('commit');
       return { evidence_request: row, evidence_topic: row.request_payload?.evidence_topic || guardedTopic };
     } catch (error) { await client.query('rollback'); throw error; }
@@ -4678,7 +4701,14 @@ export const getAskBatchDraftsForFirmFromDb = async ({ firmId = DEFAULT_FIRM_ID 
 // deliverer runs, nothing is counted, the refusal is receipted
 // ('evidence_request.send_refused', naming `surface`) and the result carries
 // `refused: <code>` so the caller can keep the ask on the owner.
-export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], surface = 'ask_send', deps } = {}) => {
+//
+// `channels` narrows WHICH deliverers run (default: all four). It never
+// narrows the gate: the gate above runs for every call whatever the list. A
+// caller that has always delivered on one channel names it here, so moving it
+// onto this path does not open a channel it never sent on.
+export const OWNER_ASK_CHANNELS = Object.freeze(['whatsapp', 'sms', 'telegram', 'email']);
+export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], surface = 'ask_send', channels = OWNER_ASK_CHANNELS, deps } = {}) => {
+  const runChannels = new Set((Array.isArray(channels) ? channels : OWNER_ASK_CHANNELS).filter((channel) => OWNER_ASK_CHANNELS.includes(channel)));
   const results = {};
   // 122 — the OWNER-channel guard, enforced once for all four channels: only
   // client-audience asks may reach WhatsApp/SMS/Telegram/email. A seat/agent
@@ -4713,21 +4743,29 @@ export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientI
       return { error: error?.message || 'delivery_failed' };
     }
   };
-  results.whatsapp = await attempt('whatsapp', () =>
-    deliverWhatsAppEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
-  results.sms = await attempt('sms', () =>
-    deliverSmsEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  if (runChannels.has('whatsapp')) {
+    results.whatsapp = await attempt('whatsapp', () =>
+      deliverWhatsAppEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  }
+  if (runChannels.has('sms')) {
+    results.sms = await attempt('sms', () =>
+      deliverSmsEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  }
   // G14 (outbound-actions M1): Telegram + owner-email join the ask fan-out.
   // Each deliverer carries its own gate (binding / config-plane flag), so an
   // unbound or dark channel is an internal no-op.
-  results.telegram = await attempt('telegram', () =>
-    deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
-  results.email = await attempt('email', () =>
-    deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  if (runChannels.has('telegram')) {
+    results.telegram = await attempt('telegram', () =>
+      deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  }
+  if (runChannels.has('email')) {
+    results.email = await attempt('email', () =>
+      deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  }
   // The asks at least one deliverer actually delivered (each deliverer reports
   // the asks the provider accepted, the same ones it stamped). Callers read
   // this instead of re-reading send_count.
-  results.delivered = [...new Set(['whatsapp', 'sms', 'telegram', 'email']
+  results.delivered = [...new Set(OWNER_ASK_CHANNELS
     .flatMap((channel) => (Array.isArray(results[channel]?.delivered) ? results[channel].delivered : [])))];
   return results;
 };

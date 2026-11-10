@@ -66,7 +66,10 @@ export const prepareFinnishHostedPilotInDb = async ({ firmId, clientId, actorId,
         return { client_id: clientId, firm_id: firmId, actor_id: actorId, profile: profilePatch, already_prepared: true, processing_readiness: 'INCOMPLETE', reason: 'hosted_runtime_contract_required' };
       }
       await assertPilotBookEmptyWithClient(client, { firmId, clientId });
-      await updateClientProfileInDb({ firmId, clientId, actorId, profilePatch, dbClient: client, manageTransaction: false });
+      // The operator is the person acting: an active member of this firm,
+      // checked under lock above. The profile row names them as pilot.prepared does.
+      await updateClientProfileInDb({ firmId, clientId, actorId, principal: { principalType: 'firm_member', principalId: actorId },
+        profilePatch, dbClient: client, manageTransaction: false });
       const stages = FI_HOSTED_PILOT_STAGES;
       for (const [flagKey, stage] of Object.entries(stages)) {
         await setClientFlagStage(client, { firmId, clientId, flagKey, stage, source: 'manual', reason: HOSTED_PILOT_VERSION, actorType: 'firm_member', actorId });

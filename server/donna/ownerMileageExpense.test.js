@@ -183,3 +183,30 @@ test('a reversed or voided historical mileage claim cannot be booked again by re
     assert.equal(result.reason, 'historical_mileage_corrected');
   }
 });
+
+// A repeated owner message (a replay) finds its retained journal. The owner is
+// told the trip is already recorded, in their language, never sent an empty line.
+const replayClient = (retained) => ({ query: async (sql) => {
+  if (['begin', 'commit', 'rollback'].includes(sql)) return { rows: [] };
+  if (sql.includes('pg_advisory_xact_lock')) return { rows: [] };
+  if (sql.includes('from clients')) return { rows: [{ id: 'client', jurisdiction: 'fi' }] };
+  if (sql.includes('from ledger_journals j\n')) return { rows: [retained] };
+  assert.fail(`replay must not reach accounts, audit or writes: ${sql}`);
+} });
+
+test('a replayed mileage message tells the owner the trip is already recorded, in the owner language', async () => {
+  const retained = { id: 'retained', status: 'posted', reversed_at: null, currency: 'EUR', amount: '44.26', payload: { computation: { km: 80.47, unit: 'km' } } };
+  const replay = (language) => recordOwnerMileageExpenseInDb({ firmId: 'firm', clientId: 'client', sourceMessageId: 'tg-original', language,
+    action: { type: 'record_mileage', miles: 50, purpose: 'asiakaskäynti', confidence: 'high' },
+    deps: { withFirmDbClient: (fn) => fn(replayClient(retained)), writeValidatedJournal: () => assert.fail('a replay must not write') } });
+  const fi = await replay('fi');
+  assert.equal(fi.status, 'booked');
+  assert.equal(fi.replay, true);
+  assert.equal(fi.consequence, 'Tämä matka on jo kirjattu (44,26 EUR). En kirjannut sitä uudelleen.');
+  const en = await replay('en');
+  assert.equal(en.consequence, "That trip is already recorded (EUR 44.26). I haven't booked it again.");
+  const noAmount = await recordOwnerMileageExpenseInDb({ firmId: 'firm', clientId: 'client', sourceMessageId: 'tg-original', language: 'fi', action: {},
+    deps: { withFirmDbClient: (fn) => fn(replayClient({ id: 'retained', status: 'closed', reversed_at: null, currency: null, amount: null, payload: null })) } });
+  assert.equal(noAmount.consequence, 'Tämä matka on jo kirjattu. En kirjannut sitä uudelleen.');
+  assert.doesNotMatch(noAmount.consequence, /undefined|null|NaN/);
+});

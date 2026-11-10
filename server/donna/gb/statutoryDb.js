@@ -12,7 +12,7 @@ import { DEFAULT_FIRM_ID, requireClientInFirm } from '../db/clients.js';
 import { rowToTransactionPayload } from '../db/transactions.js';
 import { resolveClientFiscalYearTx } from '../db/close.js';
 import { HMRC_MTD_VAT_FLAG_KEY } from '../db/hmrc.js';
-import { deliverWhatsAppEvidenceAsksAfterSend } from '../db/channels.js';
+import { deliverEvidenceAsksOnAllChannels } from '../db/asks.js';
 import { attachFeedChatConvergence } from '../db/snapshot.js';
 
 
@@ -89,7 +89,7 @@ export const drainGbVatThresholdEscalations = async ({
   // Host-local "today": the day the owner's wall clock says (audit F-11).
   const watchDate = asOf || toLocalIsoDay(new Date());
   const watchYear = Number(watchDate.slice(0, 4));
-  const summary = { scanned: 0, exceeded: 0, minted: 0, delivered: 0, skipped: 0, errors: 0 };
+  const summary = { scanned: 0, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 0, errors: 0 };
 
   const candidateResult = await client.query(
     `select distinct c.firm_id, c.id as client_id, c.jurisdiction, c.profile
@@ -146,9 +146,9 @@ export const drainGbVatThresholdEscalations = async ({
         const insertResult = await client.query(
           `insert into client_evidence_requests (
              id, firm_id, client_id, status, evidence_type, question, request_payload,
-             first_sent_at, last_sent_at, send_count, created_by
+             send_count, created_by
            )
-           values ($1, $2, $3, 'open', $4, $5, $6::jsonb, now(), now(), 1, 'system')
+           values ($1, $2, $3, 'open', $4, $5, $6::jsonb, 0, 'system')
            on conflict (id) do nothing
            returning id`,
           [
@@ -192,10 +192,15 @@ export const drainGbVatThresholdEscalations = async ({
         continue;
       }
       summary.minted += 1;
+      // The ONE gated fan-out (ownerAskDelivery.js): a send-contained client
+      // is held and the refusal receipted; only a deliverer that delivered
+      // stamps the ask (the mint above writes no sent stamp). WhatsApp only:
+      // the one channel this question has always gone out on.
       const deliver = deliverAsksImpl
-        || ((args) => deliverWhatsAppEvidenceAsksAfterSend({ client, ...args }));
-      await deliver({ firmId: candidate.firm_id, clientId: candidate.client_id, evidenceRequestIds: [askId] });
-      summary.delivered += 1;
+        || ((args) => deliverEvidenceAsksOnAllChannels({ client, ...args, surface: 'gb_vat_threshold', channels: ['whatsapp'] }));
+      const delivery = await deliver({ firmId: candidate.firm_id, clientId: candidate.client_id, evidenceRequestIds: [askId] });
+      if (Array.isArray(delivery?.delivered) && delivery.delivered.includes(askId)) summary.delivered += 1;
+      else if (delivery?.refused) summary.held += 1;
     } catch (error) {
       summary.errors += 1;
     }

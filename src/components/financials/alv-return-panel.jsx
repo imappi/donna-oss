@@ -69,6 +69,18 @@ export default function AlvReturnPanel({ envelope, period, onPeriodChange, manda
         </div>
       )}
 
+      {vm.coveredBy.length > 0 && (
+        <div role="status" style={{ border: `1px solid ${T.rule}`, borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {vm.coveredBy.map((c) => (
+            <div key={c.periodKey} style={{ fontSize: 12.5, fontWeight: 600, color: c.tone === 'ok' ? T.ok : T.amber }}>
+              {message(c.status === 'filed' ? 'mounted.financial.vat.coveredByFiled' : 'mounted.financial.vat.coveredByPending', { period: c.periodKey })}
+              {c.rangeLabel ? <span style={{ fontWeight: 400, color: T.muted }}>{` · ${c.rangeLabel}`}</span> : null}
+            </div>
+          ))}
+          <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.45 }}>{message('mounted.financial.vat.coveredByHint')}</div>
+        </div>
+      )}
+
       {vm.lifecycle && (
         <div style={{ border: `1px solid ${T.rule}`, borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: lifecycleColor }}>{vm.lifecycle.label}</div>
