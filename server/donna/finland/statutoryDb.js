@@ -40,6 +40,7 @@ import { deliverEvidenceAsksOnAllChannels, rowToClientEvidenceRequestPayload } f
 import { rowToLedgerLinePayload } from '../db/ledger.js';
 import { getLedgerPeriodPreviewFromDb } from '../db/close.js';
 import { readRecognitionGapWithClient, recognitionStatement, ensureSettlementShortfallAsksWithClient } from '../salesRecognitionGap.js';
+import { readOpenCodingCorrectionsWithClient } from '../postedCorrectionGap.js';
 
 // Every owner question these Finnish flows raise is delivered through the ONE
 // gated fan-out (db/asks.js deliverEvidenceAsksOnAllChannels, gated by
@@ -465,6 +466,15 @@ export const getFinlandAlvReturnFromDb = async ({
       if (!side.items.length) continue;
       review = { ...review, status: 'needs_review', blockers: [...review.blockers, side.blocker],
         [key]: { statement: recognitionStatement(side), ...side } };
+    }
+    // A posted line in the period whose correction case is open carries a
+    // treatment Donna has already marked as in doubt. The figures stay what
+    // the ledger says; the return is not ready, with the lines named, until
+    // each case is corrected or closed (postedCorrectionGap.js).
+    const corrections = await readOpenCodingCorrectionsWithClient({ client, firmId, clientId, period: resolvedPeriod });
+    if (corrections.count) {
+      review = { ...review, status: 'needs_review', blockers: [...review.blockers, corrections.blocker],
+        openCodingCorrections: corrections };
     }
     return {
       ...computed,
@@ -1885,14 +1895,36 @@ export const assertAlvReturnFileableInDb = async ({ firmId = DEFAULT_FIRM_ID, cl
       const live = await readLiveAlvReturnsOverlapping(client, {
         firmId, clientId, startsOn: row.starts_on_day, endsOn: row.ends_on_day, excludeId: row.id
       });
+      // A correction case opened on a posting of this period after the draft
+      // was made: the stored figures include a treatment now in doubt, so
+      // nothing is sent until the case is corrected or closed. The draft stays
+      // pending and the ask open; the next "kyllä" checks again.
+      const corrections = await readOpenCodingCorrectionsWithClient({ client, firmId, clientId,
+        period: { starts_on: row.starts_on_day, ends_on: row.ends_on_day } });
       await client.query('commit');
       if (live.length) throw alvReturnFilingOverlapRefusal({ row, live });
+      if (corrections.count) throw alvReturnOpenCorrectionsRefusal({ row, corrections });
       return rowToAlvReturnPayload(row);
     } catch (error) {
       await client.query('rollback').catch(() => {});
       throw error;
     }
   });
+};
+
+const alvReturnOpenCorrectionsRefusal = ({ row, corrections }) => {
+  const refusal = new Error(
+    `ALV return ${row.period_key} (${row.starts_on_day} – ${row.ends_on_day}) was not sent: `
+    + `${corrections.count} posting${corrections.count === 1 ? '' : 's'} in this period ${corrections.count === 1 ? 'has' : 'have'} an open correction case. `
+    + 'The return waits until each is corrected or closed.'
+  );
+  refusal.statusCode = 409;
+  refusal.code = 'ALV_RETURN_OPEN_CODING_CORRECTIONS';
+  refusal.details = {
+    alv_return: { id: row.id, period_key: row.period_key, starts_on: row.starts_on_day, ends_on: row.ends_on_day },
+    open_coding_corrections: corrections
+  };
+  return refusal;
 };
 
 const alvReturnFilingOverlapRefusal = ({ row, live }) => {
@@ -2353,7 +2385,10 @@ const ALV_REVIEW_QUESTION_COPY = Object.freeze({
     purchasesPartPaid: (n) => (n === 1
       ? '1 ladattu ostolasku on maksettu tällä kaudella vain osittain, joten sen maksamattoman loppuosan kulut ja vähennettävä ALV puuttuvat laskelmasta.'
       : `${n} ladattua ostolaskua on maksettu tällä kaudella vain osittain, joten niiden maksamattoman loppuosan kulut ja vähennettävä ALV puuttuvat laskelmasta.`),
-    drift: 'Kirjanpidossa on toimintaa, jonka ALV-käsittely tarkistetaan ennen lähetystä (mm. rakennusalan käännetty ALV) — selvitän sen kanssasi.'
+    drift: 'Kirjanpidossa on toimintaa, jonka ALV-käsittely tarkistetaan ennen lähetystä (mm. rakennusalan käännetty ALV) — selvitän sen kanssasi.',
+    corrections: (n) => (n === 1
+      ? 'Yhtä tämän kauden kirjausta korjataan parhaillaan, ja ilmoitus odottaa, kunnes korjaus on tehty.'
+      : `${n} tämän kauden kirjausta korjataan parhaillaan, ja ilmoitus odottaa, kunnes korjaukset on tehty.`)
   }),
   en: Object.freeze({
     notReady: (key) => `The VAT return (${key}) is not ready to file yet.`,
@@ -2363,7 +2398,8 @@ const ALV_REVIEW_QUESTION_COPY = Object.freeze({
     salesPartPaid: (n) => `${n} uploaded sales ${n === 1 ? 'invoice is' : 'invoices are'} paid only in part in this period, so the sales and VAT of ${n === 1 ? 'its' : 'their'} unpaid remainder are missing from the calculation.`,
     purchasesUnrecorded: (n) => `${n} uploaded purchase ${n === 1 ? 'invoice or supplier credit note is' : 'invoices or supplier credit notes are'} not yet recorded in this period's purchases, so ${n === 1 ? 'its' : 'their'} costs and deductible VAT are missing from the calculation.`,
     purchasesPartPaid: (n) => `${n} uploaded purchase ${n === 1 ? 'invoice is' : 'invoices are'} paid only in part in this period, so the costs and deductible VAT of ${n === 1 ? 'its' : 'their'} unpaid remainder are missing from the calculation.`,
-    drift: 'Your books show activity whose VAT treatment has to be checked before filing (for example reverse-charge VAT in construction). I will sort it out with you.'
+    drift: 'Your books show activity whose VAT treatment has to be checked before filing (for example reverse-charge VAT in construction). I will sort it out with you.',
+    corrections: (n) => `${n} ${n === 1 ? 'posting' : 'postings'} in this period ${n === 1 ? 'is' : 'are'} being corrected, and the return waits until that is done.`
   })
 });
 
@@ -2380,6 +2416,7 @@ export const buildFinlandAlvReviewQuestion = ({ review = {}, periodKey = '', dri
   const incompatible = review?.incompatibleLines?.length || 0;
   const sales = censusCounts(review?.unrecognizedSales);
   const purchases = censusCounts(review?.unrecognizedPurchases);
+  const corrections = Number(review?.openCodingCorrections?.count) || 0;
   return [
     copy.notReady(periodKey),
     uncoded ? copy.uncoded(uncoded) : '',
@@ -2388,6 +2425,7 @@ export const buildFinlandAlvReviewQuestion = ({ review = {}, periodKey = '', dri
     sales.partPaid ? copy.salesPartPaid(sales.partPaid) : '',
     purchases.unrecorded ? copy.purchasesUnrecorded(purchases.unrecorded) : '',
     purchases.partPaid ? copy.purchasesPartPaid(purchases.partPaid) : '',
+    corrections ? copy.corrections(corrections) : '',
     driftBlocked ? copy.drift : ''
   ].filter(Boolean).join(' ');
 };

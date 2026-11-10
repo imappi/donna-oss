@@ -73,7 +73,8 @@ const ALV_ROUTE_COPY = Object.freeze({
     overlapLead: (periodKey, named) => `ALV-ilmoitusta (${periodKey}) ei lähetetty: ${named ? `ilmoitus ${named}` : 'toinen ilmoitus'} kattaa jo osan samoista päivistä.`,
     overlapTwice: 'Samoja myyntejä ja ostoja ei voi ilmoittaa kahdesti.',
     overlapFiled: 'Lähetetty ilmoitus pysyy ennallaan. Peru tämä ilmoitus vastaamalla “ei”.',
-    overlapBothWaiting: 'Kumpaakaan ei lähetetä, ennen kuin toinen perutaan. Peru tämä ilmoitus vastaamalla “ei”.'
+    overlapBothWaiting: 'Kumpaakaan ei lähetetä, ennen kuin toinen perutaan. Peru tämä ilmoitus vastaamalla “ei”.',
+    openCorrections: (periodKey) => `ALV-ilmoitusta (${periodKey}) ei lähetetty: osaa tämän kauden kirjauksista korjataan parhaillaan, ja ilmoitus odottaa, kunnes korjaus on tehty. Vastaa sen jälkeen “kyllä” uudelleen, tai “ei” niin perun ilmoituksen.`
   }),
   en: Object.freeze({
     heading: (periodKey) => `VAT return, tax period ${periodKey}`,
@@ -97,7 +98,8 @@ const ALV_ROUTE_COPY = Object.freeze({
     overlapLead: (periodKey, named) => `The VAT return (${periodKey}) was not filed: ${named ? `the return ${named}` : 'another return'} already covers some of the same days.`,
     overlapTwice: 'The same sales and purchases can\'t be reported twice.',
     overlapFiled: 'The filed return stays as it is. Reply “no” to cancel this return.',
-    overlapBothWaiting: 'Neither is filed until one of them is cancelled. Reply “no” to cancel this return.'
+    overlapBothWaiting: 'Neither is filed until one of them is cancelled. Reply “no” to cancel this return.',
+    openCorrections: (periodKey) => `The VAT return (${periodKey}) was not filed: some postings in this period are being corrected, and the return waits until that is done. Reply “yes” again after that, or “no” and I will cancel the return.`
   })
 });
 export const alvRouteCopyFor = (language) => ALV_ROUTE_COPY[language] || ALV_ROUTE_COPY.fi;
@@ -120,6 +122,9 @@ export const summarizeAlvReturnVerdict = ({ periodKey = '', verdict = {}, langua
   return out.join('\n');
 };
 
+// ALV_RETURN_OPEN_CODING_CORRECTIONS: a posting of the period has an open
+// correction case (postedCorrectionGap.js); nothing was sent, the draft stays
+// pending and the ask open, so "kyllä" after the correction files it.
 // ALV_RETURN_FILING_OVERLAP: another live return already covers some of these
 // dates. Nothing was sent. The owner can cancel this return ("ei" / "no"); a
 // filed return stays as filed. Two returns both waiting: neither is sent until
@@ -282,6 +287,8 @@ export const resolveAlvReturnInbound = async ({
       if (typeof sendText === 'function') {
         const reason = error?.code === 'ALV_RETURN_FILING_OVERLAP'
           ? filingOverlapText({ periodKey: row.period_key, error, language })
+          : error?.code === 'ALV_RETURN_OPEN_CODING_CORRECTIONS'
+          ? copy.openCorrections(row.period_key)
           : error?.code === 'ALV_FILING_MANDATE_REQUIRED'
           ? copy.mandateMissing
           : (error?.code === 'ALV_FILING_REJECTED' && error?.channelReason

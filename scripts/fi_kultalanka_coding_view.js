@@ -24,7 +24,7 @@ export const CODING_VIEW_DIR = resolve(ROOT, 'data/evals/fixtures', CODING_VIEW_
 // fees and settlements are outside ALV; allocation components post NONE).
 // FIK-3 compares exact accounts; the month scorer is authoritative for the
 // crosswalk's wider acceptance sets.
-export const FIK3_ACCOUNT = Object.freeze({ 1910: 'Business Checking · EUR', 1700: 'Myyntisaamiset', 1760: '2940', 2939: '2939', 1930: 'Payroll withholding and employer health-insurance payable',
+export const FIK3_ACCOUNT = Object.freeze({ 1910: '1910', 1700: 'Myyntisaamiset', 1760: '2940', 2939: '2939', 1930: 'Payroll withholding and employer health-insurance payable',
   1940: 'Payroll withholding and employer health-insurance payable', 1950: 'TyEL and payroll contributions payable', 1955: 'TyEL and payroll contributions payable', 2620: 'Loan payable', 3000: 'Sales',
   3010: 'Sales', 3580: 'Interest income', 4010: 'Rent', 4080: 'Travel', 4140: 'Utilities', 4340: 'Operating supplies', 4351: 'Operating supplies', 4540: 'Office expenses', 4560: 'Telecommunications',
   5000: 'Payroll', 5210: 'Meals and entertainment', 5460: 'Insurance', 5560: 'Software subscriptions', 5570: 'Marketing', 5960: 'Meals and entertainment', 5990: 'Bank fees', 7020: 'Operating supplies',
