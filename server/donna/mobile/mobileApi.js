@@ -34,8 +34,10 @@ import {
   resolveMobileOwner,
   revokeSession
 } from './mobileAuth.js';
+import { getBusinessSetup, updateBusinessSetup } from './mobileBusinessSetup.js';
 import { confirmBusinessProfile } from './mobileBusinessProfile.js';
 import { createFirmRouteDispatcher } from './mobileDispatch.js';
+import { PUSH_REGISTRATION_ROUTES } from './mobilePushRegistrations.js';
 import {
   buildBooksStatus,
   buildQueue,
@@ -62,6 +64,7 @@ import {
   readOutboundAction,
   readOwnerName
 } from './mobileReads.js';
+import { readMobileSettings, updateMobileSettings } from './mobileSettings.js';
 import { describePendingAction } from '../outbound/ownerDigest.js';
 
 export const MOBILE_API_PATH_PREFIX = '/api/donna/mobile/v1';
@@ -525,11 +528,7 @@ export const NOT_IMPLEMENTED = Object.freeze([
   ['POST', /^\/me\/deletion-request$/, 'Donna has no account-deletion request writer yet.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/voice-draft$/, 'Voice onboarding is not available on this server.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/text-draft$/, 'Onboarding drafts are not available on this server.'],
-  ['GET', /^\/entities\/[^/]+\/settings$/, 'Mobile settings are not stored by this server yet.'],
-  ['POST', /^\/entities\/[^/]+\/settings$/, 'Mobile settings are not stored by this server yet.'],
-  ['GET', /^\/entities\/[^/]+\/business-setup$/, 'Business setup is not available on this server yet.'],
-  ['POST', /^\/entities\/[^/]+\/business-setup$/, 'Business setup is not available on this server yet.'],
-  ['POST', /^\/entities\/[^/]+\/business-setup\/lookup$/, 'Business register lookup is not available on this server yet.'],
+  ['POST', /^\/entities\/[^/]+\/business-setup\/lookup$/, 'Business register lookup is not available on this server yet. You can enter your business details yourself.'],
   ['GET', /^\/entities\/[^/]+\/reviews\/(taxes|month)$/, 'Tax and month reviews are not available on this server yet.'],
   ['GET', /^\/entities\/[^/]+\/chat$/, 'Chat is not available in the app on this server yet; use Donna on the web.'],
   ['POST', /^\/entities\/[^/]+\/chat\/messages$/, 'Chat is not available in the app on this server yet; use Donna on the web.'],
@@ -537,9 +536,7 @@ export const NOT_IMPLEMENTED = Object.freeze([
   ['GET', /^\/entities\/[^/]+\/artifacts\/(queue_card|document)\/[^/]+\/messages$/, 'Item conversations are not available on this server yet.'],
   ['POST', /^\/entities\/[^/]+\/artifacts\/(queue_card|document)\/[^/]+\/messages$/, 'Item conversations are not available on this server yet.'],
   ['POST', /^\/entities\/[^/]+\/mileage$/, 'Donna records mileage only from a chat proposal today.'],
-  ['GET', /^\/entities\/[^/]+\/activity$/, 'The activity feed is not available on this server yet.'],
-  ['POST', /^\/notifications\/registrations$/, 'Push notifications are not available on this server yet.'],
-  ['DELETE', /^\/notifications\/registrations\/[^/]+$/, 'Push notifications are not available on this server yet.']
+  ['GET', /^\/entities\/[^/]+\/activity$/, 'The activity feed is not available on this server yet.']
 ]);
 
 const ENTITY_ROUTES = [
@@ -552,12 +549,16 @@ const ENTITY_ROUTES = [
     const { periods, checks } = await readClosePeriods({ firmId: ctx.firmId, clientId: ctx.clientId });
     return buildBooksStatus({ periods, checks, queue, requests: sources.requests, locale: ctx.locale });
   }],
+  ['GET', /^\/settings$/, (ctx) => readMobileSettings(ctx)],
+  ['POST', /^\/settings$/, async (ctx) => updateMobileSettings(ctx, await readJson(ctx.req))],
   ['POST', /^\/documents\/upload-intent$/, async (ctx) => uploadIntent(ctx, await readJson(ctx.req))],
   ['POST', /^\/documents\/register$/, async (ctx) => registerDocuments(ctx, await readJson(ctx.req))],
   ['GET', /^\/documents\/parse-status$/, (ctx) => parseStatus(ctx, ctx.query)],
   ['GET', /^\/documents$/, (ctx) => listDocuments(ctx, ctx.query)],
   ['POST', /^\/documents\/([^/]+)\/retry$/, (ctx, [id]) => retryDocument(ctx, id)],
   ['POST', /^\/documents\/([^/]+)\/resolve-duplicate$/, async (ctx, [id]) => resolveDuplicate(ctx, id, await readJson(ctx.req))],
+  ['GET', /^\/business-setup$/, (ctx) => getBusinessSetup(ctx)],
+  ['POST', /^\/business-setup$/, async (ctx) => updateBusinessSetup(ctx, await readJson(ctx.req))],
   ['GET', /^\/documents\/([^/]+)$/, async (ctx, [id]) => (await documentsWithState(ctx, [await oneDocument(ctx, id)]))[0]],
   ['PUT', /^\/onboarding\/profile$/, async (ctx) => confirmBusinessProfile(ctx, await readJson(ctx.req))]
 ];
@@ -568,6 +569,7 @@ const AUTH_ROUTES = [['POST', /^\/auth\/sessions$/], ['POST', /^\/auth\/sessions
 // prefix). Used by the coverage test that pins every contract operation.
 export const mobileRouteState = (method, path) => {
   if (AUTH_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'implemented';
+  if (PUSH_REGISTRATION_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'implemented';
   if (NOT_IMPLEMENTED.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'not_implemented';
   const entity = path.match(/^\/entities\/[^/]+(\/.*)$/);
   if (entity && ENTITY_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(entity[1]))) return 'implemented';
@@ -611,6 +613,13 @@ const route = async (req, res, requestUrl, deps) => {
   const owner = await resolveMobileOwner(auth);
 
   if (path === '/me' && method === 'GET') return send(res, 200, await meBody(owner));
+  for (const [verb, pattern, handler] of PUSH_REGISTRATION_ROUTES) {
+    const match = verb === method ? path.match(pattern) : null;
+    if (match) {
+      const { status, body } = await handler({ owner, match, readBody: () => readJson(req) });
+      return send(res, status, body);
+    }
+  }
 
   for (const [verb, pattern, reason] of NOT_IMPLEMENTED) {
     if (verb === method && pattern.test(path)) {

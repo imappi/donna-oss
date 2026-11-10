@@ -13,7 +13,8 @@ router over Donna's existing reads and writers.
   anywhere and resolves to a non-seat `firm_collaborators` row with role
   `owner` (the snapshot's own owner-surface rule) with at least one current
   `client_assignments` row. Each assigned client is one contract entity. Staff
-  are refused at sign-in (their provider session is revoked); another client's
+  are refused at sign-in (only the provider session just minted is revoked;
+  their web session is untouched); another client's
   entity is 404. The shared `DONNA_ACCESS_TOKEN` is never accepted.
 - **How it acts:** every read and write is the existing firm route, run
   in-process with the caller's verified identity (`mobileDispatch.js`), so it
@@ -23,7 +24,9 @@ router over Donna's existing reads and writers.
   writer committed in its own transaction.
 - **Sign-in:** the identity provider's password grant, server-side
   (`mobileAuth.js`), rate-limited per email and per client address
-  (in-process: a floor in front of the provider's own limit).
+  (in-process: a floor in front of the provider's own limit). Sign-out ends
+  only the phone's session (`logout?scope=local`); the provider's default
+  would also sign the owner out of the web portal.
 - **CORS:** any origin, no credentials — authentication is a bearer token the
   app attaches itself.
 
@@ -54,6 +57,22 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
   close verdicts, sign-out, kill switch, and the staff / foreign-entity /
   expired-token / admin-token refusals; every response validated against the
   contract.
+- `mobileSettings.test.js` / `mobileSettingsPgLifecycle.test.js` — the
+  Settings resource (`mobileSettings.js`, `mobileSettingsDb.js`): VAT period
+  through the client-profile writer with its history guard, persisted fiscal
+  years, the owner's notification switches (migration 167) and phone number,
+  and the refusals.
+
+- `mobileBusinessSetup.test.js` / `mobileBusinessSetupPgLifecycle.test.js` —
+  the business register: parsing, projection and patches; then on PostgreSQL
+  the manual confirm, stage and defer through the firm profile route, and the
+  no-token / staff / foreign-entity / stale-candidate / replaced-ID (including
+  a race) / non-Finnish / lookup refusals.
+
+- `mobilePushRegistrations.test.js` / `mobilePushRegistrationsPgLifecycle.test.js`
+  — device registrations (migration 170): validation, idempotency, a token
+  moving to another owner, removal, the not-yours 404, and registrations
+  ending with the owner's access (removal, client delete, collaborator row).
 
 - `mobileBusinessProfile.test.js` / `mobileBusinessProfilePgLifecycle.test.js`
   — the Business page's facts (`PUT …/onboarding/profile`): server-side request
