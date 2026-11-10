@@ -9,10 +9,10 @@ import test from 'node:test';
 import { componentSchema, validateAgainst } from './contractSchema.js';
 import { mobileRouteState } from './mobileApi.js';
 import {
-  canonicalBusinessId,
   parseSetupAction,
   projectBusinessIdentity,
   projectBusinessSetup,
+  registryIdentifierFor,
   setupPatchFor
 } from './mobileBusinessSetup.js';
 
@@ -36,7 +36,12 @@ test('the business-setup routes are served; lookup stays an honest 501', () => {
   assert.equal(mobileRouteState('POST', '/entities/c1/business-setup/lookup'), 'not_implemented');
 });
 
-test('Business IDs: the typed forms the owner may use, checked by Donna’s own validator', () => {
+test('Business IDs: the country owns the format, reached through the lifecycle registry', () => {
+  assert.equal(registryIdentifierFor('GB'), null, 'no register identifier is registered for the UK');
+  assert.equal(registryIdentifierFor('ZZ'), null);
+  assert.equal(registryIdentifierFor(null), null);
+  const canonicalBusinessId = registryIdentifierFor('FI');
+  assert.equal(registryIdentifierFor('fi'), canonicalBusinessId);
   assert.equal(canonicalBusinessId('0000001-9'), '0000001-9');
   assert.equal(canonicalBusinessId(' 00000019 '), '0000001-9');
   assert.equal(canonicalBusinessId('FI00000019'), '0000001-9');
@@ -50,12 +55,13 @@ test('actions: the closed shapes only', () => {
   refusal(() => parseSetupAction({}), 400, 'SETUP_ACTION_INVALID');
   refusal(() => parseSetupAction({ type: 'replace' }), 400, 'SETUP_ACTION_INVALID');
   refusal(() => parseSetupAction({ type: 'confirm_registry', candidate_id: '' }), 400, 'CANDIDATE_ID_REQUIRED');
-  refusal(() => parseSetupAction({ type: 'confirm_manual', business_id: '0000001-8', legal_name: 'X', legal_form: 'other' }), 400, 'BUSINESS_ID_INVALID');
+  refusal(() => parseSetupAction({ type: 'confirm_manual', business_id: ' ', legal_name: 'X', legal_form: 'other' }), 400, 'BUSINESS_ID_INVALID');
+  refusal(() => parseSetupAction({ type: 'confirm_manual', business_id: 12345678, legal_name: 'X', legal_form: 'other' }), 400, 'BUSINESS_ID_INVALID');
   refusal(() => parseSetupAction({ type: 'confirm_manual', business_id: '0000001-9', legal_name: 'x'.repeat(1001), legal_form: 'other' }), 400, 'BUSINESS_DETAILS_INVALID');
   refusal(() => parseSetupAction({ type: 'confirm_manual', business_id: '0000001-9', legal_name: 'X', legal_form: 'oy' }), 400, 'BUSINESS_DETAILS_INVALID');
   refusal(() => parseSetupAction({ type: 'set_stage', business_stage: 'later' }), 400, 'BUSINESS_STAGE_INVALID');
   assert.deepEqual(parseSetupAction({ type: 'confirm_manual', business_id: '00000019', legal_name: ' Aurora Oy ', legal_form: 'limited_company' }),
-    { type: 'confirm_manual', businessId: '0000001-9', legalName: 'Aurora Oy', legalForm: 'limited_company' });
+    { type: 'confirm_manual', businessId: '00000019', legalName: 'Aurora Oy', legalForm: 'limited_company' });
   assert.deepEqual(parseSetupAction({ type: 'defer', extra: true }), { type: 'defer' });
 });
 
@@ -99,6 +105,9 @@ test('confirm_manual: writes the existing homes, never the statutory legal form,
   assert.equal(patch.business_register.source, 'owner');
   assert.equal(patch.business_register.confirmed_by, 'collab-1');
   assert.equal(patch.business_register.confirmed_at, NOW.toISOString());
+  assert.equal(setupPatchFor({ action: { ...action, businessId: 'FI00000019' }, row: row(), actorId: 'collab-1', now: NOW }).businessId,
+    '0000001-9', 'the country canonicalizes the typed form');
+  refusal(() => setupPatchFor({ action: { ...action, businessId: '0000001-8' }, row: row(), actorId: 'collab-1' }), 400, 'BUSINESS_ID_INVALID');
   assert.equal(setupPatchFor({ action, row: row({ company_name: '' }), actorId: 'collab-1', now: NOW }).companyName,
     'Aurora Kettle Works Tmi', 'an empty business name takes the legal name');
   assert.doesNotThrow(() => setupPatchFor({ action, row: confirmedRow(), actorId: 'collab-1', now: NOW }), 'the same ID is a confirmation');

@@ -38,7 +38,7 @@
 // confirming different Business IDs cannot both pass the check. A web edit by
 // the firm is not serialized with it; the firm may correct a Business ID, the
 // owner's phone may not replace one.
-import { isValidBusinessId } from '../finland/prepaymentRegister.js';
+import { resolveClientLifecycle } from '../clientLifecycleRegistry.js';
 import { queryFirmDb, withFirmDbClient } from '../firmDb.js';
 import { mobileError } from './mobileAuth.js';
 import { projectEntity, projectReceipt } from './mobileProjection.js';
@@ -61,23 +61,23 @@ const iso = (value) => {
 };
 const plainObject = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 
-// A Y-tunnus as the owner may type it ("1234567-8", "12345678", "FI12345678"
-// — the last is the VAT form of the same number) → the canonical
-// "1234567-8", or null. The check digit is Donna's existing validator.
-export const canonicalBusinessId = (input) => {
-  const compact = String(input ?? '').replace(/\s+/g, '').toUpperCase();
-  const match = compact.match(/^(?:FI)?(\d{7})-?(\d)$/);
-  if (!match) return null;
-  const value = `${match[1]}-${match[2]}`;
-  return isValidBusinessId(value) ? value : null;
+// The entity's country owns its business register identifier (format and
+// check digit). It is reached through the client lifecycle composition root,
+// never imported from a country directory: a country that registers no
+// `registryIdentifier` has no register this surface can confirm against.
+// Today that is Finland only (finland/businessId.js, the Y-tunnus).
+export const registryIdentifierFor = (country) => {
+  const canonical = resolveClientLifecycle(country)?.registryIdentifier?.canonical;
+  return typeof canonical === 'function' ? canonical : null;
 };
 
 // The Business ID already associated with this entity, in canonical form when
-// it is one (a stored value that is not a valid Y-tunnus is still associated:
-// it is compared raw, so it still blocks a replacement).
-const associatedBusinessId = (stored) => {
+// it is one (a stored value its country does not recognise is still
+// associated: it is compared raw, so it still blocks a replacement).
+const associatedBusinessId = (stored, country) => {
   const raw = str(stored);
-  return raw ? (canonicalBusinessId(raw) || raw) : null;
+  if (!raw) return null;
+  return registryIdentifierFor(country)?.(raw) || raw;
 };
 
 // ── Read ──────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ export const readBusinessSetupState = async ({ firmId, clientId, query = queryFi
 // corrected it since) is stale and not served either.
 export const projectBusinessIdentity = (row) => {
   const record = plainObject(row.business_register);
-  const businessId = associatedBusinessId(row.business_id);
+  const businessId = associatedBusinessId(row.business_id, projectEntity(row).country);
   if (!businessId || !record.business_id || record.business_id !== businessId) return null;
   if (!['prh_ytj', 'owner'].includes(record.source) || !LEGAL_FORMS.includes(record.legal_form)) return null;
   return {
@@ -162,9 +162,12 @@ export const parseSetupAction = (body) => {
     return { type, candidateId: body.candidate_id.trim() };
   }
   if (type === 'confirm_manual') {
-    if (typeof body.business_id !== 'string') throw badRequest('business_id is required.', 'BUSINESS_ID_INVALID');
-    const businessId = canonicalBusinessId(body.business_id);
-    if (!businessId) throw badRequest('That is not a valid Finnish Business ID (1234567-8).', 'BUSINESS_ID_INVALID');
+    // The format is the entity's country's to check (setupPatchFor), once
+    // the entity is read; here only the shape.
+    if (typeof body.business_id !== 'string' || !body.business_id.trim() || body.business_id.length > 40) {
+      throw badRequest('business_id is required.', 'BUSINESS_ID_INVALID');
+    }
+    const businessId = body.business_id;
     const legalName = str(body.legal_name);
     if (!legalName || legalName.length > 1000) throw badRequest('legal_name must be 1–1000 characters.', 'BUSINESS_DETAILS_INVALID');
     if (!LEGAL_FORMS.includes(body.legal_form)) {
@@ -204,20 +207,23 @@ export const setupPatchFor = ({ action, row, actorId, now = new Date() }) => {
   }
   if (action.type === 'confirm_manual') {
     const country = projectEntity(row).country;
-    if (country !== 'FI') {
+    const canonical = registryIdentifierFor(country);
+    if (!canonical) {
       throw badRequest('Business register details can be confirmed for Finnish businesses only.', 'BUSINESS_REGISTER_FINLAND_ONLY');
     }
-    const existing = associatedBusinessId(row.business_id);
-    if (existing && existing !== action.businessId) {
+    const businessId = canonical(action.businessId);
+    if (!businessId) throw badRequest('That is not a valid Finnish Business ID (1234567-8).', 'BUSINESS_ID_INVALID');
+    const existing = associatedBusinessId(row.business_id, country);
+    if (existing && existing !== businessId) {
       throw mobileError(409, 'BUSINESS_ID_LOCKED',
         'This business already has a different Business ID on file. Ask your accountant if it needs correcting.');
     }
     return {
-      businessId: action.businessId,
+      businessId,
       legalName: action.legalName,
       ...(str(row.company_name) ? {} : { companyName: action.legalName }),
       business_register: {
-        business_id: action.businessId,
+        business_id: businessId,
         legal_form: action.legalForm,
         legal_form_code: null,
         registered_address: '',
