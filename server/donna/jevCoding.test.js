@@ -97,7 +97,9 @@ test('actual batch entry retains Jev provenance for every item and DB caller pas
   assert.equal(calls, 2); assert.equal(result.suggestions.length, 2);
   assert.ok(result.suggestions.every(s => s.source === 'jev' && s.jev_decision.probability === 0.42));
   const code = readFileSync(new URL('./db/coding.js', import.meta.url), 'utf8');
-  assert.equal((code.match(/flagKey: 'JEV_RECONCILIATION',[\s\S]{0,160}strict: true/g) || []).length, 2);
+  // Both DB callers ask the one first-line question (firstLineLane.js) over the strict snapshot.
+  assert.equal((code.match(/firstLineLaneDecidesWithClient\(client, \{[\s\S]{0,240}strict: true/g) || []).length, 2);
+  assert.ok(!/flagKey: 'JEV_RECONCILIATION'/.test(code), 'no DB caller re-derives the rule from the flag alone');
 }));
 
 test('large vocabulary remains offered via component choices instead of hidden pruning or escalation', () => {

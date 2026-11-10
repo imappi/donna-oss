@@ -72,8 +72,10 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     ["assertFirmAccess","dynamic_sql","eb3969b8dfae9747beff28ec127da05caf4142c5df9c36ec002ffff8f86f44a4",1,[]],
   ]),
   ...group("server/donna/db/coding.js", "Reviewed SG C4 owner-body rehash of two unchanged normalized candidate SELECTs. The batch now refreshes persisted evidence between generation units; these exact SQL expressions, targets and site counts are unchanged. Rehashed again 2026-11-05: a comment inside the owner body renamed a real supplier to a made-up one for the public export; the SELECTs are unchanged. Rehashed again 2026-11-06: the comment no longer names any real counterparty; the SELECTs are unchanged.", [
-    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","9405e27489bc5b6152c21b5c5e50407c488c51ab0eec4ac507929dfd4994ff80",1,[]],
-    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","1f8db772d9fd8bc65714966e72dd3418405afe62cab40cdf727fcd698e305934",1,[]],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","71b9ba4d410a535b031cb3cf82359f1112457b6bf0234305d0fdbae314a92e65",1,[]],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","45723e8459887fa03afe45e6e219be4f611eee9f08659a40a55d0ed0c4f56c34",1,[]],
   ]),
   ...group("server/donna/db/codingCorrection.js", "Reviewed SG C4 candidate SELECT excluding retained or partial native markers through retainedNativeMarkerSql with fixed alias t. Firm and limit remain bound. Discovery refuses work and grants no posting or review authority.", [
     ["candidates/callback","dynamic_sql","cb0b46a00c8ed26ebaece05502eb54dbbd099cbaf918127de4c68898299d6ebe",1,[]],
@@ -116,11 +118,14 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/bankLineDispositionLlm.js", "Reviewed existing firm/client-scoped candidate and context SELECTs. The direction fragment is one of the literal money_in/money_out columns; owner changes preserve current-source settlement authority. No memory target is added.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date, description, raw_description, payload->>'contact' as contact, reconciliation_status, status from transactions where firm
-    ["runBankLineDispositionForClient","dynamic_sql","f48bf0b5552765ab1286705db37c3c02d21712eb740e699e6173e452f76ec816",1,[]],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runBankLineDispositionForClient","dynamic_sql","a2b06d82592d71db5c976c6557eb031be8cce0614ec286cbaa932b284404f3e8",1,[]],
     // select description, raw_description from transactions where firm_id = $1 and client_id = $2 and __DYNAMIC_SQL__ > 0 limit $3
-    ["runBankLineDispositionForClient","dynamic_sql","ec3da7f6da57dcaea027f945f906e6d968c3c3ce89fe419578a9b564a88b0f91",1,[]],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runBankLineDispositionForClient","dynamic_sql","4a4448f9cce948443a37c67c8a47b557bdaa8a1d927b5425f3ba992df354e94e",1,[]],
     // select description, raw_description from transactions where firm_id = $1 and client_id = $2 and __DYNAMIC_SQL__ > 0 limit $3
-    ["runBankLineDispositionForTransaction","dynamic_sql","665580369e872a21bfd90f53daba993f9ab55f6254a97a425b9633264506d68a",1,[]],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runBankLineDispositionForTransaction","dynamic_sql","3a8dea302ef79e98f0cc56ff604131bf78f9c9ceda2f035da18d52e5185302fc",1,[]],
   ]),
   ...group("server/donna/codingConvergence.js", "Reviewed extraction of the existing firm-scoped coder eligibility SELECT for shared worker/activity use. The imported policy-failure predicate remains read-only; discovery groups the same item query under its bounded client limit. No memory mutation is added. Re-reviewed 2026-09-24 (HELMIKUU S7, H-7b): the item SELECT (and so discovery, which wraps it) also excludes a resting cross-window refund-group member through the imported read-only fragment REFUSED_CROSS_WINDOW_GROUP_SQL (fixed column paths and one fixed code literal); firm scope, targets and counts are unchanged.", [
     // select t.id, t.client_id from transactions t where t.firm_id = $1 ... imported policy-failure predicate
@@ -164,7 +169,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/jevMaterialException.js", "Reviewed evidence freshness SELECT under FOR SHARE NOWAIT. The table name comes only from the eight literal evidence table names in evidenceRows, and ids are parameters selected from the already scoped packet. No model-provided identifier or memory writer is admitted. Rehashed 2026-11-05: the owner body imports extractJson from ./extractJson.js instead of the retired ./runtime.js; the SELECT is unchanged.", [
     // select id from __DYNAMIC_SQL__ where firm_id=$1 and id=any($2::text[]) order by id for share nowait
-    ["recoverJevMaterialExceptionsInDb/callback","dynamic_sql","337e175b6f7ec1cb06ed0fb1cd1b89fc80eb19bfdd365de3e81ad4843490c14f",1,[]],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["recoverJevMaterialExceptionsInDb/callback","dynamic_sql","6527d4c801049c279cbf1f616865dad37e908c30a387b7a3a6321607587c4e99",1,[]],
   ]),
   ...group("server/donna/jevPreview.js", "Reviewed source-family projection added to the existing bounded company evidence SELECTs for company, transactions, documents, lines, matches, answers, obligations and postings. Dynamic fragments are fixed optional read locks and the existing candidate eligibility predicate. Every query is firm/client scoped; no source mutation or execution authority is introduced.", [
   ]),
@@ -642,13 +648,17 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   // dynamic legacy refresh statements; their enclosing-function identities move.
   ...group("server/donna/db/transactions.js", "Existing runtime SQL boundary in server/donna/db/transactions.js.", [
     // update transactions as t set raw_description = v.raw_description, cleaned_description = v.cleaned_description, direction = v.direction, category = v.category, account_code = v.account_code, confidence_score = v.confidence_score, payload = t …
-    ["refreshTransactionIntelForClient", "dynamic_sql", "287b1f61922826d958fa46c702606f152ea44f66d7eb3cb533677bd567d63839", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["refreshTransactionIntelForClient", "dynamic_sql", "81c63ad491c9966f6d761be4404e8924fabc060d6686c5747a6d8f390d4d208d", 1, []],
     // update transactions as t set raw_description = v.raw_description, cleaned_description = v.cleaned_description, direction = v.direction, category = v.category, account_code = v.account_code, confidence_score = v.confidence_score, reconciliat …
-    ["refreshTransactionIntelForClient", "dynamic_sql", "da2467009f7b10db5d11c973289184b463bf30b60f65346a17865abc127e3557", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["refreshTransactionIntelForClient", "dynamic_sql", "1f1f334767152353f27f679e3211c1c838dfa4d2b112f9489694c2db5d891aa5", 1, []],
     // insert into reconciliation_matches ( id, firm_id, client_id, bank_transaction_id, matched_object_type, matched_object_id, match_amount, match_confidence, match_reason, status, created_by, payload ) values __DYNAMIC_SQL__ on conflict (bank_t …
-    ["refreshTransactionIntelForClient", "dynamic_sql", "ddd8fd5603a7d3c04ee2dc4417cedc5861ce89eed9d74f2c0175970bf13b6a2a", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["refreshTransactionIntelForClient", "dynamic_sql", "33872396f6bc1101cc32a71da88d3c866da3502ce2310cd37791733bee7fc141", 1, []],
     // insert into transaction_review_queue ( id, firm_id, client_id, item_type, item_id, reason, priority, status, payload ) values __DYNAMIC_SQL__ on conflict (firm_id, client_id, item_type, item_id, reason) do update set priority = excluded.pri …
-    ["refreshTransactionIntelForClient", "dynamic_sql", "ffd059da7c99d03b7ee25eb7a208d5f94beefe64ac7b95887870c7484bc75d23", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["refreshTransactionIntelForClient", "dynamic_sql", "640febf0d8bfac7246e2649a2c8d3000b7769960ea21eb9fe19c3dce6af8ea7f", 1, []],
   ]),
   ...group("server/donna/db/xero.js", "Existing runtime SQL boundary in server/donna/db/xero.js.", [
     // insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata) values ($1, $2, 'system', '__DYNAMIC_SQL__', 'accounting_system_connection', $2, $3::jsonb)
@@ -920,7 +930,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     // select id, client_id, parse_status, parse_stage, parse_progress_current, parse_progress_total, parse_summary, parse_error, duplicate_of, parse_completed_at, payload->'parse_hold' as parse_hold from documents where firm_id=$1 and id = any($2 …
     ["getParseStatusForDocumentsInDb", "dynamic_sql", "cfc23524124bfef128dbdeb40f0f9a35c7a675ed7ae6255ae9667eb9fd24d6a9", 1, []],
     // select q.id as review_id, q.payload as review_payload, q.item_id as transaction_id, t.description, t.raw_description, t.payload as transaction_payload, t.money_in, t.money_out, t.currency from transaction_review_queue q left join transactio …
-    ["autoCategorizeUnmatchedTransactionsInDb/callback", "dynamic_sql", "a311d954a800cb4fd7920a8fd9bb694db2fea24dcbe65c78a89b1941e423ab91", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["autoCategorizeUnmatchedTransactionsInDb/callback", "dynamic_sql", "85e7b2268dab43738ddf790e5eba7f5fd5830956f4948e971f61e8af49c7bd79", 1, []],
     // insert into client_rules ( id, firm_id, client_id, rule_type, pattern_text, category_override, account_code, notes, created_by, status, payload ) values ($1, $2, $3, 'merchant_category', $4, null, $5, $6, 'ai', 'active', $7::jsonb) on confl …
     ["autoCategorizeUnmatchedTransactionsInDb/callback", "mutation", "957a881730c0818ae0b2a33185f22e24f21323ebdc336c12ff5b6bfbeed6b254", 1, ["insert:client_rules"]],
     // insert into transactions ( id, firm_id, client_id, document_id, transaction_date, description, money_in, money_out, currency, status, external_transaction_id, raw_description, cleaned_description, direction, confidence_score, payload ) valu …
@@ -932,7 +943,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/paymentAccountStatementReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/paymentAccountStatementReconciliationLlm.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runPaymentAccountStatementReconciliationLlmForDocument", "dynamic_sql", "b4bbef70026675f931325e96766ccda0108acec1219637928b6e2cb41e4e7ace", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runPaymentAccountStatementReconciliationLlmForDocument", "dynamic_sql", "a3701fb38fc088ea41295e56e773fe713c97c5e0ae22a79c0a1a97d0babe4428", 1, []],
   ]),
   ...group("server/donna/paymentConfirmationReconciliation.js", "Existing runtime SQL boundary in server/donna/paymentConfirmationReconciliation.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, payload->>'bank_line_disposition_ …
@@ -940,11 +952,13 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/paymentConfirmationReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/paymentConfirmationReconciliationLlm.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runPaymentConfirmationReconciliationLlmForDocument", "dynamic_sql", "9b44c69623b89a2808a491611ce74cdd6d7196ddd446dff280893e3bf9cb9159", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runPaymentConfirmationReconciliationLlmForDocument", "dynamic_sql", "9dc77418c04b74934904305b5d9f4e296357d43143fda13c5d2bacdf2bbe8cc9", 1, []],
   ]),
   ...group("server/donna/payoutReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/payoutReconciliationLlm.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runPayoutReconciliationLlmForDocument", "dynamic_sql", "3b6875f9baa4b07fb3f86b5c9acc5559faeecd135803273e39610afe72f19f81", 1, []], // RT-21c (2026-09-08): the statement gained the matched row (matched_line_id / document_lines join); reads reconciliation_matches + document_lines, no memory table. Re-registered by the runtime orchestrator.
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runPayoutReconciliationLlmForDocument", "dynamic_sql", "7ed4697bc860b24193caf134e40c34dbbd1cdf5d0de59f3ff98e5e858462f8e7", 1, []], // RT-21c (2026-09-08): the statement gained the matched row (matched_line_id / document_lines join); reads reconciliation_matches + document_lines, no memory table. Re-registered by the runtime orchestrator.
   ]),
   ...group("server/donna/proposalStore.js", "Existing runtime SQL boundary in server/donna/proposalStore.js.", [
     // select id, status, proposal_type, triage_source, review_mode, check_status, detail, warnings, created_at, updated_at from proposal_cards where firm_id = $1 and client_id = $2 and proposal_type = 'owner_intent_candidate'__DYNAMIC_SQL__ order …
@@ -962,7 +976,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/receiptReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/receiptReconciliationLlm.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runReceiptReconciliationLlmForDocument", "dynamic_sql", "13b5dc9ae8e08859fe93913a774a8c305efebce355d93eb15d2876d67ccac237", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runReceiptReconciliationLlmForDocument", "dynamic_sql", "f407ca36b618eff39e92c8b1338a939f011acf848e110a0fe8d4f4b263df5d43", 1, []],
   ]),
   ...group("server/donna/reconcileConvergenceState.js", "Existing runtime SQL boundary in server/donna/reconcileConvergenceState.js.", [
     // WRITE_SQL[targetType]
@@ -1030,7 +1045,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/salesInvoiceReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/salesInvoiceReconciliationLlm.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runSalesInvoiceReconciliationLlmForDocument", "dynamic_sql", "f28857589074a01e79ab3a82200f8e8e6bcbb9a10db5c1c3295c9d948cc25760", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runSalesInvoiceReconciliationLlmForDocument", "dynamic_sql", "54c9416ae5b5c02cb00f76e440d19d0d53684c8b7df6b29faaa4bf996462764e", 1, []],
   ]),
   ...group("server/donna/statutoryBlocker.js", "Existing runtime SQL boundary in server/donna/statutoryBlocker.js.", [
     // sql
@@ -1038,7 +1054,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/supplierBillReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/supplierBillReconciliationLlm.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runSupplierBillReconciliationLlmForDocument", "dynamic_sql", "dca1168297e2a61181d83713eb8053f2835bffc3c682ea49cd22b5afed4e68f9", 1, []],
+    // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
+    ["runSupplierBillReconciliationLlmForDocument", "dynamic_sql", "303dd15c05797b5ecec674f11163ad138a706ffc320a5099faee05e82d60a1ea", 1, []],
   ]),
   ...group("server/donna/testSupport/applianceHarness.js", "Existing runtime SQL boundary in server/donna/testSupport/applianceHarness.js.", [
     // create database "__DYNAMIC_SQL__"

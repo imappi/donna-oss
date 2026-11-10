@@ -12,6 +12,11 @@ import {recoverJevMaterialExceptionsInDb} from './jevMaterialException.js';
 import {decideJevReconciliation} from './jevRuntimeDecision.js';
 import {callJevTyped} from './jevProvider.js';
 
+// The first-line lane decides only on a host with its provider configured
+// (firstLineLane.js, 2026-11-10); these cases are about the lane deciding.
+process.env.TYPESAFE_API_KEY ||= 'fixture-first-line-key';
+process.env.TYPESAFE_MODEL ||= 'fixture-first-line';
+
 test('US evidence wakes a pre-coding ask once, preserves the question, and exposes complete source context', {skip:!process.env.DONNA_PG_TEST_URL}, async t=>{
  const admin=new pg.Client({connectionString:process.env.DONNA_PG_TEST_URL});await admin.connect();
  const name=`jev_recovery_${process.pid}_${Date.now()}`;await admin.query(`create database "${name}"`);
