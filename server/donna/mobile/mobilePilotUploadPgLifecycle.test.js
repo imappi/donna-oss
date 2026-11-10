@@ -81,11 +81,16 @@ test('real PG, cloud host: a phone register on a Finnish pilot book carries the 
   const idp = installIdentityProvider();
   let server = null;
   let pool = null;
+  // pool.end() resolves before its sockets close; the forced drop below must
+  // not reach a backend this pool still holds, or the terminate arrives on a
+  // client with no error listener (an uncaught exception that fails the test).
+  const closed = [];
   t.after(async () => {
     if (server) { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); }
     const { __resetFirmDbPoolForTests } = await import('../db/pool.js');
     __resetFirmDbPoolForTests();
     await pool?.end();
+    await Promise.all(closed);
     idp.restore();
     for (const key of Object.keys(process.env)) if (!(key in priorEnv)) delete process.env[key];
     Object.assign(process.env, priorEnv);
@@ -101,6 +106,7 @@ test('real PG, cloud host: a phone register on a Finnish pilot book carries the 
     DONNA_ACCESS_TOKEN: 'fixture-shared-token-not-an-owner', DONNA_DEFAULT_FIRM_ID: FIRM_ID
   });
   pool = new pg.Pool({ connectionString: url.toString(), max: 4, connectionTimeoutMillis: 2000 });
+  pool.on('connect', (client) => closed.push(new Promise((resolve) => client.once('end', resolve))));
   const { __setFirmDbPoolForTests } = await import('../db/pool.js');
   __setFirmDbPoolForTests(pool);
   // The CI storage stub (scripts/prepare_ci_host_postgres.js) migration 010 needs.
