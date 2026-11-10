@@ -38,6 +38,7 @@ import { DOCUMENT_SETTLEMENT_LEDGER_ENTRY_FLAG_KEY } from './documentDisposition
 import { TAX_REGISTRATION_RECHECK_FLAG } from './db/taxRegistrationChange.js';
 import { correctionReturnMovement, taxCodeReturnKey } from './ledgerCorrectionLines.js';
 import { alvReturnLineKey, buildAlvReturnFromLedgerLines } from './finland/alvReturn.js';
+import { ANTHROPIC_MESSAGES_TEST_URL, claudeMessageResponse, claudeRequestInput, claudeRequestSystem } from './testSupport/claudeMessage.js';
 
 const pgUrl = process.env.DONNA_PG_TEST_URL;
 const skip = !pgUrl && 'DONNA_PG_TEST_URL required';
@@ -73,15 +74,19 @@ async function harness(t) {
       const token = init.headers.Authorization.replace('Bearer ', '');
       return new Response(JSON.stringify({ id: `user-${token}`, email: `${token}@auth.invalid` }));
     }
-    assert.equal(String(endpoint), 'https://api.openai.com/v1/responses');
-    const input = JSON.parse(JSON.parse(init.body).input);
+    // The coder runs on Claude (its default since 2026-11-10) on a host with
+    // both keys: answered in the Messages shape, its input the user turn.
+    assert.equal(String(endpoint), ANTHROPIC_MESSAGES_TEST_URL);
+    const request = JSON.parse(init.body);
+    assert.match(claudeRequestSystem(request), /^You code bank transactions/, 'the only model call is the coder');
+    const input = JSON.parse(claudeRequestInput(request));
     const suggestions = input.transactions.map(row => {
       const told = row.tax_registration?.status === 'not_registered' && row.tax_registration.treatments;
       return { transaction_id: row.id, ...VERDICT, tax_treatment: told ? told.purchase : VERDICT.tax_treatment,
         confidence: 'high', evidence_required: false, auto_explain_limit: 5000, reasoning: 'The settled source supports the account and the treatment.',
         posting_requirement: 'single_account', document_allocations: [], ask_client_question: '' };
     });
-    return { ok: true, status: 200, json: async () => ({ output_text: JSON.stringify({ suggestions, group_summary: [] }) }) };
+    return claudeMessageResponse({ suggestions, group_summary: [] }, { request });
   };
   const rewrites = JSON.parse(await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')).rewrites;
   const server = http.createServer((req, res) => {
