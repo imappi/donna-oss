@@ -115,9 +115,13 @@ export function openAiFixture(payload) {
   const body = structuredClone(loadRecording('document_routing/ochre-supplier-bill').body);
   body.output[0].content[0].text = JSON.stringify(payload); return { status: 200, body };
 }
+// `recording_template` names the committed recording whose wire shape the
+// fixture reuses: the recorded-providers stub treats it as recording-authored
+// (a text JSON answer is delivered as the structured_answer call when the
+// request carries that tool, 2026-11-10).
 export function anthropicFixture(payload) {
   const body = structuredClone(loadRecording('unified_extraction/ochre-discount-line').body);
-  body.content[0].text = JSON.stringify(payload); return { status: 200, body };
+  body.content[0].text = JSON.stringify(payload); return { status: 200, body, recording_template: 'unified_extraction/ochre-discount-line' };
 }
 
 export function fiRoutingFixture(kind) {

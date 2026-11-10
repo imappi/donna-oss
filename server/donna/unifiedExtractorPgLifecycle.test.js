@@ -145,7 +145,10 @@ test(
       const host = await appliance.read.host();
       assert.equal(host?.status, 'PASS', JSON.stringify(host?.certificate?.checks?.map(({ id, status }) => [id, status])));
       const modelRoutes = host.certificate.checks.find(({ id }) => id === 'model_routes');
-      assert.deepEqual(modelRoutes.detail.dark_providers, ['openai', 'typesafe']);
+      // Since 2026-11-10 no lane needs OpenAI: every lane that had it as its
+      // only provider resolves Anthropic first, so an Anthropic-only host has
+      // no lane dark for want of an OpenAI key.
+      assert.deepEqual(modelRoutes.detail.dark_providers, ['typesafe']);
       assert.ok(modelRoutes.detail.dark_lanes.includes('jev_reconciliation'));
       // The owner's decision of 2026-11-10: every document lane resolves
       // Anthropic first, so an Anthropic-only host routes and reads.

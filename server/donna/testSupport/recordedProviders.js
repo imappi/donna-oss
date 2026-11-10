@@ -263,10 +263,11 @@ const modelServedOf = (body) => (typeof body?.model === 'string' && body.model ?
 // as the Responses adaptation below marks its own). A text reply
 // that is not JSON stays text: the lane must refuse it by name. (A Responses
 // body is adapted below, tool call included.) An INLINE body a test scripts
-// is served exactly as scripted: a test that answers in prose is proving the
-// lane refuses prose.
+// is served exactly as scripted — a test that answers in prose is proving the
+// lane refuses prose — unless it names the committed recording whose wire
+// shape it reuses (`recording_template`, testSupport/fiReliabilitySources.js).
 export const deliverAsStructuredTool = (step, requestBody = null) => {
-  if (!step?.recording) return step;
+  if (!step?.recording && !step?.recording_template) return step;
   const body = step?.body;
   const wantsTool = Array.isArray(requestBody?.tools) && requestBody.tools.some((tool) => tool?.name === STRUCTURED_ANSWER_TOOL_NAME);
   if (!wantsTool || step?.status !== 200 || body?.type !== 'message' || !Array.isArray(body.content)) return step;
@@ -314,7 +315,8 @@ const normalizeStep = (lane, step) => {
     body: step.body ?? { error: { type: 'recorded_providers_scripted_error', message: `scripted ${step.status} for ${lane}` } },
     headers: step.headers ?? {},
     times: step.times ?? 1,
-    recording: null
+    recording: null,
+    ...(typeof step.recording_template === 'string' ? { recording_template: step.recording_template } : {})
   };
 };
 
