@@ -33,7 +33,7 @@ export const FI_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-28.sg-native-intake.1',
   catalogVersion: FI_CATALOG_VERSION,
-  expectedMessageCount: 2872,
+  expectedMessageCount: 2873,
   register: 'informal second person singular (sinä); never teitittely',
   outOfScope: Object.freeze([
     'server-built text: emails, SMS, chat-channel messages, questions written by code or a model',
@@ -140,6 +140,7 @@ const fi = Object.freeze({
   "operator.providerFailure.cause.PROVIDER_UNAVAILABLE": "Palveluntarjoajan palvelu ei ole saatavilla.",
   "operator.providerFailure.cause.PROVIDER_REJECTED_REQUEST": "Palveluntarjoaja hylkäsi pyynnön.",
   "operator.providerFailure.cause.PROVIDER_TIMEOUT": "Palveluntarjoajan toiminto ylitti aikarajansa.",
+  "operator.providerFailure.cause.PROVIDER_TIMEOUT.execution_budget_insufficient": "Ei aloitettu: työllä ei ollut tähän vaiheeseen riittävästi aikaa jäljellä. Seuraava ajo jatkaa sitä.",
   "operator.providerFailure.cause.PROVIDER_NETWORK": "Yhteys palveluntarjoajaan epäonnistui.",
   "operator.providerFailure.cause.PROVIDER_INVALID_OUTPUT": "Palveluntarjoaja palautti vastauksen, jota ei voitu lukea.",
   "operator.providerFailure.cause.unknown": "Palveluntarjoajan virhe kirjattiin.",

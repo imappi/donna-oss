@@ -1,8 +1,13 @@
 import { isProviderSpendLimit } from './providerTransport.js';
 // Document Router — Phase 8b of Donna Document Intelligence.
 //
-// LLM-based document classification using the OpenAI Responses API with
-// vision. The router's verdict OVERRIDES the upload-time document type for
+// LLM-based document classification over the document itself (vision).
+// Provider-agnostic since 2026-11-10 (the owner's decision that Donna runs
+// on Claude): Anthropic (claude-opus-5-5, the file as a document/image
+// block, structured output) first, the OpenAI Responses API (gpt-5.4) only
+// when no Anthropic key is configured — resolved by providerEndpoints.js
+// resolveLaneProvider (documentLaneRequest.js),
+// every call through the llmCall envelope. The router's verdict OVERRIDES the upload-time document type for
 // every family it can name once it clears DOCUMENT_ROUTER_MIN_CONFIDENCE
 // and the two blast-radius guards in `inngest/parseDocument.js`
 // (`__buildClassification`). Shadow mode — log-but-don't-override, with
@@ -21,8 +26,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
-import { currentExecutionBudget } from './executionBudget.js';
-import { providerFetchWithDeadline } from './providerTransport.js';
+import { asProviderResponse, llmCall } from './llmCall.js';
+import {
+  anthropicFileBlock,
+  documentLaneAnthropicRequest,
+  isProviderStopFailure,
+  notConfiguredFailure,
+  resolveDocumentLaneProvider,
+  stopFailureReason
+} from './documentLaneRequest.js';
+import { classifyModelProvenance } from './providerEndpoints.js';
 
 // Routing was the one principled nano use under the bulk-filter
 // carve-out (CLAUDE.md) — but the router OVERRIDES the upload-time type,
@@ -30,7 +43,20 @@ import { providerFetchWithDeadline } from './providerTransport.js';
 // sales_invoice class). A surface with override authority gets the strong
 // tier (firm call, 06-11). DOCUMENT_ROUTER_MODEL stays the override knob.
 const DEFAULT_MODEL = 'gpt-5.4';
+// 2026-11-10: the lane's Anthropic default.
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
 const REQUEST_TIMEOUT_MS = 30_000;
+// A routing decision names a family from a fixed list: `low` effort is the
+// depth it needs (adaptive thinking cannot be switched off). The Anthropic
+// request reads the whole file with thinking on, so it gets a longer wall
+// than the 30s the OpenAI call has always had — but it must stay UNDER the
+// parse worker's own 45 s wait on the router (inngest/parseDocument.js
+// ROUTER_CLASSIFY_TIMEOUT_MS): the router's call aborts itself, typed, before
+// the worker stops waiting, so no call is left running after its answer can
+// no longer be used. (Measured live: about 3 s per routing call.)
+const ANTHROPIC_EFFORT = 'low';
+const ANTHROPIC_MAX_TOKENS = 16_000;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 40_000;
 
 // ── Document families ───────────────────────────────────────────────
 const DOCUMENT_FAMILIES = Object.freeze([
@@ -174,18 +200,14 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model:
-      process.env.DOCUMENT_ROUTER_MODEL ||
-      dotEnv.DOCUMENT_ROUTER_MODEL ||
-      process.env.OPENAI_MODEL ||
-      dotEnv.OPENAI_MODEL ||
-      DEFAULT_MODEL
-  };
-};
+// DOCUMENT_ROUTER_MODEL is the lane's knob (its id pins the provider); no
+// provider-wide knob.
+const getRouterConfig = () => resolveDocumentLaneProvider({
+  laneId: 'document_routing',
+  dotEnv: readDotEnv(),
+  modelEnvKeys: ['DOCUMENT_ROUTER_MODEL'],
+  defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
+});
 
 const filenameCorrelationId = (filename = '') =>
   crypto.createHash('sha256').update(String(filename || 'unknown')).digest('hex').slice(0, 12);
@@ -322,18 +344,17 @@ const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, clientConte
     });
   }
 
-  const hasBudget = Boolean(currentExecutionBudget());
-  const fetcher = hasBudget
-    ? providerFetchWithDeadline({ provider: 'openai', timeoutMs: REQUEST_TIMEOUT_MS })
-    : fetch;
-  const response = await fetcher('https://api.openai.com/v1/responses', {
-    method: 'POST',
+  return asProviderResponse(llmCall({
+    provider: 'openai',
+    // The lane's own wall, honoured inside a worker too (llmCall hands it to
+    // the deadline transport, bounded by the job's remaining budget).
+    timeoutMs: REQUEST_TIMEOUT_MS,
+    url: 'https://api.openai.com/v1/responses',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`
     },
-    signal,
-    body: JSON.stringify({
+    body: {
       model,
       store: false,
       instructions: INSTRUCTIONS,
@@ -351,13 +372,44 @@ const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, clientConte
           schema: ROUTER_SCHEMA
         }
       }
-    })
-  });
-  if (!hasBudget) return response;
-  // Consume successful and rejected response bodies under the same owning
-  // deadline. Keep the injected caller's response-shaped contract unchanged.
-  const payload = await response.json();
-  return { ...response, json: async () => payload };
+    },
+    sections: { system: INSTRUCTIONS, tools: ROUTER_SCHEMA },
+    execution: { root: { type: 'document_routing', id: filenameCorrelationId(filename) } },
+    // The envelope bounds the call by the owning job's deadline when one is
+    // in force; the local timeout still reaches the socket.
+    fetchImpl: (url, init) => fetch(url, { ...init, signal: init?.signal && signal ? AbortSignal.any([init.signal, signal]) : init?.signal || signal })
+  }));
+};
+
+// The same request on Anthropic: the file as a content block, then the same
+// text parts the OpenAI request carries, in the same order.
+const routerTextParts = ({ clientContext, clientIdentity }) => {
+  const parts = ['Classify this document per the schema.'];
+  const identityFragment = formatClientIdentity(clientIdentity);
+  if (identityFragment) parts.push(identityFragment);
+  else if (clientContext) parts.push(`Context about the uploading client: ${clientContext}`);
+  return parts;
+};
+
+// The shared structured request (structuredRequest.js), through the envelope.
+const callAnthropicRouter = async ({ apiKey, model, base64, mimeType, filename, clientContext, clientIdentity, signal }) => {
+  const { result } = await llmCall(documentLaneAnthropicRequest({
+    apiKey,
+    model,
+    system: INSTRUCTIONS,
+    content: [
+      anthropicFileBlock({ base64, mimeType, filename }),
+      ...routerTextParts({ clientContext, clientIdentity }).map((text) => ({ type: 'text', text }))
+    ],
+    schema: ROUTER_SCHEMA,
+    effort: ANTHROPIC_EFFORT,
+    maxTokens: ANTHROPIC_MAX_TOKENS,
+    sections: { system: INSTRUCTIONS, tools: ROUTER_SCHEMA },
+    execution: { root: { type: 'document_routing', id: filenameCorrelationId(filename) } },
+    signal,
+    timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS
+  }));
+  return { text: JSON.stringify(result.parsed), servedModel: result.model || null };
 };
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -376,11 +428,14 @@ export const routeDocument = async ({
   __callOpenAi = defaultCallOpenAi
 } = {}) => {
   const correlationId = filenameCorrelationId(filename);
-  const config = getOpenAiConfig();
+  const config = getRouterConfig();
 
-  if (!config.apiKey) {
-    console.warn('[documentRouter] OPENAI_API_KEY not configured', { correlation_id: correlationId });
-    return { routed: false, reason: 'api_key_missing' };
+  if (!config.ok) {
+    // `api_key_missing` is the router's own reason; `provider_reason` names
+    // the provider whose key is missing (`anthropic_not_configured`).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'document_routing');
+    console.warn('[documentRouter] no model provider key configured', { correlation_id: correlationId, reason: notConfigured });
+    return { routed: false, reason: 'api_key_missing', provider: missing, provider_reason: notConfigured };
   }
 
   const clean = trimBase64(base64);
@@ -388,53 +443,90 @@ export const routeDocument = async ({
     return { routed: false, reason: 'empty_input' };
   }
 
-  const dataUrl = `data:${mimeType || 'application/pdf'};base64,${clean}`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), config.provider === 'anthropic' ? ANTHROPIC_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
   const startedAt = Date.now();
 
-  let response;
-  try {
-    response = await __callOpenAi({
-      apiKey: config.apiKey,
-      model: config.model,
-      dataUrl,
-      filename,
-      clientContext,
-      clientIdentity,
-      signal: controller.signal
-    });
-  } catch (err) {
-    if (isProviderSpendLimit(err)) throw err;
-    console.error('[documentRouter] OpenAI request threw', {
-      correlation_id: correlationId,
-      error_code: err?.code || null,
-      error_name: err?.name || null,
-      elapsed_ms: Date.now() - startedAt
-    });
-    return { routed: false, reason: 'llm_error' };
-  } finally {
-    clearTimeout(timeout);
+  let text = '';
+  let servedModel = null;
+  if (config.provider === 'anthropic') {
+    try {
+      ({ text, servedModel } = await callAnthropicRouter({
+        apiKey: config.apiKey,
+        model: config.model,
+        base64: clean,
+        mimeType,
+        filename,
+        clientContext,
+        clientIdentity,
+        signal: controller.signal
+      }));
+    } catch (err) {
+      if (isProviderSpendLimit(err)) throw err;
+      console.error('[documentRouter] provider request failed', {
+        correlation_id: correlationId,
+        provider: 'anthropic',
+        error_code: err?.code || null,
+        status: err?.status || null,
+        error_name: err?.name || null,
+        elapsed_ms: Date.now() - startedAt
+      });
+      return {
+        routed: false,
+        reason: 'llm_error',
+        provider: 'anthropic',
+        failure: isProviderStopFailure(err) ? stopFailureReason(err) : (err?.code || null),
+        ...(err?.servedModel ? { model: err.servedModel } : {})
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  } else {
+    const dataUrl = `data:${mimeType || 'application/pdf'};base64,${clean}`;
+    let response;
+    try {
+      response = await __callOpenAi({
+        apiKey: config.apiKey,
+        model: config.model,
+        dataUrl,
+        filename,
+        clientContext,
+        clientIdentity,
+        signal: controller.signal
+      });
+    } catch (err) {
+      if (isProviderSpendLimit(err)) throw err;
+      console.error('[documentRouter] OpenAI request threw', {
+        correlation_id: correlationId,
+        error_code: err?.code || null,
+        error_name: err?.name || null,
+        elapsed_ms: Date.now() - startedAt
+      });
+      return { routed: false, reason: 'llm_error' };
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response?.ok) {
+      const status = Number(response?.status || 0);
+      console.error('[documentRouter] OpenAI returned non-OK', {
+        correlation_id: correlationId,
+        status,
+        elapsed_ms: Date.now() - startedAt
+      });
+      return { routed: false, reason: 'llm_error' };
+    }
+
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      return { routed: false, reason: 'llm_error' };
+    }
+    text = outputTextFromResponse(payload);
+    servedModel = typeof payload?.model === 'string' && payload.model ? payload.model : null;
   }
 
-  if (!response?.ok) {
-    const status = Number(response?.status || 0);
-    console.error('[documentRouter] OpenAI returned non-OK', {
-      correlation_id: correlationId,
-      status,
-      elapsed_ms: Date.now() - startedAt
-    });
-    return { routed: false, reason: 'llm_error' };
-  }
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    return { routed: false, reason: 'llm_error' };
-  }
-
-  const text = outputTextFromResponse(payload);
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -485,9 +577,14 @@ export const routeDocument = async ({
     routed: true,
     // The model id is part of the receipt — the worker writes it into
     // the classification audit and the router confidence envelope, so
-    // it must be the resolved model that actually ran, carried on the
-    // result rather than re-derived (or worse, hardcoded) downstream.
-    model: config.model,
+    // it must be the model that actually ran: the one the RESPONSE named,
+    // the configured id only when the response named none (and then
+    // `model_source` says so).
+    ...(() => {
+      const provenance = classifyModelProvenance({ responseModel: servedModel, requestedModel: config.model });
+      return { model: provenance.model, model_source: provenance.model_source };
+    })(),
+    provider: config.provider,
     family,
     confidence,
     direction_hint: directionHint,

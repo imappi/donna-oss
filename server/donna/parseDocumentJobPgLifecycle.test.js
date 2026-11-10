@@ -32,6 +32,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { applianceHarnessSkipReason, bootApplianceForTest } from './testSupport/applianceHarness.js';
+import { claudeRequestInput } from './testSupport/claudeMessage.js';
 
 const PARSE_FN = 'parse-document';
 const BOOT_NOW = new Date('2026-08-31T09:00:00.000Z');
@@ -329,7 +330,10 @@ test(
         }],
         usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }
       });
-      appliance.providers.script('transaction_coding', [{ respond: (request) => ({ status: 200, body: codingBodyFor(JSON.parse(request.input).transactions || []) }) }]);
+      // The coder runs on Claude on a host with both keys (2026-11-10); its input
+      // is the Messages user turn, and the stub serves this OpenAI-shaped
+      // answer in the Messages shape.
+      appliance.providers.script('transaction_coding', [{ respond: (request) => ({ status: 200, body: codingBodyFor(JSON.parse(request.input ?? claudeRequestInput(request)).transactions || []) }) }]);
       await appliance.query(`
         create or replace function appliance_fixture_coding_fault() returns trigger language plpgsql as $$
         begin

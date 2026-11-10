@@ -94,7 +94,9 @@ const runTests = async () => {
 
   await test('1. returns DOCUMENT_EXTRACTION_FAILED when API key not configured', async () => {
     const originalKey = process.env.OPENAI_API_KEY;
+    const originalAnthropic = process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
     try {
       const result = await extractGenericDocumentFromBase64({
         base64: 'aGVsbG8=',
@@ -106,10 +108,13 @@ const runTests = async () => {
       });
       assert.equal(result.kind, 'failed');
       assert.equal(result.code, 'DOCUMENT_EXTRACTION_FAILED');
-      assert.equal(result.reason, 'openai_not_configured');
+      // 2026-11-10: the reason names the provider whose key is missing
+      // (Anthropic, the lane's first), in the parse wait vocabulary.
+      assert.equal(result.reason, 'anthropic_not_configured');
     } finally {
       if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
       else process.env.OPENAI_API_KEY = originalKey;
+      if (originalAnthropic !== undefined) process.env.ANTHROPIC_API_KEY = originalAnthropic;
     }
   });
 

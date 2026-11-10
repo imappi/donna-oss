@@ -6,6 +6,7 @@ import { findEarliestObservableDivergence } from '../server/donna/world/traceRec
 import { buildProposeMatchesUserPrompt } from '../server/donna/salesInvoiceReconciliationLlm.js';
 import { runWorldClose } from './eval_world_close.js';
 import { createProof0ProductionAdapter, createUsageCapturingFetch, decodeFirmContext, solveWorldClose } from './eval_world_proof0_adapter.js';
+import { claudeMessageBody } from '../server/donna/testSupport/claudeMessage.js';
 
 const world = JSON.parse(readFileSync(new URL('../data/worlds/proof0.json', import.meta.url), 'utf8'));
 const STUB_MODEL = 'claude-test-model-from-response';
@@ -82,7 +83,10 @@ function stubProviderFetch(_url, { body }) {
   return {
     ok: true,
     status: 200,
-    json: async () => ({ id: 'msg-test-response', model: STUB_MODEL, usage: { input_tokens: 10, output_tokens: 5 }, content: [{ text: JSON.stringify(payload) }] }),
+    // The unified extractor's schema is over the structured-output limits,
+    // so its request carries the `structured_answer` tool and the answer is
+    // that call (2026-11-10, the shared Claude request); matching stays text.
+    json: async () => ({ ...claudeMessageBody(payload, { request, model: STUB_MODEL, id: 'msg-test-response' }), usage: { input_tokens: 10, output_tokens: 5 } }),
   };
 }
 

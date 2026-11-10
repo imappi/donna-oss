@@ -1,4 +1,3 @@
-import { isProviderSpendLimit } from './providerTransport.js';
 // Generic document extraction — fallback extractor for documents that
 // don't match any known type (receipt, supplier_bill, sales_invoice,
 // bank_statement, contract). Real examples: student loan payment
@@ -21,7 +20,18 @@ import { resolve as resolvePath } from 'node:path';
 import { buildLineageForGenericProjection } from './decisionLineage.js';
 import { calibrate } from './confidenceCalibration.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
-import { extractionFailureForStatus, readProviderError } from './inngest/parseErrors.js';
+import { extractionFailureForStatus } from './inngest/parseErrors.js';
+import { asProviderResponse, llmCall } from './llmCall.js';
+import {
+  documentLaneRequestFromResponses,
+  notConfiguredFailure,
+  readDocumentLaneReply,
+  resolveDocumentLaneProvider,
+  stopFailureCode,
+  stopFailureReason,
+  thrownReason
+} from './documentLaneRequest.js';
+import { classifyModelProvenance } from './providerEndpoints.js';
 
 // Generic extraction is a load-bearing call — its output is persisted
 // and reasoned about downstream, and these are the HARDEST documents
@@ -29,6 +39,14 @@ import { extractionFailureForStatus, readProviderError } from './inngest/parseEr
 // anti-pattern (CLAUDE.md). Strong model by default; GENERIC_DOC_MODEL
 // stays the override knob.
 const DEFAULT_MODEL = 'gpt-5.4';
+// 2026-11-10 (the owner's decision that Donna runs on Claude): the lane
+// (type_extractors_legacy) resolves Anthropic first; claude-opus-5-5 reads
+// the document as a document/image block with structured output. A full
+// field extraction feeding the books earns `high` effort.
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
+const ANTHROPIC_EFFORT = 'high';
+const ANTHROPIC_MAX_TOKENS = 64_000;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 180_000;
 // RT-12 (audit F-12): every extraction lane stamps its prompt version on
 // the receipt. A string constant per module; bump when the prompt or the
 // schema changes meaning.
@@ -104,18 +122,13 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model:
-      process.env.GENERIC_DOC_MODEL ||
-      dotEnv.GENERIC_DOC_MODEL ||
-      process.env.OPENAI_MODEL ||
-      dotEnv.OPENAI_MODEL ||
-      DEFAULT_MODEL
-  };
-};
+// The lane's model knob pins the provider by id; no provider-wide knob.
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
+  laneId: 'type_extractors_legacy',
+  dotEnv: readDotEnv(),
+  modelEnvKeys: ['GENERIC_DOC_MODEL'],
+  defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
+});
 
 const outputTextFromResponse = (response = {}) => {
   if (typeof response.output_text === 'string') return response.output_text;
@@ -485,15 +498,11 @@ const mapExtractionToWriterShape = (parsed, { modelId = '' } = {}) => {
 
 // ── OpenAI call ──────────────────────────────────────────────────────
 
-const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, signal }) =>
-  fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
-    },
+const buildDefaultCall = (send) => async ({ apiKey, model, dataUrl, filename, signal }) =>
+  send({
+    apiKey,
     signal,
-    body: JSON.stringify({
+    body: {
       model,
       store: false,
       instructions: INSTRUCTIONS,
@@ -514,8 +523,48 @@ const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, signal }) =
           schema: GENERIC_DOCUMENT_EXTRACTION_SCHEMA
         }
       }
-    })
+    }
   });
+
+// The request body is built ONCE (Responses shape) and sent by either
+// transport: OpenAI as is, Anthropic carried over unchanged
+// (documentLaneRequest.js documentLaneRequestFromResponses, onto structuredRequest.js). Both ride llmCall.
+const executionFor = (filename) => ({ root: { type: 'document_extraction', id: filenameCorrelationId(filename) } });
+
+const sendOpenAi = ({ apiKey, signal, body }) => asProviderResponse(llmCall({
+  provider: 'openai',
+  // The lane's own wall, honoured inside a worker too (llmCall hands it to
+  // the deadline transport, bounded by the job's remaining budget).
+  timeoutMs: REQUEST_TIMEOUT_MS,
+  url: 'https://api.openai.com/v1/responses',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+  body,
+  sections: { system: body.instructions, tools: body.text?.format?.schema },
+  execution: executionFor(body.input?.[0]?.content?.[0]?.filename),
+  promptVersion: GENERIC_DOCUMENT_PROMPT_VERSION,
+  fetchImpl: (url, init) => fetch(url, { ...init, signal: init?.signal && signal ? AbortSignal.any([init.signal, signal]) : init?.signal || signal })
+}));
+
+
+// The Anthropic call: the shared structured request (structuredRequest.js,
+// via documentLaneRequest.js) through the envelope, called here. llmCall is
+// loaded at call time where the module's import graph needs it.
+const callAnthropicEnvelope = async (options) => {
+  const { llmCall } = await import('./llmCall.js');
+  return llmCall(documentLaneRequestFromResponses({ timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS, ...options }));
+};
+const sendAnthropic = ({ apiKey, signal, body }) => callAnthropicEnvelope({
+  apiKey,
+  body,
+  effort: ANTHROPIC_EFFORT,
+  maxTokens: ANTHROPIC_MAX_TOKENS,
+  execution: executionFor(body.input?.[0]?.content?.[0]?.filename),
+  promptVersion: GENERIC_DOCUMENT_PROMPT_VERSION,
+  signal
+});
+
+const defaultCallOpenAi = buildDefaultCall(sendOpenAi);
+const defaultCallAnthropic = buildDefaultCall(sendAnthropic);
 
 // ── Public extractor ─────────────────────────────────────────────────
 //
@@ -528,18 +577,26 @@ export const extractGenericDocumentFromBase64 = async ({
   base64,
   filename = '',
   mimeType = '',
-  __callOpenAi = defaultCallOpenAi
+  __callOpenAi = defaultCallOpenAi,
+  __callAnthropic = defaultCallAnthropic
 } = {}) => {
   const startedAt = Date.now();
   const correlationId = filenameCorrelationId(filename);
   const config = getOpenAiConfig();
 
-  if (!config.apiKey) {
-    console.warn('[genericDocument] OPENAI_API_KEY not configured', { correlation_id: correlationId });
+  if (!config.ok) {
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'type_extractors_legacy');
+    console.warn('[genericDocument] no model provider key configured', { correlation_id: correlationId, reason: notConfigured, pinned_by: config.pinned_by || null });
     return {
       kind: 'failed',
+      model: null,
+      provider: missing,
       code: 'DOCUMENT_EXTRACTION_FAILED',
-      reason: 'openai_not_configured'
+      reason: notConfigured,
+      // The lane knob whose model id chose the missing provider, if one did.
+      ...(config.pinned_by ? { pinned_by: config.pinned_by } : {})
     };
   }
 
@@ -547,6 +604,8 @@ export const extractGenericDocumentFromBase64 = async ({
   if (!clean) {
     return {
       kind: 'failed',
+      model: config.model,
+      provider: config.provider,
       code: 'DOCUMENT_EXTRACTION_UNREADABLE',
       reason: 'empty_input'
     };
@@ -554,59 +613,88 @@ export const extractGenericDocumentFromBase64 = async ({
 
   const dataUrl = `data:${mimeType || 'application/pdf'};base64,${clean}`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), config.provider === 'anthropic' ? ANTHROPIC_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
 
-  let response;
+  let reply;
   try {
-    response = await __callOpenAi({
+    reply = await readDocumentLaneReply({
+      provider: config.provider,
+      callOpenAi: () => __callOpenAi({
       apiKey: config.apiKey,
       model: config.model,
       dataUrl,
       filename,
       signal: controller.signal
+      }),
+      callAnthropic: () => __callAnthropic({
+      apiKey: config.apiKey,
+      model: config.model,
+      dataUrl,
+      filename,
+      signal: controller.signal
+      }),
+      outputText: outputTextFromResponse
     });
-  } catch (err) {
-    if (isProviderSpendLimit(err)) throw err;
-    console.error('[genericDocument] OpenAI request threw', {
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  // The model on every receipt from here is the one the response named
+  // (the configured id only when it named none — model_source says so).
+  const stamp = (servedModel) => {
+    const provenance = classifyModelProvenance({ responseModel: servedModel, requestedModel: config.model });
+    return { model: provenance.model, model_source: provenance.model_source, provider: config.provider };
+  };
+
+  if (!reply.ok && reply.kind === 'threw') {
+    const err = reply.error;
+    console.error('[genericDocument] provider request threw', {
       correlation_id: correlationId,
+      provider: config.provider,
       error_code: err?.code || null,
       error_name: err?.name || null,
       elapsed_ms: Date.now() - startedAt
     });
     return {
       kind: 'failed',
+      ...stamp(null),
       code: 'DOCUMENT_EXTRACTION_FAILED',
-      reason: err?.name === 'AbortError' ? 'timeout' : 'network_error'
+      reason: thrownReason(err)
     };
-  } finally {
-    clearTimeout(timeout);
   }
 
-  if (!response?.ok) {
-    const status = Number(response?.status || 0);
-    // The provider's error body tells an empty account from a rate limit or a
-    // rejection of this file (parseErrors.providerFaultOfResponse).
-    const providerError = await readProviderError(response);
-    console.error('[genericDocument] OpenAI returned non-OK', {
+  if (!reply.ok && reply.kind === 'status') {
+    const status = reply.status;
+    console.error('[genericDocument] provider returned non-OK', {
       correlation_id: correlationId,
+      provider: config.provider,
       status,
       elapsed_ms: Date.now() - startedAt
     });
-    return extractionFailureForStatus(status, { providerError });
+    return { ...extractionFailureForStatus(status, { provider: config.provider, providerError: reply.providerError }), ...stamp(null) };
   }
 
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
+  if (!reply.ok && reply.kind === 'stop') {
+    // A refusal or a cut-off reply will not clear with a retry of the same
+    // request: terminal, named, receipted with the model that gave it. An
+    // answer that is not the structured answer is retryable (stopFailureCode).
+    console.error('[genericDocument] provider stopped without a usable reply', {
+      correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason, elapsed_ms: Date.now() - startedAt
+    });
+    return { kind: 'failed', ...stamp(reply.error.servedModel), code: stopFailureCode(reply.error), reason: stopFailureReason(reply.error) };
+  }
+
+  if (!reply.ok) {
     return {
       kind: 'failed',
+      ...stamp(null),
       code: 'DOCUMENT_EXTRACTION_FAILED',
       reason: 'response_not_json'
     };
   }
 
-  const text = outputTextFromResponse(payload);
+  const { text } = reply;
+  const served = stamp(reply.servedModel);
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -617,6 +705,7 @@ export const extractGenericDocumentFromBase64 = async ({
     });
     return {
       kind: 'failed',
+      ...served,
       code: 'DOCUMENT_EXTRACTION_FAILED',
       reason: 'structured_bad_json'
     };
@@ -632,12 +721,15 @@ export const extractGenericDocumentFromBase64 = async ({
     });
     return {
       kind: 'failed',
+      // The model that answered and its provider: the parse error names
+      // them, never a default.
+      ...served,
       code: 'DOCUMENT_EXTRACTION_UNREADABLE',
       reason: parsed?.extraction_status === 'failed' ? 'extractor_status_failed' : 'low_confidence'
     };
   }
 
-  const { header, summary, lines } = mapExtractionToWriterShape(parsed, { modelId: config.model });
+  const { header, summary, lines } = mapExtractionToWriterShape(parsed, { modelId: served.model });
 
   console.log('[genericDocument] extraction complete', {
     correlation_id: correlationId,
@@ -657,7 +749,7 @@ export const extractGenericDocumentFromBase64 = async ({
     elapsed_ms: Date.now() - startedAt
   });
 
-  return { kind: 'completed', header, summary, lines };
+  return { kind: 'completed', ...served, header, summary, lines };
 };
 
 // Exported for tests so they can assert the schema shape and mapping

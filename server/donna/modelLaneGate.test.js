@@ -344,7 +344,20 @@ await test('registry views: thresholds resolve per lane; the governed-lane view 
     // Q9 (2026-08-16, the sole-model lab): the coding lane joined the feed —
     // experiment-seatable 27B, no challenger wiring (eligible stays false);
     // product-wide promotion still needs the signed verdict.
-    { id: 'transaction_coding', qualified: ['gpt-5.4', 'qwen/qwen3.8-27b'], eligible: false },
+    // 2026-11-10 (owner's decision: Claude only): claude-opus-5-5 joins as the
+    // strong default, gpt-5.4 the alternative; rides the Claude-only verdict.
+    // The text lanes and the document lanes join the feed with both strong
+    // defaults (registry order). No challenger wiring.
+    { id: 'transaction_coding', qualified: ['claude-opus-5-5', 'gpt-5.4', 'qwen/qwen3.8-27b'], eligible: false },
+    { id: 'type_extractors_legacy', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'bank_statement_vision', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'document_chat', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'ask_drafting', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'memory_extraction', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'owner_invoice_command_read', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'client_intake_draft', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'marketing_drafting', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'parser_repair', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
     // Q6c (2026-08-16): the §9.5 staged candidate joined the disposition
     // lane's qualified set under the model-lab call — experiment-basis
     // policy-selectable; product-wide promotion still needs the signed verdict.
@@ -352,7 +365,9 @@ await test('registry views: thresholds resolve per lane; the governed-lane view 
     // 27B substitute); Qwen3.8-27B-UD-Q4_K_XL = the dense local 27B rung,
     // experiment-admitted only.
     // (bank_line_classification, the B2 pilot, was retired in RT-14, 2026-09-02.)
-    { id: 'bank_line_disposition', qualified: ['claude-opus-4-8', 'Qwen/Qwen3.5-397B-A17B', 'Qwen/Qwen3.5-35B-A3B', 'Qwen3.8-27B-UD-Q4_K_XL', 'qwen/qwen3.8-27b'], eligible: true }
+    { id: 'bank_line_disposition', qualified: ['claude-opus-4-8', 'Qwen/Qwen3.5-397B-A17B', 'Qwen/Qwen3.5-35B-A3B', 'Qwen3.8-27B-UD-Q4_K_XL', 'qwen/qwen3.8-27b'], eligible: true },
+    { id: 'document_routing', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'receipt_classification', qualified: ['claude-opus-5-5', 'gpt-5.4-nano'], eligible: false }
   ]);
   assert.deepEqual([...getLane(LANE).qualified], ['claude-opus-4-8', 'Qwen/Qwen3.5-397B-A17B', 'Qwen/Qwen3.5-35B-A3B', 'Qwen3.8-27B-UD-Q4_K_XL', 'qwen/qwen3.8-27b']);
 });

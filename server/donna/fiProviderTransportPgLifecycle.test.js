@@ -52,12 +52,15 @@ test('real PG (FI): provider failures on the matcher, coder and ask drafter are 
   installConvergenceSettleOnPool(pool);
   const closed = []; pool.on('connect', (c) => closed.push(new Promise((resolve) => c.once('end', resolve))));
   __setFirmDbPoolForTests(pool);
-  const ENV_KEYS = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'LOOPS_TIER', 'LOOPS_SHADOW', 'BILL_MATCHER_ENABLED', 'SALES_INVOICE_MATCHER_ENABLED',
+  const ENV_KEYS = ['OPENAI_API_KEY', 'OPENAI_MODEL', 'ANTHROPIC_API_KEY', 'LOOPS_TIER', 'LOOPS_SHADOW', 'BILL_MATCHER_ENABLED', 'SALES_INVOICE_MATCHER_ENABLED',
     'RECONCILIATION_AUTO_MATCH_POLICY', 'RECONCILIATION_AUTO_MATCH_MATERIALITY_CEILING', 'PROVIDER_REQUEST_TIMEOUT_MS', 'PROVIDER_BUDGET_RESERVE_MS'];
   const priorEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
   const priorFetch = globalThis.fetch;
   Object.assign(process.env, {
     OPENAI_API_KEY: 'fixture-only', ANTHROPIC_API_KEY: 'fixture-only', LOOPS_TIER: 'canary', LOOPS_SHADOW: 'true',
+    // 2026-11-10: both keys now put the text lanes on Claude; this file
+    // exercises the OpenAI coder transport, so it pins them to OpenAI.
+    OPENAI_MODEL: 'gpt-5.4',
     BILL_MATCHER_ENABLED: '1', SALES_INVOICE_MATCHER_ENABLED: '1',
     RECONCILIATION_AUTO_MATCH_POLICY: '1', RECONCILIATION_AUTO_MATCH_MATERIALITY_CEILING: '1000000',
     PROVIDER_REQUEST_TIMEOUT_MS: '400', PROVIDER_BUDGET_RESERVE_MS: '0'

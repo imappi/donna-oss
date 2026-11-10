@@ -46,7 +46,8 @@ test('real PG: explicit source-use fact survives extraction; actual coder and wr
  Object.assign(raw.header,{counterparty_name:'Synthetic service station',own_name:null,currency:'EUR',document_date:'2025-02-14',total_amount:52.1,subtotal_amount:41.51,tax_amount:10.59,line_amounts_include_tax:true,shipping_amount:0,discount_amount:0,rounding_amount:0});
  const extracted=await extractUnified({base64:Buffer.from('%PDF fixture').toString('base64'),filename:'receipt.pdf',documentId:'receipt',documentType:'receipt',env:{ANTHROPIC_API_KEY:'fixture'},fetchImpl:async(_,init)=>{
   assert.match(JSON.parse(init.body).system,/SOURCE BUSINESS USE/);
-  return {ok:true,status:200,json:async()=>({model:'fixture-extractor',content:[{type:'text',text:JSON.stringify(raw)}],usage:{input_tokens:1,output_tokens:1}})};
+  // The unified schema rides the structured-result tool (past the structured-output limits, 2026-11-10); the reply is its call.
+  return {ok:true,status:200,json:async()=>({model:'fixture-extractor',stop_reason:'tool_use',content:[{type:'tool_use',id:'toolu_fixture',name:JSON.parse(init.body).tools[0].name,input:raw}],usage:{input_tokens:1,output_tokens:1}})};
  }});assert.equal(extracted.kind,'completed_header',JSON.stringify(extracted));
  const runId='00000000-0000-4000-8000-000000000001';
  for(const id of ['blocked','legacy']){

@@ -220,7 +220,13 @@ test(
       assert.equal(extraction.length, 1);
       assert.equal(routing[0].status, 200);
       assert.equal(extraction[0].status, 200);
-      assert.equal(routing[0].model_served, loadRecording('document_routing/ochre-supplier-bill').body.model);
+      // Both keys lit ⇒ the router resolves Anthropic first (2026-11-10) and
+      // the stub serves the (Responses-shaped) recording in the Messages
+      // shape, answering as the model the request named.
+      assert.equal(routing[0].endpoint_class, 'anthropic');
+      assert.equal(routing[0].recording, 'document_routing/ochre-supplier-bill');
+      assert.equal(routing[0].adapted, 'openai_responses_to_anthropic_messages');
+      assert.equal(routing[0].model_served, 'claude-opus-5-5');
       assert.equal(extraction[0].model_served, loadRecording('unified_extraction/ochre-discount-line').body.model);
       assert.equal(routing[0].model_requested, routing[0].model_served, 'the router asked for the model the recording answers as');
       assert.equal(extraction[0].model_requested, extraction[0].model_served);

@@ -27,6 +27,10 @@ import crypto from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { toIsoDay } from './dates.js';
+import { llmCall } from './llmCall.js';
+import { getLane } from './modelLanes.js';
+import { resolveTextLaneProvider } from './providerEndpoints.js';
+import { anthropicStructuredRequest, openAiStructuredRequest, typedLlmCallFailure } from './structuredRequest.js';
 
 // Match-reasoning and client-question drafting are judgment calls, not
 // bulk filtering — a nano-class default here was the Failure-A
@@ -474,11 +478,65 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
+// 2026-11-10 (owner's decision: Claude only): provider-agnostic — Anthropic
+// (claude-opus-5-5) when its key is present, OpenAI (DEFAULT_MODEL) only
+// when no Anthropic key is configured. OPENAI_MODEL_CHAT, then OPENAI_MODEL,
+// stay the model knobs and may pin either family's id. Effort `medium`: an
+// interactive turn over one document's extracted fields, whose actions are
+// only PROPOSALS a person confirms.
+const LANE_PROVIDERS = getLane('document_chat').providers;
+const ANTHROPIC_EFFORT = 'medium';
+const resolveChatProvider = () => resolveTextLaneProvider({
+  providers: LANE_PROVIDERS,
+  openAiDefaultModel: DEFAULT_MODEL,
+  modelEnvKeys: ['OPENAI_MODEL_CHAT', 'OPENAI_MODEL'],
+  dotEnv: readDotEnv()
+});
+
+// The Responses `input` turns as Messages API turns: same order, same text.
+const anthropicMessagesFromInput = (input = []) => input.map((turn) => ({
+  role: turn.role === 'assistant' ? 'assistant' : 'user',
+  content: (turn.content || []).map((part) => ({ type: 'text', text: String(part?.text ?? '') }))
+}));
+
+// The Anthropic turn, through the shared envelope. Same discriminated
+// union as the OpenAI path below; the failure code names the provider and
+// the typed cause (anthropic_<status> / anthropic_refused / …).
+const anthropicDocumentChatReply = async ({ resolved, input, signal }) => {
+  let call;
+  try {
+    call = await llmCall(anthropicStructuredRequest({
+      apiKey: resolved.apiKey,
+      model: resolved.model,
+      system: SYSTEM_PROMPT,
+      messages: anthropicMessagesFromInput(input),
+      schema: DOCUMENT_CHAT_RESPONSE_SCHEMA,
+      effort: ANTHROPIC_EFFORT,
+      maxTokens: 16000,
+      cacheSystem: true,
+      execution: { root: { type: 'document_chat_turn', id: 'document_chat' } },
+      fetchImpl: signalFetch(signal)
+    }));
+  } catch (error) {
+    const typed = typedLlmCallFailure('anthropic', error);
+    if (!typed) return { kind: 'failed', code: 'anthropic_network', reason: error?.message || 'network_error' };
+    const code = typed.code === 'PROVIDER_REFUSED' ? 'anthropic_refused'
+      : typed.code === 'PROVIDER_OUTPUT_LIMIT' ? 'anthropic_output_limit'
+        : typed.code === 'PROVIDER_INVALID_OUTPUT' ? 'parse_error'
+          : typed.status ? `anthropic_${typed.status}` : 'anthropic_network';
+    return { kind: 'failed', code, reason: typed.message, provider_failure: typed.receipt() };
+  }
+  const parsed = call.result.parsed;
+  if (!parsed || typeof parsed.text !== 'string' || !Array.isArray(parsed.actions)) {
+    return { kind: 'failed', code: 'validation_error', reason: 'invalid_response_shape' };
+  }
   return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL_CHAT || process.env.OPENAI_MODEL || dotEnv.OPENAI_MODEL || DEFAULT_MODEL
+    kind: 'ok',
+    text: parsed.text,
+    actions: parsed.actions.map((a) => ({ ...a, status: 'proposed' })),
+    // The id the API served (llmCall rail 5).
+    model: call.result.model || resolved.model,
+    provider: 'anthropic'
   };
 };
 
@@ -542,29 +600,38 @@ const buildOpenAiInput = ({ context, history, userMessage }) => {
   return input;
 };
 
-const defaultCallOpenAi = async ({ apiKey, model, input, signal }) =>
-  fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
-    },
-    signal,
-    body: JSON.stringify({
+// The OpenAI turn's default transport: the same Responses body as before,
+// now through the shared envelope (llmCall). It still answers the
+// `__callOpenAi` seam's Response-like shape ({ ok, status, json }), so the
+// mapping below — and any injected test transport — is unchanged.
+const signalFetch = (signal) => (signal
+  ? (url, init) => fetch(url, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, signal]) : signal })
+  : fetch);
+
+const defaultCallOpenAi = async ({ apiKey, model, input, signal }) => {
+  try {
+    const { result } = await llmCall(openAiStructuredRequest({
+      apiKey,
       model,
-      store: false,
       instructions: SYSTEM_PROMPT,
       input,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'document_chat_response',
-          strict: true,
-          schema: DOCUMENT_CHAT_RESPONSE_SCHEMA
-        }
-      }
-    })
-  });
+      schemaName: 'document_chat_response',
+      schema: DOCUMENT_CHAT_RESPONSE_SCHEMA,
+      store: false,
+      sections: { system: SYSTEM_PROMPT, tools: DOCUMENT_CHAT_RESPONSE_SCHEMA, history: input },
+      execution: { root: { type: 'document_chat_turn', id: 'document_chat' } },
+      parse: (payload) => payload,
+      fetchImpl: signalFetch(signal)
+    }));
+    const payload = result.parsed;
+    return { ok: true, status: 200, json: async () => payload };
+  } catch (error) {
+    if (error?.code === 'LLM_CALL_PROVIDER_ERROR') {
+      return { ok: false, status: error.status || 0, json: async () => ({}) };
+    }
+    throw error;
+  }
+};
 
 // Discriminated-union return:
 //   { kind: 'ok', text, actions, model }
@@ -584,11 +651,16 @@ export const generateDocumentChatReply = async ({
   if (typeof userMessage !== 'string' || !userMessage.trim()) {
     return { kind: 'failed', code: 'validation_error', reason: 'empty_user_message' };
   }
-  const config = getOpenAiConfig();
-  if (!config.apiKey) {
-    return { kind: 'failed', code: 'openai_not_configured', reason: 'openai_not_configured' };
+  const resolved = resolveChatProvider();
+  if (!resolved.ok) {
+    // No key for either provider. The code keeps its old spelling when the
+    // missing key is OpenAI's (a pinned gpt-* model), else names Anthropic.
+    const missing = resolved.provider === 'openai' ? 'openai_not_configured' : 'anthropic_not_configured';
+    return { kind: 'failed', code: missing, reason: missing };
   }
   const input = buildOpenAiInput({ context, history, userMessage });
+  if (resolved.provider === 'anthropic') return anthropicDocumentChatReply({ resolved, input, signal });
+  const config = { apiKey: resolved.apiKey, model: resolved.model };
   let response;
   try {
     response = await __callOpenAi({
@@ -608,8 +680,10 @@ export const generateDocumentChatReply = async ({
     };
   }
   let parsed;
+  let servedModel = null;
   try {
     const raw = await response.json();
+    servedModel = typeof raw?.model === 'string' && raw.model ? raw.model : null;
     const text = outputTextFromResponse(raw);
     parsed = JSON.parse(text);
   } catch (err) {
@@ -622,7 +696,10 @@ export const generateDocumentChatReply = async ({
     kind: 'ok',
     text: parsed.text,
     actions: parsed.actions.map((a) => ({ ...a, status: 'proposed' })),
-    model: config.model
+    // The id the API served when the response named one (CLAUDE.md "the
+    // model id is part of the receipt"); the configured id otherwise.
+    model: servedModel || config.model,
+    provider: 'openai'
   };
 };
 

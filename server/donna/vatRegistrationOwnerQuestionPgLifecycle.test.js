@@ -27,6 +27,7 @@ import { runCodingAutoPostForTransaction } from './codingAutoPost.js';
 import { GB_DEFAULT_CHART } from './gb/defaultChart.js';
 import { ledgerRecordId } from './db/shared.js';
 import { CODING_RECONSIDERATION_CONTRACT } from './codingPolicyRecovery.js';
+import { claudeMessageResponse, claudeRequestInput, claudeRequestSystem } from './testSupport/claudeMessage.js';
 
 const pgUrl = process.env.DONNA_PG_TEST_URL;
 const firmId = 'vat-registration-question-proof';
@@ -84,19 +85,22 @@ const mockModels = (t, reading) => {
   const counts = { coder: 0, reader: 0, inputs: [], enums: [] };
   t.mock.method(globalThis, 'fetch', async (endpoint, init) => {
     const url = String(endpoint);
-    if (url === 'https://api.anthropic.com/v1/messages') {
+    assert.equal(url, 'https://api.anthropic.com/v1/messages');
+    const request = JSON.parse(init.body);
+    // 2026-11-10: the coder runs on Claude too (its default since the owner's
+    // decision); the reader is the request that names its forced tool.
+    if (request.tool_choice?.name === 'interpret_owner_reply') {
       counts.reader += 1;
-      const body = JSON.parse(init.body);
-      assert.equal(body.tool_choice?.name, 'interpret_owner_reply');
+      const body = request;
       const context = JSON.parse(body.messages[0].content);
       const input = reading.current(context);
       return new Response(JSON.stringify({ model: READER_MODEL, stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'interpret_owner_reply', input }] }), { status: 200 });
     }
-    assert.equal(url, 'https://api.openai.com/v1/responses');
+    assert.match(claudeRequestSystem(request), /^You code bank transactions/, 'the only other call is the coder');
     counts.coder += 1;
-    const body = JSON.parse(init.body);
-    counts.enums.push(body.text?.format?.schema?.properties?.suggestions?.items?.properties?.tax_treatment?.enum || null);
-    const input = JSON.parse(body.input);
+    const body = request;
+    counts.enums.push(body.output_config?.format?.schema?.properties?.suggestions?.items?.properties?.tax_treatment?.enum || null);
+    const input = JSON.parse(claudeRequestInput(body));
     const suggestions = input.transactions.map(row => {
       counts.inputs.push(row);
       const sale = Number(row.money_in) > 0;
@@ -107,7 +111,7 @@ const mockModels = (t, reading) => {
       return { transaction_id: row.id, ...verdict, tax_treatment: treatment, confidence: 'high', evidence_required: false, auto_explain_limit: 5000,
         reasoning: 'The settled receipt supports the account and the treatment.', posting_requirement: 'single_account', document_allocations: [], ask_client_question: '' };
     });
-    return { ok: true, status: 200, json: async () => ({ output_text: JSON.stringify({ suggestions, group_summary: [] }) }) };
+    return claudeMessageResponse({ suggestions, group_summary: [] }, { request: body });
   });
   return counts;
 };

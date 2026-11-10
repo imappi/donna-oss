@@ -67,17 +67,29 @@ starts, you sign in, the demo firm and company are created with their
 Finnish chart of accounts, and uploads are stored. No document is read.
 The statement row shows as "Stalled" and an uploaded receipt waits.
 
-Reading and booking need keys, set in `.env`:
+Reading and booking need keys, set in `.env`. One Anthropic key is
+enough for every model task; an OpenAI key is optional.
 
 | Provider | Variable | What it does |
 |---|---|---|
-| OpenAI | `OPENAI_API_KEY` | Routes and reads documents, including the bank statement; coding; drafts asks |
-| Anthropic | `ANTHROPIC_API_KEY` | Reads receipts and invoices (preferred over OpenAI when both are set); reconciliation triage; bank-line disposition; chat |
+| Anthropic | `ANTHROPIC_API_KEY` | Every model task: routes and reads documents, including the bank statement; codes bank lines; drafts asks; reconciliation triage; bank-line disposition; chat; what Donna remembers. Claude (`claude-opus-5-5` unless a task names another model) |
+| OpenAI (optional) | `OPENAI_API_KEY` | The same tasks on OpenAI, used only when no Anthropic key is set |
 | Typesafe | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | First-line decisions on matching, disposition and coding. Without it, bank lines stay "Stalled" |
 
+Each document task has its own model knob: `OPENAI_VISION_MODEL` (bank
+statements), `DOCUMENT_ROUTER_MODEL`, `BILL_EXTRACTOR_MODEL`,
+`INVOICE_EXTRACTOR_MODEL`, `CONTRACT_EXTRACTOR_MODEL`,
+`PAYOUT_EXTRACTOR_MODEL`, `GENERIC_DOC_MODEL`, `RECEIPT_CLASSIFIER_MODEL` and
+`CLIENT_INTAKE_MODEL`. A model id in one pins that task to its provider: a
+`gpt-*` id sends it to OpenAI even when an Anthropic key is set, and with
+only an Anthropic key the document waits for `OPENAI_API_KEY`. The wait
+names the knob that caused it. Leave them unset to read on Claude. The
+document tasks do not read `OPENAI_MODEL`, and the receipt reader and parser
+repair have no knob.
+
 A local book creates every company with the Typesafe lane switched on
-(`JEV_RECONCILIATION`). If you have OpenAI and Anthropic keys but no
-Typesafe key, add this line to `.env`:
+(`JEV_RECONCILIATION`). If you have an Anthropic key but no Typesafe key,
+add this line to `.env`:
 
 ```bash
 CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION
@@ -85,8 +97,8 @@ CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION
 
 It is the existing kill switch (`forceDisabled` in
 `server/donna/clientConfig.js`). It can only switch a capability off. With
-it, the bank lines are coded by the OpenAI coder and the Anthropic
-disposition step instead of staying "Stalled".
+it, the bank lines are coded by the Claude coder and the disposition step
+instead of staying "Stalled".
 
 When a key is set, the contents of the documents you upload and of the
 books are sent to that provider. At start the runtime prints a
@@ -187,7 +199,7 @@ This key is the only sign-in on a local book. Anyone who has it can read
 and change every company on it.
 
 **7. Look at the company.** Choose Kampaamo Kultalanka Oy in the sidebar.
-With an OpenAI key, the February 2025 bank lines (36) appear within a
+With an Anthropic key, the February 2025 bank lines (36) appear within a
 minute or two of step 5. Without one, the statement is the only row.
 
 **8. Upload a document.** Open the owner's view of the company at
@@ -253,7 +265,7 @@ rm -rf ~/.donna-desktop
   a book an earlier release stopped over such a document (new uploads
   refused, "The work queue needs recovery") accepts work again on the
   first start of this release.
-- **Every bank line is "Stalled" although OpenAI and Anthropic are lit**:
+- **Every bank line is "Stalled" although Anthropic is lit**:
   the runtime log shows `Configure the first-line provider model for this
   host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`, or switch that lane
   off with `CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION` in `.env`

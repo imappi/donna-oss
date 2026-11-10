@@ -18,15 +18,20 @@ import test from 'node:test';
 import { bootApplianceForTest, applianceHarnessSkipReason } from './testSupport/applianceHarness.js';
 import { FI_PROFILE, openAiFixture } from './testSupport/fiReliabilitySources.js';
 import { loadRecording } from './testSupport/recordedProviders.js';
+import { claudeRequestInput } from './testSupport/claudeMessage.js';
 import { STATUTORY_GROUPS } from './finland/tilikartta.js';
 
 const ACCOUNT_BY_TEXT = Object.freeze({ VUOKRA: 'Rent', ADOBE: 'Software subscriptions', NOSTO: 'Käteinen raha', PAPER: 'Office expenses', STATIONERY: 'Office supplies' });
 const menus = [];
+// The coder runs on Claude on a host with both keys (2026-11-10): its input is
+// the Messages user turn and its schema rides output_config.format; the stub
+// serves this OpenAI-shaped answer in the Messages shape.
 const coder = (request) => {
-  const input = JSON.parse(request.input);
+  const input = JSON.parse(request.input ?? claudeRequestInput(request));
   const base = JSON.parse(loadRecording('transaction_coding/kestrel-two-lines-coded').body.output[0].content[0].text).suggestions[1];
   const rows = input.transactions || [input.transaction];
-  menus.push(request.text?.format?.schema?.properties?.suggestions?.items?.properties?.proposed_account?.enum || []);
+  const schema = request.text?.format?.schema || request.output_config?.format?.schema;
+  menus.push(schema?.properties?.suggestions?.items?.properties?.proposed_account?.enum || []);
   const suggestions = rows.map((row) => {
     const key = Object.keys(ACCOUNT_BY_TEXT).find((k) => String(row.description || '').toUpperCase().includes(k));
     return { ...base, transaction_id: row.id, proposed_account: ACCOUNT_BY_TEXT[key] || 'Suspense', contact: '',

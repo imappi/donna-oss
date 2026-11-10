@@ -12,7 +12,8 @@
 
 import { BANDS, RECURRING_MONTHLY_PRICE, fmt } from '../../../src/lib/pricing.js';
 import { UNSUBSCRIBE_PLACEHOLDER } from './marketingOutbound.js';
-import { getOpenAiConfig, outputTextFromResponse } from './openAiConfig.js';
+import { llmCall } from '../llmCall.js';
+import { marketingFailureMessage, marketingKeyMissingMessage, marketingStructuredRequest, resolveMarketingProvider } from './openAiConfig.js';
 import {
   buildReplySubject,
   buildTriageInput,
@@ -27,56 +28,50 @@ const providerUnavailable = (code, message) => {
   return error;
 };
 
-const callResponsesApi = async ({ config, fetchImpl, instructions, input, schemaName, schema }) => {
-  const response = await fetchImpl('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
-      model: config.model,
+// One structured call on the resolved provider (Anthropic first since
+// 2026-11-10; OpenAI only without an Anthropic key), through the shared
+// envelope. The 503 code stays REPLY_TRIAGE_UNAVAILABLE for both calls, as
+// before; its message now names the typed provider cause.
+const callResponsesApi = async ({ resolved, fetchImpl, instructions, input, schemaName, schema, executionType, executionId }) => {
+  let call;
+  try {
+    call = await llmCall(marketingStructuredRequest({
+      resolved,
       instructions,
       input: JSON.stringify(input),
+      schemaName,
+      schema,
       store: false,
-      text: {
-        format: { type: 'json_schema', name: schemaName, strict: true, schema }
-      }
-    })
-  });
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw providerUnavailable(
-      'REPLY_TRIAGE_UNAVAILABLE',
-      errorBody?.error?.message || `OpenAI request failed with ${response.status}.`
-    );
+      executionType,
+      executionId,
+      fetchImpl
+    }));
+  } catch (error) {
+    const message = marketingFailureMessage(resolved.provider, error);
+    if (!message) throw error;
+    throw providerUnavailable('REPLY_TRIAGE_UNAVAILABLE', message);
   }
-  const payload = await response.json();
-  let parsed = null;
-  try {
-    parsed = JSON.parse(outputTextFromResponse(payload));
-  } catch {
-    throw providerUnavailable('REPLY_TRIAGE_UNAVAILABLE', 'OpenAI returned an unreadable response.');
-  }
-  return { parsed, model: payload.model || config.model };
+  return { parsed: call.result.parsed, model: call.result.model || resolved.model };
 };
 
 // Triage one inbound message. Returns { verdict, model }.
 export const triageInboundMessage = async ({ message, lead = null, prospect = null, fetchImpl = fetch, openAiConfig = null } = {}) => {
-  const config = openAiConfig || getOpenAiConfig();
-  if (!config.apiKey) {
+  const resolved = resolveMarketingProvider({ openAiConfig });
+  if (!resolved.ok) {
     throw providerUnavailable(
       'REPLY_TRIAGE_UNAVAILABLE',
-      'OpenAI API key is not configured; reply triage has no deterministic fallback by design.'
+      marketingKeyMissingMessage(resolved, 'reply triage has no deterministic fallback by design.')
     );
   }
   const { parsed, model } = await callResponsesApi({
-    config,
+    resolved,
     fetchImpl,
     instructions: buildTriageInstructions(),
     input: buildTriageInput({ message, lead, prospect }),
     schemaName: 'marketing_reply_triage',
-    schema: buildTriageSchema()
+    schema: buildTriageSchema(),
+    executionType: 'marketing_inbound_message',
+    executionId: message?.id
   });
   return { verdict: parsed, model };
 };
@@ -150,20 +145,22 @@ export const draftInboundReply = async ({
   fetchImpl = fetch,
   openAiConfig = null
 } = {}) => {
-  const config = openAiConfig || getOpenAiConfig();
-  if (!config.apiKey) {
+  const resolved = resolveMarketingProvider({ openAiConfig });
+  if (!resolved.ok) {
     throw providerUnavailable(
       'REPLY_DRAFTER_UNAVAILABLE',
-      'OpenAI API key is not configured; the reply drafter has no fallback copy by design.'
+      marketingKeyMissingMessage(resolved, 'the reply drafter has no fallback copy by design.')
     );
   }
   const { parsed, model } = await callResponsesApi({
-    config,
+    resolved,
     fetchImpl,
     instructions: buildReplyInstructions({ signupUrl }),
     input: buildReplyInput({ message, verdict, lead, prospect }),
     schemaName: 'marketing_reply_draft',
-    schema: buildReplyDraftSchema()
+    schema: buildReplyDraftSchema(),
+    executionType: 'marketing_inbound_reply_draft',
+    executionId: message?.id
   });
   return {
     subject: String(parsed.subject || '').trim() || buildReplySubject(message?.subject),

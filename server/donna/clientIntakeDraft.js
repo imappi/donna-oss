@@ -34,9 +34,27 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
+import { asProviderResponse, llmCall } from './llmCall.js';
+import {
+  documentLaneRequestFromResponses,
+  notConfiguredFailure,
+  readDocumentLaneReply,
+  resolveDocumentLaneProvider,
+  stopFailureCode,
+  stopFailureReason,
+  thrownReason
+} from './documentLaneRequest.js';
+import { classifyModelProvenance } from './providerEndpoints.js';
 
 // Strong tier by default — see module header. Override for evals only.
 const DEFAULT_MODEL = 'gpt-5.4';
+// 2026-11-10 (the owner's decision that Donna runs on Claude): Anthropic
+// first. Reading WHO the business is off a registry extract or a bill is
+// identity extraction, not line-level arithmetic: `medium` effort.
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
+const ANTHROPIC_EFFORT = 'medium';
+const ANTHROPIC_MAX_TOKENS = 32_000;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 180_000;
 const REQUEST_TIMEOUT_MS = 90_000;
 
 const NAME_MAX_LEN = 200;
@@ -67,16 +85,13 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model:
-      process.env.CLIENT_INTAKE_MODEL ||
-      dotEnv.CLIENT_INTAKE_MODEL ||
-      DEFAULT_MODEL
-  };
-};
+// CLIENT_INTAKE_MODEL is the lane knob; its id pins the provider.
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
+  laneId: 'client_intake_draft',
+  dotEnv: readDotEnv(),
+  modelEnvKeys: ['CLIENT_INTAKE_MODEL'],
+  defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
+});
 
 const outputTextFromResponse = (response = {}) => {
   if (typeof response.output_text === 'string') return response.output_text;
@@ -268,7 +283,9 @@ extraction_confidence: 0..1, your honest calibration for company_name + jurisdic
 
 // ── OpenAI call ─────────────────────────────────────────────────────
 
-const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, text, signal }) => {
+// The request body is built ONCE (Responses shape); the OpenAI transport
+// sends it as is and the Anthropic transport carries it over unchanged.
+const buildDefaultCall = (send) => async ({ apiKey, model, dataUrl, filename, text, signal }) => {
   const content = [];
   if (dataUrl) {
     content.push(buildResponsesDocumentPart({ dataUrl, filename }));
@@ -279,14 +296,11 @@ const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, text, signa
       ? `Draft the client intake profile from this pasted document text per the schema.\n\n${text}`
       : 'Draft the client intake profile from this document per the schema.'
   });
-  return fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
-    },
+  return send({
+    apiKey,
     signal,
-    body: JSON.stringify({
+    filename,
+    body: {
       model,
       store: false,
       instructions: INSTRUCTIONS,
@@ -299,9 +313,41 @@ const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, text, signa
           schema: INTAKE_DRAFT_SCHEMA
         }
       }
-    })
+    }
   });
 };
+
+const executionFor = (filename) => ({ root: { type: 'client_intake_draft', id: filenameCorrelationId(filename) } });
+
+const defaultCallOpenAi = buildDefaultCall(({ apiKey, signal, filename, body }) => asProviderResponse(llmCall({
+  provider: 'openai',
+  // The lane's own wall, honoured inside a worker too (llmCall hands it to
+  // the deadline transport, bounded by the job's remaining budget).
+  timeoutMs: REQUEST_TIMEOUT_MS,
+  url: 'https://api.openai.com/v1/responses',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+  body,
+  sections: { system: INSTRUCTIONS, tools: INTAKE_DRAFT_SCHEMA },
+  execution: executionFor(filename),
+  fetchImpl: (url, init) => fetch(url, { ...init, signal: init?.signal && signal ? AbortSignal.any([init.signal, signal]) : init?.signal || signal })
+})));
+
+
+// The Anthropic call: the shared structured request (structuredRequest.js,
+// via documentLaneRequest.js) through the envelope, called here. llmCall is
+// loaded at call time where the module's import graph needs it.
+const callAnthropicEnvelope = async (options) => {
+  const { llmCall } = await import('./llmCall.js');
+  return llmCall(documentLaneRequestFromResponses({ timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS, ...options }));
+};
+const defaultCallAnthropic = buildDefaultCall(({ apiKey, signal, filename, body }) => callAnthropicEnvelope({
+  apiKey,
+  body,
+  effort: ANTHROPIC_EFFORT,
+  maxTokens: ANTHROPIC_MAX_TOKENS,
+  execution: executionFor(filename),
+  signal
+}));
 
 // ── Normalization ───────────────────────────────────────────────────
 
@@ -392,15 +438,19 @@ export const extractClientIntakeDraft = async ({
   filename = '',
   mimeType = '',
   text = '',
-  __callOpenAi = defaultCallOpenAi
+  __callOpenAi = defaultCallOpenAi,
+  __callAnthropic = defaultCallAnthropic
 } = {}) => {
   const startedAt = Date.now();
   const correlationId = filenameCorrelationId(filename || text.slice(0, 64));
   const config = getOpenAiConfig();
 
-  if (!config.apiKey) {
-    console.warn('[clientIntakeDraft] OPENAI_API_KEY not configured', { correlation_id: correlationId });
-    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: 'openai_not_configured' };
+  if (!config.ok) {
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'client_intake_draft');
+    console.warn('[clientIntakeDraft] no model provider key configured', { correlation_id: correlationId, reason: notConfigured, pinned_by: config.pinned_by || null });
+    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: notConfigured, provider: missing, ...(config.pinned_by ? { pinned_by: config.pinned_by } : {}) };
   }
 
   const clean = trimBase64(base64);
@@ -411,54 +461,74 @@ export const extractClientIntakeDraft = async ({
 
   const dataUrl = clean ? `data:${mimeType || 'application/pdf'};base64,${clean}` : '';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), config.provider === 'anthropic' ? ANTHROPIC_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  const callArgs = {
+    apiKey: config.apiKey,
+    model: config.model,
+    dataUrl,
+    filename,
+    text: pastedText,
+    signal: controller.signal
+  };
 
-  let response;
+  let reply;
   try {
-    response = await __callOpenAi({
-      apiKey: config.apiKey,
-      model: config.model,
-      dataUrl,
-      filename,
-      text: pastedText,
-      signal: controller.signal
+    reply = await readDocumentLaneReply({
+      provider: config.provider,
+      callOpenAi: () => __callOpenAi(callArgs),
+      callAnthropic: () => __callAnthropic(callArgs),
+      outputText: outputTextFromResponse
     });
-  } catch (err) {
-    console.error('[clientIntakeDraft] OpenAI request threw', {
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!reply.ok && reply.kind === 'threw') {
+    console.error('[clientIntakeDraft] provider request threw', {
       correlation_id: correlationId,
-      error_code: err?.code || null,
-      error_name: err?.name || null,
+      provider: config.provider,
+      error_code: reply.error?.code || null,
+      error_name: reply.error?.name || null,
       elapsed_ms: Date.now() - startedAt
     });
     return {
       kind: 'failed',
       code: 'DOCUMENT_EXTRACTION_FAILED',
-      reason: err?.name === 'AbortError' ? 'timeout' : 'network_error'
+      reason: thrownReason(reply.error)
     };
-  } finally {
-    clearTimeout(timeout);
   }
 
-  if (!response?.ok) {
-    const status = Number(response?.status || 0);
-    console.error('[clientIntakeDraft] OpenAI returned non-OK', {
+  if (!reply.ok && reply.kind === 'status') {
+    const status = reply.status;
+    console.error('[clientIntakeDraft] provider returned non-OK', {
       correlation_id: correlationId,
+      provider: config.provider,
       status,
       elapsed_ms: Date.now() - startedAt
     });
-    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: `openai_${status || 'unknown'}` };
+    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: `${config.provider}_${status || 'unknown'}` };
   }
 
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
+  if (!reply.ok && reply.kind === 'stop') {
+    console.error('[clientIntakeDraft] provider stopped without a usable reply', {
+      correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason, elapsed_ms: Date.now() - startedAt
+    });
+    // Refusal / output limit final; an answer that is not the structured
+    // answer retryable (stopFailureCode), receipted with the served model.
+    return { kind: 'failed', code: stopFailureCode(reply.error), reason: stopFailureReason(reply.error), model: reply.error.servedModel || null, provider: config.provider };
+  }
+
+  if (!reply.ok) {
     return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: 'response_not_json' };
   }
 
+  // The model id is the one the response named (configured only when it
+  // named none; model_source says which).
+  const provenance = classifyModelProvenance({ responseModel: reply.servedModel, requestedModel: config.model });
+
   let parsed;
   try {
-    parsed = JSON.parse(outputTextFromResponse(payload));
+    parsed = JSON.parse(reply.text);
   } catch {
     console.error('[clientIntakeDraft] structured response was not valid JSON', {
       correlation_id: correlationId,
@@ -480,7 +550,8 @@ export const extractClientIntakeDraft = async ({
 
   console.log('[clientIntakeDraft] draft extracted', {
     correlation_id: correlationId,
-    model: config.model,
+    provider: config.provider,
+    model: provenance.model,
     document_kind: draft.document_kind,
     extraction_status: draft.extraction_status,
     confidence_band: draft.extraction_confidence >= 0.8 ? 'high' : draft.extraction_confidence >= 0.5 ? 'medium' : 'low',
@@ -490,7 +561,7 @@ export const extractClientIntakeDraft = async ({
     elapsed_ms: Date.now() - startedAt
   });
 
-  return { kind: 'ok', draft };
+  return { kind: 'ok', draft, provider: config.provider, model: provenance.model, model_source: provenance.model_source };
 };
 
 // Test-only exports.

@@ -13,10 +13,41 @@ import {
   extractStructuredFromOpenAiVisionPaginated,
   extractStructuredFromStatementText,
   isOpenAiVisionConfigured,
-  ocrPdfWithOpenAiVision
+  ocrPdfWithOpenAiVision,
+  statementReaderMissingProvider,
+  statementReaderPinnedBy,
+  statementReaderProvider
 } from './bankStatementVision.js';
 import { toUtcIsoDay } from './dates.js';
 import { providerFaultOfResponse } from './inngest/parseErrors.js';
+import { isProviderStopFailure, stopFailureCode, stopFailureReason } from './documentLaneRequest.js';
+
+// The strong reader's own stop — a refusal, a cut-off at the output limit,
+// an answer that is not the structured answer — is that named failure on the
+// document, never a quieter reader's guess (no plain-transcription + regex
+// fallback, no text-layer regex tiers). The parse worker throws it with the
+// code the document lanes use (refusal / output limit final, invalid output
+// retryable) and the model that answered.
+const strongReaderStop = (error) => (isProviderStopFailure(error)
+  ? { fault: stopFailureReason(error), code: stopFailureCode(error), provider: error.provider || null, model: error.servedModel || null }
+  : null);
+// Which reader produced a statement's rows (`extraction_source`): the reader
+// kind, prefixed with the provider that ANSWERED — `anthropic_vision_structured`
+// when Claude read it, `openai_vision_structured` when OpenAI did (the value
+// every OpenAI read has always stored, so those rows and their readers are
+// unchanged). `extraction_provider` carries the provider beside it.
+// `statementSourceKind` reads the reader kind from either spelling.
+export const STATEMENT_READER_KINDS = Object.freeze({
+  VISION_STRUCTURED: 'vision_structured',
+  TEXT_STRUCTURED: 'text_structured',
+  VISION_TEXT: 'vision_text'
+});
+const statementSource = (kind, provider) => `${provider === 'anthropic' ? 'anthropic' : 'openai'}_${kind}`;
+export const statementSourceKind = (source) => {
+  const match = /^(openai|anthropic)_(vision_structured|text_structured|vision_text)$/.exec(String(source || ''));
+  return match ? match[2] : null;
+};
+const stopRecord = (base, stop, extra = {}) => ({ ...base, transactions: [], vision_skipped: 'provider_stop', vision_skipped_details: stop, ...extra });
 
 const OCR_SCRIPT_PATH = fileURLToPath(new URL('./pdfOcr.swift', import.meta.url));
 const OCR_MAX_PAGES = 80;
@@ -1165,11 +1196,14 @@ const tryLlmTextExtraction = async (text, filename, { bypassCache = false } = {}
     if (Array.isArray(structured?.transactions) && structured.transactions.length > 0) {
       return {
         text: clean,
-        source: 'openai_text_structured',
+        source: statementSource(STATEMENT_READER_KINDS.TEXT_STRUCTURED, structured.provider),
         lineCount: countLines(clean),
         transactions: structured.transactions,
         statement_summary_hint: structured.statement_summary || null,
         extraction_model: structured.model || null,
+        extraction_model_source: structured.model_source || null,
+        ...(structured.chunk_models ? { extraction_chunk_models: structured.chunk_models } : {}),
+        extraction_provider: structured.provider || null,
         llm_elapsed_ms: Date.now() - startedAt,
         llm_cache_hit: Boolean(structured.cache_hit)
       };
@@ -1178,6 +1212,11 @@ const tryLlmTextExtraction = async (text, filename, { bypassCache = false } = {}
       filename
     });
   } catch (error) {
+    const stop = strongReaderStop(error);
+    if (stop) {
+      console.warn('[bankStatement] llm-first text extraction stopped — no regex fallback', { filename, ...stop });
+      return stopRecord({ text: clean, source: 'none', lineCount: countLines(clean) }, stop);
+    }
     console.warn('[bankStatement] llm-first text extraction failed — falling back to regex tiers', {
       filename,
       code: error?.code,
@@ -1286,6 +1325,7 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
     // instead of waiting for the function-kill.
     let visionTimedOut = null;
     let visionProviderFault = null;
+    let visionStop = null;
     try {
       const structured = await extractStructuredFromOpenAiVisionPaginated({
         base64,
@@ -1296,10 +1336,14 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
       if (Array.isArray(structured?.transactions) && structured.transactions.length > 0) {
         return {
           text: '',
-          source: 'openai_vision_structured',
+          source: statementSource(STATEMENT_READER_KINDS.VISION_STRUCTURED, structured.provider),
           lineCount: structured.transactions.length,
           transactions: structured.transactions,
           statement_summary_hint: structured.statement_summary || null,
+          extraction_model: structured.model || null,
+        extraction_model_source: structured.model_source || null,
+        ...(structured.chunk_models ? { extraction_chunk_models: structured.chunk_models } : {}),
+          extraction_provider: structured.provider || null,
           vision_cache_hit: Boolean(structured.cache_hit),
           vision_elapsed_ms: Date.now() - visionStart
         };
@@ -1335,12 +1379,19 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
       // A refused key or an account with no credit (status + the provider's
       // error body): the installation's fault, not the statement's. The plain
       // vision fallback would hit the same wall; say which fault it was so the
-      // parse worker waits on it instead of resting "no transactions".
-      const fault = error?.code === 'OPENAI_VISION_REQUEST_FAILED'
+      // parse worker waits on it instead of resting "no transactions". The
+      // provider is the one the reader called (Anthropic first since
+      // 2026-11-10).
+      const fault = ['OPENAI_VISION_REQUEST_FAILED', 'LLM_CALL_PROVIDER_ERROR'].includes(error?.code)
         ? providerFaultOfResponse({ status: error.statusCode, providerError: error.details?.error })
         : null;
-      if (fault) visionProviderFault = { fault, status: error.statusCode || null, provider: 'openai' };
-      const isAbort = error?.name === 'AbortError' || error?.code === 'ABORT_ERR';
+      if (fault) visionProviderFault = { fault, status: error.statusCode || null, provider: error.provider || 'openai' };
+      visionStop = strongReaderStop(error);
+      // (PROVIDER_TIMEOUT: a timeout typed by the envelope's deadline
+      // transport. Inside a worker that is the reader's own 240 s wall
+      // (OPENAI_VISION_TIMEOUT_MS, handed to llmCall) or the job's remaining
+      // budget, whichever is shorter.)
+      const isAbort = error?.name === 'AbortError' || error?.code === 'ABORT_ERR' || error?.code === 'PROVIDER_TIMEOUT';
       if (isAbort) {
         visionTimedOut = {
           message: error?.message || 'Structured vision OCR timed out before returning a result.',
@@ -1348,6 +1399,7 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
         };
       }
     }
+    if (visionStop) return stopRecord(bestTextLayer, visionStop, { vision_elapsed_ms: Date.now() - visionStart });
     if (visionProviderFault) {
       return {
         ...bestTextLayer,
@@ -1372,13 +1424,16 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
           });
           return {
             text: sanitizeStatementText(visionText),
-            source: 'openai_vision_text',
+            source: statementSource(STATEMENT_READER_KINDS.VISION_TEXT, statementReaderProvider()),
+            extraction_provider: statementReaderProvider(),
             lineCount: countLines(visionText),
             transactions,
             vision_elapsed_ms: Date.now() - visionStart
           };
         }
       } catch (error) {
+        const stop = strongReaderStop(error);
+        if (stop) return stopRecord(bestTextLayer, stop, { vision_elapsed_ms: Date.now() - visionStart });
         console.error('[bankStatement] plain vision OCR threw', {
           filename,
           code: error?.code,
@@ -1410,7 +1465,10 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
   // it into a provider wait (parseErrors.providerWaitFor) instead of a
   // terminal skip.
   if (bestTextLayer.lineCount === 0 && safeOcrCandidate.lineCount === 0 && !isOpenAiVisionConfigured()) {
-    return { ...bestTextLayer, vision_skipped: 'not_configured', vision_skipped_details: { fault: 'not_configured', provider: 'openai' } };
+    // The provider named is the one whose key is missing: the reader's
+    // first (Anthropic since 2026-11-10), so the wait names ANTHROPIC_API_KEY.
+    const pinnedBy = statementReaderPinnedBy();
+    return { ...bestTextLayer, vision_skipped: 'not_configured', vision_skipped_details: { fault: 'not_configured', provider: statementReaderMissingProvider() || 'anthropic', ...(pinnedBy ? { pinned_by: pinnedBy } : {}) } };
   }
   return bestTextLayer;
 };
@@ -1794,12 +1852,22 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
   const isPdf = mimeType.includes('pdf') || /\.pdf$/i.test(filename);
   const extraction = isPdf && preferVision
     ? await (async () => {
-        const structured = await extractStructuredFromOpenAiVisionPaginated({
-          base64, filename, mimeType, periodHint: inferFilenamePeriod(filename), bypassCache
-        });
-        return { text: '', source: 'openai_vision_structured',
+        let structured;
+        try {
+          structured = await extractStructuredFromOpenAiVisionPaginated({
+            base64, filename, mimeType, periodHint: inferFilenamePeriod(filename), bypassCache
+          });
+        } catch (error) {
+          const stop = strongReaderStop(error);
+          if (stop) return stopRecord({ text: '', source: 'none', lineCount: 0 }, stop);
+          throw error;
+        }
+        return { text: '', source: statementSource(STATEMENT_READER_KINDS.VISION_STRUCTURED, structured.provider),
           lineCount: structured.transactions.length, transactions: structured.transactions,
           statement_summary_hint: structured.statement_summary, extraction_model: structured.model,
+          extraction_model_source: structured.model_source || null,
+          ...(structured.chunk_models ? { extraction_chunk_models: structured.chunk_models } : {}),
+          extraction_provider: structured.provider || null,
           vision_cache_hit: structured.cache_hit };
       })()
     : isPdf
@@ -1841,9 +1909,8 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
     model_candidate: hintCurrency || null
   };
 
-  const isStructuredLlm =
-    extraction.source === 'openai_vision_structured' ||
-    extraction.source === 'openai_text_structured';
+  const isStructuredLlm = [STATEMENT_READER_KINDS.VISION_STRUCTURED, STATEMENT_READER_KINDS.TEXT_STRUCTURED]
+    .includes(statementSourceKind(extraction.source));
   const correctedTransactions = isStructuredLlm
     ? repairStructuredDirectionsFromBalances(transactions, statementSummary)
     : transactions;
@@ -1872,6 +1939,8 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
     );
   } else if (extraction.vision_skipped === 'not_configured' || extraction.vision_skipped === 'provider_fault') {
     warnings.push('Cloud OCR could not be used on this installation (no key, a refused key, or no credit), so this scanned statement has not been read yet.');
+  } else if (extraction.vision_skipped === 'provider_stop') {
+    warnings.push('The statement reader stopped without a usable answer (a refusal, a cut-off answer or an answer outside the schema); no transactions were guessed from a weaker reader.');
   } else if (extraction.vision_skipped === 'timeout') {
     // The structured vision call hit its per-chunk AbortController and
     // surfaced an AbortError. Without this branch the caller would fall
@@ -1918,6 +1987,13 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
     extraction_source: extraction.source,
     // The model id is part of the receipt — null on regex-only paths.
     extraction_model: extraction.extraction_model ?? null,
+    // response_proven / configured_fallback / legacy_unproven (a cached read
+    // from before sources were stored), and every chunk's model when chunks
+    // were answered by different ids.
+    extraction_model_source: extraction.extraction_model_source ?? null,
+    ...(extraction.extraction_chunk_models ? { extraction_chunk_models: extraction.extraction_chunk_models } : {}),
+    // Which provider answered (null on regex-only paths).
+    extraction_provider: extraction.extraction_provider ?? null,
     date_line_count: dateLikeLineCount,
     amount_line_count: amountLikeLineCount,
     statement_summary: statementSummary,
@@ -1944,7 +2020,7 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
       vision_elapsed_ms: extraction.vision_elapsed_ms ?? null,
       vision_cache_hit: extraction.vision_cache_hit ?? null,
       vision_skipped: extraction.vision_skipped ?? null,
-      vision_skipped_details: ['not_configured', 'provider_fault'].includes(extraction.vision_skipped) ? extraction.vision_skipped_details : null,
+      vision_skipped_details: ['not_configured', 'provider_fault', 'provider_stop'].includes(extraction.vision_skipped) ? extraction.vision_skipped_details : null,
       llm_elapsed_ms: extraction.llm_elapsed_ms ?? null,
       llm_cache_hit: extraction.llm_cache_hit ?? null
     }

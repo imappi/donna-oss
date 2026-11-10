@@ -72,8 +72,14 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     ["assertFirmAccess","dynamic_sql","eb3969b8dfae9747beff28ec127da05caf4142c5df9c36ec002ffff8f86f44a4",1,[]],
   ]),
   ...group("server/donna/db/coding.js", "Reviewed SG C4 owner-body rehash of two unchanged normalized candidate SELECTs. The batch now refreshes persisted evidence between generation units; these exact SQL expressions, targets and site counts are unchanged. Rehashed again 2026-11-05: a comment inside the owner body renamed a real supplier to a made-up one for the public export; the SELECTs are unchanged. Rehashed again 2026-11-06: the comment no longer names any real counterparty; the SELECTs are unchanged.", [
-    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","9405e27489bc5b6152c21b5c5e50407c488c51ab0eec4ac507929dfd4994ff80",1,[]],
-    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","1f8db772d9fd8bc65714966e72dd3418405afe62cab40cdf727fcd698e305934",1,[]],
+    // 2026-11-10 (Claude-only text lanes): owner-body rehash only. The round's
+    // coding transport is now resolved before chunking, and the chunk size is
+    // the transport's (codingBatchLinesFor) instead of a fixed 25. The same two
+    // candidate SELECTs (transaction_review_queue joined to transactions; the
+    // matched uncoded transactions) read the same tables, write nothing, and
+    // keep their counts; their SQL text is unchanged.
+    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","24a3bb79362aaa1c40ffdd8a5133cdf376661788ea2e8460ebde0d6335c99bf6",1,[]],
+    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","d2ae92fadd86f2bd981a0c5cc16f9538b0ca4580d158d430067846a97f9ef9ba",1,[]],
   ]),
   ...group("server/donna/db/codingCorrection.js", "Reviewed SG C4 candidate SELECT excluding retained or partial native markers through retainedNativeMarkerSql with fixed alias t. Firm and limit remain bound. Discovery refuses work and grants no posting or review authority.", [
     ["candidates/callback","dynamic_sql","cb0b46a00c8ed26ebaece05502eb54dbbd099cbaf918127de4c68898299d6ebe",1,[]],

@@ -155,6 +155,13 @@ test('operator surface keeps the full diagnostics and exhausted retries the firm
   assert.match(text(), /rejected the configured credentials/);
   assert.match(text(), /Bank line.*Queue recovery.*exceeded its deadline/s);
   assert.match(text(), /execution_budget_aborted/);
+  // A batch the job's remaining budget could not hold was never sent: the
+  // panel does not say the provider timed out.
+  askResponse = (id) => response(payload(id, [failure(id, { id: 'coding:line', lane: 'coding', label: 'Bank line', owner: 'queue',
+    code: 'PROVIDER_TIMEOUT', reason: 'execution_budget_insufficient', provider: 'anthropic', status: null, request_attempts: 0 })]));
+  await clickRefresh();
+  assert.match(text(), /Bank line.*Queue recovery.*Not started: the job did not have enough time left for this step/s);
+  assert.doesNotMatch(text(), /exceeded its deadline/);
   askResponse = (id) => response(payload(id, []));
   await clickRefresh();
   assert.match(text(), /No active provider failure receipts/, 'a successful retry clears the operator item');

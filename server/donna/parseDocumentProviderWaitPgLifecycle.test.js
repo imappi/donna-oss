@@ -76,7 +76,10 @@ const snapshotDocument = async (appliance, documentId) => {
   return (response.json.documents || []).find((row) => row.id === documentId) || null;
 };
 
-const assertWaiting = async (appliance, { documentId, runId, waits, keyName = 'OPENAI_API_KEY' }) => {
+// No key at all: every document lane resolves Anthropic first (the owner's
+// decision of 2026-11-10), so the wait names the Anthropic key — the one
+// this installation is meant to hold.
+const assertWaiting = async (appliance, { documentId, runId, waits, provider = 'anthropic', keyName = 'ANTHROPIC_API_KEY' }) => {
   const document = await appliance.read.document(documentId);
   assert.equal(document.parse_status, 'pending', `waits, never rests terminal: ${JSON.stringify({ parse_error: document.parse_error, summary: document.parse_summary })}`);
   assert.equal(document.parse_run_id, runId, 'the same run waits — no new run is minted');
@@ -85,15 +88,15 @@ const assertWaiting = async (appliance, { documentId, runId, waits, keyName = 'O
   const hold = document.payload?.parse_hold;
   assert.equal(hold?.reason_code, 'provider_not_configured', JSON.stringify(hold));
   assert.equal(hold?.boundary, 'parse_extract');
-  assert.equal(hold?.provider, 'openai');
+  assert.equal(hold?.provider, provider);
   assert.equal(hold?.key_name, keyName);
-  assert.equal(hold?.reason, 'openai_not_configured', 'the extractor\'s own stored reason is the receipt');
+  assert.equal(hold?.reason, `${provider}_not_configured`, 'the extractor\'s own stored reason is the receipt');
   assert.equal(hold?.parse_run_id, runId);
   assert.equal(hold?.waits, waits);
   const [job] = await jobsForRun(appliance, runId);
   assert.equal(job.status, 'pending', `the job waits, never dead: ${JSON.stringify(job)}`);
   assert.equal(job.attempt_count, 0, 'the deferral spends no attempt');
-  assert.match(String(job.last_error), /provider_wait:provider_not_configured:openai/);
+  assert.match(String(job.last_error), new RegExp(`provider_wait:provider_not_configured:${provider}`));
   return { document, hold, job };
 };
 
@@ -129,7 +132,7 @@ test(
       assert.equal(appliance.providers.calls.length, 0, 'a missing key makes no model request');
       const waitAudits = await appliance.read.audit({ clientId, action: 'document.parse.provider_wait' });
       assert.equal(waitAudits.length, 1, 'one audit per distinct wait, not per recheck');
-      assert.equal(waitAudits[0].metadata.key_name, 'OPENAI_API_KEY');
+      assert.equal(waitAudits[0].metadata.key_name, 'ANTHROPIC_API_KEY');
       assert.equal((await appliance.read.audit({ clientId, action: 'document.parse.failed' })).length, 0);
       assert.equal((await appliance.read.jobs({ functionId: PARSE_FN })).filter((job) => job.status === 'dead').length, 0,
         'no dead parse job — nothing for Host A to refuse uploads over');
@@ -137,12 +140,13 @@ test(
       // What the firm view reads: the stored hold and the verdict naming it.
       const shown = await snapshotDocument(appliance, upload.documentId);
       assert.equal(shown?.parse_hold?.reason_code, 'provider_not_configured', JSON.stringify(shown));
-      assert.equal(shown?.parse_hold?.key_name, 'OPENAI_API_KEY');
+      assert.equal(shown?.parse_hold?.key_name, 'ANTHROPIC_API_KEY');
       assert.equal(shown?.convergence_state, 'hanging');
       assert.equal(shown?.convergence_reason, 'parse_hold:provider_not_configured');
 
-      // The key is added (the restart's env), and the next recheck reads it.
-      lightProviders();
+      // The Anthropic key is added (the restart's env), and the next recheck
+      // reads it, on Anthropic.
+      process.env.ANTHROPIC_API_KEY = PRESENCE_ONLY_KEY('anthropic');
       scriptReceiptLanes(appliance);
       await recheck(appliance);
       const [job] = await jobsForRun(appliance, runId);
@@ -155,6 +159,8 @@ test(
       assert.equal(read.payload?.parse_hold ?? null, null, 'the claim strips the hold');
       assert.equal(read.vendor_name, upload.fixture.expected.vendor_name);
       assert.equal(appliance.providers.callsFor('unified_extraction').length, 1);
+      assert.deepEqual(appliance.providers.calls.map((call) => call.endpoint_class).filter((cls) => cls !== 'anthropic'), [],
+        'read on the key that was added');
       const completedAt = read.parse_completed_at;
 
       // Nothing is read twice.
@@ -266,6 +272,31 @@ test(
       assert.notEqual(document.parse_summary?.reason, 'no_transactions_detected');
       assert.deepEqual(await appliance.read.transactions(clientId), []);
       assert.equal(appliance.providers.calls.length, 0);
+    } finally {
+      await appliance.stop();
+    }
+  }
+);
+
+test(
+  'real PG (e2): a Claude-only host whose statement knob holds a gpt id waits on the OpenAI key, and the wait names the knob that caused it',
+  { skip: applianceHarnessSkipReason({ dark: ['openai'] }) },
+  async () => {
+    const appliance = await bootApplianceForTest({ keys: { openai: false, anthropic: true, typesafe: false }, env: { OPENAI_VISION_MODEL: 'gpt-5.4' }, now: BOOT_NOW });
+    try {
+      const { clientId } = await appliance.createClient();
+      const upload = await appliance.uploadDocument({
+        clientId,
+        bytes: readFileSync(SCANNED_STATEMENT),
+        filename: 'scanned-statement-2025-02.pdf',
+        documentType: 'bank_statement'
+      });
+      const runId = upload.registered.parse_run_id;
+      await appliance.tick({ functions: [PARSE_FN], collapseWaits: false, maxRounds: 1 });
+      const { hold } = await assertWaiting(appliance, { documentId: upload.documentId, runId, waits: 1, provider: 'openai', keyName: 'OPENAI_API_KEY' });
+      assert.equal(hold.pinned_by, 'OPENAI_VISION_MODEL=gpt-5.4');
+      assert.match(hold.message, /OPENAI_API_KEY is not set, and OPENAI_VISION_MODEL=gpt-5\.4 pins this lane to openai/);
+      assert.equal(appliance.providers.callsFor('bank_statement_extraction').length, 0);
     } finally {
       await appliance.stop();
     }
@@ -509,11 +540,12 @@ test(
     try {
       const { clientId } = await appliance.createClient();
       appliance.providers.script('document_routing', [{ recording: 'document_routing/screwfix-receipt', times: Infinity }]);
-      // Both lanes refuse their keys: the unified read (Anthropic) is final
-      // and falls through to the receipt extractor (OpenAI), which is refused
-      // too. The stored reason names the last lane that refused.
+      // Both lanes refuse the key: the unified read is final and falls
+      // through to the receipt extractor, which (both keys lit) also resolves
+      // Anthropic first since 2026-11-10 and is refused too. The stored
+      // reason names the last lane that refused.
       appliance.providers.script('unified_extraction', [UNAUTHORIZED('anthropic'), 'unified_extraction/screwfix-receipt']);
-      appliance.providers.script('receipt_extraction', [UNAUTHORIZED('openai')]);
+      appliance.providers.script('receipt_extraction', [UNAUTHORIZED('anthropic')]);
       appliance.providers.script('document_disposition', ['document_disposition/screwfix-receipt-immaterial-auto-explain']);
       const upload = await appliance.uploadDocument({ clientId, fixture: 'receipt_screwfix' });
       const runId = upload.registered.parse_run_id;
@@ -523,8 +555,8 @@ test(
       const hold = document.payload?.parse_hold;
       assert.equal(hold?.reason_code, 'provider_unauthorized', JSON.stringify(hold));
       assert.equal(hold?.code, 'DOCUMENT_EXTRACTION_UNAUTHORIZED');
-      assert.equal(hold?.provider, 'openai');
-      assert.equal(hold?.key_name, 'OPENAI_API_KEY');
+      assert.equal(hold?.provider, 'anthropic');
+      assert.equal(hold?.key_name, 'ANTHROPIC_API_KEY');
       assert.equal(document.parse_attempts, 0);
       const [job] = await jobsForRun(appliance, runId);
       assert.equal(job.status, 'pending');

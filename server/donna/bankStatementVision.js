@@ -6,12 +6,33 @@ import { resolve as resolvePath } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
+import { asProviderResponse, llmCall } from './llmCall.js';
+import { classifyModelProvenance } from './providerEndpoints.js';
+import {
+  ANTHROPIC_MAX_PDF_PAGES,
+  ANTHROPIC_MAX_REQUEST_BYTES,
+  anthropicFileBlock,
+  documentLaneAnthropicRequest,
+  missingProviderFor,
+  resolveDocumentLaneProvider
+} from './documentLaneRequest.js';
 
+// PROVIDERS (2026-11-10, the owner's decision that Donna runs on Claude):
+// the lane resolves its provider through providerEndpoints.js
+// resolveLaneProvider (documentLaneRequest.js) — Anthropic (claude-opus-5-5)
+// first, OpenAI (gpt-5.4) only when no Anthropic key is configured. Every
+// call rides the llmCall envelope; on Anthropic the shared structured
+// request (structuredRequest.js: document block + structured output,
+// streamed). The model id this module returns is the one the provider's
+// RESPONSE named. The exported names below still say "OpenAi" because the
+// pipeline and tests import them by those names; they serve both providers.
+//
 // Structured statement extraction on the strong model, two transports:
 //
 //   1. VISION (extractStructuredFromOpenAiVisionPaginated) — the PDF goes
-//      to OpenAI's Responses API as input_file. Historically the OCR
-//      fallback for scanned statements with no text layer.
+//      to the provider as a file (OpenAI input_file / Anthropic document
+//      block). Historically the OCR fallback for scanned statements with no
+//      text layer.
 //   2. TEXT (extractStructuredFromStatementText) — the PDF's own text
 //      layer (or a pasted/text upload) goes as input_text. This is the
 //      LLM-first tier for native-text statements: the same schema, no
@@ -69,20 +90,44 @@ const getSupabaseConfig = (dotEnv) => {
   return { url, key };
 };
 
+// The lane's strong default per provider. The project-wide OPENAI_MODEL is
+// deliberately NOT read here: it is often a small/fast model tuned for chat
+// latency, and dense financial PDFs need the strong tier. OPENAI_VISION_MODEL
+// stays the lane's model knob (any provider's id: a claude id pins Anthropic,
+// a gpt id pins OpenAI).
+export const STATEMENT_READER_DEFAULT_MODELS = Object.freeze({
+  anthropic: 'claude-opus-5-5',
+  openai: 'gpt-5.4'
+});
+// Depth per call on Anthropic (adaptive thinking is always on): reading
+// every line of a statement exactly is the work that repays depth; the
+// plain transcription entry is mechanical reading.
+const STRUCTURED_EFFORT = 'high';
+const TRANSCRIPTION_EFFORT = 'medium';
+// Thinking counts toward max_tokens; a 4-page chunk or a 48K-char text
+// fragment can carry a long line list. A reply that still hits the cap is
+// a named failure (PROVIDER_OUTPUT_LIMIT), never a truncated statement.
+const STATEMENT_MAX_TOKENS = 64_000;
+
 const getOpenAiConfig = () => {
   const dotEnv = readDotEnvFromCwd();
+  const resolved = resolveDocumentLaneProvider({
+    laneId: 'bank_statement_vision',
+    dotEnv,
+    modelEnvKeys: ['OPENAI_VISION_MODEL'],
+    defaultModels: STATEMENT_READER_DEFAULT_MODELS
+  });
   return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    // The project-wide OPENAI_MODEL is often a small/fast model
-    // (e.g. gpt-5.4-nano) tuned for chat-completion latency. Vision
-    // OCR on dense financial PDFs needs the larger gpt-5.4 — nano
-    // variants have spotty support for input_file + json_schema.
-    // Default directly to gpt-5.4 unless OPENAI_VISION_MODEL is set
-    // to override.
-    model:
-      process.env.OPENAI_VISION_MODEL ||
-      dotEnv.OPENAI_VISION_MODEL ||
-      'gpt-5.4',
+    provider: resolved.provider,
+    // The provider whose key is missing when none is configured: the lane's
+    // first (the parse wait names ANTHROPIC_API_KEY, not a key the
+    // installation never meant to hold).
+    missingProvider: resolved.ok ? null : missingProviderFor(resolved, 'bank_statement_vision'),
+    pinnedBy: resolved.ok ? null : resolved.pinned_by || null,
+    apiKey: resolved.ok ? resolved.apiKey : '',
+    configured: resolved.ok,
+    reason: resolved.reason,
+    model: resolved.model,
     pagesPerChunk: readPositiveInt(
       process.env.OPENAI_VISION_PAGES_PER_CHUNK || dotEnv.OPENAI_VISION_PAGES_PER_CHUNK,
       4
@@ -434,7 +479,177 @@ const extractTextFromResponse = (payload) => {
   return chunks.join('\n');
 };
 
-export const isOpenAiVisionConfigured = () => Boolean(getOpenAiConfig().apiKey);
+// Can the statement reader run at all — does any of the lane's providers
+// hold a key? (Name kept: the pipeline imports it.)
+export const isOpenAiVisionConfigured = () => getOpenAiConfig().configured;
+
+// Which provider the statement reader is waiting on when it is not
+// configured (the parse worker's not_configured record names it).
+export const statementReaderMissingProvider = () => getOpenAiConfig().missingProvider;
+// …and the lane knob whose model id pinned that provider, when one did.
+export const statementReaderPinnedBy = () => getOpenAiConfig().pinnedBy;
+// The provider the reader resolves (the plain transcription returns text only).
+export const statementReaderProvider = () => getOpenAiConfig().provider;
+
+const notConfiguredError = (config, what) => {
+  const error = new Error(`No model provider key is configured for ${what} (${config.reason || 'no_provider_key'}).`);
+  error.code = 'STATEMENT_READER_NOT_CONFIGURED';
+  error.reason = config.reason || 'no_provider_key';
+  return error;
+};
+
+// ── the one request ─────────────────────────────────────────────────────
+// Every provider call this module makes goes through here: the lane's
+// resolved provider, the envelope, and the response-named model back.
+// `file` is { base64, mimeType, filename } or null; `schema` null asks for
+// plain text. Throws on any failure with a typed code; returns
+// { text, servedModel, provider }.
+const executionRefFor = (seed) => ({
+  root: { type: 'bank_statement_extraction', id: createHash('sha256').update(String(seed || 'statement')).digest('hex').slice(0, 16) }
+});
+
+const requestStatementModel = async ({ config, file = null, prompt, schema = null, effort, label, seed }) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_VISION_TIMEOUT_MS);
+  const execution = executionRefFor(seed);
+  const withSignal = (url, init) => fetch(url, {
+    ...init,
+    signal: init?.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal
+  });
+  try {
+    if (config.provider === 'anthropic') {
+      try {
+        const content = file
+          ? [anthropicFileBlock({ base64: file.base64, mimeType: file.mimeType, filename: file.filename }), { type: 'text', text: prompt }]
+          : [{ type: 'text', text: prompt }];
+        const { result } = await llmCall(documentLaneAnthropicRequest({
+          apiKey: config.apiKey,
+          model: config.model,
+          content,
+          schema,
+          effort,
+          maxTokens: STATEMENT_MAX_TOKENS,
+          execution,
+          sections: { context: prompt, tools: schema || undefined },
+          signal: controller.signal,
+          timeoutMs: OPENAI_VISION_TIMEOUT_MS
+        }));
+        return {
+          text: schema ? JSON.stringify(result.parsed) : result.text,
+          servedModel: result.model || null,
+          provider: 'anthropic'
+        };
+      } catch (error) {
+        error.provider ||= 'anthropic';
+        if (error?.code === 'LLM_CALL_PROVIDER_ERROR') {
+          console.error(`[bankStatementVision] ${label} request failed`, { provider: 'anthropic', status: error.status, model: config.model });
+          error.statusCode = error.status;
+          // The provider's own error object, where #71's fault reader looks
+          // (an account with no credit is a provider wait, not a rejection).
+          error.details = { error: error.providerError || null };
+        }
+        throw error;
+      }
+    }
+    const content = file
+      ? [
+          buildResponsesDocumentPart({
+            dataUrl: `data:${file.mimeType || 'application/pdf'};base64,${file.base64}`,
+            filename: file.filename,
+            fallbackFilename: 'statement.pdf'
+          }),
+          { type: 'input_text', text: prompt }
+        ]
+      : [{ type: 'input_text', text: prompt }];
+    const body = { model: config.model, store: false, input: [{ role: 'user', content }] };
+    if (schema) body.text = { format: { type: 'json_schema', name: 'bank_statement_extraction', strict: true, schema } };
+    const response = await asProviderResponse(llmCall({
+      provider: 'openai',
+      // The lane's own wall, honoured inside a worker too (llmCall hands it to
+      // the deadline transport, bounded by the job's remaining budget).
+      timeoutMs: OPENAI_VISION_TIMEOUT_MS,
+      url: 'https://api.openai.com/v1/responses',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+      body,
+      sections: { context: prompt, tools: schema || undefined },
+      execution,
+      fetchImpl: withSignal
+    }));
+    if (!response.ok) {
+      console.error(`[bankStatementVision] ${label} request failed`, { provider: 'openai', status: response.status, model: config.model });
+      const error = new Error(`OpenAI ${label} failed with ${response.status}.`);
+      error.code = file ? 'OPENAI_VISION_REQUEST_FAILED' : 'OPENAI_TEXT_REQUEST_FAILED';
+      error.statusCode = response.status;
+      error.provider = 'openai';
+      error.details = await response.json().catch(() => null);
+      throw error;
+    }
+    const payload = await response.json();
+    return {
+      text: extractTextFromResponse(payload),
+      servedModel: typeof payload?.model === 'string' && payload.model ? payload.model : null,
+      provider: 'openai'
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+// The model on the statement's receipt is the one each RESPONSE named,
+// recorded per call with its source (providerEndpoints.js
+// classifyModelProvenance): `response_proven` when the response named it,
+// `configured_fallback` when it named none (the requested id stands in), and
+// a chunk read back from the cache keeps the source it was stored with
+// (`legacy_unproven` for an entry written before sources were stored).
+// The read's `model_source` is the weakest of its calls'. One id answers in
+// practice; when chunks were answered by different ids (a chunk cached under
+// one model, the rest read under another) the read stores the id that
+// answered most chunks (the first in page order on a tie) as `model`, and
+// every chunk's id and source in `chunk_models` — never a joined string.
+const SOURCE_RANK = Object.freeze({ response_proven: 0, configured_fallback: 1, legacy_unproven: 2 });
+const callProvenance = (result, config) => (result?.cached_model_source
+  ? { model: result.served_model || null, model_source: result.cached_model_source }
+  : classifyModelProvenance({ responseModel: result?.served_model, requestedModel: config.model }));
+const provenanceOfResults = (results, config, pages = []) => {
+  const calls = results.map((result, index) => ({ ...callProvenance(result, config), ...(pages[index] || {}) }));
+  const counts = new Map();
+  for (const call of calls) if (call.model) counts.set(call.model, (counts.get(call.model) || 0) + 1);
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const model = ranked[0]?.[0] || config.model;
+  const modelSource = calls.reduce((worst, call) => ((SOURCE_RANK[call.model_source] ?? 2) > (SOURCE_RANK[worst] ?? 2) ? call.model_source : worst), 'response_proven');
+  return { model, model_source: calls.length ? modelSource : 'configured_fallback', ...(counts.size > 1 ? { chunk_models: calls } : {}) };
+};
+
+// Anthropic's request limit is on the encoded request (32 MB). A chunk that
+// would exceed it is split further — down to single pages — exactly the way
+// the lane already splits a long statement; a single page that still does
+// not fit fails as too large. Nothing is ever dropped to make it fit.
+const ANTHROPIC_CHUNK_BYTE_BUDGET = ANTHROPIC_MAX_REQUEST_BYTES - 1024 * 1024;
+
+const fitChunksToRequestLimit = async (config, chunks, budget = ANTHROPIC_CHUNK_BYTE_BUDGET) => {
+  if (config.provider !== 'anthropic') return chunks;
+  const fitted = [];
+  for (const chunk of chunks) {
+    const pages = chunk.pageEnd - chunk.pageStart + 1;
+    // Both request limits: the encoded size and the page count per request.
+    if (chunk.base64.length <= budget && pages <= ANTHROPIC_MAX_PDF_PAGES) { fitted.push(chunk); continue; }
+    if (pages <= 1) {
+      const error = new Error(`One page of this PDF is larger than the ${Math.floor(ANTHROPIC_MAX_REQUEST_BYTES / 1024 / 1024)} MB model request limit.`);
+      error.code = 'OPENAI_VISION_PDF_TOO_LARGE';
+      error.byteSize = base64ByteLength(chunk.base64);
+      error.maxBytes = budget;
+      throw error;
+    }
+    const singles = await splitPdfBase64(chunk.base64, 1);
+    fitted.push(...await fitChunksToRequestLimit(config, singles.map((single) => ({
+      ...single,
+      pageStart: chunk.pageStart + single.pageStart - 1,
+      pageEnd: chunk.pageStart + single.pageEnd - 1,
+      totalPages: chunk.totalPages
+    })), budget));
+  }
+  return fitted;
+};
 
 const cleanLineField = (value) => {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -536,106 +751,58 @@ export const extractStructuredFromOpenAiVision = async ({
   chunkContext = null
 } = {}) => {
   const config = getOpenAiConfig();
-  if (!config.apiKey) {
-    const error = new Error('OPENAI_API_KEY not configured for cloud OCR.');
-    error.code = 'OPENAI_NOT_CONFIGURED';
-    throw error;
-  }
+  if (!config.configured) throw notConfiguredError(config, 'statement reading');
   const clean = trimBase64(base64);
   if (!clean) {
     const error = new Error('No PDF data provided to OCR.');
     error.code = 'OPENAI_EMPTY_INPUT';
     throw error;
   }
-
-  const dataUrl = `data:${mimeType || 'application/pdf'};base64,${clean}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), OPENAI_VISION_TIMEOUT_MS);
   const prompt = buildChunkPrompt(chunkContext);
-
+  const { text, servedModel, provider } = await requestStatementModel({
+    config,
+    file: { base64: clean, mimeType: mimeType || 'application/pdf', filename },
+    prompt,
+    schema: STRUCTURED_RESPONSE_SCHEMA,
+    effort: STRUCTURED_EFFORT,
+    label: 'structured vision',
+    seed: computePdfSha256(clean)
+  });
+  let parsed = null;
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: config.model,
-        store: false,
-        input: [
-          {
-            role: 'user',
-            content: [
-              buildResponsesDocumentPart({ dataUrl, filename, fallbackFilename: 'statement.pdf' }),
-              { type: 'input_text', text: prompt }
-            ]
-          }
-        ],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'bank_statement_extraction',
-            strict: true,
-            schema: STRUCTURED_RESPONSE_SCHEMA
-          }
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      console.error('[bankStatementVision] structured request failed', {
-        status: response.status,
-        model: config.model,
-        filename,
-        error: body?.error
-      });
-      const error = new Error(body?.error?.message || `OpenAI structured vision failed with ${response.status}.`);
-      error.code = 'OPENAI_VISION_REQUEST_FAILED';
-      error.statusCode = response.status;
-      error.details = body;
-      throw error;
-    }
-
-    const payload = await response.json();
-    const text = extractTextFromResponse(payload);
-    let parsed = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      console.error('[bankStatementVision] structured response was not valid JSON', {
-        model: config.model,
-        filename,
-        text_preview: String(text).slice(0, 400)
-      });
-      const error = new Error('OpenAI structured vision returned unparseable JSON.');
-      error.code = 'OPENAI_VISION_BAD_JSON';
-      error.details = { text };
-      throw error;
-    }
-
-    const transactions = normalizeStructuredTransactions(
-      Array.isArray(parsed?.transactions) ? parsed.transactions : []
-    );
-    console.log('[bankStatementVision] structured extraction complete', {
-      model: config.model,
+    parsed = JSON.parse(text);
+  } catch {
+    console.error('[bankStatementVision] structured response was not valid JSON', {
+      provider,
+      model: servedModel || config.model,
       filename,
-      raw_transaction_count: Array.isArray(parsed?.transactions) ? parsed.transactions.length : 0,
-      normalized_transaction_count: transactions.length,
-      has_summary: Boolean(parsed?.statement_summary),
-      chunk: chunkContext
-        ? `${chunkContext.pageStart}-${chunkContext.pageEnd}/${chunkContext.totalPages}`
-        : null
+      text_length: String(text || '').length
     });
-    return {
-      transactions,
-      statement_summary: parsed?.statement_summary || null
-    };
-  } finally {
-    clearTimeout(timeout);
+    const error = new Error('Structured vision returned unparseable JSON.');
+    error.code = 'OPENAI_VISION_BAD_JSON';
+    throw error;
   }
+
+  const transactions = normalizeStructuredTransactions(
+    Array.isArray(parsed?.transactions) ? parsed.transactions : []
+  );
+  console.log('[bankStatementVision] structured extraction complete', {
+    provider,
+    model: servedModel || config.model,
+    filename,
+    raw_transaction_count: Array.isArray(parsed?.transactions) ? parsed.transactions.length : 0,
+    normalized_transaction_count: transactions.length,
+    has_summary: Boolean(parsed?.statement_summary),
+    chunk: chunkContext
+      ? `${chunkContext.pageStart}-${chunkContext.pageEnd}/${chunkContext.totalPages}`
+      : null
+  });
+  return {
+    transactions,
+    statement_summary: parsed?.statement_summary || null,
+    served_model: servedModel,
+    provider
+  };
 };
 
 // Fixed metadata stamped onto every chunk PDF so its bytes — and therefore its
@@ -736,11 +903,7 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
 } = {}) => {
   const config = getOpenAiConfig();
   if (bypassCache) config.cache.enabled = false;
-  if (!config.apiKey) {
-    const error = new Error('OPENAI_API_KEY not configured for cloud OCR.');
-    error.code = 'OPENAI_NOT_CONFIGURED';
-    throw error;
-  }
+  if (!config.configured) throw notConfiguredError(config, 'statement reading');
   const clean = trimBase64(base64);
   if (!clean) {
     const error = new Error('No PDF data provided to OCR.');
@@ -777,6 +940,9 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
       transactions: cached.transactions,
       statement_summary: cached.statement_summary || null,
       model: cached.model || config.model,
+      model_source: cached.model ? (cached.model_source || 'legacy_unproven') : 'configured_fallback',
+      ...(cached.chunk_models ? { chunk_models: cached.chunk_models } : {}),
+      provider: cached.provider || null,
       cache_hit: true,
       cache_sha: sha
     };
@@ -796,27 +962,34 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
       filename,
       message: error?.message
     });
-    const single = await extractStructuredFromOpenAiVision({ base64: clean, filename, mimeType });
-    await writeVisionCache(config.cache, sha, {
-      cached_at: new Date().toISOString(),
-      model: config.model,
-      filename,
-      transactions: single.transactions,
-      statement_summary: single.statement_summary
-    });
-    return { ...single, model: config.model, cache_hit: false, cache_sha: sha };
+    chunks = null;
   }
 
-  if (chunks.length <= 1) {
+  // A chunk over the provider's request limit is split further (pages are
+  // never dropped). Only a PDF that split cleanly can be split again.
+  if (chunks) chunks = await fitChunksToRequestLimit(config, chunks);
+
+  if (!chunks || chunks.length <= 1) {
     const single = await extractStructuredFromOpenAiVision({ base64: clean, filename, mimeType });
+    const { model, model_source } = provenanceOfResults([single], config);
     await writeVisionCache(config.cache, sha, {
       cached_at: new Date().toISOString(),
-      model: config.model,
+      model,
+      model_source,
+      provider: single.provider,
       filename,
       transactions: single.transactions,
       statement_summary: single.statement_summary
     });
-    return { ...single, model: config.model, cache_hit: false, cache_sha: sha };
+    return {
+      transactions: single.transactions,
+      statement_summary: single.statement_summary,
+      model,
+      model_source,
+      provider: single.provider,
+      cache_hit: false,
+      cache_sha: sha
+    };
   }
 
   const startedAt = Date.now();
@@ -844,7 +1017,10 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
       chunkCacheHits += 1;
       return {
         transactions: Array.isArray(cachedChunk.transactions) ? cachedChunk.transactions : [],
-        statement_summary: cachedChunk.statement_summary || null
+        statement_summary: cachedChunk.statement_summary || null,
+        served_model: cachedChunk.model || null,
+        cached_model_source: cachedChunk.model ? (cachedChunk.model_source || 'legacy_unproven') : 'configured_fallback',
+        provider: cachedChunk.provider || null
       };
     }
     chunkCacheMisses += 1;
@@ -862,9 +1038,12 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
     // Write-through. A failed write degrades silently — the chunk
     // still flows through to the merge; the worst case is one extra
     // OpenAI call on the next retry.
+    const freshProvenance = callProvenance(fresh, config);
     await writeChunkVisionCache(config.cache, chunkSha, {
       cached_at: new Date().toISOString(),
-      model: config.model,
+      model: freshProvenance.model,
+      model_source: freshProvenance.model_source,
+      provider: fresh.provider,
       filename,
       page_start: chunk.pageStart,
       page_end: chunk.pageEnd,
@@ -889,9 +1068,15 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
     elapsed_ms: Date.now() - startedAt
   });
 
+  const { model, model_source, chunk_models } = provenanceOfResults(results, config,
+    chunks.map((chunk) => ({ page_start: chunk.pageStart, page_end: chunk.pageEnd })));
+  const provider = results.find((result) => result?.provider)?.provider || config.provider;
   await writeVisionCache(config.cache, sha, {
     cached_at: new Date().toISOString(),
-    model: config.model,
+    model,
+    model_source,
+    ...(chunk_models ? { chunk_models } : {}),
+    provider,
     filename,
     transactions: merged,
     statement_summary: summary
@@ -900,7 +1085,10 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
   return {
     transactions: merged,
     statement_summary: summary,
-    model: config.model,
+    model,
+    model_source,
+    ...(chunk_models ? { chunk_models } : {}),
+    provider,
     cache_hit: false,
     cache_sha: sha
   };
@@ -978,77 +1166,38 @@ const mergeSummaryHints = (summaries = []) => {
 };
 
 const requestStructuredFromText = async ({ config, text, filename, chunkContext = null }) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), OPENAI_VISION_TIMEOUT_MS);
+  const prompt = `${buildTextPrompt(chunkContext)}\n\n--- STATEMENT TEXT (${filename}) ---\n${text}`;
+  const { text: raw, servedModel, provider } = await requestStatementModel({
+    config,
+    prompt,
+    schema: STRUCTURED_RESPONSE_SCHEMA,
+    effort: STRUCTURED_EFFORT,
+    label: 'structured text',
+    seed: createHash('sha256').update(String(text || ''), 'utf8').digest('hex')
+  });
+  let parsed = null;
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: config.model,
-        store: false,
-        input: [
-          {
-            role: 'user',
-            content: [
-              { type: 'input_text', text: `${buildTextPrompt(chunkContext)}\n\n--- STATEMENT TEXT (${filename}) ---\n${text}` }
-            ]
-          }
-        ],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'bank_statement_extraction',
-            strict: true,
-            schema: STRUCTURED_RESPONSE_SCHEMA
-          }
-        }
-      })
+    parsed = JSON.parse(raw);
+  } catch {
+    console.error('[bankStatementVision] structured text response was not valid JSON', {
+      provider,
+      model: servedModel || config.model,
+      filename,
+      text_length: String(raw || '').length
     });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      console.error('[bankStatementVision] structured text request failed', {
-        status: response.status,
-        model: config.model,
-        filename,
-        error: body?.error
-      });
-      const error = new Error(body?.error?.message || `OpenAI structured text extraction failed with ${response.status}.`);
-      error.code = 'OPENAI_TEXT_REQUEST_FAILED';
-      error.statusCode = response.status;
-      throw error;
-    }
-
-    const payload = await response.json();
-    const raw = extractTextFromResponse(payload);
-    let parsed = null;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      console.error('[bankStatementVision] structured text response was not valid JSON', {
-        model: config.model,
-        filename,
-        text_preview: String(raw).slice(0, 400)
-      });
-      const error = new Error('OpenAI structured text extraction returned unparseable JSON.');
-      error.code = 'OPENAI_TEXT_BAD_JSON';
-      throw error;
-    }
-    return {
-      transactions: normalizeStructuredTransactions(
-        Array.isArray(parsed?.transactions) ? parsed.transactions : [],
-        { parserFlag: 'openai_text' }
-      ),
-      statement_summary: parsed?.statement_summary || null
-    };
-  } finally {
-    clearTimeout(timeout);
+    const error = new Error('Structured text extraction returned unparseable JSON.');
+    error.code = 'OPENAI_TEXT_BAD_JSON';
+    throw error;
   }
+  return {
+    transactions: normalizeStructuredTransactions(
+      Array.isArray(parsed?.transactions) ? parsed.transactions : [],
+      { parserFlag: 'openai_text' }
+    ),
+    statement_summary: parsed?.statement_summary || null,
+    served_model: servedModel,
+    provider
+  };
 };
 
 // LLM-first structured extraction over statement TEXT. Same schema and
@@ -1064,11 +1213,7 @@ export const extractStructuredFromStatementText = async ({
 } = {}) => {
   const config = getOpenAiConfig();
   if (bypassCache) config.cache.enabled = false;
-  if (!config.apiKey) {
-    const error = new Error('OPENAI_API_KEY not configured for structured text extraction.');
-    error.code = 'OPENAI_NOT_CONFIGURED';
-    throw error;
-  }
+  if (!config.configured) throw notConfiguredError(config, 'structured text extraction');
   const clean = String(text || '').trim();
   if (!clean) {
     const error = new Error('No statement text provided.');
@@ -1094,6 +1239,9 @@ export const extractStructuredFromStatementText = async ({
       transactions: cached.transactions,
       statement_summary: cached.statement_summary || null,
       model: cached.model || config.model,
+      model_source: cached.model ? (cached.model_source || 'legacy_unproven') : 'configured_fallback',
+      ...(cached.chunk_models ? { chunk_models: cached.chunk_models } : {}),
+      provider: cached.provider || null,
       cache_hit: true
     };
   }
@@ -1116,8 +1264,11 @@ export const extractStructuredFromStatementText = async ({
   merged.sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const summary = mergeSummaryHints(results.map((result) => result?.statement_summary));
 
+  const { model, model_source, chunk_models } = provenanceOfResults(results, config, chunks.map((_, index) => ({ chunk: index })));
+  const provider = results.find((result) => result?.provider)?.provider || config.provider;
   console.log('[bankStatementVision] structured text extraction complete', {
-    model: config.model,
+    provider,
+    model,
     filename,
     chunk_count: chunks.length,
     merged_transaction_count: merged.length,
@@ -1131,7 +1282,10 @@ export const extractStructuredFromStatementText = async ({
     sha,
     {
       cached_at: new Date().toISOString(),
-      model: config.model,
+      model,
+      model_source,
+      ...(chunk_models ? { chunk_models } : {}),
+      provider,
       filename,
       transactions: merged,
       statement_summary: summary
@@ -1142,77 +1296,42 @@ export const extractStructuredFromStatementText = async ({
   return {
     transactions: merged,
     statement_summary: summary,
-    model: config.model,
+    model,
+    model_source,
+    ...(chunk_models ? { chunk_models } : {}),
+    provider,
     cache_hit: false
   };
 };
 
 export const ocrPdfWithOpenAiVision = async ({ base64, filename = 'statement.pdf', mimeType = 'application/pdf' } = {}) => {
   const config = getOpenAiConfig();
-  if (!config.apiKey) {
-    const error = new Error('OPENAI_API_KEY not configured for cloud OCR.');
-    error.code = 'OPENAI_NOT_CONFIGURED';
-    throw error;
-  }
+  if (!config.configured) throw notConfiguredError(config, 'statement transcription');
   const clean = trimBase64(base64);
   if (!clean) {
     const error = new Error('No PDF data provided to OCR.');
     error.code = 'OPENAI_EMPTY_INPUT';
     throw error;
   }
-
-  const dataUrl = `data:${mimeType || 'application/pdf'};base64,${clean}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), OPENAI_VISION_TIMEOUT_MS);
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: config.model,
-        store: false,
-        input: [
-          {
-            role: 'user',
-            content: [
-              buildResponsesDocumentPart({ dataUrl, filename, fallbackFilename: 'statement.pdf' }),
-              { type: 'input_text', text: OCR_PROMPT }
-            ]
-          }
-        ]
-      })
-    });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      console.error('[bankStatementVision] plain OCR request failed', {
-        status: response.status,
-        model: config.model,
-        filename,
-        error: body?.error
-      });
-      const error = new Error(body?.error?.message || `OpenAI vision OCR failed with ${response.status}.`);
-      error.code = 'OPENAI_VISION_REQUEST_FAILED';
-      error.statusCode = response.status;
-      error.details = body;
-      throw error;
-    }
-
-    const payload = await response.json();
-    const text = extractTextFromResponse(payload).trim();
-    console.log('[bankStatementVision] plain OCR complete', {
-      model: config.model,
-      filename,
-      text_length: text.length,
-      line_count: text.split(/\r?\n/).filter(Boolean).length
-    });
-    return text;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const { text: raw, servedModel, provider } = await requestStatementModel({
+    config,
+    file: { base64: clean, mimeType: mimeType || 'application/pdf', filename },
+    prompt: OCR_PROMPT,
+    schema: null,
+    effort: TRANSCRIPTION_EFFORT,
+    label: 'plain OCR',
+    seed: computePdfSha256(clean)
+  });
+  const text = String(raw || '').trim();
+  console.log('[bankStatementVision] plain OCR complete', {
+    provider,
+    model: servedModel || config.model,
+    filename,
+    text_length: text.length,
+    line_count: text.split(/\r?\n/).filter(Boolean).length
+  });
+  return text;
 };
+
+// Test seam: the request-limit split with an explicit budget.
+export const __fitChunksToRequestLimit = fitChunksToRequestLimit;

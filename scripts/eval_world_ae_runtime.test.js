@@ -53,7 +53,7 @@ test('real PG: raw AE arrival orders, persisted process restart, honest missing 
   }
   assert.ok(receipt.prerequisites.every((row) => row.status === 'PASS'), JSON.stringify(receipt.prerequisites));
   assert.ok(receipt.blockers.some((row) => row.code === 'AE7_DOCUMENT_PARSE_INCOMPLETE'
-    && row.durableJob?.last_error === 'Supplier bill extraction failed: openai_not_configured'));
+    && row.durableJob?.last_error === 'Supplier bill extraction failed: anthropic_not_configured'));
   assert.deepEqual(receipt.orders[0].replay.observation.transactions.map(({ id, document_id, ...fields }) => fields),
     receipt.orders[1].replay.observation.transactions.map(({ id, document_id, ...fields }) => fields));
   assert.ok(receipt.blockers.some((row) => row.code === 'AE7_TRANSACTION_NON_TERMINAL'));

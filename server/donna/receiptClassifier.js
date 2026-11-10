@@ -20,9 +20,25 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
 import { CATEGORY_ACCOUNTS, canonicalMerchantPattern } from './transactionIntel.js';
+import { asProviderResponse, llmCall } from './llmCall.js';
+import {
+  documentLaneRequestFromResponses,
+  notConfiguredFailure,
+  readDocumentLaneReply,
+  resolveDocumentLaneProvider,
+  stopFailureReason
+} from './documentLaneRequest.js';
+import { classifyModelProvenance } from './providerEndpoints.js';
 
 const DEFAULT_MODEL = 'gpt-5.4-nano';
 const REQUEST_TIMEOUT_MS = 30_000;
+// 2026-11-10 (the owner's decision that Donna runs on Claude): Anthropic
+// first. Labelling an already-extracted receipt from a fixed vocabulary is
+// a classification: `low` effort (adaptive thinking cannot be switched off).
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
+const ANTHROPIC_EFFORT = 'low';
+const ANTHROPIC_MAX_TOKENS = 16_000;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 90_000;
 
 // Version constants — module-local, NOT LLM output. The sanitizer
 // attaches these to every SemanticOutput so the LLM cannot spoof a
@@ -138,20 +154,14 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    // Optional smaller model for the classifier-only path. Falls back
-    // to the global OPENAI_MODEL, then to DEFAULT_MODEL.
-    model:
-      process.env.RECEIPT_CLASSIFIER_MODEL ||
-      dotEnv.RECEIPT_CLASSIFIER_MODEL ||
-      process.env.OPENAI_MODEL ||
-      dotEnv.OPENAI_MODEL ||
-      DEFAULT_MODEL
-  };
-};
+// RECEIPT_CLASSIFIER_MODEL is the lane knob (its id pins the provider); no
+// provider-wide knob.
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
+  laneId: 'receipt_classification',
+  dotEnv: readDotEnv(),
+  modelEnvKeys: ['RECEIPT_CLASSIFIER_MODEL'],
+  defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
+});
 
 const filenameCorrelationId = (filename = '') =>
   crypto.createHash('sha256').update(String(filename || 'unknown')).digest('hex').slice(0, 12);
@@ -336,7 +346,7 @@ export const makeDeterministicSemanticOutput = ({ vendor = '', reason = '' } = {
 // fields are NOT read from rawOutput — they're attached from module
 // constants so a hostile LLM can't spoof them. Mirrors transactionLlm's
 // sanitize → fallback → guarded-output pattern.
-export const sanitizeClassifierOutput = (rawOutput = {}, { vendor = '', model = '' } = {}) => {
+export const sanitizeClassifierOutput = (rawOutput = {}, { vendor = '', model = '', provider = 'openai' } = {}) => {
   const safeOutput = rawOutput && typeof rawOutput === 'object' ? rawOutput : {};
 
   const expenseKind = EXPENSE_KINDS.includes(safeOutput.expense_kind)
@@ -390,7 +400,7 @@ export const sanitizeClassifierOutput = (rawOutput = {}, { vendor = '', model = 
     // Metadata — set here, NOT by the LLM.
     classifier_version: RECEIPT_SEMANTIC_VERSION,
     prompt_version: RECEIPT_SEMANTIC_PROMPT_VERSION,
-    provider: 'openai',
+    provider,
     used_fallback: false,
     fallback_reason: null,
     model: model || null
@@ -402,29 +412,56 @@ export const sanitizeClassifierOutput = (rawOutput = {}, { vendor = '', model = 
 // responses without touching the network. Mirrors receipt.js's
 // `defaultCallOpenAi`, minus the input_file/file_data slot — the
 // classifier is text-only, never vision.
-const defaultCallOpenAi = async ({ apiKey, model, instructions, input, signal }) =>
-  fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
-    },
-    signal,
-    body: JSON.stringify({
-      model,
-      store: false,
-      instructions,
-      input,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'receipt_semantic_classifier',
-          strict: true,
-          schema: RECEIPT_CLASSIFIER_SCHEMA
-        }
-      }
-    })
-  });
+// The body is built ONCE (Responses shape): OpenAI sends it as is, the
+// Anthropic transport carries it over unchanged.
+const buildBody = ({ model, instructions, input }) => ({
+  model,
+  store: false,
+  instructions,
+  input,
+  text: {
+    format: {
+      type: 'json_schema',
+      name: 'receipt_semantic_classifier',
+      strict: true,
+      schema: RECEIPT_CLASSIFIER_SCHEMA
+    }
+  }
+});
+
+const EXECUTION = { root: { type: 'receipt_classification', id: 'semantic' } };
+
+const defaultCallOpenAi = async ({ apiKey, signal, ...args }) => asProviderResponse(llmCall({
+  provider: 'openai',
+  // The lane's own wall, honoured inside a worker too (llmCall hands it to
+  // the deadline transport, bounded by the job's remaining budget).
+  timeoutMs: REQUEST_TIMEOUT_MS,
+  url: 'https://api.openai.com/v1/responses',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+  body: buildBody(args),
+  sections: { system: args.instructions, tools: RECEIPT_CLASSIFIER_SCHEMA },
+  execution: EXECUTION,
+  promptVersion: RECEIPT_SEMANTIC_PROMPT_VERSION,
+  fetchImpl: (url, init) => fetch(url, { ...init, signal: init?.signal && signal ? AbortSignal.any([init.signal, signal]) : init?.signal || signal })
+}));
+
+
+// The Anthropic call: the shared structured request (structuredRequest.js,
+// via documentLaneRequest.js) through the envelope, called here. llmCall is
+// loaded at call time where the module's import graph needs it.
+const callAnthropicEnvelope = async (options) => {
+  const { llmCall } = await import('./llmCall.js');
+  return llmCall(documentLaneRequestFromResponses({ timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS, ...options }));
+};
+const defaultCallAnthropic = async ({ apiKey, signal, ...args }) => callAnthropicEnvelope({
+  apiKey,
+  body: buildBody(args),
+  effort: ANTHROPIC_EFFORT,
+  maxTokens: ANTHROPIC_MAX_TOKENS,
+  execution: EXECUTION,
+  promptVersion: RECEIPT_SEMANTIC_PROMPT_VERSION,
+  signal
+});
 
 // Async entry point. NEVER throws — provider failures convert to
 // deterministic fallback. The parse worker can call this
@@ -435,65 +472,87 @@ export const classifyReceipt = async ({
   summary = {},
   lines = [],
   filename = '',
-  __callOpenAi = defaultCallOpenAi
+  __callOpenAi = defaultCallOpenAi,
+  __callAnthropic = defaultCallAnthropic
 } = {}) => {
   const vendor = header.vendor_name || '';
   const config = getOpenAiConfig();
   const correlationId = filenameCorrelationId(filename);
 
-  if (!config.apiKey) {
-    console.warn('[receiptClassifier] OPENAI_API_KEY not configured', {
-      correlation_id: correlationId
+  if (!config.ok) {
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'receipt_classification');
+    console.warn('[receiptClassifier] no model provider key configured', {
+      correlation_id: correlationId,
+      reason: notConfigured
     });
     return makeDeterministicSemanticOutput({
       vendor,
-      reason: 'openai_not_configured'
+      reason: notConfigured
     });
   }
 
   const { instructions, input } = buildClassifierPrompt({ header, summary, lines, filename });
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), config.provider === 'anthropic' ? ANTHROPIC_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  const callArgs = {
+    apiKey: config.apiKey,
+    model: config.model,
+    instructions,
+    input,
+    signal: controller.signal
+  };
 
-  let response;
+  let reply;
   try {
-    response = await __callOpenAi({
-      apiKey: config.apiKey,
-      model: config.model,
-      instructions,
-      input,
-      signal: controller.signal
-    });
-  } catch (err) {
-    console.error('[receiptClassifier] OpenAI request threw', {
-      correlation_id: correlationId,
-      error_code: err?.code || null,
-      error_name: err?.name || null
-    });
-    return makeDeterministicSemanticOutput({
-      vendor,
-      reason: err?.name === 'AbortError' ? 'timeout' : 'network_error'
+    reply = await readDocumentLaneReply({
+      provider: config.provider,
+      callOpenAi: () => __callOpenAi(callArgs),
+      callAnthropic: () => __callAnthropic(callArgs),
+      outputText: outputTextFromResponse
     });
   } finally {
     clearTimeout(timeout);
   }
 
-  if (!response?.ok) {
-    console.error('[receiptClassifier] OpenAI returned non-OK', {
+  if (!reply.ok && reply.kind === 'threw') {
+    const err = reply.error;
+    console.error('[receiptClassifier] provider request threw', {
       correlation_id: correlationId,
-      status: Number(response?.status || 0)
+      provider: config.provider,
+      error_code: err?.code || null,
+      error_name: err?.name || null
+    });
+    return makeDeterministicSemanticOutput({
+      vendor,
+      reason: err?.name === 'AbortError' || err?.code === 'PROVIDER_TIMEOUT' ? 'timeout' : 'network_error'
+    });
+  }
+
+  if (!reply.ok && reply.kind === 'status') {
+    console.error('[receiptClassifier] provider returned non-OK', {
+      correlation_id: correlationId,
+      provider: config.provider,
+      status: reply.status
     });
     return makeDeterministicSemanticOutput({ vendor, reason: 'http_error' });
   }
 
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
+  if (!reply.ok && reply.kind === 'stop') {
+    console.error('[receiptClassifier] provider stopped without a usable reply', {
+      correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason
+    });
+    // The lanes' one stop vocabulary (provider_refused / provider_output_limit
+    // / provider_invalid_output), as the extractors store it.
+    return makeDeterministicSemanticOutput({ vendor, reason: stopFailureReason(reply.error) });
+  }
+
+  if (!reply.ok) {
     return makeDeterministicSemanticOutput({ vendor, reason: 'json_parse' });
   }
 
-  const text = outputTextFromResponse(payload);
+  const { text } = reply;
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -505,7 +564,10 @@ export const classifyReceipt = async ({
     return makeDeterministicSemanticOutput({ vendor, reason: 'sanitize_wipeout' });
   }
 
-  const sanitized = sanitizeClassifierOutput(parsed, { vendor, model: config.model });
+  // The model id is the one the response named (configured only when it
+  // named none).
+  const { model: servedModel } = classifyModelProvenance({ responseModel: reply.servedModel, requestedModel: config.model });
+  const sanitized = sanitizeClassifierOutput(parsed, { vendor, model: servedModel, provider: config.provider });
 
   console.log('[receiptClassifier] classification complete', {
     correlation_id: correlationId,

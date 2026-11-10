@@ -539,6 +539,7 @@ import { loadKnownAccountKeysForClient } from './clientAccountHistory.js';
 import { loadDuplicateCandidateIdsForTransaction } from './transactionDuplicateCandidates.js';
 // The parse-cron failure rule (one owner; the desktop manifest reads it too).
 import { parseCronSummaryFailures } from './parseCronSummaryFailures.js';
+import { isProviderSpendLimit } from './providerTransport.js';
 export { parseCronSummaryFailures };
 // Parse-cron task allowlist. Exported so regression tests can pin the
 // supported set — a stale vercel.json schedule pointing at a removed
@@ -1097,12 +1098,27 @@ const donnaBizfileApiHandler = async (req, res) => {
         return;
       }
 
-      const result = await extractClientIntakeDraft({
-        base64,
-        filename,
-        mimeType,
-        text: pastedText
-      });
+      let result;
+      try {
+        result = await extractClientIntakeDraft({
+          base64,
+          filename,
+          mimeType,
+          text: pastedText
+        });
+      } catch (error) {
+        // A spending allowance that is used up is the operator's pause, not a
+        // failed read (2026-11-10: the intake lane now rides the envelope,
+        // which refuses past the allowance): say so, retryable once raised.
+        if (!isProviderSpendLimit(error)) throw error;
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          error: 'Model work is paused because its spending allowance is exhausted. Increase the allowance and try again.',
+          code: 'PROVIDER_SPEND_LIMIT'
+        }));
+        return;
+      }
 
       if (result.kind !== 'ok') {
         res.statusCode = result.code === 'DOCUMENT_IDENTIFIES_NO_BUSINESS' ? 422 : 502;

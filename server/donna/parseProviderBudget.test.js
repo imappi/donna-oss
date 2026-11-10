@@ -6,6 +6,7 @@ import { routeDocument } from './documentRouter.js';
 import { extractUnified } from './unifiedExtractor.js';
 import { createExecutionBudget, runWithExecutionBudget } from './executionBudget.js';
 import { fiSource, fiRoutingFixture, fiExtractionFixture, openAiFixture } from './testSupport/fiReliabilitySources.js';
+import { claudeMessageBody } from './testSupport/claudeMessage.js';
 
 const input = { base64: Buffer.from('synthetic document').toString('base64'), filename: 'synthetic.pdf', mimeType: 'application/pdf' };
 const response = (fixture) => ({ ok: fixture.status === 200, status: fixture.status, json: async () => fixture.body });
@@ -56,7 +57,11 @@ test('actual unified extraction: both providers preserve owning signal, refuse l
   const fixture = fiExtractionFixture(fiSource('supplies'));
   for (const provider of ['openai', 'anthropic']) {
     const env = provider === 'openai' ? { OPENAI_API_KEY: 'fixture-only' } : { ANTHROPIC_API_KEY: 'fixture-only' };
-    const healthy = provider === 'openai' ? openAiFixture(JSON.parse(fixture.body.content[0].text)) : fixture;
+    // On Anthropic the unified request carries the `structured_answer` tool
+    // (its schema is over the structured-output limits, 2026-11-10): the
+    // healthy answer is that call.
+    const answer = JSON.parse(fixture.body.content[0].text);
+    const healthy = provider === 'openai' ? openAiFixture(answer) : { status: 200, body: claudeMessageBody(answer, { request: { tools: [{ name: 'structured_answer' }] }, model: fixture.body.model }) };
     for (const phase of ['headers', 'body']) {
       const entered = deferred(), held = deferred();
       const budget = createExecutionBudget({ timeoutMs: 60_000, label: 'extraction-invocation' });

@@ -55,7 +55,7 @@ test('real HTTP + PG: a fresh hosted Oy is born with the coded Finnish statutory
     await seed.connect();
     const envKeys = ['DATABASE_URL', 'DATABASE_POOL_MAX', 'DONNA_DESKTOP_BLOB_DIR', 'DONNA_ACCESS_TOKEN', 'DONNA_DEFAULT_FIRM_ID',
       'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY', 'DONNA_AUTH_ALLOWED_EMAILS', 'STRIPE_SECRET_KEY',
-      'VERCEL', 'VERCEL_PROJECT_ID', 'VERCEL_ENV', 'VERCEL_DEPLOYMENT_ID', 'VERCEL_GIT_COMMIT_SHA', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY'];
+      'VERCEL', 'VERCEL_PROJECT_ID', 'VERCEL_ENV', 'VERCEL_DEPLOYMENT_ID', 'VERCEL_GIT_COMMIT_SHA', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_MODEL'];
     const priorEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
     const realFetch = globalThis.fetch;
     try {
@@ -69,7 +69,10 @@ test('real HTTP + PG: a fresh hosted Oy is born with the coded Finnish statutory
         DATABASE_URL: scratchUrl.toString(), DATABASE_POOL_MAX: '2', DONNA_ACCESS_TOKEN: 'unused', DONNA_DEFAULT_FIRM_ID: 'firm-default',
         SUPABASE_URL: 'https://auth.fi21.invalid', SUPABASE_ANON_KEY: 'anon', DONNA_AUTH_ALLOWED_EMAILS: 'nobody@example.test',
         VERCEL: '1', VERCEL_PROJECT_ID: 'fixture-project', VERCEL_ENV: 'preview', VERCEL_DEPLOYMENT_ID: 'fixture-deployment',
-        VERCEL_GIT_COMMIT_SHA: 'fixture-source', ANTHROPIC_API_KEY: 'fixture-only', OPENAI_API_KEY: 'fixture-only'
+        VERCEL_GIT_COMMIT_SHA: 'fixture-source', ANTHROPIC_API_KEY: 'fixture-only', OPENAI_API_KEY: 'fixture-only',
+        // 2026-11-10: both keys put the text lanes on Claude; this file's stub
+        // answers the OpenAI coder, so it pins the text lanes to OpenAI.
+        OPENAI_MODEL: 'gpt-5.4'
       });
       delete process.env.DONNA_DESKTOP_BLOB_DIR; delete process.env.SUPABASE_PUBLISHABLE_KEY; delete process.env.STRIPE_SECRET_KEY;
       let coderFetch = null;

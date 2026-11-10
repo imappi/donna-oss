@@ -5,6 +5,7 @@ import test from 'node:test';
 import { createDecisionReceipt } from '../server/donna/world/traceReceipts.js';
 import { createProof0WorldSpec } from '../server/donna/world/worldSchema.js';
 import { NO_FAILURE_RECEIPT, loadSolveWorldClose, parseArgs, runWorldShrink } from './eval_world_shrink.js';
+import { claudeMessageBody } from '../server/donna/testSupport/claudeMessage.js';
 
 function world() {
   return createProof0WorldSpec({
@@ -186,7 +187,10 @@ test('composition: persisted Proof 0 world runs through the loaded production ad
         notice_period_days: null, recurring_amount: null, recurring_frequency: 'none', obligations: [],
       },
     } : { proposals: [], unmatchable_reason: 'no_plausible_match' };
-    return { ok: true, status: 200, json: async () => ({ model: 'provider-response-test-model', content: [{ text: JSON.stringify(payload) }] }) };
+    // The unified extraction request carries the `structured_answer` tool
+    // (its schema is over the structured-output limits, 2026-11-10); the
+    // answer is that call. Matching stays text.
+    return { ok: true, status: 200, json: async () => claudeMessageBody(payload, { request, model: 'provider-response-test-model' }) };
   };
   try {
     const solveWorldClose = await loadSolveWorldClose('scripts/eval_world_proof0_adapter.js');

@@ -37,6 +37,21 @@
 //    fail-closed cap. First flip: bank_line_classification (2026-08-12;
 //    lane retired in RT-14, 2026-09-02 — its sweep was env-dark everywhere).
 //
+// 2026-11-10 — DONNA RUNS ON CLAUDE (the owner's decision of 2026-11-10):
+// an installation holding only an Anthropic key must read every document.
+// Every lane whose input includes a document (or that classifies one) moved
+// to `providers: ['anthropic', 'openai']` — Anthropic first, OpenAI a
+// qualified alternative that runs only when no Anthropic key is configured —
+// resolving through providerEndpoints.js resolveLaneProvider, with claude-opus-5-5 as each
+// moved lane's Anthropic default. The qualified sets below grew to include
+// claude-opus-5-5 by that dated decision; the PROMOTION VERDICT these
+// extensions ride is a full Finnish company-month run on Claude only,
+// measured on the stacked document-lanes + decision-lanes branches before
+// either merges. The extension is not to merge without that verdict.
+export const CLAUDE_ONLY_DECISION = '2026-11-10';
+export const DOCUMENT_LANE_PROVIDERS = Object.freeze(['anthropic', 'openai']);
+export const DOCUMENT_LANE_ANTHROPIC_DEFAULT = 'claude-opus-5-5';
+
 // `ledger_commit` has NO lane and never will — the ledger post path is
 // permanently unroutable to any model (spec §1.3, CLAUDE.md). Pinned by
 // test.
@@ -93,6 +108,9 @@ export const MODEL_LANES = Object.freeze([
     // human-signed change.
     providers: ['anthropic', 'openai'],
     promptVersion: 'unified-extraction-v8',
+    // 2026-11-10 (CLAUDE_ONLY_DECISION): the Anthropic default stays
+    // claude-opus-4-8 (its request moved onto the shared structured seam);
+    // the set stays exactly the two providers' defaults.
     qualified: ['claude-opus-4-8', 'gpt-5.4'],
     modules: ['server/donna/unifiedExtractor.js'],
     note: 'THE load-bearing extraction call — the appliance default since RT-12; the per-type family below serves the cloud for one release, then deletes.'
@@ -126,7 +144,16 @@ export const MODEL_LANES = Object.freeze([
     id: 'transaction_coding',
     title: 'Transaction coding',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
     modules: ['server/donna/transactionLlm.js'],
     // Q9 (Kari's dated sole-model lab call, 2026-08-16: "whenever Donna or
     // any part of its workflow invokes an LLM, it needs to be qwen 27B —
@@ -136,14 +163,18 @@ export const MODEL_LANES = Object.freeze([
     // chat/completions via llmCall, mismatch guard, response-proven model
     // id in the ai_suggestion receipt) and per-flip receipts as Q6c/Q7.
     // Product-wide promotion still requires the signed §5.2 gate verdict.
-    qualified: ['gpt-5.4', 'qwen/qwen3.8-27b'],
-    note: 'Q9 (2026-08-16): governed for the sole-model lab — experiment policies may seat the qualified 27B as the coding decider; the strong default (gpt-5.4) holds absent a policy row.'
+    qualified: ['claude-opus-5-5', 'gpt-5.4', 'qwen/qwen3.8-27b'],
+    note: 'Q9 (2026-08-16): governed for the sole-model lab — experiment policies may seat the qualified 27B as the coding decider; the strong default holds absent a policy row (claude-opus-5-5 since 2026-11-10; gpt-5.4 only without an Anthropic key).'
   }),
   lane({
     id: 'type_extractors_legacy',
     title: 'Type-specific extractors (legacy family)',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (CLAUDE_ONLY_DECISION): provider-agnostic; claude-opus-5-5
+    // first, the OpenAI strong default as the qualified alternative.
+    providers: DOCUMENT_LANE_PROVIDERS,
+    qualified: [DOCUMENT_LANE_ANTHROPIC_DEFAULT, 'gpt-5.4'],
     modules: [
       'server/donna/salesInvoice.js',
       'server/donna/supplierBill.js',
@@ -162,7 +193,10 @@ export const MODEL_LANES = Object.freeze([
     id: 'bank_statement_vision',
     title: 'Bank-statement vision extraction',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (CLAUDE_ONLY_DECISION).
+    providers: DOCUMENT_LANE_PROVIDERS,
+    qualified: [DOCUMENT_LANE_ANTHROPIC_DEFAULT, 'gpt-5.4'],
     modules: ['server/donna/bankStatementVision.js']
   }),
   lane({
@@ -177,8 +211,19 @@ export const MODEL_LANES = Object.freeze([
     id: 'document_chat',
     title: 'Document chat',
     kind: 'deciding',
-    endpointClass: 'openai',
-    modules: ['server/donna/documentChat.js']
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
+    modules: ['server/donna/documentChat.js'],
+    note: 'Text-only: the document\'s extracted fields and the chat turns, never the file itself.'
   }),
   lane({
     id: 'intent_compilation',
@@ -192,7 +237,17 @@ export const MODEL_LANES = Object.freeze([
     id: 'ask_drafting',
     title: 'Ask drafting',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
     modules: ['server/donna/askPipeline.js']
   }),
   lane({
@@ -207,7 +262,17 @@ export const MODEL_LANES = Object.freeze([
     id: 'memory_extraction',
     title: 'Memory extraction (firm/entity facts)',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
     modules: ['server/donna/firmFacts.js'],
     note: 'Mints durable memory — the clearest evidence-only test case for challengers. (entityFacts.js, the env-dark statutory-record extractor, was deleted in RT-14, 2026-09-02.)'
   }),
@@ -237,7 +302,17 @@ export const MODEL_LANES = Object.freeze([
     id: 'owner_invoice_command_read',
     title: 'Owner invoice command read',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
     modules: ['server/donna/ownerInvoiceCommandRead.js'],
     note: 'Fully envelope-adopted (the M3 pass-1 site).'
   }),
@@ -245,14 +320,27 @@ export const MODEL_LANES = Object.freeze([
     id: 'client_intake_draft',
     title: 'Client intake draft',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (CLAUDE_ONLY_DECISION).
+    providers: DOCUMENT_LANE_PROVIDERS,
+    qualified: [DOCUMENT_LANE_ANTHROPIC_DEFAULT, 'gpt-5.4'],
     modules: ['server/donna/clientIntakeDraft.js']
   }),
   lane({
     id: 'marketing_drafting',
     title: 'Marketing drafters + reply ingestion',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (the owner's decision: Donna runs on Claude only): a
+    // provider-agnostic text lane — Anthropic first (claude-opus-5-5, its
+    // strong default), OpenAI (gpt-5.4) a qualified alternative that runs
+    // only when no Anthropic key is configured; resolved by
+    // providerEndpoints.js resolveLaneProvider, the model id on the receipt
+    // the response's. The qualified-set extension rides the promotion
+    // verdict named for it: a full Finnish company-month on Claude only,
+    // measured before this change merges.
+    providers: ['anthropic', 'openai'],
+    qualified: ['claude-opus-5-5', 'gpt-5.4'],
     modules: [
       'server/donna/marketing/dossierDrafter.js',
       'server/donna/marketing/nurtureDrafter.js',
@@ -266,7 +354,10 @@ export const MODEL_LANES = Object.freeze([
     id: 'parser_repair',
     title: 'Parser repair',
     kind: 'deciding',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (CLAUDE_ONLY_DECISION): re-reads the document file.
+    providers: DOCUMENT_LANE_PROVIDERS,
+    qualified: [DOCUMENT_LANE_ANTHROPIC_DEFAULT, 'gpt-5.4'],
     modules: ['server/donna/parserRepair.js']
   }),
   lane({
@@ -324,7 +415,12 @@ export const MODEL_LANES = Object.freeze([
     id: 'document_routing',
     title: 'Document routing / classification',
     kind: 'bulk_filter',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (CLAUDE_ONLY_DECISION). The Anthropic transport sends the
+    // file as a document/image block, so the multimodal parity concern in
+    // the note below holds for Claude as it did for OpenAI.
+    providers: DOCUMENT_LANE_PROVIDERS,
+    qualified: [DOCUMENT_LANE_ANTHROPIC_DEFAULT, 'gpt-5.4'],
     modules: ['server/donna/documentRouter.js'],
     note: 'Was the spec table\'s rung-1 pilot pick; superseded 2026-08-12 — its deciding call is multimodal (Responses API + PDF data URL), which a chat/completions rung cannot replay at parity. Challenger-eligible once a vision/file-capable rung exists.'
   }),
@@ -332,7 +428,12 @@ export const MODEL_LANES = Object.freeze([
     id: 'receipt_classification',
     title: 'Receipt classification',
     kind: 'bulk_filter',
-    endpointClass: 'openai',
+    endpointClass: 'anthropic',
+    // 2026-11-10 (CLAUDE_ONLY_DECISION). Text-only input (the extracted
+    // receipt), moved with the document pipeline it serves. The OpenAI
+    // alternative keeps its nano default.
+    providers: DOCUMENT_LANE_PROVIDERS,
+    qualified: [DOCUMENT_LANE_ANTHROPIC_DEFAULT, 'gpt-5.4-nano'],
     modules: ['server/donna/receiptClassifier.js'],
     note: 'Already on the cheapest tier — the existence proof that bulk lanes descend safely.'
   })

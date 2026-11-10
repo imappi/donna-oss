@@ -383,7 +383,9 @@ test('FI appliance: an invalid provider key is named as a credential failure, wa
     const source = fiSource('supplies');
     app.providers.script('document_routing', [fiRoutingFixture(source.type)]);
     app.providers.script('unified_extraction', [{ status: 401, body: { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } } }]);
-    app.providers.script('supplier_bill_extraction', [{ status: 401, body: { error: { message: 'Incorrect API key provided', type: 'invalid_request_error', code: 'invalid_api_key' } } }]);
+    // The per-type fall-through resolves Anthropic first too (2026-11-10), so
+    // the same refused key answers it.
+    app.providers.script('supplier_bill_extraction', [{ status: 401, body: { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } } }]);
     const upload = await app.uploadDocument({ clientId, bytes: await fiDocumentBytes(source), filename: `${source.reference}.pdf`, mimeType: 'application/pdf', documentType: source.type });
     // 2026-11-10 (provider waits, PR #71): a refused key is the installation's
     // fault, so the document no longer rests terminal on a manual retry. It
@@ -396,7 +398,7 @@ test('FI appliance: an invalid provider key is named as a credential failure, wa
     assert.equal(hold?.reason_code, 'provider_unauthorized', JSON.stringify(hold));
     assert.equal(hold?.code, 'DOCUMENT_EXTRACTION_UNAUTHORIZED');
     assert.match(hold?.reason || '', /_401$/);
-    assert.equal(hold?.key_name, 'OPENAI_API_KEY', 'the refused key is named — never the document');
+    assert.equal(hold?.key_name, 'ANTHROPIC_API_KEY', 'the refused key is named — never the document');
     assert.equal(waiting.parse_attempts, 0);
     assert.equal((await counts(app, clientId)).asks, 0, 'a credential failure never becomes a client question');
     const jobs = await app.read.jobs({ functionId: PARSE_DOCUMENT_FUNCTION_ID });

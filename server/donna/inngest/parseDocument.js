@@ -54,7 +54,7 @@ import {
 import { fetchEvidenceObjectBytes } from '../evidenceStorage.js';
 import { sendOwnerMediaParseSummary } from '../channels/ownerMediaParseSummary.js';
 import { applyPostExtractionEnrichment } from '../filenameFallback.js';
-import { extractBankStatementFromBase64 } from '../bankStatement.js';
+import { extractBankStatementFromBase64, STATEMENT_READER_KINDS, statementSourceKind } from '../bankStatement.js';
 import { extractReceiptFromBase64 } from '../receipt.js';
 import { extractSupplierBillFromBase64 } from '../supplierBill.js';
 import { extractSalesInvoiceFromBase64 } from '../salesInvoice.js';
@@ -363,6 +363,10 @@ export const __buildClassification = ({
   originalType,
   minConfidence,
   routerModel = null,
+  // response_proven / configured_fallback, as the router classified it
+  // (providerEndpoints.js classifyModelProvenance) — the same receipt pair
+  // every extractor carries.
+  routerModelSource = null,
   pickExtractorImpl = pickExtractor
 } = {}) => {
   const normalizedOriginal = originalType || 'unknown';
@@ -372,6 +376,7 @@ export const __buildClassification = ({
       classification: {
         source: 'user_hint',
         model: null,
+        model_source: null,
         confidence: null,
         original_type: normalizedOriginal,
         final_type: normalizedOriginal,
@@ -390,6 +395,7 @@ export const __buildClassification = ({
   const base = {
     source: 'router_v1',
     model: routerModel,
+    model_source: routerModel ? (routerModelSource || null) : null,
     confidence: typeof routerResult.confidence === 'number' ? routerResult.confidence : null,
     original_type: normalizedOriginal,
     family: routerResult.family || null,
@@ -587,7 +593,7 @@ export const buildExtractorReceipt = ({ documentType, result } = {}) => {
   const fellBack = unifiedDefault && attempt?.attempted && !ranUnified;
   return {
     path: ranUnified ? 'unified' : 'type_specific',
-    provider: ranUnified ? (attempt?.provider || null) : (result?.extractor_provider || 'openai'),
+    provider: ranUnified ? (attempt?.provider || null) : (result?.extractor_provider || null),
     model: ranUnified ? (attempt?.model || result?.extractor_model || null) : (result?.extractor_model || null),
     model_source: ranUnified ? (attempt?.model_source || null) : (result?.extractor_model_source || (result?.extractor_model ? 'configured_fallback' : null)),
     prompt_version: ranUnified ? UNIFIED_EXTRACTOR_PROMPT_VERSION : (result?.summary?.prompt_version || null),
@@ -768,6 +774,9 @@ const buildStatementSummary = (extraction, fingerprint) => {
     // which model, when a structured LLM tier did (null on regex paths).
     extraction_source: extraction?.extraction_source || null,
     extraction_model: extraction?.extraction_model || null,
+    extraction_provider: extraction?.extraction_provider || null,
+    extraction_model_source: extraction?.extraction_model_source || null,
+    ...(extraction?.extraction_chunk_models ? { extraction_chunk_models: extraction.extraction_chunk_models } : {}),
     warnings: Array.isArray(extraction?.warnings) ? extraction.warnings.slice(0, 6) : [],
     account_fingerprint: fingerprint || null
   };
@@ -1122,9 +1131,13 @@ const extractDocumentInner = async ({
       // for retryability; no string-message inference involved.
       throw new ParseError(extraction.code, {
         message: `Receipt extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai',
+        // The provider the lane resolved (Anthropic first since 2026-11-10);
+        // with no key, the provider whose key is missing (its reason reads
+        // `<provider>_not_configured`, #71's wait vocabulary).
+        provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1190,7 +1203,10 @@ const extractDocumentInner = async ({
       summary,
       header: extraction.header,
       lines,
-      extractor_model: extraction.model || null
+      extractor_model: extraction.model || null,
+      // response_proven / configured_fallback, as the extractor classified it.
+      extractor_model_source: extraction.model_source || null,
+      extractor_provider: extraction.provider || null
     };
   }
 
@@ -1211,9 +1227,13 @@ const extractDocumentInner = async ({
     if (extraction.kind === 'failed') {
       throw new ParseError(extraction.code, {
         message: `Supplier bill extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai',
+        // The provider the lane resolved (Anthropic first since 2026-11-10);
+        // with no key, the provider whose key is missing (its reason reads
+        // `<provider>_not_configured`, #71's wait vocabulary).
+        provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1241,7 +1261,10 @@ const extractDocumentInner = async ({
       summary,
       header: extraction.header,
       lines,
-      extractor_model: extraction.model || null
+      extractor_model: extraction.model || null,
+      // response_proven / configured_fallback, as the extractor classified it.
+      extractor_model_source: extraction.model_source || null,
+      extractor_provider: extraction.provider || null
     };
   }
 
@@ -1270,9 +1293,13 @@ const extractDocumentInner = async ({
     if (extraction.kind === 'failed') {
       throw new ParseError(extraction.code, {
         message: `${documentType === 'deposit_slip' ? 'Deposit slip' : 'Payout statement'} extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai',
+        // The provider the lane resolved (Anthropic first since 2026-11-10);
+        // with no key, the provider whose key is missing (its reason reads
+        // `<provider>_not_configured`, #71's wait vocabulary).
+        provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1291,7 +1318,10 @@ const extractDocumentInner = async ({
       summary,
       header: extraction.header,
       lines,
-      extractor_model: extraction.model || null
+      extractor_model: extraction.model || null,
+      // response_proven / configured_fallback, as the extractor classified it.
+      extractor_model_source: extraction.model_source || null,
+      extractor_provider: extraction.provider || null
     };
   }
 
@@ -1315,9 +1345,13 @@ const extractDocumentInner = async ({
     if (extraction.kind === 'failed') {
       throw new ParseError(extraction.code, {
         message: `${extractor.type === 'issued_receipt' ? 'Issued receipt' : 'Sales invoice'} extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai',
+        // The provider the lane resolved (Anthropic first since 2026-11-10);
+        // with no key, the provider whose key is missing (its reason reads
+        // `<provider>_not_configured`, #71's wait vocabulary).
+        provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1354,7 +1388,8 @@ const extractDocumentInner = async ({
       header: extraction.header,
       lines,
       extractor_model: extraction.model || null,
-      extractor_model_source: extraction.model_source || null
+      extractor_model_source: extraction.model_source || null,
+      extractor_provider: extraction.provider || null
     };
   }
 
@@ -1367,7 +1402,10 @@ const extractDocumentInner = async ({
     if (extraction.kind === 'failed') {
       throw new ParseError(extraction.code, {
         message: `Generic document extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai'
+        provider: extraction.provider || null,
+        reason: extraction.reason || null,
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1399,6 +1437,20 @@ const extractDocumentInner = async ({
     ...(Number(document.parse_attempts) > 1 ? { bypassCache: true } : {})
   });
   const visionSkipped = extraction?.extraction_diagnostics?.vision_skipped;
+  if (visionSkipped === 'provider_stop') {
+    // The strong reader stopped without a usable answer (bankStatement.js
+    // strongReaderStop): that named failure, with the model that answered —
+    // a refusal or a cut-off is final, an answer outside the schema
+    // retryable — never `no transactions` from a weaker reader.
+    const details = extraction.extraction_diagnostics.vision_skipped_details || {};
+    throw new ParseError(details.code || 'DOCUMENT_EXTRACTION_FAILED', {
+      provider: details.provider || null,
+      retryable: details.code === 'DOCUMENT_EXTRACTION_FAILED',
+      reason: details.fault || 'provider_invalid_output',
+      model: details.model || null,
+      message: `Bank statement extraction stopped: ${details.fault || 'provider_invalid_output'}`
+    });
+  }
   if (visionSkipped === 'not_configured' || visionSkipped === 'provider_fault') {
     // The statement has no text layer and cloud OCR could not be used — no
     // key, a refused key, or no credit on the account. It was never read: a
@@ -1413,6 +1465,7 @@ const extractDocumentInner = async ({
       provider,
       retryable: !unauthorized,
       reason: unauthorized ? `${provider}_${details.status === 403 ? 403 : 401}` : `${provider}_${fault}`,
+      ...(details.pinned_by ? { details: { pinned_by: details.pinned_by } } : {}),
       message: `Bank statement extraction failed: ${provider} ${fault} (no text layer; cloud OCR unavailable)`
     });
   }
@@ -1420,7 +1473,7 @@ const extractDocumentInner = async ({
   // rows. Never repair amounts or weaken balance checks. Bypass failed cached
   // extractions so the existing bounded queue retry can make fresh progress.
   const recoveringValidation = extraction?.extraction_status === 'needs_review' &&
-      extraction?.extraction_source !== 'openai_vision_structured' &&
+      statementSourceKind(extraction?.extraction_source) !== STATEMENT_READER_KINDS.VISION_STRUCTURED &&
       (mimeType === 'application/pdf' || /\.pdf$/i.test(filename));
   if (recoveringValidation) {
     extraction = await extractor.extract({ base64, filename, mimeType, ledgerCurrency,
@@ -1431,7 +1484,7 @@ const extractDocumentInner = async ({
   if (extraction?.extraction_status === 'needs_review' ||
       (recoveringValidation && extraction?.extraction_status !== 'validated')) {
     throw new ParseError('STATEMENT_VALIDATION_FAILED', {
-      provider: 'openai', reason: 'statement_totals_mismatch', model: extraction.extraction_model,
+      provider: extraction.extraction_provider || null, reason: 'statement_totals_mismatch', model: extraction.extraction_model,
       message: 'Statement extraction failed balance validation; no transactions were imported.'
     });
   }
@@ -1748,6 +1801,7 @@ const runParseAndWrite = async ({ firmId, documentId, parseRunId, log, attempt =
       // produced a receipt that lies whenever the router's resolved
       // model differs (CLAUDE.md: the model id is part of the receipt).
       routerModel: routerResult?.routed ? (routerResult.model || null) : null,
+      routerModelSource: routerResult?.routed ? (routerResult.model_source || null) : null,
       // Batch-2 Slice B — thread the run's config snapshot into the
       // perception-downgrade guard's dedicated-extractor probe, so the
       // guard's view of "which types have a dedicated extractor" matches
@@ -2016,6 +2070,8 @@ const runParseAndWrite = async ({ firmId, documentId, parseRunId, log, attempt =
           candidate_families: routerResult.candidate_families,
           language_hint: routerResult.language_hint,
           reason: routerResult.reason,
+          model: routerResult.model || null,
+          model_source: routerResult.model_source || null,
           confidence_envelope: calibrate(routerResult.confidence, {
             model: routerResult.model || 'unknown',
             source: 'router'
@@ -2213,6 +2269,14 @@ const runParseAndWrite = async ({ firmId, documentId, parseRunId, log, attempt =
     const priorHold = claimResult?.prior_hold || null;
     if (wait && providerWaitAllowed({ wait, prior: priorHold })) {
       const hold = buildProviderWaitHold({ wait, categorized, prior: priorHold, parseRunId });
+      // A lane knob that pins a provider by model id (a gpt id in
+      // BILL_EXTRACTOR_MODEL, say) is what made the installation wait on that
+      // provider's key: the hold names it.
+      const pinnedBy = err?.details?.pinned_by || null;
+      if (hold && pinnedBy) {
+        hold.pinned_by = pinnedBy;
+        hold.message = `${hold.key_name || 'the provider key'} is not set, and ${pinnedBy} pins this lane to ${hold.provider}. Set the key, or clear the knob to use the configured provider.`;
+      }
       let released = null;
       let releaseThrew = false;
       try {

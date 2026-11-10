@@ -284,14 +284,19 @@ test('transport: provider failures map to the shared extraction envelope', async
 
 test('transport: no API key ⇒ a retryable failure without a call; empty input ⇒ unreadable', async () => {
   const prior = process.env.OPENAI_API_KEY;
+  const priorAnthropic = process.env.ANTHROPIC_API_KEY;
   delete process.env.OPENAI_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
   try {
     let calls = 0;
     const result = await extractPayoutStatementFromBase64({ base64: 'aGk=', filename: 'p.pdf', fetchImpl: async () => { calls += 1; } });
-    assert.deepEqual([result.kind, result.code, result.reason, calls], ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'openai_not_configured', 0]);
+    // 2026-11-10: the reason names the provider whose key is missing
+    // (Anthropic, the lane's first), in the parse wait vocabulary.
+    assert.deepEqual([result.kind, result.code, result.reason, result.provider, calls], ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'anthropic_not_configured', 'anthropic', 0]);
   } finally {
     if (prior === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = prior;
+    if (priorAnthropic !== undefined) process.env.ANTHROPIC_API_KEY = priorAnthropic;
   }
   await withApiKey(async () => {
     const empty = await extractPayoutStatementFromBase64({ base64: '   ', filename: 'p.pdf', fetchImpl: async () => responseFor({}) });

@@ -16,21 +16,34 @@
 
 const present = (value) => typeof value === 'string' && value.trim().length > 0;
 
+// 2026-11-10 (owner's decision: Donna runs on Claude only): the text lanes —
+// coding, ask drafting, memory extraction, owner invoice commands, document
+// chat, the marketing drafters and the reply reader — are provider-agnostic,
+// Anthropic first (modelLanes.js `providers`); OpenAI serves them only when
+// no Anthropic key is configured, which its line says.
 export const MODEL_LANES = Object.freeze({
+  // 2026-11-10 (Donna runs on Claude): every lane that called only OpenAI
+  // resolves Anthropic first now — the text lanes and the document lanes —
+  // so OpenAI serves them only when no Anthropic key is set.
   openai: Object.freeze([
-    'document extraction',
-    'coding (batch coder)',
-    'ask drafting',
-    'auto-explain classifier',
-    'bank-statement parse'
+    'the text and document lanes only when no Anthropic key is set'
   ]),
   anthropic: Object.freeze([
+    'document routing + extraction',
+    'auto-explain classifier',
+    'bank-statement parse',
     'reconciliation LLM triage + authority grants',
     'bank-line disposition producer',
     'merchant lookup',
     'transaction/feed chat',
     'knowledge answers (K1 compose)',
-    'unified extractor'
+    'unified extractor',
+    'coding (batch coder)',
+    'ask drafting',
+    'memory extraction',
+    'owner invoice commands',
+    'document chat',
+    'marketing drafters + reply reader'
   ]),
   // Evidence-only: the shadow-challenger rung (descent ladder). Dispatch
   // additionally needs the MODEL_CHALLENGER config-plane stage; this line
@@ -59,8 +72,13 @@ const providerLine = (provider, keyName, env) => {
   if (!present(env?.[keyName])) return `${provider} DARK — no ${keyName} (${lanes})`;
   const knob = MODEL_OVERRIDE_KNOBS[provider];
   const override = present(env?.[knob]) ? env[knob].trim() : null;
-  return override
-    ? `${provider} LIT — ${knob} override: ${override} (${lanes})`
+  // OPENAI_MODEL is also the text lanes' knob since 2026-11-10, and a
+  // claude-* id there pins those lanes on Anthropic: name it on that line.
+  const textLaneKnob = provider === 'anthropic' && present(env?.OPENAI_MODEL) && /^claude/i.test(env.OPENAI_MODEL.trim())
+    ? `OPENAI_MODEL override: ${env.OPENAI_MODEL.trim()} (text lanes)` : null;
+  const overrides = [override ? `${knob} override: ${override}` : null, textLaneKnob].filter(Boolean);
+  return overrides.length
+    ? `${provider} LIT — ${overrides.join(', ')} (${lanes})`
     : `${provider} LIT (${lanes})`;
 };
 

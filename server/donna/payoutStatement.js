@@ -58,10 +58,28 @@ import { buildClientIdentityPromptFragment } from './clientIdentityPrompt.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { normalizeIsoCurrency, normalizeIsoOrDayFirstDate } from './parsePrimitives.js';
 import { extractionFailureForStatus } from './inngest/parseErrors.js';
+import {
+  documentLaneRequestFromResponses,
+  isProviderStopFailure,
+  notConfiguredFailure,
+  resolveDocumentLaneProvider,
+  stopFailureCode,
+  stopFailureReason,
+  thrownReason
+} from './documentLaneRequest.js';
+import { classifyModelProvenance } from './providerEndpoints.js';
 
 // The strong tier for the load-bearing extraction call (CLAUDE.md); the env
 // override remains the per-deploy tuning knob.
 const DEFAULT_MODEL = 'gpt-5.4';
+// 2026-11-10 (the owner's decision that Donna runs on Claude): Anthropic
+// first; claude-opus-5-5 reads the settlement document as a document/image
+// block with structured output. Gross → fees → net arithmetic read off the
+// page earns `high` effort.
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
+const ANTHROPIC_EFFORT = 'high';
+const ANTHROPIC_MAX_TOKENS = 64_000;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 180_000;
 // RT-12 (audit F-12): every extraction lane stamps its prompt version on
 // the receipt. A string constant per module; bump when the prompt or the
 // schema changes meaning.
@@ -103,18 +121,14 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model:
-      process.env.PAYOUT_EXTRACTOR_MODEL ||
-      dotEnv.PAYOUT_EXTRACTOR_MODEL ||
-      process.env.OPENAI_MODEL ||
-      dotEnv.OPENAI_MODEL ||
-      DEFAULT_MODEL
-  };
-};
+// PAYOUT_EXTRACTOR_MODEL is the lane knob (its id pins the provider); no
+// provider-wide knob.
+const getOpenAiConfig = () => resolveDocumentLaneProvider({
+  laneId: 'type_extractors_legacy',
+  dotEnv: readDotEnv(),
+  modelEnvKeys: ['PAYOUT_EXTRACTOR_MODEL'],
+  defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
+});
 
 const outputTextFromResponse = (response = {}) => {
   if (typeof response.output_text === 'string') return response.output_text;
@@ -575,13 +589,19 @@ export const extractPayoutStatementFromBase64 = async ({
   const config = getOpenAiConfig();
   const kind = PAYOUT_DOCUMENT_TYPES.includes(documentType) ? documentType : 'payout_statement';
 
-  if (!config.apiKey) {
-    console.warn('[payout-statement] OPENAI_API_KEY not configured', { correlation_id: correlationId });
+  if (!config.ok) {
+    // No key: the failure names the provider whose key is missing (the
+    // lane's first, Anthropic, unless a pinned model id chose another).
+    const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'type_extractors_legacy');
+    console.warn('[payout-statement] no model provider key configured', { correlation_id: correlationId, reason: notConfigured, pinned_by: config.pinned_by || null });
     return {
       kind: 'failed',
-      model: config.model,
+      model: null,
+      provider: missing,
       code: 'DOCUMENT_EXTRACTION_FAILED',
-      reason: 'openai_not_configured'
+      reason: notConfigured,
+      // The lane knob whose model id chose the missing provider, if one did.
+      ...(config.pinned_by ? { pinned_by: config.pinned_by } : {})
     };
   }
 
@@ -599,32 +619,69 @@ export const extractPayoutStatementFromBase64 = async ({
   const instructions = `${INSTRUCTIONS}${buildClientIdentityPromptFragment(clientIdentity)}`;
   const userContent = buildUserContent({ dataUrl, filename, dateFormatHint, documentType: kind });
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const transport = fetchImpl || fetch;
+  const timeout = setTimeout(() => controller.abort(), config.provider === 'anthropic' ? ANTHROPIC_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  const transport = (...args) => (fetchImpl || globalThis.fetch)(...args);
+  // The request body, built once; the Anthropic transport carries it over
+  // unchanged (instructions → system, the file part → a document/image
+  // block, the strict schema → structured output).
+  const body = {
+    model: config.model,
+    store: false,
+    instructions,
+    input: [{ role: 'user', content: userContent }],
+    text: {
+      format: {
+        type: 'json_schema',
+        name: PAYOUT_EXTRACTION_SCHEMA_NAME,
+        strict: true,
+        schema: PAYOUT_EXTRACTION_SCHEMA
+      }
+    }
+  };
+  const execution = { root: { type: 'document_extraction', id: documentId || correlationId } };
+  const parseText = (text, servedModel) => {
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw Object.assign(new Error('structured response was not valid JSON'), { code: 'PAYOUT_STRUCTURED_BAD_JSON', servedModel });
+    }
+    return { parsed, servedModel };
+  };
+  const stamp = (servedModel) => {
+    const provenance = classifyModelProvenance({ responseModel: servedModel, requestedModel: config.model });
+    return { model: provenance.model, model_source: provenance.model_source, provider: config.provider };
+  };
 
   let result;
   try {
-    ({ result } = await llmCall({
+    if (config.provider === 'anthropic') {
+      // The shared structured request (structuredRequest.js, via
+      // documentLaneRequest.js): the answer is already parsed and held to
+      // the schema; the model is the response's.
+      const { result: answer } = await llmCall(documentLaneRequestFromResponses({
+        apiKey: config.apiKey,
+        body,
+        effort: ANTHROPIC_EFFORT,
+        maxTokens: ANTHROPIC_MAX_TOKENS,
+        execution,
+        promptVersion: PAYOUT_PROMPT_VERSION,
+        signal: controller.signal,
+        timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS,
+        fetchImpl: transport
+      }));
+      result = { parsed: answer.parsed, servedModel: answer.model || null };
+    } else ({ result } = await llmCall({
       provider: 'openai',
+      // The lane's own wall, honoured inside a worker too (llmCall hands it to
+      // the deadline transport, bounded by the job's remaining budget).
+      timeoutMs: REQUEST_TIMEOUT_MS,
       url: 'https://api.openai.com/v1/responses',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.apiKey}`
       },
-      body: {
-        model: config.model,
-        store: false,
-        instructions,
-        input: [{ role: 'user', content: userContent }],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: PAYOUT_EXTRACTION_SCHEMA_NAME,
-            strict: true,
-            schema: PAYOUT_EXTRACTION_SCHEMA
-          }
-        }
-      },
+      body,
       // Sizes only (llmCall rail 1). The document bytes are deliberately not
       // measured as a section — the envelope would stringify megabytes for a
       // number the body length already carries.
@@ -633,27 +690,29 @@ export const extractPayoutStatementFromBase64 = async ({
         tools: PAYOUT_EXTRACTION_SCHEMA,
         context: userContent.filter((part) => part.type === 'input_text')
       },
-      execution: { root: { type: 'document_extraction', id: documentId || correlationId } },
-      parseResponse: (payload) => {
-        const text = outputTextFromResponse(payload);
-        let parsed;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          throw Object.assign(new Error('structured response was not valid JSON'), { code: 'PAYOUT_STRUCTURED_BAD_JSON' });
-        }
-        return { parsed, model: typeof payload?.model === 'string' && payload.model ? payload.model : config.model };
-      },
+      execution,
+      promptVersion: PAYOUT_PROMPT_VERSION,
+      parseResponse: (payload) => parseText(outputTextFromResponse(payload), typeof payload?.model === 'string' && payload.model ? payload.model : null),
       fetchImpl: (url, init) => transport(url, { ...init, signal: controller.signal })
     }));
   } catch (err) {
     if (err?.code === 'LLM_CALL_PROVIDER_ERROR') {
-      console.error('[payout-statement] OpenAI returned non-OK', {
+      console.error('[payout-statement] provider returned non-OK', {
         correlation_id: correlationId,
+        provider: config.provider,
         status: err.status,
         elapsed_ms: Date.now() - startedAt
       });
-      return { ...extractionFailureForStatus(Number(err.status || 0), { providerError: err.providerError || null }), model: config.model };
+      return { ...extractionFailureForStatus(Number(err.status || 0), { provider: config.provider, providerError: err.providerError || null }), ...stamp(null) };
+    }
+    if (isProviderStopFailure(err)) {
+      // A refusal or a cut-off reply will not clear with a retry of the same
+      // request: terminal, named, receipted with the model that gave it. An
+      // answer that is not the structured answer is retryable (stopFailureCode).
+      console.error('[payout-statement] provider stopped without a usable reply', {
+        correlation_id: correlationId, provider: config.provider, failure: err.code, reason: err.reason, elapsed_ms: Date.now() - startedAt
+      });
+      return { kind: 'failed', ...stamp(err.servedModel), code: stopFailureCode(err), reason: stopFailureReason(err) };
     }
     if (err?.code === 'PAYOUT_STRUCTURED_BAD_JSON') {
       console.error('[payout-statement] structured response was not valid JSON', {
@@ -662,28 +721,32 @@ export const extractPayoutStatementFromBase64 = async ({
       });
       return {
         kind: 'failed',
-        model: config.model,
+        ...stamp(err.servedModel || null),
         code: 'DOCUMENT_EXTRACTION_FAILED',
         reason: 'structured_bad_json'
       };
     }
-    console.error('[payout-statement] OpenAI request threw', {
+    if (['trial_spend_cap_refused', 'PROVIDER_SPEND_LIMIT'].includes(err?.code)) throw err;
+    console.error('[payout-statement] provider request threw', {
       correlation_id: correlationId,
+      provider: config.provider,
       error_code: err?.code || null,
       error_name: err?.name || null,
       elapsed_ms: Date.now() - startedAt
     });
     return {
       kind: 'failed',
-      model: config.model,
+      ...stamp(null),
       code: 'DOCUMENT_EXTRACTION_FAILED',
-      reason: err?.name === 'AbortError' ? 'timeout' : 'network_error'
+      reason: thrownReason(err)
     };
   } finally {
     clearTimeout(timeout);
   }
 
-  const { parsed, model } = result;
+  const { parsed } = result;
+  const served = stamp(result.servedModel);
+  const { model } = served;
   const confidence = Number(parsed?.extraction_confidence || 0);
   if (parsed?.extraction_status === 'failed' || confidence < UNREADABLE_CONFIDENCE_FLOOR) {
     console.warn('[payout-statement] extraction below floor', {
@@ -694,7 +757,7 @@ export const extractPayoutStatementFromBase64 = async ({
     });
     return {
       kind: 'failed',
-      model,
+      ...served,
       code: 'DOCUMENT_EXTRACTION_UNREADABLE',
       reason: parsed?.extraction_status === 'failed' ? 'extractor_status_failed' : 'low_confidence'
     };
@@ -719,7 +782,7 @@ export const extractPayoutStatementFromBase64 = async ({
     elapsed_ms: Date.now() - startedAt
   });
 
-  return { kind: 'completed', model, header, summary, lines };
+  return { kind: 'completed', ...served, header, summary, lines };
 };
 
 // Test seams.

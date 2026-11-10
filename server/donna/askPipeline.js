@@ -32,11 +32,25 @@ import { ownerClientCountry, preferredOwnerTemplateLanguage } from './ownerLangu
 // with the typed cause attached, so the outbox dead letter names the
 // provider and the outage recovery (codingConvergence.js) can re-request it.
 import { callProviderJson, providerFailureReceipt, providerInvalidOutput, providerKeyMissing } from './providerTransport.js';
+import { llmCall } from './llmCall.js';
+import { getLane } from './modelLanes.js';
+import { missingKeyNameFor, resolveTextLaneProvider } from './providerEndpoints.js';
+import { anthropicStructuredRequest, typedLlmCallFailure } from './structuredRequest.js';
 
 // Drafting a message that ships to the CLIENT is a load-bearing call —
 // strong model by default, OPENAI_MODEL stays the override knob (same
 // convention as transactionLlm.js).
+// 2026-11-10 (owner's decision: Claude only): provider-agnostic — Anthropic
+// (claude-opus-5-5) when its key is present, OpenAI (this default) only when
+// no Anthropic key is configured; OPENAI_MODEL may pin either family's id.
+// Effort `high`: the draft ships to the client and must cover every item it
+// is handed under one handle contract (sanitizeAskMessageDraft refuses a
+// draft that does not) — the most demanding writing job among the text lanes.
+// The request streams: the draft for a full month is long.
 const DEFAULT_MODEL = 'gpt-5.4';
+const LANE_PROVIDERS = getLane('ask_drafting').providers;
+const ANTHROPIC_EFFORT = 'high';
+const ANTHROPIC_TIMEOUT_MS = 300_000;
 
 // Durable request payload marker. A convergence clock can distinguish draft
 // requests created before the call-local-handle boundary from requests that
@@ -93,13 +107,9 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL || dotEnv.OPENAI_MODEL || DEFAULT_MODEL
-  };
-};
+const resolveDrafter = (openAiConfig = null) => resolveTextLaneProvider({
+  providers: LANE_PROVIDERS, openAiDefaultModel: DEFAULT_MODEL, dotEnv: readDotEnv(), openAiConfig
+});
 
 const askPipelineUnavailable = (message, providerFailure = null) => {
   const error = new Error(message);
@@ -1060,13 +1070,15 @@ export const draftClientAskMessage = async ({
   fetchImpl = fetch,
   openAiConfig = null
 } = {}) => {
-  const config = openAiConfig || getOpenAiConfig();
-  if (!config.apiKey) {
+  const resolved = resolveDrafter(openAiConfig);
+  if (!resolved.ok) {
+    const { provider, keyName } = missingKeyNameFor(resolved, LANE_PROVIDERS);
     throw askPipelineUnavailable(
-      'OpenAI API key is not configured; the ask-pipeline has no fallback drafter by design.',
-      providerFailureReceipt(providerKeyMissing('openai', { keyName: 'OPENAI_API_KEY' }))
+      `No model key is configured (${keyName || 'ANTHROPIC_API_KEY'}); the ask-pipeline has no fallback drafter by design.`,
+      providerFailureReceipt(providerKeyMissing(provider || 'anthropic', { keyName }))
     );
   }
+  const config = { apiKey: resolved.apiKey, model: resolved.model };
 
   const draftInputs = {
     clientProfile,
@@ -1087,56 +1099,88 @@ export const draftClientAskMessage = async ({
   const handles = buildAskDraftHandleContext(draftInputs);
   const input = buildAskDraftInput(draftInputs, handles);
 
-  // ONE bounded call: headers + body under the deadline, capped by the
-  // worker's execution budget. Every transport failure — a non-OK status, a
-  // reset socket, a timeout — is the same typed cause on the same error code.
   let payload;
-  try {
-    ({ payload } = await callProviderJson({
-      provider: 'openai',
-      url: 'https://api.openai.com/v1/responses',
-      init: {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.apiKey}`
-        },
-        body: JSON.stringify({
-          model: config.model,
-          instructions,
-          input: JSON.stringify(input),
-          store: false,
-          text: {
-            format: {
-              type: 'json_schema',
-              name: 'client_ask_message_draft',
-              strict: true,
-              schema: buildAskMessageSchema()
-            }
-          }
-        })
-      },
-      fetchImpl
-    }));
-  } catch (error) {
-    const receipt = providerFailureReceipt(error);
-    if (!receipt) throw error;
-    throw askPipelineUnavailable(receipt.message || `OpenAI draft request failed (${receipt.code}).`, receipt);
-  }
-
   let parsed = null;
-  try {
-    parsed = JSON.parse(outputTextFromResponse(payload));
-  } catch {
-    // An unreadable body is a transport-class failure (no draft exists to
-    // render) and gets the same treatment as a reset socket — the outage
-    // recovery re-requests it. A READABLE draft that violates the contract
-    // (unknown handles, missing coverage) stays ASK_PIPELINE_BAD_DRAFT below:
-    // that is the model's judgment failing, not the provider.
-    const receipt = providerFailureReceipt(providerInvalidOutput('openai', {
-      detail: 'the ask-message draft was not JSON', model: payload?.model || config.model
-    }));
-    throw askPipelineUnavailable(receipt.message, receipt);
+  if (resolved.provider === 'anthropic') {
+    // The same instructions, input and schema on the Messages API, through
+    // the shared envelope. Every failure — no credit, a bad key, a rate
+    // limit, a refusal, an output cut at max_tokens, an unreadable or
+    // schema-breaking body — is the same ASK_PIPELINE_LLM_UNAVAILABLE with
+    // the typed cause, exactly like the OpenAI path below.
+    let call;
+    try {
+      call = await llmCall(anthropicStructuredRequest({
+        apiKey: config.apiKey,
+        model: config.model,
+        system: instructions,
+        user: JSON.stringify(input),
+        schema: buildAskMessageSchema(),
+        effort: ANTHROPIC_EFFORT,
+        maxTokens: 64000,
+        stream: true,
+        cacheSystem: true,
+        timeoutMs: ANTHROPIC_TIMEOUT_MS,
+        execution: { root: { type: 'client_ask_draft', id: String(clientProfile?.id || clientProfile?.client_id || 'client') } },
+        fetchImpl
+      }));
+    } catch (error) {
+      const typed = typedLlmCallFailure('anthropic', error);
+      if (!typed) throw error;
+      const receipt = typed.receipt();
+      throw askPipelineUnavailable(receipt.message || `Anthropic draft request failed (${receipt.code}).`, receipt);
+    }
+    payload = { model: call.result.model, id: call.result.response_id };
+    parsed = call.result.parsed;
+  } else {
+    // ONE bounded call: headers + body under the deadline, capped by the
+    // worker's execution budget. Every transport failure — a non-OK status, a
+    // reset socket, a timeout — is the same typed cause on the same error code.
+    try {
+      ({ payload } = await callProviderJson({
+        provider: 'openai',
+        url: 'https://api.openai.com/v1/responses',
+        init: {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.apiKey}`
+          },
+          body: JSON.stringify({
+            model: config.model,
+            instructions,
+            input: JSON.stringify(input),
+            store: false,
+            text: {
+              format: {
+                type: 'json_schema',
+                name: 'client_ask_message_draft',
+                strict: true,
+                schema: buildAskMessageSchema()
+              }
+            }
+          })
+        },
+        fetchImpl
+      }));
+    } catch (error) {
+      const receipt = providerFailureReceipt(error);
+      if (!receipt) throw error;
+      throw askPipelineUnavailable(receipt.message || `OpenAI draft request failed (${receipt.code}).`, receipt);
+    }
+
+    try {
+      parsed = JSON.parse(outputTextFromResponse(payload));
+    } catch {
+      // An unreadable body is a transport-class failure (no draft exists to
+      // render) and gets the same treatment as a reset socket — the outage
+      // recovery re-requests it. A READABLE draft that violates the contract
+      // (unknown handles, missing coverage) stays ASK_PIPELINE_BAD_DRAFT below:
+      // that is the model's judgment failing, not the provider.
+      const receipt = providerFailureReceipt(providerInvalidOutput('openai', {
+        detail: 'the ask-message draft was not JSON', model: payload?.model || config.model
+      }));
+      throw askPipelineUnavailable(receipt.message, receipt);
+    }
   }
 
   return {
