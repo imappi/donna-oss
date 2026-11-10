@@ -233,6 +233,11 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
     body: { documents: [{ ...registration, id: `${clientId}-mobile-capture-twin`, storage_object_key: twinIntent.storage_object_key }] } }));
   assert.equal(twin.documents[0].capture_state, 'stored');
   assert.equal(twin.documents[0].duplicate_of, registration.id);
+  // The registration's own audit row says the phone made it.
+  const registrationAudit = (await appliance.query(
+    "select actor_type, metadata from audit_events where resource_id = $1 and action = 'document.parse.queued' order by id", [registration.id])).rows;
+  assert.equal(registrationAudit.length, 1, JSON.stringify(registrationAudit));
+  assert.equal(registrationAudit[0].metadata.channel, 'mobile', 'the document registration row carries the channel');
   // Someone else's upload key cannot be registered here.
   conformError(await api({ method: 'POST', path: `/entities/${clientId}/documents/register`, token,
     body: { documents: [{ ...registration, id: 'foreign-key', storage_object_key: `${firmId}/${neighbourClientId}/evidence/x.pdf` }] } }), 400, 'UPLOAD_NOT_IN_ENTITY');
@@ -302,8 +307,32 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
   conformError(await api({ method: 'POST', path: `${cardPath}/decision`, token, body: { type: 'answer', answer: { text: '' } } }), 400, 'ANSWER_EMPTY');
   conformError(await api({ method: 'POST', path: `${cardPath}/decision`, token, body: { type: 'answer', answer: { document_ids: [`${clientId}-nope`] } } }), 400, 'DOCUMENT_NOT_IN_ENTITY');
 
-  // ── Answer ──────────────────────────────────────────────────────────────
+  // A note on an answer is refused: an answer's words are answer.text, and the
+  // reply writer has nowhere to keep a second text that anything would read.
+  conformError(await api({ method: 'POST', path: `${cardPath}/decision`, token,
+    body: { type: 'answer', answer: { text: 'Printer paper.' }, note: 'Ask me again next week.' } }), 400, 'OWNER_NOTE_NOT_ACCEPTED');
+
+  // ── A reply that leaves the question open (the topic-turn lane) ─────────
   const askId = card.source.id;
+  const partial = conform('/entities/{entityId}/queue/cards/{cardId}/decision', 'POST', await api({
+    method: 'POST', path: `${cardPath}/decision`, token, body: { type: 'answer', answer: { text: "I'll send the invoice later." } }
+  }));
+  assert.equal(partial.applied, true, JSON.stringify(partial));
+  assert.equal(partial.card.state, 'open', 'the question stays open');
+  const topicRows = (await appliance.query(
+    "select id::text id, actor_type, actor_id, metadata from audit_events where resource_id = $1 and action = 'evidence_request.topic_turn' order by id",
+    [askId])).rows;
+  assert.equal(topicRows.length, 1, 'the open-question reply has its own audit row');
+  assert.deepEqual([topicRows[0].actor_type, topicRows[0].actor_id, topicRows[0].metadata.channel],
+    ['client', IDENTITIES.owner.email, 'mobile'], JSON.stringify(topicRows[0]));
+  assert.equal(topicRows[0].metadata.outcome, 'defer_later');
+  assert.equal(topicRows[0].metadata.previous_evidence_topic, null, 'there was no topic before: undoing it removes the topic');
+  assert.ok(partial.receipt.audit_event_ids.includes(topicRows[0].id), 'the receipt is that row');
+  const openTopic = (await appliance.query('select request_payload from client_evidence_requests where id = $1', [askId])).rows[0].request_payload.evidence_topic;
+  assert.equal(openTopic.channel, 'mobile', 'the topic records the phone, not the portal');
+  assert.equal(openTopic.turns.at(-1).channel, 'mobile');
+
+  // ── Answer ──────────────────────────────────────────────────────────────
   const answerText = 'Printer paper and toner for the studio — business use.';
   const decided = conform('/entities/{entityId}/queue/cards/{cardId}/decision', 'POST', await api({
     method: 'POST', path: `${cardPath}/decision`, token, body: { type: 'answer', answer: { text: answerText } }
@@ -367,6 +396,11 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
   conformError(await api({ method: 'POST', path: `${fyiPath}/decision`, token, body: { type: 'approve' } }), 409, 'DECISION_NOT_VALID_FOR_CARD');
   conformError(await api({ method: 'POST', path: `${approvalPath}/decision`, token, body: { type: 'veto_flag' } }), 409, 'DECISION_NOT_VALID_FOR_CARD');
 
+  // A note on an approval is refused, not dropped: the approval writer records
+  // none (an approval proceeds as held; a note could not change it).
+  conformError(await api({ method: 'POST', path: `${approvalPath}/decision`, token, body: { type: 'approve', note: 'Only if they have not paid.' } }),
+    400, 'OWNER_NOTE_NOT_ACCEPTED');
+  assert.equal((await appliance.query("select status from outbound_actions where id = 'action-held'")).rows[0].status, 'hold_for_approval', 'nothing decided');
   const approved = conform('/entities/{entityId}/queue/cards/{cardId}/decision', 'POST',
     await api({ method: 'POST', path: `${approvalPath}/decision`, token, body: { type: 'approve' } }));
   assert.equal(approved.applied, true);

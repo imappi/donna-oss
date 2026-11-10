@@ -99,9 +99,9 @@ const intentionalCanonicalValues = new Set([
 // Re-pin deliberately, in the same change as the keys.
 test('AR-3A plus AR-3B install one immutable 2,621-message Alpha catalog for AR-3C activation', () => {
   assert.equal(AR_AE_CATALOG_VERSION, '2026-09-28.sg-native-intake.1');
-  assert.equal(Object.keys(en).length, 2864);
-  assert.equal(Object.keys(arAE).length, 2864);
-  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2864);
+  assert.equal(Object.keys(en).length, 2867);
+  assert.equal(Object.keys(arAE).length, 2867);
+  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2867);
   assert.equal(AR_AE_CATALOG_METADATA.maturity, 'alpha');
   assert.equal(AR_AE_CATALOG_METADATA.displayLabel, 'العربية · إصدار تجريبي');
   assert.equal(AR_AE_CATALOG_METADATA.authorship, 'machine-authored');
@@ -207,7 +207,7 @@ test('the pre-AR-3B English catalog semantics are pinned and the mounted source 
     Object.entries(en).filter(([key]) => !key.startsWith('mounted.'))
   );
   assert.equal(hash(remainingSource), 'da0d0d66a1847d5a67d8f41d2262962e12a0153c1505a9d69906e5f923870816');
-  assert.equal(hash(mountedSource), 'a38893f36abc735770dae7c5da10bca7525afb1a9f95e04fb9b02f303cb852a5');
+  assert.equal(hash(mountedSource), '8771a26c8a529ccd4c0de626fdaa1c9224d4a1cf9cdd52dbc192c8f3a24b2ad0');
   assert.equal(hash(JSON.stringify(preAr3bEn)), '0caeb7e43ca33dcb3c00f5db4d4799fa5306220b9175f2733fe15b9d00f22256');
 });
 

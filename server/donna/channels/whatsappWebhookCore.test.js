@@ -43,6 +43,16 @@ test('extractAskRef extracts explicit Ref tokens only', () => {
   assert.equal(extractAskRef('no anchor here'), '');
 });
 
+test('extractAskRef reads "ref" as a whole word with Finnish letters counted as letters', () => {
+  // JavaScript's \b does not treat ä or ö as letters, so "ref" at the end of a
+  // longer word was read as an anchor, and an id running into ä was cut short.
+  assert.equal(extractAskRef('tyhjäref AB12CD'), '');
+  assert.equal(extractAskRef('Ref AB12ä'), '');
+  assert.equal(extractAskRef('Ref: AB12CD, kiitos'), 'AB12CD');
+  assert.equal(extractAskRef('maksoin itse (ref ab12-cd34)'), 'AB12CD34');
+  assert.equal(extractAskRef('ref\u00A0AB12CD'), 'AB12CD');
+});
+
 test('normalizePhoneE164 and salted hash are stable across formatting variants', () => {
   const formatted = '+44 (7700) 900-123';
   const normalized = '+447700900123';

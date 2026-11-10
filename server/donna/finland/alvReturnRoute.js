@@ -67,6 +67,24 @@ const FILE_FAILED_TEXT = 'ALV-ilmoituksen lähetys ei onnistunut. Vastaa “kyll
 // not in Donna. The ask stays open; the next "kyllä" retries after the grant.
 const MANDATE_MISSING_TEXT = 'ALV-ilmoitusta ei voi vielä lähettää: Suomi.fi-valtuutus (veroasioiden hoito) puuttuu tai ei ole voimassa. Myönnä valtuutus Suomi.fi-valtuudet-palvelussa, niin vahvistetaan kirjaus — sen jälkeen vastaa “kyllä” uudelleen.';
 
+// ALV_RETURN_FILING_OVERLAP: another live return already covers some of these
+// dates. Nothing was sent. The owner can cancel this return ("ei"); a filed
+// return stays as filed. Two returns both waiting: neither is sent until one
+// is cancelled.
+const OVERLAP_STATUS_WORDS = { filed: 'lähetetty', draft_pending_confirmation: 'odottaa vahvistusta' };
+const filingOverlapText = ({ periodKey, error }) => {
+  const others = Array.isArray(error?.details?.overlapping) ? error.details.overlapping : [];
+  const named = others.map((other) => `${other.period_key} (${OVERLAP_STATUS_WORDS[other.status] || other.status})`).join(', ');
+  const anyFiled = others.some((other) => other.status === 'filed');
+  return [
+    `ALV-ilmoitusta (${periodKey}) ei lähetetty: ${named ? `ilmoitus ${named}` : 'toinen ilmoitus'} kattaa jo osan samoista päivistä.`,
+    'Samoja myyntejä ja ostoja ei voi ilmoittaa kahdesti.',
+    anyFiled
+      ? 'Lähetetty ilmoitus pysyy ennallaan. Peru tämä ilmoitus vastaamalla “ei”.'
+      : 'Kumpaakaan ei lähetetä, ennen kuin toinen perutaan. Peru tämä ilmoitus vastaamalla “ei”.'
+  ].join(' ');
+};
+
 export const alvReturnConfirmQuestion = ({ periodKey, verdict }) =>
   `${summarizeAlvReturnVerdict({ periodKey, verdict })}\n\n${CONFIRM_INSTRUCTION}`;
 
@@ -78,11 +96,16 @@ const stateFromAsk = ({ ask }) => {
   return raw.state && typeof raw.state === 'object' ? { kind: raw.kind, ...raw.state } : raw;
 };
 
-// fileConfirmedAlvReturn — the filing motion: transmit (re-footed, refused
-// without authority/mandate/channel) → mark filed with the receipt (audit-as-
-// precondition, in-txn). The FI-8 channel must be idempotent per period —
-// the persisted row flips only after a successful transmit, so a crash between
-// the two legs retries the transmit on the next "kyllä".
+// fileConfirmedAlvReturn — the filing motion: overlap check → transmit
+// (re-footed, refused without authority/mandate/channel) → mark filed with the
+// receipt (audit-as-precondition, in-txn). The FI-8 channel must be idempotent
+// per period — the persisted row flips only after a successful transmit, so a
+// crash between the two legs retries the transmit on the next "kyllä".
+//
+// The overlap check (assertAlvReturnFileableInDb) runs BEFORE anything is
+// transmitted: returns that overlapped before migration 172 must not both be
+// reported. It refuses ALV_RETURN_FILING_OVERLAP while any other live return
+// covers one of these dates. Fail-closed: no check wired ⇒ nothing transmits.
 export const fileConfirmedAlvReturn = async ({
   firmId,
   clientId,
@@ -92,8 +115,16 @@ export const fileConfirmedAlvReturn = async ({
   mandate = null,
   transmitImpl = transmitAlvReturnFiling,
   submitReturn,
+  assertFileableImpl,
   markFiledImpl
 } = {}) => {
+  if (typeof assertFileableImpl !== 'function') {
+    throw Object.assign(
+      new Error('ALV filing refused: the overlap check before transmit is not wired.'),
+      { code: 'ALV_FILING_OVERLAP_CHECK_REQUIRED' }
+    );
+  }
+  await assertFileableImpl({ firmId, clientId, alvReturnId: row.id });
   const { receipt } = await transmitImpl({
     verdict: row.verdict,
     period: { key: row.period_key, type: row.period_type, starts_on: row.starts_on, ends_on: row.ends_on },
@@ -129,6 +160,7 @@ export const resolveAlvReturnInbound = async ({
   flagActs = true,
   getAlvReturnImpl,
   getMandateImpl,
+  assertFileableImpl,
   markFiledImpl,
   cancelImpl,
   fileImpl = fileConfirmedAlvReturn,
@@ -183,6 +215,7 @@ export const resolveAlvReturnInbound = async ({
         mandate,
         ...(transmitImpl ? { transmitImpl } : {}),
         submitReturn,
+        assertFileableImpl,
         markFiledImpl
       });
     } catch (error) {
@@ -193,7 +226,9 @@ export const resolveAlvReturnInbound = async ({
       // Suomi.fi mandate gets its own copy — granting it is an OWNER action
       // (Suomi.fi valtuudet), so the ask legitimately rests on them.
       if (typeof sendText === 'function') {
-        const reason = error?.code === 'ALV_FILING_MANDATE_REQUIRED'
+        const reason = error?.code === 'ALV_RETURN_FILING_OVERLAP'
+          ? filingOverlapText({ periodKey: row.period_key, error })
+          : error?.code === 'ALV_FILING_MANDATE_REQUIRED'
           ? MANDATE_MISSING_TEXT
           : (error?.code === 'ALV_FILING_REJECTED' && error?.channelReason
             ? `ALV-ilmoitusta ei hyväksytty: ${error.channelReason}\n\n${FILE_FAILED_TEXT}`

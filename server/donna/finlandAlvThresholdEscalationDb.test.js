@@ -57,9 +57,9 @@ test('exceeded: mints the deterministic per-year ask + audit in one txn, then de
   const summary = await drainFinlandAlvThresholdEscalations({
     client,
     year: 2026,
-    deliverAsksImpl: async (args) => { delivered.push(args); }
+    deliverAsksImpl: async (args) => { delivered.push(args); return { delivered: args.evidenceRequestIds }; }
   });
-  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 1, delivered: 1, skipped: 0, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 1, delivered: 1, held: 0, skipped: 0, errors: 0 });
 
   const askInsert = client.queries.find((q) => q.sql.includes('insert into client_evidence_requests'));
   assert.equal(askInsert.params[0], 'alv-threshold-firm-1-client-1-2026');
@@ -98,9 +98,9 @@ test('existing ask (conflict no-op): no audit, no delivery, no re-nag', async ()
   const summary = await drainFinlandAlvThresholdEscalations({
     client,
     year: 2026,
-    deliverAsksImpl: async (args) => { delivered.push(args); }
+    deliverAsksImpl: async (args) => { delivered.push(args); return { delivered: args.evidenceRequestIds }; }
   });
-  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 0, delivered: 0, skipped: 1, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 0, delivered: 0, held: 0, skipped: 1, errors: 0 });
   assert.equal(client.queries.some((q) => q.sql.includes('audit_events')), false, 'a no-op mint must not audit');
   assert.deepEqual(delivered, []);
 });
@@ -112,7 +112,7 @@ test('not exceeded: nothing minted, nothing delivered', async () => {
     turnoverRows: [{ year: '2026', turnover: '12000.00' }]
   });
   const summary = await drainFinlandAlvThresholdEscalations({ client, year: 2026, deliverAsksImpl: async () => {} });
-  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, skipped: 0, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 0, errors: 0 });
   assert.equal(client.queries.some((q) => q.sql.includes('client_evidence_requests')), false);
 });
 
@@ -123,7 +123,7 @@ test('scope guard: FINLAND_ALV_CODING acting skips the client (the return engine
     turnoverRows: [{ year: '2026', turnover: '25000.00' }]
   });
   const summary = await drainFinlandAlvThresholdEscalations({ client, year: 2026, deliverAsksImpl: async () => {} });
-  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, skipped: 1, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 1, errors: 0 });
 });
 
 test('authoritative re-gate: an enumerated candidate whose snapshot does not act is skipped', async () => {
@@ -135,13 +135,13 @@ test('authoritative re-gate: an enumerated candidate whose snapshot does not act
     turnoverRows: [{ year: '2026', turnover: '25000.00' }]
   });
   const summary = await drainFinlandAlvThresholdEscalations({ client, year: 2026, deliverAsksImpl: async () => {} });
-  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, skipped: 1, errors: 0 });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 1, errors: 0 });
 });
 
 test('no candidates (flag dark everywhere): a strict no-op', async () => {
   const client = fakeClient({ candidates: [] });
   const summary = await drainFinlandAlvThresholdEscalations({ client, year: 2026, deliverAsksImpl: async () => {} });
-  assert.deepEqual(summary, { scanned: 0, exceeded: 0, minted: 0, delivered: 0, skipped: 0, errors: 0 });
+  assert.deepEqual(summary, { scanned: 0, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 0, errors: 0 });
   assert.equal(client.queries.length, 1, 'only the candidate enumeration runs');
 });
 
@@ -157,9 +157,26 @@ test('a per-client failure is counted and does not stop the sweep', async () => 
     year: 2026,
     deliverAsksImpl: async () => {
       if (first) { first = false; throw new Error('WHATSAPP_DOWN'); }
+      return { delivered: ['alv-threshold-firm-1-client-2-2026'] };
     }
   });
   assert.equal(summary.scanned, 2);
   assert.equal(summary.errors, 1);
   assert.equal(summary.delivered, 1);
+});
+test('the mint writes no sent stamp; a question the send gate held counts as held, never as delivered', async () => {
+  const client = fakeClient({
+    candidates: [CANDIDATE],
+    snapshotFlags: { FINLAND_ALV_THRESHOLD_WATCH: 'auto' },
+    turnoverRows: [{ year: '2026', turnover: '25000.00' }]
+  });
+  const summary = await drainFinlandAlvThresholdEscalations({
+    client,
+    year: 2026,
+    deliverAsksImpl: async () => ({ refused: 'INTERNAL_PILOT_SEND_DISABLED' })
+  });
+  assert.deepEqual(summary, { scanned: 1, exceeded: 1, minted: 1, delivered: 0, held: 1, skipped: 0, errors: 0 });
+  const mint = client.queries.find((q) => q.sql.includes('insert into client_evidence_requests'));
+  assert.doesNotMatch(mint.sql, /first_sent_at|last_sent_at/, 'only a deliverer stamps a send');
+  assert.match(mint.sql, /, 0, 'system'\)/, 'minted with send_count 0');
 });

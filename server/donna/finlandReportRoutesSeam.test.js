@@ -80,7 +80,9 @@ await test('FI ALV return route preserves its complete current envelope byte-for
         source: 'Verohallinto tietuekuvaus VSRALVKV (27.2.2026) + vero.fi täyttöohje, via search extraction 2026-07-10; primary fetch blocked by network policy (F-FI3-1)'
       }
     },
-    lifecycle: null
+    lifecycle: null,
+    // Additive: other live returns over these dates (none here).
+    covered_by: []
   });
   assert.equal(pool.matching(/from client_capability_config/).length, 1);
   assert.equal(pool.matching(/select ll\.\*, la\.account_type/).length, 1);
@@ -140,6 +142,8 @@ await test('FI ALV start route: dates already covered by a live return answer 40
     assert.deepEqual(response.json.details.overlapping.map((row) => row.id), ['alv-q3']);
     assert.equal(pool.matching(/insert into alv_returns/).length, 0);
     assert.equal(pool.matching(/insert into client_evidence_requests/).length, 0, 'the owner is not asked to confirm');
-    assert.equal(pool.matching(/^\s*rollback\s*$/i).length, 1, 'the writer transaction rolls back');
+    // The overlap is read BEFORE the compute: no ledger read, no writer transaction.
+    assert.equal(pool.matching(/select ll\.\*, la\.account_type/).length, 0, 'nothing is computed for a covered period');
+    assert.equal(pool.matching(/^\s*begin\s*$/i).length, 0, 'the writer is never entered');
   });
 });
