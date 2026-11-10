@@ -592,8 +592,10 @@ await test('portal evidence replies keep non-terminal topic turns open', () => {
   // lane on a generic 'supporting_document') bypasses it too.
   // DMEM-R1 W1 (INV-14): a `draft` (minted, never delivered) is a live question the
   // owner may already answer from the portal, so the gate admits both live states.
-  assert.match(api, /if \(!answerSource && \(evidenceRequest\?\.status === 'open' \|\| evidenceRequest\?\.status === 'draft'\)\s*&& !\(replyText && supportsStructuredOwnerReply\(evidenceRequest\)\) && !portalTurn\.terminal\)/);
-  const topicBranch = api.match(/if \(!answerSource && \(evidenceRequest\?\.status === 'open' \|\| evidenceRequest\?\.status === 'draft'\)\s*&& !\(replyText && supportsStructuredOwnerReply\(evidenceRequest\)\) && !portalTurn\.terminal\)[\s\S]*?return;\n\s*}\n/);
+  // A text reply to a question that asks for a document is read by its strong
+  // reader too (ownerDocumentUnavailable.js): "it is missing" may be the answer.
+  assert.match(api, /if \(!answerSource && \(evidenceRequest\?\.status === 'open' \|\| evidenceRequest\?\.status === 'draft'\)\s*&& !\(replyText && \(supportsStructuredOwnerReply\(evidenceRequest\) \|\| asksOwnerForDocument\(evidenceRequest\)\)\) && !portalTurn\.terminal\)/);
+  const topicBranch = api.match(/if \(!answerSource && \(evidenceRequest\?\.status === 'open' \|\| evidenceRequest\?\.status === 'draft'\)\s*&& !\(replyText && \(supportsStructuredOwnerReply\(evidenceRequest\) \|\| asksOwnerForDocument\(evidenceRequest\)\)\) && !portalTurn\.terminal\)[\s\S]*?return;\n\s*}\n/);
   assert.ok(topicBranch, 'non-terminal portal branch should return before resolve');
   assert.doesNotMatch(topicBranch[0], /resolveClientEvidenceRequestInDb/);
 });
