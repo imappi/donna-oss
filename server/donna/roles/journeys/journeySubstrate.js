@@ -395,12 +395,31 @@ export const createJourneySubstrate = ({
     const expression = String(raw).trim();
 
     const conditional = expression.match(
-      /^case when\s+(.+?)\s*=\s*(.+?)\s+then\s+(.+?)\s+else\s+(.+?)\s+end$/i
+      /^case when\s+(.+?)\s+then\s+(.+?)\s+else\s+(.+?)\s+end$/i
     );
     if (conditional) {
-      const left = resolveExpression(conditional[1], { row, params, upsert, sql });
-      const right = resolveExpression(conditional[2], { row, params, upsert, sql });
-      const branch = String(left) === String(right) ? conditional[3] : conditional[4];
+      // A disjunction of `a = b`, `a is null` and `a in ('…', …)` — the shapes
+      // the writers in scope branch on (the journal account mint's
+      // fill-don't-overwrite type, 2026-11-10). Anything else is unrouted.
+      const holds = (predicate) => {
+        const isNull = predicate.match(/^(.+?)\s+is null$/i);
+        if (isNull) {
+          const resolved = resolveExpression(isNull[1], { row, params, upsert, sql });
+          return resolved === null || resolved === undefined;
+        }
+        const inList = predicate.match(/^(.+?)\s+in\s*\((.+)\)$/i);
+        if (inList) {
+          const resolved = resolveExpression(inList[1], { row, params, upsert, sql });
+          return splitTopLevel(inList[2]).some((item) => String(value(item, params)) === String(resolved));
+        }
+        const equal = predicate.match(/^(.+?)\s*=\s*(.+)$/);
+        if (equal) {
+          return String(resolveExpression(equal[1], { row, params, upsert, sql }))
+            === String(resolveExpression(equal[2], { row, params, upsert, sql }));
+        }
+        throw new UnroutedSqlError(`case predicate: ${predicate}`);
+      };
+      const branch = splitKeyword(conditional[1], 'or').some((part) => holds(part.trim())) ? conditional[2] : conditional[3];
       return resolveExpression(branch, { row, params, upsert, sql });
     }
 

@@ -55,6 +55,7 @@ const fakeClient = ({ flags = {}, askInsertReturns = true, entityType = null } =
       if (sql.includes('insert into client_evidence_requests')) {
         return askInsertReturns ? { rows: [{ id: params[0] }] } : { rows: [] };
       }
+      if (sql.startsWith('select id, code from ledger_accounts') || sql.startsWith('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3')) return { rows: [] }; // the mint's existing-row lookup (2026-11-10)
       if (sql.includes('insert into ledger_accounts')) return { rows: [] };
       if (sql.includes('insert into ledger_journals')) return { rows: [{ id: params[0] }] };
       if (sql.includes('delete from ledger_lines')) return { rows: [] };

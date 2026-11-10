@@ -82,6 +82,7 @@ const fakeClient = ({
       }
       if (sql.includes('from ledger_journals lj')) return { rows: existingJournal ? [existingJournal] : [] };
       if (sql.includes('from close_periods')) return { rows: lockedAtDate ? [{ id: 'cp-1' }] : [] };
+      if (sql.startsWith('select id, code from ledger_accounts') || sql.startsWith('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3')) return { rows: [] }; // the mint's existing-row lookup (2026-11-10)
       if (sql.includes('insert into ledger_accounts')) return { rows: [] };
       if (sql.includes('insert into ledger_journals')) return { rows: [{ id: 'journal-1' }] };
       if (sql.includes('delete from ledger_lines')) return { rows: [] };
@@ -369,6 +370,7 @@ const reversalFakeClient = ({
       if (sql.includes('as birth_created_at') && sql.includes('from clients')) return { rows: [{ id: params[1], firm_id: params[0], birth_created_at: null, jurisdiction: 'us', profile: {} }] };
       if (sql.includes('from audit_events where firm_id=$1 and resource_id=$2')) return { rows: [] };
       if (sql === 'select id,code,name,account_type,normal_balance,canonical_role,status,currency,payload\n    from ledger_accounts where firm_id=$1 and client_id=$2 order by id') return { rows: [AR_ACCOUNT, REVENUE_ACCOUNT] };
+      if (sql.startsWith('select id, code from ledger_accounts') || sql.startsWith('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3')) return { rows: [] }; // the mint's existing-row lookup (2026-11-10)
       if (sql.includes('insert into ledger_accounts')) return { rows: [] };
       if (sql.includes('insert into ledger_journals')) return { rows: [] };
       if (sql.includes('insert into ledger_lines')) return { rows: [] };
