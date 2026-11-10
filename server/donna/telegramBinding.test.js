@@ -51,7 +51,7 @@ const makeFakeClient = ({ tokens = [], bindings = [], asks = [], profile = null,
         const wantsTelegram = text.includes("'telegram'");
         return { rows: state.bindings.filter((row) => row.phone_hash === params[0] && !row.revoked_at && (!wantsTelegram || (row.channel || 'whatsapp') === 'telegram')) };
       }
-      if (text.includes('select profile from clients')) return { rows: [{ profile: state.profile }] };
+      if (text.includes('select jurisdiction, profile from clients')) return { rows: [{ profile: state.profile, jurisdiction: null }] };
       if (text.includes('update clients set profile')) return { rows: [] };
       // Config control plane — the sensitive-ask portal notice reads
       // OWNER_PORTAL_LINK through readClientConfigSnapshot.

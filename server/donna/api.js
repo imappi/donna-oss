@@ -2399,11 +2399,11 @@ const donnaFirmsApiHandler = async (req, res) => {
     // #5 Slice 6 — the §14 delegated-authority metrics the canary rollout is
     // GATED on (docs/proposal-2026-06-23-delegated-authority-material-matches.md
     // §14/§15). Pure observability: it reads only persisted state (grants 040,
-    // authorization requests 041, the delegated-accept receipt on matches) and
-    // adds NO inference (trust-the-strong-LLM). The model id rides FROM THE DATA
+    // the held-match and delegated-accept receipts on matches) and adds NO
+    // inference (trust-the-strong-LLM). The model id rides FROM THE DATA
     // in `models` (CLAUDE.md "the model id is the receipt"). Firm-governance read,
     // gated like /firm-facts (requireMember); optional ?client_id narrows every
-    // aggregate. In V1 (canary off) every counter is expected to read ZERO.
+    // aggregate. In V1 (canary off) the grant counters read ZERO; held is live.
     if (requestUrl.pathname === '/delegated-authority-metrics' && req.method === 'GET') {
       if (!isFirmDatabaseConfigured()) {
         res.statusCode = 503;

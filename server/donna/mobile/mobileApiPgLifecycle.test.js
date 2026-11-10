@@ -31,6 +31,7 @@ const installIdentityProvider = () => {
   const realFetch = globalThis.fetch;
   const live = new Map(); // access token -> identity key
   const revoked = [];
+  const revokedScopes = [];
   let seq = 0;
   const mint = (key) => {
     seq += 1;
@@ -58,13 +59,27 @@ const installIdentityProvider = () => {
       return key ? json(mint(key)) : json({ error: 'invalid_grant' }, 400);
     }
     if (url.pathname === '/auth/v1/logout') {
+      // The provider's rule: no scope (or `global`) ends EVERY session of the
+      // user; `local` ends only the session of the token presented.
+      const scope = url.searchParams.get('scope') || 'global';
+      const key = live.get(bearer);
       revoked.push(bearer);
-      live.delete(bearer);
+      revokedScopes.push(scope);
+      if (scope === 'local') live.delete(bearer);
+      else for (const [access, owner] of [...live]) if (owner === key) live.delete(access);
       return new Response(null, { status: 204 });
     }
     return json({ error: 'unexpected' }, 404);
   };
-  return { revoked, expire: (token) => live.delete(token), restore: () => { globalThis.fetch = realFetch; } };
+  return {
+    revoked,
+    revokedScopes,
+    // A session opened somewhere else (the web portal), not through the adapter.
+    openElsewhere: (key) => mint(key).access_token,
+    isLive: (token) => live.has(token),
+    expire: (token) => live.delete(token),
+    restore: () => { globalThis.fetch = realFetch; }
+  };
 };
 
 const conform = (pathTemplate, method, response) => {
@@ -152,9 +167,12 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
   // ── Refusals ────────────────────────────────────────────────────────────
   await t.test('staff identities are refused and their provider session is revoked', async () => {
     for (const key of ['member', 'seat']) {
+      const web = idp.openElsewhere(key);
       const before = idp.revoked.length;
       conformError(await signIn(key), 403, 'MOBILE_OWNER_ONLY');
       assert.equal(idp.revoked.length, before + 1, `${key}: the minted session was revoked`);
+      assert.equal(idp.revokedScopes.at(-1), 'local', `${key}: only the session just minted is revoked`);
+      assert.ok(idp.isLive(web), `${key}: the web session survives the phone's refusal`);
     }
   });
   await t.test('another client’s entity is not found, for reads and writes', async () => {
@@ -173,7 +191,7 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
   });
   await t.test('unimplemented contract paths answer 501 in the error envelope', async () => {
     conformError(await api({ path: `/entities/${clientId}/chat`, token }), 501, 'NOT_IMPLEMENTED');
-    conformError(await api({ method: 'POST', path: '/notifications/registrations', token, body: { platform: 'ios', expo_push_token: 'x' } }), 501, 'NOT_IMPLEMENTED');
+    conformError(await api({ path: `/entities/${clientId}/activity`, token }), 501, 'NOT_IMPLEMENTED');
   });
 
   // ── Queue starts empty; status starts unchecked ─────────────────────────
@@ -394,9 +412,12 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
   assert.deepEqual(status.periods[0].blockers.map((blocker) => blocker.code), openChecks.map((row) => row.check_type));
 
   // ── Sign out; kill switch ───────────────────────────────────────────────
+  const ownerWeb = idp.openElsewhere('owner');
   const out = await api({ method: 'DELETE', path: '/auth/sessions/current', token });
   assert.equal(out.status, 204);
   assert.ok(idp.revoked.includes(token));
+  assert.ok(idp.revokedScopes.every((scope) => scope === 'local'), 'every revoke names the local scope');
+  assert.ok(idp.isLive(ownerWeb), 'signing out on the phone leaves the owner signed in on the web');
   conformError(await api({ path: '/me', token }), 401, 'AUTH_REQUIRED');
   process.env.DONNA_MOBILE_API = 'off';
   try {
