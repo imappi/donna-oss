@@ -11,9 +11,20 @@
 import { useState } from 'react';
 import { useIntl } from 'react-intl';
 
+import { useInterfaceLocale } from '../../i18n/LocaleProvider.jsx';
+
 import { D } from '../shared/design-tokens.js';
 import { btnPrimary, btnChip, btnDisabled } from '../shared/buttons.js';
-import { isMatchHeldForAuthority, defaultReviewDate, humanizeSlug } from '../../lib/heldMatchAuthority.js';
+import {
+  authorityAmount,
+  authorityArchetype,
+  authorityDate,
+  authorityDocumentType,
+  authorityIneligibleReason,
+  authorityRefusal,
+  defaultReviewDate,
+  isMatchHeldForAuthority
+} from '../../lib/heldMatchAuthority.js';
 import { mintReconciliationAuthorityGrant, previewReconciliationAuthorityGrant } from '../../lib/firmApi.js';
 
 const row = { display: 'grid', gridTemplateColumns: 'minmax(96px, 0.42fr) minmax(0, 1fr)', columnGap: 12, rowGap: 6, fontSize: 12.5 };
@@ -23,6 +34,7 @@ const input = { font: 'inherit', fontSize: 12.5, padding: '4px 6px', border: `1p
 
 export const GrantPreviewForm = ({ clientId, preview, onMinted, onCancel, mint = mintReconciliationAuthorityGrant }) => {
   const intl = useIntl();
+  const { formatAmount, formatDate } = useInterfaceLocale();
   const message = (id, values) => intl.formatMessage({ id }, values);
   const [ceiling, setCeiling] = useState(String(preview.amount ?? ''));
   const [reviewDate, setReviewDate] = useState(defaultReviewDate());
@@ -49,7 +61,7 @@ export const GrantPreviewForm = ({ clientId, preview, onMinted, onCancel, mint =
       });
       onMinted?.(result);
     } catch (err) {
-      setError(err?.message || String(err));
+      setError(authorityRefusal(intl, err));
     } finally {
       setBusy(false);
     }
@@ -60,10 +72,10 @@ export const GrantPreviewForm = ({ clientId, preview, onMinted, onCancel, mint =
       <div style={row}>
         <span style={label}>{message('firm.reconAuthority.preview.scope')}</span>
         <span style={value} data-testid="grant-scope">{message('firm.reconAuthority.preview.scopeValue', {
-          vendor: example.vendor_name || scope.merchant || '—', label: humanizeSlug(example.document_type || scope.document_type) || '—', account: scope.account || '—'
+          vendor: example.vendor_name || scope.merchant || '—', label: authorityDocumentType(intl, example.document_type || scope.document_type), account: scope.account || '—'
         })}</span>
         <span style={label}>{message('firm.reconAuthority.preview.archetype')}</span>
-        <span style={value}>{message(`firm.reconAuthority.archetype.${preview.archetype}`)}</span>
+        <span style={value} data-testid="grant-archetype">{authorityArchetype(intl, preview.archetype)}</span>
         <span style={label}>{message('firm.reconAuthority.preview.action')}</span>
         <span style={value}>{message('firm.reconAuthority.preview.actionValue')}</span>
         <label style={label} htmlFor="grant-ceiling">{message('firm.reconAuthority.preview.ceiling')}</label>
@@ -73,8 +85,10 @@ export const GrantPreviewForm = ({ clientId, preview, onMinted, onCancel, mint =
         <label style={label} htmlFor="grant-review">{message('firm.reconAuthority.preview.reviewAfter')}</label>
         <input id="grant-review" data-testid="grant-review" type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} style={input} />
         <span style={label}>{message('firm.reconAuthority.preview.example')}</span>
-        <span style={value}>{message('firm.reconAuthority.preview.exampleValue', {
-          vendor: example.vendor_name || '—', amount: example.amount, currency: example.currency, date: String(example.date || '').slice(0, 10) || '—'
+        <span style={value} data-testid="grant-example">{message('firm.reconAuthority.preview.exampleValue', {
+          vendor: example.vendor_name || '—',
+          amount: authorityAmount(example.amount, example.currency || preview.currency, formatAmount),
+          date: authorityDate(example.date, formatDate)
         })}</span>
         <label style={label} htmlFor="grant-reason">{message('firm.reconAuthority.preview.reason')}</label>
         <input id="grant-reason" type="text" value={reason} onChange={(e) => setReason(e.target.value)} style={input} />
@@ -162,7 +176,7 @@ const HeldMatchAuthority = ({
       {panel.state === 'failed' && <div role="alert" style={{ marginTop: 10, fontSize: 12 }}>{message('firm.reconAuthority.preview.failed')}</div>}
       {panel.state === 'ready' && !panel.preview.eligible && (
         <div data-testid="grant-ineligible" style={{ marginTop: 10, fontSize: 12.5, color: D.inkSoft }}>
-          {message(`firm.reconAuthority.ineligible.${panel.preview.ineligible_reason}`, { status: panel.preview.existing_grant?.status || '' })}
+          {authorityIneligibleReason(intl, panel.preview.ineligible_reason, panel.preview.existing_grant?.status)}
         </div>
       )}
       {panel.state === 'ready' && panel.preview.eligible && (
