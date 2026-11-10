@@ -79,6 +79,17 @@ enough for every model task; an OpenAI key is optional.
 | OpenAI (optional) | `OPENAI_API_KEY` | The same tasks on OpenAI, used only when no Anthropic key is set |
 | Typesafe | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | First-line decisions on matching, disposition and coding. Without it, bank lines stay "Stalled" |
 
+Each document task has its own model knob: `OPENAI_VISION_MODEL` (bank
+statements), `DOCUMENT_ROUTER_MODEL`, `BILL_EXTRACTOR_MODEL`,
+`INVOICE_EXTRACTOR_MODEL`, `CONTRACT_EXTRACTOR_MODEL`,
+`PAYOUT_EXTRACTOR_MODEL`, `GENERIC_DOC_MODEL`, `RECEIPT_CLASSIFIER_MODEL` and
+`CLIENT_INTAKE_MODEL`. A model id in one pins that task to its provider: a
+`gpt-*` id sends it to OpenAI even when an Anthropic key is set, and with
+only an Anthropic key the document waits for `OPENAI_API_KEY`. The wait
+names the knob that caused it. Leave them unset to read on Claude. The
+document tasks do not read `OPENAI_MODEL`, and the receipt reader and parser
+repair have no knob.
+
 A local book creates every company with the Typesafe lane switched on
 (`JEV_RECONCILIATION`). If you have an Anthropic key but no Typesafe key,
 add this line to `.env`:

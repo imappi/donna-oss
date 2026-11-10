@@ -585,13 +585,15 @@ export const extractReceiptFromBase64 = async ({
     // No key: the failure names the provider whose key is missing (the
     // lane's first, Anthropic, unless a pinned model id chose another).
     const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'type_extractors_legacy');
-    console.warn('[receipt] no model provider key configured', { correlation_id: correlationId, reason: notConfigured });
+    console.warn('[receipt] no model provider key configured', { correlation_id: correlationId, reason: notConfigured, pinned_by: config.pinned_by || null });
     return {
       kind: 'failed',
       model: null,
       provider: missing,
       code: 'DOCUMENT_EXTRACTION_FAILED',
-      reason: notConfigured
+      reason: notConfigured,
+      // The lane knob whose model id chose the missing provider, if one did.
+      ...(config.pinned_by ? { pinned_by: config.pinned_by } : {})
     };
   }
 

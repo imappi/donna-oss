@@ -9,6 +9,7 @@ import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { asProviderResponse, llmCall } from './llmCall.js';
 import { classifyModelProvenance } from './providerEndpoints.js';
 import {
+  ANTHROPIC_MAX_PDF_PAGES,
   ANTHROPIC_MAX_REQUEST_BYTES,
   anthropicFileBlock,
   documentLaneAnthropicRequest,
@@ -122,6 +123,7 @@ const getOpenAiConfig = () => {
     // first (the parse wait names ANTHROPIC_API_KEY, not a key the
     // installation never meant to hold).
     missingProvider: resolved.ok ? null : missingProviderFor(resolved, 'bank_statement_vision'),
+    pinnedBy: resolved.ok ? null : resolved.pinned_by || null,
     apiKey: resolved.ok ? resolved.apiKey : '',
     configured: resolved.ok,
     reason: resolved.reason,
@@ -484,6 +486,8 @@ export const isOpenAiVisionConfigured = () => getOpenAiConfig().configured;
 // Which provider the statement reader is waiting on when it is not
 // configured (the parse worker's not_configured record names it).
 export const statementReaderMissingProvider = () => getOpenAiConfig().missingProvider;
+// …and the lane knob whose model id pinned that provider, when one did.
+export const statementReaderPinnedBy = () => getOpenAiConfig().pinnedBy;
 
 const notConfiguredError = (config, what) => {
   const error = new Error(`No model provider key is configured for ${what} (${config.reason || 'no_provider_key'}).`);
@@ -624,8 +628,9 @@ const fitChunksToRequestLimit = async (config, chunks, budget = ANTHROPIC_CHUNK_
   if (config.provider !== 'anthropic') return chunks;
   const fitted = [];
   for (const chunk of chunks) {
-    if (chunk.base64.length <= budget) { fitted.push(chunk); continue; }
     const pages = chunk.pageEnd - chunk.pageStart + 1;
+    // Both request limits: the encoded size and the page count per request.
+    if (chunk.base64.length <= budget && pages <= ANTHROPIC_MAX_PDF_PAGES) { fitted.push(chunk); continue; }
     if (pages <= 1) {
       const error = new Error(`One page of this PDF is larger than the ${Math.floor(ANTHROPIC_MAX_REQUEST_BYTES / 1024 / 1024)} MB model request limit.`);
       error.code = 'OPENAI_VISION_PDF_TOO_LARGE';

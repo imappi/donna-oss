@@ -1130,7 +1130,8 @@ const extractDocumentInner = async ({
         // `<provider>_not_configured`, #71's wait vocabulary).
         provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1225,7 +1226,8 @@ const extractDocumentInner = async ({
         // `<provider>_not_configured`, #71's wait vocabulary).
         provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1290,7 +1292,8 @@ const extractDocumentInner = async ({
         // `<provider>_not_configured`, #71's wait vocabulary).
         provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1341,7 +1344,8 @@ const extractDocumentInner = async ({
         // `<provider>_not_configured`, #71's wait vocabulary).
         provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1394,7 +1398,8 @@ const extractDocumentInner = async ({
         message: `Generic document extraction failed: ${extraction.reason || extraction.code}`,
         provider: extraction.provider || null,
         reason: extraction.reason || null,
-        model: extraction.model || null
+        model: extraction.model || null,
+        ...(extraction.pinned_by ? { details: { pinned_by: extraction.pinned_by } } : {})
       });
     }
 
@@ -1454,6 +1459,7 @@ const extractDocumentInner = async ({
       provider,
       retryable: !unauthorized,
       reason: unauthorized ? `${provider}_${details.status === 403 ? 403 : 401}` : `${provider}_${fault}`,
+      ...(details.pinned_by ? { details: { pinned_by: details.pinned_by } } : {}),
       message: `Bank statement extraction failed: ${provider} ${fault} (no text layer; cloud OCR unavailable)`
     });
   }
@@ -2254,6 +2260,14 @@ const runParseAndWrite = async ({ firmId, documentId, parseRunId, log, attempt =
     const priorHold = claimResult?.prior_hold || null;
     if (wait && providerWaitAllowed({ wait, prior: priorHold })) {
       const hold = buildProviderWaitHold({ wait, categorized, prior: priorHold, parseRunId });
+      // A lane knob that pins a provider by model id (a gpt id in
+      // BILL_EXTRACTOR_MODEL, say) is what made the installation wait on that
+      // provider's key: the hold names it.
+      const pinnedBy = err?.details?.pinned_by || null;
+      if (hold && pinnedBy) {
+        hold.pinned_by = pinnedBy;
+        hold.message = `${hold.key_name || 'the provider key'} is not set, and ${pinnedBy} pins this lane to ${hold.provider}. Set the key, or clear the knob to use the configured provider.`;
+      }
       let released = null;
       let releaseThrew = false;
       try {

@@ -14,7 +14,8 @@ import {
   extractStructuredFromStatementText,
   isOpenAiVisionConfigured,
   ocrPdfWithOpenAiVision,
-  statementReaderMissingProvider
+  statementReaderMissingProvider,
+  statementReaderPinnedBy
 } from './bankStatementVision.js';
 import { toUtcIsoDay } from './dates.js';
 import { providerFaultOfResponse } from './inngest/parseErrors.js';
@@ -1448,7 +1449,8 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
   if (bestTextLayer.lineCount === 0 && safeOcrCandidate.lineCount === 0 && !isOpenAiVisionConfigured()) {
     // The provider named is the one whose key is missing: the reader's
     // first (Anthropic since 2026-11-10), so the wait names ANTHROPIC_API_KEY.
-    return { ...bestTextLayer, vision_skipped: 'not_configured', vision_skipped_details: { fault: 'not_configured', provider: statementReaderMissingProvider() || 'anthropic' } };
+    const pinnedBy = statementReaderPinnedBy();
+    return { ...bestTextLayer, vision_skipped: 'not_configured', vision_skipped_details: { fault: 'not_configured', provider: statementReaderMissingProvider() || 'anthropic', ...(pinnedBy ? { pinned_by: pinnedBy } : {}) } };
   }
   return bestTextLayer;
 };

@@ -449,8 +449,8 @@ export const extractClientIntakeDraft = async ({
     // No key: the failure names the provider whose key is missing (the
     // lane's first, Anthropic, unless a pinned model id chose another).
     const { provider: missing, reason: notConfigured } = notConfiguredFailure(config, 'client_intake_draft');
-    console.warn('[clientIntakeDraft] no model provider key configured', { correlation_id: correlationId, reason: notConfigured });
-    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: notConfigured, provider: missing };
+    console.warn('[clientIntakeDraft] no model provider key configured', { correlation_id: correlationId, reason: notConfigured, pinned_by: config.pinned_by || null });
+    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: notConfigured, provider: missing, ...(config.pinned_by ? { pinned_by: config.pinned_by } : {}) };
   }
 
   const clean = trimBase64(base64);

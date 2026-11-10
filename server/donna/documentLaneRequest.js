@@ -60,19 +60,26 @@ export const resolveDocumentLaneProvider = ({
   providerEnvKey = null,
   modelEnvKeys = [],
   defaultModels = {}
-} = {}) => ({
-  ...resolveLaneProvider({
+} = {}) => {
+  const merged = envWithDotEnvFallback(env, dotEnv);
+  const resolved = resolveLaneProvider({
     providers: getLane(laneId)?.providers || [],
     defaultModels,
     providerEnvKey,
     modelEnvKeys,
-    env: envWithDotEnvFallback(env, dotEnv),
+    env: merged,
     provider,
     model,
     keys
-  }),
-  lane: laneId
-});
+  });
+  // A lane knob holding a model id pins the provider it belongs to (a gpt id
+  // pins OpenAI even with an Anthropic key present). Name the knob, so a
+  // wait for a key the installation never meant to hold says what caused it.
+  const knob = !model && resolved.source?.provider === 'model_id'
+    ? modelEnvKeys.find((name) => String(merged?.[name] || '').trim()) || null
+    : null;
+  return { ...resolved, lane: laneId, ...(knob ? { pinned_by: `${knob}=${String(merged[knob]).trim()}` } : {}) };
+};
 
 // The provider a no-key result names: the lane's first registry provider,
 // so the parse pipeline's wait (inngest/parseErrors.js) names the key this
@@ -92,7 +99,8 @@ export const notConfiguredFailure = (resolved, laneId) => {
   const reason = !resolved?.reason || String(resolved.reason).startsWith('no_provider_key')
     ? `${provider}_not_configured`
     : resolved.reason;
-  return { provider, reason };
+  // `pinned_by`: the lane knob whose model id chose this provider, when one did.
+  return { provider, reason, ...(resolved?.pinned_by ? { pinned_by: resolved.pinned_by } : {}) };
 };
 
 // ── a file as a content block ─────────────────────────────────────────────

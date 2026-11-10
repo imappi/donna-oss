@@ -543,7 +543,9 @@ export const classifyReceipt = async ({
     console.error('[receiptClassifier] provider stopped without a usable reply', {
       correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason
     });
-    return makeDeterministicSemanticOutput({ vendor, reason: reply.error.reason });
+    // The lanes' one stop vocabulary (provider_refused / provider_output_limit
+    // / provider_invalid_output), as the extractors store it.
+    return makeDeterministicSemanticOutput({ vendor, reason: stopFailureReason(reply.error) });
   }
 
   if (!reply.ok) {

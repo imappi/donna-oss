@@ -192,7 +192,17 @@ for (const lane of EXTRACTORS) {
   });
 }
 
-test('a lane on tool delivery: a prose reply (no tool call) and a reply that breaks the lane schema are named, terminal failures', async () => {
+test('a lane knob holding a gpt id pins the lane to OpenAI even with an Anthropic key: the failure names the knob', async () => {
+  keys({ anthropic: true });
+  process.env.BILL_EXTRACTOR_MODEL = 'gpt-5.4';
+  try {
+    const pinned = await extractSupplierBillFromBase64({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
+    assert.deepEqual([pinned.code, pinned.reason, pinned.provider, pinned.pinned_by],
+      ['DOCUMENT_EXTRACTION_FAILED', 'openai_not_configured', 'openai', 'BILL_EXTRACTOR_MODEL=gpt-5.4']);
+  } finally { restore(); }
+});
+
+test('a lane on tool delivery: a prose reply (no tool call) and a reply that breaks the lane schema are named, retryable failures', async () => {
   keys({ anthropic: true });
   const providers = installRecordedProviders();
   try {

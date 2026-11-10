@@ -279,6 +279,31 @@ test(
 );
 
 test(
+  'real PG (e2): a Claude-only host whose statement knob holds a gpt id waits on the OpenAI key, and the wait names the knob that caused it',
+  { skip: applianceHarnessSkipReason({ dark: ['openai'] }) },
+  async () => {
+    const appliance = await bootApplianceForTest({ keys: { openai: false, anthropic: true, typesafe: false }, env: { OPENAI_VISION_MODEL: 'gpt-5.4' }, now: BOOT_NOW });
+    try {
+      const { clientId } = await appliance.createClient();
+      const upload = await appliance.uploadDocument({
+        clientId,
+        bytes: readFileSync(SCANNED_STATEMENT),
+        filename: 'scanned-statement-2025-02.pdf',
+        documentType: 'bank_statement'
+      });
+      const runId = upload.registered.parse_run_id;
+      await appliance.tick({ functions: [PARSE_FN], collapseWaits: false, maxRounds: 1 });
+      const { hold } = await assertWaiting(appliance, { documentId: upload.documentId, runId, waits: 1, provider: 'openai', keyName: 'OPENAI_API_KEY' });
+      assert.equal(hold.pinned_by, 'OPENAI_VISION_MODEL=gpt-5.4');
+      assert.match(hold.message, /OPENAI_API_KEY is not set, and OPENAI_VISION_MODEL=gpt-5\.4 pins this lane to openai/);
+      assert.equal(appliance.providers.callsFor('bank_statement_extraction').length, 0);
+    } finally {
+      await appliance.stop();
+    }
+  }
+);
+
+test(
   'real PG (f): upgrade — a receipt the old code rested failed on a missing key (and its dead job) is re-admitted by migration 186, read once, and Host A stops refusing uploads',
   { skip: applianceHarnessSkipReason({ dark: DARK }) },
   async () => {
