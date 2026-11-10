@@ -60,6 +60,9 @@ test('insertLedgerCorrectionJournal persists role on the correction ledger_lines
     async query(sql, params = []) {
       if (sql.includes('as birth_created_at') || sql.includes('select id,code,name,account_type,normal_balance,canonical_role,status,currency,payload')
         || sql.includes('from audit_events where firm_id=$1 and resource_id=$2')) return { rows: [] };
+      // The filed-VAT-return guard reads the client's country (db/ledger.js
+      // assertJournalDateOutsideFiledReturn, 2026-11-10); this fixture has none, so nothing more is read.
+      if (sql === 'select jurisdiction, profile from clients where firm_id = $1 and id = $2') return { rows: [] };
       if (sql.includes('insert into ledger_accounts')) return { rows: [] };
       if (sql.includes('insert into ledger_journals')) return { rows: [] };
       if (sql.includes('insert into ledger_lines')) {
