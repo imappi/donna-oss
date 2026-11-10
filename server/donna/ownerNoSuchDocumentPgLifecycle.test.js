@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bootApplianceForTest, applianceHarnessSkipReason } from './testSupport/applianceHarness.js';
 import { loadRecording } from './testSupport/recordedProviders.js';
+import { claudeRequestInput } from './testSupport/claudeMessage.js';
 import { FI_PROFILE, openAiFixture, anthropicFixture } from './testSupport/fiReliabilitySources.js';
 
 const CODING = 'parse-cron:coding_convergence';
@@ -55,7 +56,10 @@ const LINES = Object.freeze({
 });
 const lineKeyFor = (row) => Object.keys(LINES).find((key) => String(row.description || '').startsWith(LINES[key].description.split(' ')[0]));
 const codingResponder = (request) => {
-  const input = JSON.parse(request.input);
+  // The coder runs on Claude on a host with both keys (2026-11-10): its input
+  // is the Messages user turn; the stub serves this OpenAI-shaped answer in
+  // the Messages shape.
+  const input = JSON.parse(request.input ?? claudeRequestInput(request));
   const rows = input.transactions || [input.transaction];
   const suggestions = rows.map((row) => {
     const line = LINES[lineKeyFor(row)] || {};
