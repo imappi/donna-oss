@@ -24,6 +24,8 @@ import { resolveOwnerPortalLink, composePortalLinkReply, recordOwnerPortalLinkSh
 import { prefetchOwnerChannelGateContext } from './ownerChannelConfig.js';
 import { clientFlagActs } from '../clientConfig.js';
 import { supportsStructuredOwnerReply } from '../statutoryRegistry.js';
+import { CORRECTION_NOT_CORRECTABLE_CODE, closedQuestionNotice } from '../ownerReplyCorrection.js';
+import { readEvidenceCorrectionReaderInDb } from '../db/asks.js';
 import {
   checkEntityReadinessAdmissionWithClient,
   EntityReadinessAdmissionError
@@ -116,9 +118,12 @@ const INBOUND_CORE_COPY = Object.freeze({
     invoiceRefusalStillOpen: ' The question remains open; reply with your complete invoice instruction to try again.',
     savedCodingExhausted: 'Your answer is saved, but coding could not finish. The issue needs repair before it can continue.',
     savedCodingPending: 'Your answer is saved. Coding has not finished yet.',
-    bookedPosted: "It's on your books now — reply if that's not right.",
-    bookedNotPosted: "Reply if that's not right.",
-    booked: (account, tail) => `Got it — booked to ${account}. ${tail}`,
+    // No invitation to reply: once booked, the line is finished and its
+    // question closed, so no reader could take a correction
+    // (ownerReplyCorrection.js); a reply there is read as a new message.
+    bookedPosted: "It's on your books now.",
+    bookedNotPosted: '',
+    booked: (account, tail) => `Got it — booked to ${account}.${tail ? ` ${tail}` : ''}`,
     followUpSent: 'Thanks. I sent you a follow-up question.'
   }),
   fi: Object.freeze({
@@ -130,9 +135,9 @@ const INBOUND_CORE_COPY = Object.freeze({
     invoiceRefusalStillOpen: ' Kysymys on yhä auki. Vastaa koko laskuohjeella, niin yritetään uudelleen.',
     savedCodingExhausted: 'Vastauksesi on tallessa, mutta kirjausta ei saatu valmiiksi. Asia pitää korjata, ennen kuin se voi jatkua.',
     savedCodingPending: 'Vastauksesi on tallessa. Kirjaus ei ole vielä valmis.',
-    bookedPosted: 'Se on nyt kirjanpidossasi. Vastaa, jos se ei ole oikein.',
-    bookedNotPosted: 'Vastaa, jos se ei ole oikein.',
-    booked: (account, tail) => `Selvä, kirjasin tämän tilille ${account}. ${tail}`,
+    bookedPosted: 'Se on nyt kirjanpidossasi.',
+    bookedNotPosted: '',
+    booked: (account, tail) => `Selvä, kirjasin tämän tilille ${account}.${tail ? ` ${tail}` : ''}`,
     followUpSent: 'Kiitos. Lähetin sinulle vielä tarkentavan kysymyksen.'
   })
 });
@@ -391,7 +396,10 @@ export const buildEvidenceTopicState = ({ ask = {}, turn = {}, now, channel, act
 // a follow-up), we fall back to the channel's generic acknowledgement. We NEVER
 // claim a booking that didn't happen — the line is rendered from the persisted
 // recode verdict, not from optimism (honest-promise rail).
-export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language = 'en' } = {}) => {
+// `replyInvitation: false` is for a channel where a reply cannot be tied back
+// to this message (SMS has no quote-reply): the lane's line is spoken without
+// its invitation (owner_notice_statement, ownerReplyNotice.js).
+export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language = 'en', replyInvitation = true } = {}) => {
   const copy = coreCopyFor(language);
   const recode = resolved && typeof resolved === 'object' ? resolved.recode : null;
   const clarification = resolved?.evidence_request?.response_payload?.reply_processing?.clarification;
@@ -418,7 +426,13 @@ export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language 
   // registration lane, taxRegistrationReply.js: recorded, or not recorded)
   // speaks that line, already in the owner's language. The worker keeps the
   // same line on the answered question (ownerReplyNotice.js).
-  if (recode?.applied === true && typeof recode.owner_notice === 'string' && recode.owner_notice.trim()) return recode.owner_notice.trim();
+  // A correction to a closed question's answer (ownerReplyCorrection.js)
+  // always says what came of it, recorded or not.
+  // (A correction's in-band line invites nothing; its statement is what the
+  // question shows, which is not what was said in reply.)
+  const notice = !replyInvitation && !recode?.correction && typeof recode?.owner_notice_statement === 'string' && recode.owner_notice_statement.trim()
+    ? recode.owner_notice_statement : recode?.owner_notice;
+  if ((recode?.applied === true || recode?.correction) && typeof notice === 'string' && notice.trim()) return notice.trim();
   if (!recode || recode.applied !== true) {
     if (resolved?.evidence_request?.status === 'replied' || recode?.error || recode?.skipped) {
       return recode?.exhausted ? copy.savedCodingExhausted : copy.savedCodingPending;
@@ -995,7 +1009,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
     }
   }
   const outboundText = resolved
-    ? buildResolvedReplyText({ resolved, fallback: finalReply.text, language: config.language })
+    ? buildResolvedReplyText({ resolved, fallback: finalReply.text, language: config.language, replyInvitation: config.capabilities?.quoteReplyAnchor === true })
     : mileage?.status === 'booked'
       ? mileage.consequence
       : portalLink
@@ -1023,7 +1037,15 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
     actorType: 'llm'
   });
   await deps.recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: action?.type === 'answer_evidence_request' ? action.evidence_request_id : null, client_id: clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: resolved?.evidence_request?.id || null, provider_payload: { inbound: { type: 'text', anchor: 'general_owner_chat', assistant_message_id: assistantMessage.id, action_applied: Boolean(resolved || mileage?.status === 'booked' || portalLink?.status === 'sent'), ...(portalLink ? { portal_link: { status: portalLink.status, path: portalLink.path || null } } : {}), ...(selfKnowledge ? { self_knowledge_version: selfKnowledge.receipt.self_knowledge_version, self_knowledge_fingerprint: selfKnowledge.receipt.self_knowledge_fingerprint } : {}) } } } });
-  await deps.sendText({ to: from, text: outboundText });
+  const delivery = await deps.sendText({ to: from, text: outboundText });
+  // An answer recorded from general chat: its line is kept under the question
+  // it answered, so a quote-reply to it reaches that question (as in the
+  // anchored path below).
+  if (resolved && config.capabilities?.quoteReplyAnchor && delivery?.ok && delivery.id != null) {
+    await deps.recordLedger({ entry: { message_id: String(delivery.id), provider: config.provider, channel: config.channel, ask_id: action.evidence_request_id,
+      client_id: clientId, recipient_phone_hash: anchor.phoneHash, sent_at: new Date().toISOString(),
+      provider_payload: { outbound: { kind: 'owner_reply_notice', in_reply_to: message.id } } } }).catch((error) => console.warn('[inbound-owner-chat] reply-notice ledger write failed', error?.message || error));
+  }
   return { status: 'general_chat', clientId, actionApplied: Boolean(resolved || mileage?.status === 'booked' || portalLink?.status === 'sent'), resolved, mileage, portalLink, report: reportRequest ? { request: reportRequest } : null };
 };
 
@@ -1066,27 +1088,31 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
   // known); the channel copy carries the same line in the owner's language.
   const deferredText = (item) => (config.language && item?.deferredReason === 'voice_deferred' ? config.copy.voiceDeferred : null)
     || item?.deferredText || config.copy.voiceDeferred;
-  if (anchor.status !== 'anchored') {
+  // A message tied to no live question: the owner-initiated lanes, then
+  // general chat, then the nudge. Also the path for a reply to a closed
+  // question no reader can take (ownerReplyCorrection.js).
+  const answerUnanchored = async (unanchored) => {
     if (descriptor?.deferred) { await sendText({ to: from, text: deferredText(descriptor) }); return { status: 'nudged', reason: descriptor.deferredReason || 'voice_deferred' }; }
-    const issuance = await maybeStartInvoiceIssuance({ message, from, firmId, env, deps, config, anchor, text, descriptor });
+    const issuance = await maybeStartInvoiceIssuance({ message, from, firmId, env, deps, config, anchor: unanchored, text, descriptor });
     if (issuance) return issuance;
     // Kernel-audit M2: the jurisdiction-neutral owner-invoice turn entry. Runs
     // AFTER the Finnish lane and refuses outright for a client that lane serves
     // (the G12 double-lifecycle guard lives in the hook). Born off — with no
     // OWNER_INVOICE_COMMAND stage row this returns null and nothing changes.
-    const ownerInvoice = await maybeRunOwnerInvoiceCommand({ message, from, firmId, env, deps, config, anchor, text, descriptor });
+    const ownerInvoice = await maybeRunOwnerInvoiceCommand({ message, from, firmId, env, deps, config, anchor: unanchored, text, descriptor });
     if (ownerInvoice) return ownerInvoice;
     // FI-9 (R): mutually exclusive with the issuance hook (text-only vs
     // document-only); null falls through to the standard nudge byte-identically.
-    const einvoice = await maybeReceiveEInvoiceMedia({ message, from, firmId, env, deps, config, anchor, descriptor });
+    const einvoice = await maybeReceiveEInvoiceMedia({ message, from, firmId, env, deps, config, anchor: unanchored, descriptor });
     if (einvoice) return einvoice;
-    const ownerMedia = await maybeReceiveOwnerInitiatedMedia({ message, from, firmId, env, deps, config, anchor, descriptor });
+    const ownerMedia = await maybeReceiveOwnerInitiatedMedia({ message, from, firmId, env, deps, config, anchor: unanchored, descriptor });
     if (ownerMedia) return ownerMedia;
-    const generalOwnerChat = await maybeAnswerGeneralOwnerChat({ message, from, firmId, env, deps, config, anchor, text });
+    const generalOwnerChat = await maybeAnswerGeneralOwnerChat({ message, from, firmId, env, deps, config, anchor: unanchored, text });
     if (generalOwnerChat) return generalOwnerChat;
     await sendText({ to: from, text: config.copy.unanchored });
-    return { status: 'nudged', reason: anchor.reason || 'unanchored' };
-  }
+    return { status: 'nudged', reason: unanchored.reason || 'unanchored' };
+  };
+  if (anchor.status !== 'anchored') return answerUnanchored(anchor);
 
   const actorId = bindingActorId(anchor.binding, config.actorFallback);
   const ask = anchor.ask || (typeof deps.getAskById === 'function' ? await deps.getAskById({ firmId, clientId: anchor.clientId, askId: anchor.askId }) : null);
@@ -1125,6 +1151,44 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
       provider_payload: { inbound: { type: 'text', anchor: anchor.source, owner_invoice_command: result?.status } } } });
     return { status: 'owner_invoice_command', result };
   }
+  // A reply to a closed question (ownerReplyCorrection.js), on the generic
+  // reply path (a country consumer or the opening-balance lane owns its own
+  // asks): with a reader it goes to the reply writer as a correction; without
+  // one it is not attached to the question, and is read as a new message.
+  const closedQuestion = Boolean(ask && ['resolved', 'cancelled'].includes(ask.status)
+    && !resolveCountryOpeningBinding(ask) && !resolveCountryInboundReply(ask));
+  const answerClosedQuestionAsNewMessage = async () => {
+    await sendText({ to: from, text: closedQuestionNotice({ language: config.language }) });
+    const result = await answerUnanchored({ status: 'unanchored', reason: 'closed_question', phoneHash: anchor.phoneHash,
+      bindings: (anchor.bindings || []).filter((binding) => binding?.client_id === anchor.clientId), gateContext: anchor.gateContext });
+    return { ...result, closed_question: ask?.id || anchor.askId };
+  };
+  if (closedQuestion) {
+    const readCorrectionReader = deps.readCorrectionReader || readEvidenceCorrectionReaderInDb;
+    const reader = ask.status === 'resolved'
+      ? (await readCorrectionReader({ firmId, clientId: anchor.clientId, evidenceRequestId: ask.id }).catch(() => null))?.reader || null : null;
+    if (!reader) return answerClosedQuestionAsNewMessage();
+  }
+  // Donna's in-band line about this question, kept in the delivery ledger
+  // under its question, so a quote-reply to it reaches the question as other
+  // outbound messages do (a channel without quote-replies keeps none).
+  const recordReplyNotice = async (delivery) => {
+    if (!config.capabilities?.quoteReplyAnchor || !delivery?.ok || delivery.id == null || typeof recordLedger !== 'function') return null;
+    try {
+      return await recordLedger({ entry: { message_id: String(delivery.id), provider: config.provider, channel: config.channel, ask_id: anchor.askId,
+        client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, sent_at: new Date().toISOString(),
+        provider_payload: { outbound: { kind: 'owner_reply_notice', in_reply_to: message.id } } } });
+    } catch (error) {
+      console.warn('[inboundCore] reply-notice ledger write failed', error?.message || error);
+      return null;
+    }
+  };
+  // The writer refuses a correction no reader can take (a race with the check above).
+  const notCorrectable = async (error) => {
+    if (error?.code !== CORRECTION_NOT_CORRECTABLE_CODE) throw error;
+    await sendText({ to: from, text: `${closedQuestionNotice({ language: config.language })} ${config.copy.unanchored}`.trim() });
+    return { status: 'nudged', reason: 'closed_question', closed_question: anchor.askId };
+  };
   const claim = await deps.claimInboundMessage({ firmId, inboundMessageId: message.id, clientId: anchor.clientId, phoneHash: anchor.phoneHash, providerPayload: { message, actor_id: actorId } });
   if (!claim.claimed) return { status: 'duplicate', reason: claim.reason || 'already_processed' };
 
@@ -1202,16 +1266,20 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
       return { status: 'opening_balance', askId: anchor.askId, result };
     }
     const turn = assessEvidenceTopicTurn({ ask, text, descriptor: null });
-    if (!supportsStructuredOwnerReply(ask) && !turn.terminal && typeof deps.recordEvidenceTopicTurn === 'function') {
+    if (!closedQuestion && !supportsStructuredOwnerReply(ask) && !turn.terminal && typeof deps.recordEvidenceTopicTurn === 'function') {
       const topicState = buildEvidenceTopicState({ ask, turn: { ...turn, text }, now: deps.now?.() || new Date().toISOString(), channel: config.channel, actorId, inboundMessageId: message.id, documentIds: [] });
       const recorded = await deps.recordEvidenceTopicTurn({ firmId, evidenceRequestId: anchor.askId, topicState, actorId, actorType: 'client' });
       await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: null, provider_payload: { inbound: { type: 'text', anchor: anchor.source, evidence_topic: { outcome: turn.outcome, status: 'open' } } } } });
       await sendText({ to: from, text: config.copy.topicOpen || coreCopyFor(config.language).topicOpen });
       return { status: 'topic_open', askId: anchor.askId, result: recorded, topicState };
     }
-    const resolved = await resolveEvidenceRequest({ firmId, evidenceRequestId: anchor.askId, reply: text, actorId, actorType: 'client' });
+    let resolved;
+    try {
+      resolved = await resolveEvidenceRequest({ firmId, evidenceRequestId: anchor.askId, reply: text, actorId, actorType: 'client' });
+    } catch (error) { return notCorrectable(error); }
     await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: resolved?.evidence_request?.status === 'resolved' ? (resolved.evidence_request.id || anchor.askId) : null, provider_payload: { inbound: { type: 'text', anchor: anchor.source } } } });
-    await sendText({ to: from, text: buildResolvedReplyText({ resolved, fallback: config.copy.textResolved, language: config.language }) });
+    await recordReplyNotice(await sendText({ to: from, text: buildResolvedReplyText({ resolved, fallback: config.copy.textResolved, language: config.language,
+      replyInvitation: config.capabilities?.quoteReplyAnchor === true }) }));
     return { status: resolved?.evidence_request?.status === 'replied' ? 'reply_saved'
       : resolved?.evidence_request?.status === 'open' ? 'topic_open' : 'resolved', askId: anchor.askId, result: resolved };
   }
@@ -1250,7 +1318,10 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
     await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: anchor.askId, provider_payload: { inbound: { type: descriptor.kind, media_id: descriptor.id, document_id: documentId, anchor: anchor.source, opening_balance: result.action } } } });
     return { status: 'opening_balance', askId: anchor.askId, documentId, result };
   }
-  const resolved = await resolveEvidenceRequest({ firmId, evidenceRequestId: anchor.askId, reply: text, documentIds: [documentId].filter(Boolean), actorId, actorType: 'client' });
+  let resolved;
+  try {
+    resolved = await resolveEvidenceRequest({ firmId, evidenceRequestId: anchor.askId, reply: text, documentIds: [documentId].filter(Boolean), actorId, actorType: 'client' });
+  } catch (error) { return notCorrectable(error); }
   await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: resolved?.evidence_request?.status === 'resolved' ? (resolved.evidence_request.id || anchor.askId) : null, provider_payload: { inbound: { type: descriptor.kind, media_id: descriptor.id, document_id: documentId, anchor: anchor.source } } } });
   await sendText({ to: from, text: config.copy.mediaSaved });
   return { status: 'media_registered', askId: anchor.askId, documentId, result: resolved };

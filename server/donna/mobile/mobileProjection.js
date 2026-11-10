@@ -96,8 +96,12 @@ export const projectAskCard = (request, entityId) => {
     ask: {
       question: str(request.question) || '',
       evidence_type: str(request.evidence_type),
-      allows_text: true,
-      allows_documents: true,
+      // Only an open question takes an answer: the decision route answers an
+      // answered or closed card `applied: false` (the contract's idempotent
+      // replay), so inviting text there would promise a path that does not
+      // exist. A correction to a closed answer goes through the owner's chat.
+      allows_text: request.status === 'open',
+      allows_documents: request.status === 'open',
       // Donna's ask pipeline has no choice shape (DESIGN-NOTES smell 1).
       choices: null,
       answered_text: str(response.reply),

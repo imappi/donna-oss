@@ -202,3 +202,22 @@ test('SMS texts sent before a client is known are bilingual; the connected line 
   assert.equal(smsConnectedText('fi'), 'Selvä, tekstiviestit on nyt yhdistetty.');
   assert.equal(smsConnectedText(null), 'Selvä, tekstiviestit on nyt yhdistetty. / Got it. SMS is connected.');
 });
+
+// SMS has no quote-reply, so a reply cannot be tied back to Donna's line about
+// an answer: the line is spoken without its invitation (ownerReplyNotice.js
+// statement) and is not kept in the delivery ledger as something to anchor to.
+test('SMS speaks a recorded answer\'s line without its invitation to reply, and keeps no outbound anchor', async () => {
+  const line = 'We recorded that the business has been VAT-registered since 2026-01-01. Reply here if that is not right.';
+  const statement = 'We recorded that the business has been VAT-registered since 2026-01-01.';
+  const { deps, calls } = makeDeps({
+    openByRef: { 'client-1:23DEF456': { id: 'ask_abc123def456', client_id: 'client-1', transaction_id: 'tx-1' } },
+    deps: {
+      resolveEvidenceRequest: async (args) => { calls.resolved.push(args); return { evidence_request: { id: args.evidenceRequestId, status: 'resolved' },
+        recode: { applied: true, owner_notice: line, owner_notice_statement: statement } }; },
+      sendText: async (args) => { calls.texts.push(args); return { ok: true, id: 'SM.outbound-notice' }; }
+    }
+  });
+  await processSmsInboundMessage({ from: '+15551234567', firmId: 'firm', env: envOn, deps, message: { MessageSid: 'SM.answer', Body: 'Yes since 2026-01-01 Ref: 23DEF456' } });
+  assert.equal(calls.texts.at(-1).text, statement);
+  assert.ok(!calls.ledger.some((call) => call.entry.message_id === 'SM.outbound-notice'), 'no outbound anchor on SMS');
+});

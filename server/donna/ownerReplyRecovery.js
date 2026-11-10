@@ -10,6 +10,8 @@ import { listStructuredOwnerReplyEvidenceTypes, resolveStructuredOwnerReplyAdapt
 import { processStructuredOwnerReplyWithClient } from './structuredOwnerReply.js';
 import { documentOwnerReplyDocumentId, processDocumentOwnerReplyWithClient } from './documentOwnerReply.js';
 import { deliverOwnerFollowUpWithClient } from './ownerAskDelivery.js';
+import { CODER_FINISHED_CODING_STATES, CORRECTION_OUTCOMES, correctionNotRecordedNotice, correctionOf } from './ownerReplyCorrection.js';
+import { restoreUnrecordedCorrectionWithClient } from './db/asks.js';
 
 export const OWNER_REPLY_MAX_ATTEMPTS = 3;
 // An answer exhausted on a PROVIDER outage (never a policy failure, never a
@@ -61,6 +63,28 @@ export const clarificationFollowUpAskIds = (request, result) => {
     result.document_disposition?.clarification_request_id || null,
     result.follow_up_request_id || null
   ].filter(Boolean))];
+};
+
+// A correction (ownerReplyCorrection.js) whose line was finished before the
+// coder could read it: no reader can take it now, so nothing on the line
+// moves and the question goes back to its closed state, with both receipts.
+const restoreUnreadCorrection = async ({ client, firmId, clientId, request, replyKey, reason }) => {
+  const correction = correctionOf(request);
+  await client.query('begin');
+  try {
+    const restored = await restoreUnrecordedCorrectionWithClient({ client, firmId, clientId, evidenceRequestId: request.id,
+      replyKey, actorId: correction.actor_id || 'system', actorType: correction.actor_type || 'system', reason });
+    if (restored) {
+      const { recordOwnerReplyProcessingReceipt } = await import('./ownerReplyProcessingReceipt.js');
+      await recordOwnerReplyProcessingReceipt({ client, firmId, clientId, evidenceRequestId: request.id, transactionId: request.transaction_id || null,
+        actorId: correction.actor_id || 'system', processing: { reply_key: replyKey, state: 'completed', applied: false,
+          correction: { ...correction, outcome: CORRECTION_OUTCOMES.notRecorded, reason } } });
+    }
+    await client.query('commit');
+  } catch (error) { await client.query('rollback'); throw error; }
+  const profile = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
+  const notice = correctionNotRecordedNotice({ profile: profile?.profile, client: profile });
+  return { applied: false, skipped: reason, correction: { outcome: CORRECTION_OUTCOMES.notRecorded }, owner_notice: notice, owner_notice_statement: notice };
 };
 
 // One delivery for all three: the gated fan-out, with the re-ask sweep's
@@ -124,7 +148,10 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
     }
     if (!force && attempts >= OWNER_REPLY_MAX_ATTEMPTS && !previous.policy_failure) return { applied: false, skipped: 'reply_attempts_exhausted' };
     const tx = request.transaction_id ? (await client.query('select coding_state, transaction_date from transactions where firm_id = $1 and client_id = $2 and id = $3', [firmId, clientId, request.transaction_id])).rows[0] : null;
-    if (request.transaction_id && !structured && (!tx || ['applied', 'held', 'posted', 'synced', 'closed'].includes(tx.coding_state))) return { applied: false, skipped: 'terminal_or_missing_transaction' };
+    if (request.transaction_id && !structured && (!tx || CODER_FINISHED_CODING_STATES.includes(tx.coding_state))) {
+      return correctionOf(request) ? restoreUnreadCorrection({ client, firmId, clientId, request, replyKey, reason: 'terminal_or_missing_transaction' })
+        : { applied: false, skipped: 'terminal_or_missing_transaction' };
+    }
     let result;
     try {
       if (documentReply) {
@@ -143,6 +170,9 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
       result = await recodeFn({ client, firmId, clientId, transactionId: request.transaction_id,
         evidenceRequest: request, reply: request.response_payload?.reply || '',
         replyDocumentIds: request.response_payload?.document_ids || [], actorId, expectedReplyKey: replyKey });
+      if (result?.skipped === 'terminal_or_missing_transaction' && correctionOf(request)) {
+        return await restoreUnreadCorrection({ client, firmId, clientId, request, replyKey, reason: result.skipped });
+      }
       if (result?.skipped === 'llm_unavailable') {
         const error = new Error('Reply coding is temporarily unavailable.');
         error.code = 'OWNER_REPLY_PROVIDER_UNAVAILABLE';
