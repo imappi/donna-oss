@@ -68,7 +68,12 @@ const ALV_ROUTE_COPY = Object.freeze({
     filedRefund: (amount) => `Palautusta odotettavissa ${euro(amount)}.`,
     filedPayable: (amount) => `Maksettavaa ${euro(amount)} — maksuohjeet OmaVerossa.`,
     cancelled: (periodKey) => `ALV-ilmoitus (${periodKey}) peruttu. Korjataan kirjanpito ja lasken sen uudelleen.`,
-    textOnly: 'Vastaa tekstillä: “kyllä” tai “ei”.'
+    textOnly: 'Vastaa tekstillä: “kyllä” tai “ei”.',
+    overlapStatus: { filed: 'lähetetty', draft_pending_confirmation: 'odottaa vahvistusta' },
+    overlapLead: (periodKey, named) => `ALV-ilmoitusta (${periodKey}) ei lähetetty: ${named ? `ilmoitus ${named}` : 'toinen ilmoitus'} kattaa jo osan samoista päivistä.`,
+    overlapTwice: 'Samoja myyntejä ja ostoja ei voi ilmoittaa kahdesti.',
+    overlapFiled: 'Lähetetty ilmoitus pysyy ennallaan. Peru tämä ilmoitus vastaamalla “ei”.',
+    overlapBothWaiting: 'Kumpaakaan ei lähetetä, ennen kuin toinen perutaan. Peru tämä ilmoitus vastaamalla “ei”.'
   }),
   en: Object.freeze({
     heading: (periodKey) => `VAT return, tax period ${periodKey}`,
@@ -87,7 +92,12 @@ const ALV_ROUTE_COPY = Object.freeze({
     filedRefund: (amount) => `A refund of ${euroEn(amount)} is expected.`,
     filedPayable: (amount) => `${euroEn(amount)} to pay. The payment instructions are in OmaVero.`,
     cancelled: (periodKey) => `VAT return (${periodKey}) cancelled. Let's fix the books and I will calculate it again.`,
-    textOnly: 'Please reply in text: “yes” or “no”.'
+    textOnly: 'Please reply in text: “yes” or “no”.',
+    overlapStatus: { filed: 'filed', draft_pending_confirmation: 'waiting for confirmation' },
+    overlapLead: (periodKey, named) => `The VAT return (${periodKey}) was not filed: ${named ? `the return ${named}` : 'another return'} already covers some of the same days.`,
+    overlapTwice: 'The same sales and purchases can\'t be reported twice.',
+    overlapFiled: 'The filed return stays as it is. Reply “no” to cancel this return.',
+    overlapBothWaiting: 'Neither is filed until one of them is cancelled. Reply “no” to cancel this return.'
   })
 });
 export const alvRouteCopyFor = (language) => ALV_ROUTE_COPY[language] || ALV_ROUTE_COPY.fi;
@@ -110,6 +120,22 @@ export const summarizeAlvReturnVerdict = ({ periodKey = '', verdict = {}, langua
   return out.join('\n');
 };
 
+// ALV_RETURN_FILING_OVERLAP: another live return already covers some of these
+// dates. Nothing was sent. The owner can cancel this return ("ei" / "no"); a
+// filed return stays as filed. Two returns both waiting: neither is sent until
+// one is cancelled.
+const filingOverlapText = ({ periodKey, error, language = 'fi' }) => {
+  const copy = alvRouteCopyFor(language);
+  const others = Array.isArray(error?.details?.overlapping) ? error.details.overlapping : [];
+  const named = others.map((other) => `${other.period_key} (${copy.overlapStatus[other.status] || other.status})`).join(', ');
+  const anyFiled = others.some((other) => other.status === 'filed');
+  return [
+    copy.overlapLead(periodKey, named),
+    copy.overlapTwice,
+    anyFiled ? copy.overlapFiled : copy.overlapBothWaiting
+  ].join(' ');
+};
+
 export const alvReturnConfirmQuestion = ({ periodKey, verdict, language = 'fi' }) =>
   `${summarizeAlvReturnVerdict({ periodKey, verdict, language })}\n\n${alvRouteCopyFor(language).confirm}`;
 
@@ -121,11 +147,16 @@ const stateFromAsk = ({ ask }) => {
   return raw.state && typeof raw.state === 'object' ? { kind: raw.kind, ...raw.state } : raw;
 };
 
-// fileConfirmedAlvReturn — the filing motion: transmit (re-footed, refused
-// without authority/mandate/channel) → mark filed with the receipt (audit-as-
-// precondition, in-txn). The FI-8 channel must be idempotent per period —
-// the persisted row flips only after a successful transmit, so a crash between
-// the two legs retries the transmit on the next "kyllä".
+// fileConfirmedAlvReturn — the filing motion: overlap check → transmit
+// (re-footed, refused without authority/mandate/channel) → mark filed with the
+// receipt (audit-as-precondition, in-txn). The FI-8 channel must be idempotent
+// per period — the persisted row flips only after a successful transmit, so a
+// crash between the two legs retries the transmit on the next "kyllä".
+//
+// The overlap check (assertAlvReturnFileableInDb) runs BEFORE anything is
+// transmitted: returns that overlapped before migration 172 must not both be
+// reported. It refuses ALV_RETURN_FILING_OVERLAP while any other live return
+// covers one of these dates. Fail-closed: no check wired ⇒ nothing transmits.
 export const fileConfirmedAlvReturn = async ({
   firmId,
   clientId,
@@ -135,8 +166,16 @@ export const fileConfirmedAlvReturn = async ({
   mandate = null,
   transmitImpl = transmitAlvReturnFiling,
   submitReturn,
+  assertFileableImpl,
   markFiledImpl
 } = {}) => {
+  if (typeof assertFileableImpl !== 'function') {
+    throw Object.assign(
+      new Error('ALV filing refused: the overlap check before transmit is not wired.'),
+      { code: 'ALV_FILING_OVERLAP_CHECK_REQUIRED' }
+    );
+  }
+  await assertFileableImpl({ firmId, clientId, alvReturnId: row.id });
   const { receipt } = await transmitImpl({
     verdict: row.verdict,
     period: { key: row.period_key, type: row.period_type, starts_on: row.starts_on, ends_on: row.ends_on },
@@ -172,6 +211,7 @@ export const resolveAlvReturnInbound = async ({
   flagActs = true,
   getAlvReturnImpl,
   getMandateImpl,
+  assertFileableImpl,
   markFiledImpl,
   cancelImpl,
   fileImpl = fileConfirmedAlvReturn,
@@ -229,6 +269,7 @@ export const resolveAlvReturnInbound = async ({
         mandate,
         ...(transmitImpl ? { transmitImpl } : {}),
         submitReturn,
+        assertFileableImpl,
         markFiledImpl
       });
     } catch (error) {
@@ -239,7 +280,9 @@ export const resolveAlvReturnInbound = async ({
       // Suomi.fi mandate gets its own copy — granting it is an OWNER action
       // (Suomi.fi valtuudet), so the ask legitimately rests on them.
       if (typeof sendText === 'function') {
-        const reason = error?.code === 'ALV_FILING_MANDATE_REQUIRED'
+        const reason = error?.code === 'ALV_RETURN_FILING_OVERLAP'
+          ? filingOverlapText({ periodKey: row.period_key, error, language })
+          : error?.code === 'ALV_FILING_MANDATE_REQUIRED'
           ? copy.mandateMissing
           : (error?.code === 'ALV_FILING_REJECTED' && error?.channelReason
             ? `${copy.rejected(error.channelReason)}\n\n${copy.fileFailed}`

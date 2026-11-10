@@ -53,6 +53,12 @@
 //      the journal posted), run sweepLedgerAutoPost (ledgerAutoPost.js).
 //      Fail-closed behind the LEDGER_AUTO_POST control-plane flag (no env
 //      pair), internal Donna ledger only, refusals receipted per line.
+//   4. HELD-MATCH COVERAGE FRESHNESS — a held material match reads covered only
+//      while a standing grant would act on it right now; a grant passing its
+//      review / expiry date changes no row, so no trigger marks the line. The
+//      tick re-derives the firm's lines resting on such a cover
+//      (settleCoveredHeldMatchLines, migration 175's candidate set); no model
+//      call, and it writes only the convergence columns.
 //
 // Discovery deliberately EXCLUDES (mirrors the coder's own pool filters, so a
 // line the coder would refuse can never hot-loop the trigger):
@@ -83,6 +89,7 @@ import { recoverReconciliationProviderFailuresInDb } from './reconciliationProvi
 import { recoverJevMaterialExceptionsInDb } from './jevMaterialException.js';
 import { runHostedPilotTerminalConvergenceInDb } from './hostedPilotTerminalConvergence.js';
 import { ACTIVE_CODING_POLICY_FAILURE_SQL, REFUSED_CROSS_WINDOW_GROUP_SQL } from './codingPolicyRecovery.js';
+import { settleCoveredHeldMatchLines } from './reconcileConvergenceState.js';
 
 // Per-tick bounds. The cron runs every few minutes, so a burst larger than
 // the cap simply converges across ticks instead of blowing the 300s budget.
@@ -471,6 +478,9 @@ export const runCodingConvergence = async ({
   recoverChangedEvidenceFn = null,
   recoverPostedCorrectionsFn = null,
   recoverRefusedEvidenceFn = null,
+  // Held-match coverage freshness (step 4): re-derives covered held lines whose
+  // cover may have lapsed with time. Injected by the production wrapper.
+  heldMatchCoverageFn = null,
   requestAskDraftFn = requestAskDraftViaDb,
   batchSuggestFn = batchSuggestTransactionCodingInDb,
   sweepFn = sweepCodingAutoPost,
@@ -725,8 +735,28 @@ export const runCodingConvergence = async ({
     }
   }
 
+  // Step 4 — held-match coverage freshness. A held material match counts as
+  // covered only while a standing grant would act on it right now; a grant
+  // passing its review_after / expires_at (or a host certificate its validity)
+  // changes no row, so nothing marks the line. Each tick re-derives the firm's
+  // lines that rest on such a cover (reconcileConvergenceState
+  // settleCoveredHeldMatchLines); a lapsed one moves to hanging within a tick.
+  // Read-only apart from the convergence columns; no model call.
+  if (heldMatchCoverageFn) {
+    try {
+      summary.held_match_coverage = await heldMatchCoverageFn({ firmId });
+      summary.errors += (summary.held_match_coverage?.errors || []).length;
+    } catch (error) {
+      summary.errors += 1;
+      summary.held_match_coverage_error = error?.message || String(error);
+    }
+  }
+
   return summary;
 };
+
+export const settleHeldMatchCoverageInDb = ({ firmId }) =>
+  withFirmDbClient((client) => settleCoveredHeldMatchLines(client, { firmId }));
 
 export const runCodingConvergenceInDb = async (args = {}) =>
   runCodingConvergence({
@@ -738,6 +768,7 @@ export const runCodingConvergenceInDb = async (args = {}) =>
     recoverPostedCorrectionsFn: recoverPostedCodingCorrectionsInDb,
     recoverRefusedEvidenceFn: recoverRefusedCodingEvidenceInDb,
     recoverAeVatLegacyCodingFn: async recoveryArgs => (await import('./db/coding.js')).recoverAeVatLegacyCodingInDb(recoveryArgs),
+    heldMatchCoverageFn: settleHeldMatchCoverageInDb,
     ...args,
     runWorkerAdmissionFn: async ({ firmId, clientId, work }) => {
       // Discovery has its own short transaction; independently pooled child

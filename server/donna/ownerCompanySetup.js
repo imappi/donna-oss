@@ -46,7 +46,10 @@ export const completeOwnerCompanySetup = async ({ firmId, clientId, auth, profil
       const prepared = await client.query("select 1 from audit_events where firm_id=$1 and client_id=$2 and action='pilot.prepared' limit 1", [firmId, clientId]);
       if (prepared.rowCount) refuse('This pilot has already been prepared. Its company identity cannot be replaced here.');
       const { entityType, ...fields } = profilePatch;
-      const result = await updateClientProfileInDb({ firmId, clientId, profilePatch: { ...fields, companyName: fields.companyName.trim(), entity_type: entityType }, actorId: auth.userId, dbClient: client, manageTransaction: false });
+      // The owner is the person acting: the profile row names them as the
+      // client.owner_company_setup row below does (supabase_user, their user id).
+      const result = await updateClientProfileInDb({ firmId, clientId, profilePatch: { ...fields, companyName: fields.companyName.trim(), entity_type: entityType },
+        actorId: auth.userId, principal: { principalType: 'supabase_user', userId: auth.userId }, dbClient: client, manageTransaction: false });
       await client.query(`insert into audit_events(firm_id,client_id,actor_type,actor_id,action,resource_type,resource_id,metadata)
         values($1,$2,'supabase_user',$3,'client.owner_company_setup','client',$2,$4::jsonb)`,
       [firmId, clientId, auth.userId, JSON.stringify({ authority_basis: 'authenticated_initial_owner_company_confirmation',

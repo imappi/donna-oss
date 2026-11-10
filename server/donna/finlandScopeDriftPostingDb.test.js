@@ -187,11 +187,12 @@ const sweepClient = ({ pending = [] } = {}) => {
   };
 };
 
-test('delivery sweep: skipped (unbound/flag-off) retries tomorrow; an attempted send stamps the ask row', async () => {
+test('delivery sweep: skipped (unbound/flag-off) retries tomorrow; held by the send gate retries tomorrow; only the deliverer stamps', async () => {
   const client = sweepClient({
     pending: [
       { id: 'scope-drift-f-c1-first_employee', firm_id: 'f', client_id: 'c1' },
-      { id: 'scope-drift-f-c2-cash_activity', firm_id: 'f', client_id: 'c2' }
+      { id: 'scope-drift-f-c2-cash_activity', firm_id: 'f', client_id: 'c2' },
+      { id: 'scope-drift-f-c3-cash_activity', firm_id: 'f', client_id: 'c3' }
     ]
   });
   const delivered = [];
@@ -199,14 +200,16 @@ test('delivery sweep: skipped (unbound/flag-off) retries tomorrow; an attempted 
     client,
     deliverAsksImpl: async ({ clientId, evidenceRequestIds }) => {
       delivered.push({ clientId, evidenceRequestIds });
-      return clientId === 'c1' ? { skipped: true, reason: 'unbound' } : { sent: 1 };
+      if (clientId === 'c1') return { whatsapp: { skipped: true, reason: 'unbound' }, delivered: [] };
+      if (clientId === 'c3') return { refused: 'INTERNAL_PILOT_SEND_DISABLED' };
+      return { whatsapp: { sent: 1, delivered: evidenceRequestIds }, delivered: evidenceRequestIds };
     }
   });
-  assert.deepEqual(summary, { pending: 2, attempted: 1, skipped: 1, errors: 0 });
-  assert.equal(delivered.length, 2);
+  assert.deepEqual(summary, { pending: 3, attempted: 1, held: 1, skipped: 1, errors: 0 });
+  assert.equal(delivered.length, 3);
+  // The sweep never writes a sent stamp itself: the deliverer that delivered did.
   const updates = client.queries.filter((q) => q.sql.includes('update client_evidence_requests'));
-  assert.equal(updates.length, 1);
-  assert.equal(updates[0].params[0], 'scope-drift-f-c2-cash_activity');
+  assert.equal(updates.length, 0);
 });
 
 test('delivery sweep: a throwing send is counted, never fatal; empty backlog is a quiet no-op', async () => {
@@ -215,9 +218,9 @@ test('delivery sweep: a throwing send is counted, never fatal; empty backlog is 
     client: failing,
     deliverAsksImpl: async () => { throw new Error('meta down'); }
   });
-  assert.deepEqual(summary, { pending: 1, attempted: 0, skipped: 0, errors: 1 });
+  assert.deepEqual(summary, { pending: 1, attempted: 0, held: 0, skipped: 0, errors: 1 });
 
   const idle = sweepClient({ pending: [] });
   const quiet = await deliverPendingFinlandScopeDriftAsks({ client: idle, deliverAsksImpl: async () => ({ sent: 1 }) });
-  assert.deepEqual(quiet, { pending: 0, attempted: 0, skipped: 0, errors: 0 });
+  assert.deepEqual(quiet, { pending: 0, attempted: 0, held: 0, skipped: 0, errors: 0 });
 });

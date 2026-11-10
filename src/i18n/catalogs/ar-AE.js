@@ -26,6 +26,8 @@ import mounted from './ar-AE/mounted.js';
 // Self-service firm signup adds two web onboarding messages in both catalogs.
 // Verdict-first activity pills add fifteen working-phase and batch-summary messages.
 // SG processing review adds ten saved-review and unavailable-posting messages.
+// ALV return overlap adds three "already covered by" messages; the Arabic ones
+// are machine-written and unreviewed (the UAE market is on hold).
 export const AR_AE_CATALOG_VERSION = '2026-09-28.sg-native-intake.1';
 
 export const AR_AE_GLOSSARY = Object.freeze({
@@ -255,7 +257,7 @@ export const AR_AE_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-01.ar2-remaining-surfaces-contract',
   catalogVersion: AR_AE_CATALOG_VERSION,
-  expectedMessageCount: 2731,
+  expectedMessageCount: 2734,
   sourceContext: Object.freeze([
     'docs/design-donna-arabic-localization.md',
     'docs/ar4f-ae-native-review-packet.md'

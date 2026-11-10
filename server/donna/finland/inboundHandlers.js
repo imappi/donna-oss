@@ -119,6 +119,8 @@ const runAlvReturnReply = async ({ descriptor, sendText, from, config, deps, fir
       // G-3: the Suomi.fi mandate lookup for the transmit gate. Fail-closed —
       // an unwired lookup means no mandate, and the transmit refuses typed.
       getMandateImpl: deps.getSuomifiMandate,
+      // The overlap check before transmit (fail-closed when unwired).
+      assertFileableImpl: deps.assertAlvReturnFileable,
       markFiledImpl: deps.markAlvReturnFiled,
       cancelImpl: deps.cancelAlvReturn,
       // The seam payload carries no client identity; bind it here so the FI-8

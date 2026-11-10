@@ -71,7 +71,9 @@ await test('absent jurisdiction: FI ALV return route preserves its complete curr
         source: 'Verohallinto tietuekuvaus VSRALVKV (27.2.2026) + vero.fi täyttöohje, via search extraction 2026-07-10; primary fetch blocked by network policy (F-FI3-1)'
       }
     },
-    lifecycle: null
+    lifecycle: null,
+    // Additive: other live returns over these dates (none here).
+    covered_by: []
   });
   assert.equal(pool.matching(/from client_capability_config/).length, 1);
   assert.equal(pool.matching(/select ll\.\*, la\.account_type/).length, 1);
