@@ -47,6 +47,9 @@ import { BANK_LINE_DISPOSITION_FAMILY, BANK_LINE_DISPOSITION_TARGET_TYPE, summar
 // leaf (same TDZ reasoning as the bank-line shape import above).
 import { DOCUMENT_NO_LINE_DISPOSITION_FAMILY, DOCUMENT_NO_LINE_DISPOSITION_FLAG_KEY, DOCUMENT_NO_LINE_DISPOSITION_POLICY_VERSION, DOCUMENT_NO_LINE_DISPOSITION_TARGET_TYPE } from '../documentDispositionShape.js';
 import { assertAskDraftLocalEvidenceIntegrity, assertAskDraftTerminalCoverage, draftClientAskMessage } from '../askPipeline.js';
+import { readLaneDecidingPolicy } from '../modelLanePolicy.js';
+import { SELF_HOSTED_BASIS } from '../modelLanes.js';
+import { resolveSeatTransport } from '../providerEndpoints.js';
 import { citableEvidenceCandidates, citableRefreshDue, loadLocalEvidenceCandidatesWithClient, localEvidenceCandidateReceipt } from '../localEvidenceInventory.js';
 import { enrichCodingWithXeroAccount } from '../xeroAccountMatcher.js';
 import { normalizeLedgerPeriod } from '../ledgerReadModel.js';
@@ -4844,7 +4847,17 @@ export const __draftClientAskBatchWithClient = async ({
   );
   const verdictsAsOf = new Date(Math.max(lastEvaluatedAtMs, lastSuggestedAtMs) || Date.now()).toISOString();
 
-  const { draft, model, response_id: responseId, language: draftLanguage } = await draftFn({
+  // 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): a self-hosted seat on
+  // ask_drafting for this company drafts over the compatible endpoint. Only
+  // that basis is read here (this lane read no policy before), so a company
+  // without such a seat is unchanged; an active seat with no endpoint throws
+  // OPENAI_COMPATIBLE_NOT_CONFIGURED — never quietly another model.
+  const askSeatTransport = resolveSeatTransport({
+    policy: await readLaneDecidingPolicy({ client, firmId, clientId: cleanClientId, laneId: 'ask_drafting' }),
+    onlyBasis: SELF_HOSTED_BASIS
+  });
+  const { draft, model, response_id: responseId, language: draftLanguage, policy_basis: draftPolicyBasis } = await draftFn({
+    ...(askSeatTransport ? { transport: askSeatTransport } : {}),
     clientProfile,
     codingItems,
     internalMovementLines,
@@ -4954,6 +4967,9 @@ export const __draftClientAskBatchWithClient = async ({
     // owner language the drafter was instructed to write in. null when an
     // injected drafter does not report one.
     language: draftLanguage || null,
+    // The seat's honesty column: 'self_hosted_unqualified' when an
+    // unqualified self-hosted model drafted this batch (absent otherwise).
+    ...(draftPolicyBasis ? { policy_basis: draftPolicyBasis, qualified: false } : {}),
     // Exact direct-ask anchors generation-time validation approved. The send
     // writer rechecks only batches minted by this freshness-aware code; older
     // persisted drafts remain readable and follow their historical contract.
@@ -5057,6 +5073,7 @@ export const __draftClientAskBatchWithClient = async ({
         JSON.stringify({
           model: model || null,
           language: draftLanguage || null,
+          ...(draftPolicyBasis ? { policy_basis: draftPolicyBasis, qualified: false } : {}),
           period_start: cleanPeriodStart,
           period_end: cleanPeriodEnd,
           counts: draft.counts,

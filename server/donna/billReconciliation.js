@@ -866,6 +866,7 @@ export const runBillReconciliationForDocument = async ({
   if (policyActive) {
     const challengerSnapshot = await readClientConfigSnapshot(client, { firmId, clientId });
     challengerHook = makeReconciliationReasoningChallengerHook({
+      decidingPolicy,
       family: 'supplier_bill',
       firmId,
       clientId,

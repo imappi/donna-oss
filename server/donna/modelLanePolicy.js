@@ -23,13 +23,30 @@
 // transaction: close the prior active row + insert the new one + the
 // audit_events receipt, all-or-nothing (audit-as-precondition — no
 // receipt, no policy change).
+//
+// 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): a third basis,
+// 'self_hosted_unqualified' (migration 207) — a model of the operator's own
+// choosing on their own compatible endpoint, for ONE named company, on a lane
+// that declares `selfHosted`. Its rail, all in this writer: the model id is in
+// NO lane's qualified set and names no cloud provider's family (so it always
+// routes to the compatible endpoint and never reads as a qualified rung); a
+// named client (never firm-wide); an active firm member; a reason; the
+// receipt in the same transaction. It never qualifies a model and is never
+// promotion evidence (modelLaneGate.js counts its receipts apart).
 
 import { randomUUID } from 'node:crypto';
 
-import { getLane } from './modelLanes.js';
+import { SELF_HOSTED_BASIS, getLane, isQualifiedAnywhere } from './modelLanes.js';
+import { inferProviderFromModel } from './providerEndpoints.js';
 
 export const MODEL_LANE_POLICY_SET_ACTION = 'model_lane.policy_set';
 export const MODEL_LANE_POLICY_CLEARED_ACTION = 'model_lane.policy_cleared';
+export const MODEL_LANE_POLICY_BASES = Object.freeze(['experiment', 'promotion', SELF_HOSTED_BASIS]);
+
+// The one reader of the honesty column: did an UNQUALIFIED model decide under
+// this policy row (or a receipt's policy_basis string)?
+export const isUnqualifiedSeat = (policyOrBasis) =>
+  (typeof policyOrBasis === 'string' ? policyOrBasis : policyOrBasis?.basis) === SELF_HOSTED_BASIS;
 
 const tablePresent = async (client) => {
   const present = await client.query("select to_regclass('public.model_lane_policy') as present");
@@ -88,6 +105,27 @@ export const listLaneDecidingPolicies = async ({ client, firmId } = {}) => {
   }));
 };
 
+// Every ACTIVE self-hosted, unqualified seat on this database (all firms) —
+// the boot banner's and Host A's read. Missing table ⇒ [].
+export const listSelfHostedSeats = async ({ client, firmId = null } = {}) => {
+  if (!client) return [];
+  if (!(await tablePresent(client))) return [];
+  const result = await client.query(
+    `select firm_id, client_id, lane, deciding_model, valid_from
+       from model_lane_policy
+      where basis = $1 and valid_to is null and ($2::text is null or firm_id = $2)
+      order by firm_id, client_id, lane`,
+    [SELF_HOSTED_BASIS, firmId]
+  );
+  return (result.rows || []).map((row) => ({
+    firm_id: row.firm_id,
+    client_id: row.client_id,
+    lane: row.lane,
+    deciding_model: row.deciding_model,
+    valid_from: row.valid_from ? new Date(row.valid_from).toISOString() : null
+  }));
+};
+
 const closeActiveRow = async (client, { firmId, clientId, laneId }) => {
   const closed = clientId
     ? await client.query(
@@ -127,6 +165,22 @@ export const setLaneDecidingPolicy = async ({
   const lane = getLane(laneId);
   if (!lane) throw Object.assign(new Error(`unknown lane "${laneId}"`), { code: 'UNKNOWN_LANE' });
   const model = typeof decidingModel === 'string' ? decidingModel.trim() : '';
+  const selfHosted = basis === SELF_HOSTED_BASIS;
+  if (selfHosted) {
+    if (!lane.selfHosted) {
+      throw Object.assign(new Error(`lane "${laneId}" does not take a self-hosted model`), { code: 'LANE_NOT_SELF_HOSTABLE' });
+    }
+    if (!model) throw Object.assign(new Error('a self-hosted seat names the model its endpoint serves'), { code: 'MODEL_REQUIRED' });
+    if (isQualifiedAnywhere(model)) {
+      throw Object.assign(new Error(`model "${model}" is a qualified id; a self-hosted seat is for an unqualified model and never wears a qualified id`), { code: 'SELF_HOSTED_MODEL_IS_QUALIFIED' });
+    }
+    if (inferProviderFromModel(model)) {
+      throw Object.assign(new Error(`model "${model}" names a cloud provider's model family; a self-hosted seat names the local model`), { code: 'SELF_HOSTED_MODEL_NAMES_CLOUD' });
+    }
+    if (!clientId || actorType !== 'firm_member' || !actorId || !String(reason || '').trim()) {
+      throw Object.assign(new Error('A self-hosted seat requires a named company, an active member and a reason'), { code: 'SELF_HOSTED_AUTHORITY_REQUIRED' });
+    }
+  }
   const experiment = basis === 'experiment' && lane.experimental
     && model && model === String(env[lane.experimental.modelEnvironmentKey] || '').trim();
   if (!Array.isArray(lane.qualified) && !lane.experimental) {
@@ -135,13 +189,13 @@ export const setLaneDecidingPolicy = async ({
       { code: 'LANE_NOT_GOVERNED' }
     );
   }
-  if (!lane.qualified?.includes(model) && !experiment) {
+  if (!lane.qualified?.includes(model) && !experiment && !selfHosted) {
     throw Object.assign(
       new Error(`model "${model}" is outside the lane's qualified set [${(lane.qualified || []).join(', ')}] and has no explicit experimental eligibility`),
       { code: 'MODEL_NOT_QUALIFIED' }
     );
   }
-  if (!['experiment', 'promotion'].includes(basis)) {
+  if (!MODEL_LANE_POLICY_BASES.includes(basis)) {
     throw Object.assign(new Error(`unknown basis "${basis}"`), { code: 'UNKNOWN_BASIS' });
   }
   if (experiment && (!clientId || actorType !== 'firm_member' || !actorId || !String(reason || '').trim())) {
@@ -151,12 +205,16 @@ export const setLaneDecidingPolicy = async ({
   const id = randomUUID();
   if (manageTransaction) await client.query('begin');
   try {
-    if (experiment) {
+    if (experiment || selfHosted) {
       const authority = await client.query(`select m.id from firm_members m
         join clients c on c.firm_id = m.firm_id
         where m.firm_id = $1 and m.id = $2 and m.status = 'active' and c.id = $3
         for share of m, c`, [firmId, actorId, clientId]);
-      if (!authority.rows.length) throw Object.assign(new Error('Experimental seat authority is no longer active'), { code: 'EXPERIMENT_AUTHORITY_REQUIRED' });
+      if (!authority.rows.length) {
+        throw selfHosted
+          ? Object.assign(new Error('Self-hosted seat authority is no longer active'), { code: 'SELF_HOSTED_AUTHORITY_REQUIRED' })
+          : Object.assign(new Error('Experimental seat authority is no longer active'), { code: 'EXPERIMENT_AUTHORITY_REQUIRED' });
+      }
     }
     const prior = await closeActiveRow(client, { firmId, clientId, laneId });
     await client.query(
@@ -181,6 +239,7 @@ export const setLaneDecidingPolicy = async ({
           deciding_model: model,
           basis,
           ...(experiment ? { eligibility: 'client_scoped_experiment', authority_basis: 'active_firm_member', globally_qualified: false } : {}),
+          ...(selfHosted ? { eligibility: 'self_hosted_operator_choice', authority_basis: 'active_firm_member', globally_qualified: false, qualified: false, endpoint_class: 'openai_compatible' } : {}),
           reason,
           prior: prior ? { deciding_model: prior.deciding_model, basis: prior.basis } : null
         })

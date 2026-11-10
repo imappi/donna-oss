@@ -690,8 +690,27 @@ const LadderCard = ({ firm }) => {
           </Row>
         );
       })}
+      {/* 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): one notice per
+          active self-hosted seat — an UNQUALIFIED model decides that lane for
+          that company. Read-only here: the seat is set and cleared only by
+          scripts/seat_local_model.js; the dropdown below stays a selector
+          within the qualified set. */}
+      {(report.lanes || []).flatMap((lane) => (lane.policies || [])
+        .filter((policy) => policy.basis === 'self_hosted_unqualified')
+        .map((policy) => (
+          <Row
+            key={`${lane.id}-${policy.client_id}-unqualified`}
+            label={message('mounted.settings.ai.unqualifiedSeat')}
+            desc={message('mounted.settings.ai.unqualifiedSeatDesc', {
+              model: policy.deciding_model, lane: lane.title, client: policy.client_id,
+              date: policy.valid_from ? policy.valid_from.slice(0, 10) : '—'
+            })}
+          >
+            <FactValue mono>{policy.deciding_model}</FactValue>
+          </Row>
+        )))}
       {(report.lanes || []).filter((lane) => Array.isArray(lane.qualified)).map((lane) => {
-        const activePolicy = (lane.policies || [])[0] || null;
+        const activePolicy = (lane.policies || []).filter((policy) => policy.basis !== 'self_hosted_unqualified')[0] || null;
         const verdictRows = (lane.comparison?.verdicts_by_model || []);
         const pairs = (lane.comparison?.agreement_pairs || []);
         return (

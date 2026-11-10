@@ -33,6 +33,7 @@
 // model's cost here is the deciding budget it just vacated. The cap env
 // still gates dispatch fail-closed, same as every challenger.
 
+import { isUnqualifiedSeat } from './modelLanePolicy.js';
 import { CHALLENGER_CAP_ENV, dispatchChallengerRun } from './modelChallenger.js';
 import { getLane } from './modelLanes.js';
 import {
@@ -236,8 +237,14 @@ export const makeReconciliationReasoningChallengerHook = ({
   env = process.env,
   sample = null,
   fetchImpl = null,
-  anthropicApiKey = null
+  anthropicApiKey = null,
+  // 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): the seat the hook would
+  // shadow. A self-hosted, unqualified seat gets NO reverse shadow: the
+  // company chose a local model, so no cloud model is called about its
+  // documents for this lane (and no comparison is evidence for promotion).
+  decidingPolicy = null
 } = {}) => {
+  if (isUnqualifiedSeat(decidingPolicy)) return null;
   const familyConfig = familyConfigFor(family);
   if (!familyConfig || !firmId || !clientId || typeof withClient !== 'function') return null;
   const lane = getLane(RECONCILIATION_REASONING_LANE);

@@ -56,8 +56,10 @@
 import {
   ANTHROPIC_API_VERSION,
   ANTHROPIC_MESSAGES_URL,
-  OPENAI_RESPONSES_URL
+  OPENAI_RESPONSES_URL,
+  shapeOpenAiCompatibleRequest
 } from './providerEndpoints.js';
+import { extractJson } from './extractJson.js';
 import {
   classifyProviderStatus,
   classifyProviderThrow,
@@ -489,6 +491,123 @@ export const openAiStructuredRequest = ({
   fetchImpl: laneDeadlineFetch({ provider: 'openai', fetchImpl, timeoutMs, bareOutsideWorker: true }),
   ...laneWall(timeoutMs)
 });
+
+// ── the openai_compatible llmCall options (one seam) ───────────────────────
+// 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): every lane whose deciding
+// call can ride the openai_compatible endpoint — a policy-seated lab rung or
+// a self-hosted, unqualified model — builds its call HERE: the lane's own
+// instructions and input unchanged, the chat/completions body, the lane's wall
+// as one deadline transport, and a reader that turns each way of having no
+// answer into the providerTransport vocabulary the cloud paths use:
+//  - finish_reason `length`          → PROVIDER_OUTPUT_LIMIT (never parsed)
+//  - finish_reason `content_filter`
+//    or a `refusal` message          → PROVIDER_REFUSED
+//  - an empty reply                  → PROVIDER_INVALID_OUTPUT
+//  - (json) prose, not JSON          → PROVIDER_INVALID_OUTPUT
+//  - (json + schema) a schema breach → PROVIDER_INVALID_OUTPUT (validateLaneSchema,
+//                                      the lane's FULL schema)
+// HTTP statuses and timeouts are typed by typedLlmCallFailure, as for every
+// lane. Most compatible servers take no strict-schema grammar the same way, so
+// with `pinSchema` the schema travels in the system prompt and the answer is
+// held to it after parsing — the same check, done on our side. No fallback to
+// another model is ever requested or made here.
+export const openAiCompatibleReplyText = (payload) => {
+  const content = payload?.choices?.[0]?.message?.content;
+  return typeof content === 'string' ? content : '';
+};
+
+export const readOpenAiCompatibleReply = ({ json = false, schema = null, maxTokens = null, requestedModel = null } = {}) => (payload) => {
+  const choice = payload?.choices?.[0] || null;
+  const model = servedModelOf(payload) || requestedModel;
+  const finishReason = choice?.finish_reason ?? null;
+  if (finishReason === 'length') throw providerOutputLimit('openai_compatible', { model, maxTokens });
+  if (finishReason === 'content_filter' || (typeof choice?.message?.refusal === 'string' && choice.message.refusal.trim())) {
+    throw providerRefused('openai_compatible', { model, category: finishReason === 'content_filter' ? 'content_filter' : 'refusal' });
+  }
+  const text = openAiCompatibleReplyText(payload);
+  if (!text.trim()) throw providerInvalidOutput('openai_compatible', { detail: 'the reply was empty', model });
+  const base = {
+    text,
+    model: servedModelOf(payload),
+    response_id: typeof payload?.id === 'string' ? payload.id : '',
+    finish_reason: finishReason
+  };
+  if (!json) return base;
+  let parsed;
+  try {
+    parsed = extractJson(text);
+  } catch {
+    parsed = undefined;
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw providerInvalidOutput('openai_compatible', { detail: 'the structured answer was not JSON', model });
+  }
+  if (schema) {
+    const violations = validateLaneSchema(schema, parsed);
+    if (violations.length) {
+      throw providerInvalidOutput('openai_compatible', {
+        detail: `the structured answer broke its schema: ${violations.slice(0, 3).join('; ')}`,
+        model
+      });
+    }
+  }
+  return { ...base, parsed };
+};
+
+// The schema, pinned into the instructions for a server that takes no
+// grammar (the coding lane's wording since Q9, now shared).
+export const pinSchemaInstructions = (instructions, { schemaName, schema }) => `${instructions}
+
+Respond with a SINGLE JSON object only — no markdown fences, no prose. The object must be valid against this JSON Schema ("${schemaName}"):
+${JSON.stringify(schema)}`;
+
+// `transport` is { endpoint: { url, headers }, model } (the seat's resolved
+// transport). `user` is the per-call input string.
+export const openAiCompatibleStructuredRequest = ({
+  transport,
+  system,
+  user,
+  maxTokens = null,
+  json = false,
+  schema = null,
+  schemaName = null,
+  pinSchema = false,
+  execution,
+  promptVersion = null,
+  sections = null,
+  fetchImpl = fetch,
+  timeoutMs = null
+} = {}) => {
+  const instructions = pinSchema && schema ? pinSchemaInstructions(system, { schemaName, schema }) : system;
+  return {
+    provider: 'openai_compatible',
+    url: transport.endpoint.url,
+    headers: transport.endpoint.headers,
+    body: shapeOpenAiCompatibleRequest({
+      model: transport.model,
+      system: instructions,
+      messages: [{ role: 'user', content: user }],
+      maxTokens
+    }),
+    sections: sections || { system: instructions, context: user },
+    execution,
+    promptVersion,
+    parseResponse: readOpenAiCompatibleReply({ json, schema, maxTokens, requestedModel: transport.model }),
+    fetchImpl: laneDeadlineFetch({ provider: 'openai_compatible', fetchImpl, timeoutMs }),
+    ...laneWall(timeoutMs)
+  };
+};
+
+// The served-model guard, one spelling: a llama-server-class endpoint serves
+// ONE loaded model and may ignore the request's model field. When the
+// response ATTESTS a different id than the seat's, there is no verdict under
+// either id. Returns { requested, served } on a mismatch, else null.
+export const seatModelMismatch = (transport, telemetry) => {
+  const served = telemetry?.model_source === 'response' && typeof telemetry?.model === 'string' && telemetry.model
+    ? telemetry.model
+    : null;
+  return served && served !== transport?.model ? { requested: transport?.model || null, served } : null;
+};
 
 // ── a failed call, typed ──────────────────────────────────────────────────
 // llmCall throws (a) a typed ProviderFailureError from parseResponse or the

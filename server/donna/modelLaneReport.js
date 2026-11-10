@@ -10,7 +10,7 @@
 // never from env or code defaults (the model-id-is-the-receipt rail).
 
 import { MODEL_LANES } from './modelLanes.js';
-import { listLaneDecidingPolicies } from './modelLanePolicy.js';
+import { isUnqualifiedSeat, listLaneDecidingPolicies } from './modelLanePolicy.js';
 
 // The model lab (Q6c) compares deciding models on the DISPOSITION lane —
 // its verdicts persist in reconciliation_evaluations under this family.
@@ -155,7 +155,10 @@ export const computeModelLaneReport = async ({ client, firmId }) => {
       // free picker.
       qualified: lane.qualified,
       // Q6c — active policy rows for this lane (firm-wide row first).
-      policies: policies.filter((p) => p.lane === lane.id),
+      policies: policies.filter((p) => p.lane === lane.id)
+        // 2026-11-10 (SELF_HOSTED_DECISION): a self-hosted seat says what it is.
+        .map((p) => (isUnqualifiedSeat(p) ? { ...p, unqualified: true } : p)),
+      self_hosted: lane.selfHosted,
       stats: byLane.get(lane.id),
       comparison: {
         verdicts_by_model: verdictsByLane.get(lane.id) || [],

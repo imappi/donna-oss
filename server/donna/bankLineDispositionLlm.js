@@ -60,7 +60,8 @@ import { jevDispositionEnabled, loadJevDispositionEvidence, decideJevDisposition
 import { llmCall } from './llmCall.js';
 import { amountText, dayText } from './salesRecognitionGap.js';
 import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
-import { resolveOpenAiCompatibleEndpoint, shapeOpenAiCompatibleRequest } from './providerEndpoints.js';
+import { resolveOpenAiCompatibleEndpoint } from './providerEndpoints.js';
+import { openAiCompatibleStructuredRequest } from './structuredRequest.js';
 import { canonicalMerchantPattern } from './transactionIntel.js';
 import {
   BANK_LINE_DISPOSITION_FAMILY,
@@ -798,21 +799,18 @@ export const proposeBankLineDisposition = async ({
   // disposition or falls toward a human exactly like the strong path.
   if (transport?.provider === 'openai_compatible') {
     try {
-      const { result, telemetry } = await llmCall({
-        provider: 'openai_compatible',
-        url: transport.endpoint.url,
-        headers: transport.endpoint.headers,
-        body: shapeOpenAiCompatibleRequest({
-          model: transport.model,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }]
-        }),
-        sections: { system: systemPrompt, context: userPrompt },
+      // 2026-11-10 (SELF_HOSTED_DECISION): the one compatible seam builds the
+      // call (same prompts; finish_reason / refusal / empty reply typed and
+      // caught below as a transport-class failure, never stamped; the
+      // transport default deadline outside a worker, which this call lacked).
+      const { result: reply, telemetry } = await llmCall(openAiCompatibleStructuredRequest({
+        transport,
+        system: systemPrompt,
+        user: userPrompt,
         execution: { root: { type: 'bank_line_disposition', id: transaction.id } },
-        promptVersion: null,
-        parseResponse: (payload) => payload?.choices?.[0]?.message?.content ?? '',
-        ...(fetchImpl ? { fetchImpl } : {})
-      });
+        fetchImpl: fetchImpl || fetch
+      }));
+      const result = reply?.text ?? '';
       // Model-mismatch guard (2026-08-16, the local-rung admission): a
       // llama-server-class compatible endpoint serves ONE loaded model and
       // ignores the request's model field, so a policy naming model A
@@ -850,9 +848,14 @@ export const proposeBankLineDisposition = async ({
       console.error(`[${LOG_TAG}] compatible disposition call threw`, {
         bank_transaction_id: transaction.id,
         model: transport.model,
-        error: error?.message || String(error)
+        error: error?.message || String(error),
+        provider_failure: error?.providerFailure === true ? error.code : null
       });
-      return { ...safeDisposition('transport_error'), transport_failure: true };
+      return {
+        ...safeDisposition('transport_error'),
+        transport_failure: true,
+        ...(error?.providerFailure === true ? { provider_failure_code: error.code } : {})
+      };
     }
   }
 

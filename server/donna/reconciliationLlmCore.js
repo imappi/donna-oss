@@ -48,7 +48,8 @@ import { clientFlagActs } from './clientConfig.js';
 // ran under. llmDecisions is a leaf (node:crypto only) — no import cycle. The write is
 // ADDITIVE + SOFT-FAIL: a logging error never affects the match persist.
 import { recordLlmDecision } from './llmDecisions.js';
-import { classifyModelProvenance, shapeOpenAiCompatibleRequest } from './providerEndpoints.js';
+import { classifyModelProvenance } from './providerEndpoints.js';
+import { openAiCompatibleStructuredRequest, seatModelMismatch, typedLlmCallFailure } from './structuredRequest.js';
 // Q7 (the model lab, 2026-08-16): the compatible deciding path rides the
 // llmCall envelope (sizes-only telemetry, typed refusals). llmCall is a leaf
 // module (node built-ins only) — no import cycle.
@@ -65,7 +66,6 @@ import {
   classifyProviderThrow,
   fetchProviderJson,
   isProviderFailure,
-  providerFetchWithDeadline,
   providerInvalidOutput,
   waitForProviderRetry
 } from './providerTransport.js';
@@ -1405,40 +1405,37 @@ export const proposeMatchesViaAnthropic = async ({
     let text;
     let telemetry;
     try {
-      ({ result: text, telemetry } = await llmCall({
-        provider: 'openai_compatible',
-        url: transport.endpoint.url,
-        headers: transport.endpoint.headers,
-        body: shapeOpenAiCompatibleRequest({
-          model: transport.model,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-          maxTokens: 2048
-        }),
-        sections: { system: systemPrompt, context: userPrompt },
+      // 2026-11-10 (SELF_HOSTED_DECISION): the one compatible seam builds the
+      // call — the same prompts; finish_reason, refusals and an empty reply
+      // typed before the parser runs; the lane's wall as one deadline.
+      let reply;
+      ({ result: reply, telemetry } = await llmCall(openAiCompatibleStructuredRequest({
+        transport,
+        system: systemPrompt,
+        user: userPrompt,
+        maxTokens: 2048,
         execution: transport.execution,
-        promptVersion: null,
-        parseResponse: (payload) => payload?.choices?.[0]?.message?.content ?? '',
-        fetchImpl: providerFetchWithDeadline({ provider: 'openai_compatible', fetchImpl: fetchImpl || fetch, ...timeoutOverride })
-      }));
+        fetchImpl: fetchImpl || fetch,
+        timeoutMs: timeoutOverride.timeoutMs ?? null
+      })));
+      text = reply?.text ?? '';
     } catch (error) {
-      if (error?.code === 'LLM_CALL_PROVIDER_ERROR') {
-        throw classifyProviderStatus({ provider: 'openai_compatible', status: error.status, payload: { error: { message: error.message } } });
-      }
-      throw classifyProviderThrow({ provider: 'openai_compatible', error }) || error;
+      const typed = typedLlmCallFailure('openai_compatible', error);
+      if (typed) throw typed;
+      throw error;
     }
     // Model-mismatch guard (the #1711 disposition guard, same law): when
     // the endpoint ATTESTS a model other than the policy's, the reply must
     // not become a verdict under EITHER model id — throw typed, nothing
     // persists, never a silent decider swap mid-experiment.
-    const servedModel = telemetry?.model_source === 'response'
-      && typeof telemetry?.model === 'string' && telemetry.model
+    const mismatch = seatModelMismatch(transport, telemetry);
+    const servedModel = telemetry?.model_source === 'response' && typeof telemetry?.model === 'string' && telemetry.model
       ? telemetry.model
       : null;
-    if (servedModel && servedModel !== transport.model) {
-      console.error(`[${logTag}] compatible endpoint MODEL MISMATCH — policy requested "${transport.model}", endpoint served "${servedModel}"; refusing the verdict`);
+    if (mismatch) {
+      console.error(`[${logTag}] compatible endpoint MODEL MISMATCH — policy requested "${mismatch.requested}", endpoint served "${mismatch.served}"; refusing the verdict`);
       throw Object.assign(
-        new Error(`compatible endpoint model mismatch — requested "${transport.model}", served "${servedModel}"`),
+        new Error(`compatible endpoint model mismatch — requested "${mismatch.requested}", served "${mismatch.served}"`),
         { code: 'POLICY_MODEL_MISMATCH' }
       );
     }

@@ -35,7 +35,7 @@ import { callProviderJson, providerFailureReceipt, providerInvalidOutput, provid
 import { llmCall } from './llmCall.js';
 import { getLane } from './modelLanes.js';
 import { missingKeyNameFor, resolveTextLaneProvider } from './providerEndpoints.js';
-import { anthropicStructuredRequest, typedLlmCallFailure } from './structuredRequest.js';
+import { anthropicStructuredRequest, openAiCompatibleStructuredRequest, seatModelMismatch, typedLlmCallFailure } from './structuredRequest.js';
 
 // Drafting a message that ships to the CLIENT is a load-bearing call —
 // strong model by default, OPENAI_MODEL stays the override knob (same
@@ -1068,9 +1068,15 @@ export const draftClientAskMessage = async ({
   periodStart = null,
   periodEnd = null,
   fetchImpl = fetch,
-  openAiConfig = null
+  openAiConfig = null,
+  // 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): the ask_drafting lane's
+  // self-hosted seat, resolved by the DB caller (providerEndpoints.js
+  // resolveSeatTransport). Present ⇒ the SAME instructions, input and schema
+  // ride the compatible endpoint; absent ⇒ the provider paths below,
+  // byte-identical.
+  transport = null
 } = {}) => {
-  const resolved = resolveDrafter(openAiConfig);
+  const resolved = transport ? { ok: true, provider: 'openai_compatible', apiKey: '', model: transport.model } : resolveDrafter(openAiConfig);
   if (!resolved.ok) {
     const { provider, keyName } = missingKeyNameFor(resolved, LANE_PROVIDERS);
     throw askPipelineUnavailable(
@@ -1101,7 +1107,41 @@ export const draftClientAskMessage = async ({
 
   let payload;
   let parsed = null;
-  if (resolved.provider === 'anthropic') {
+  if (resolved.provider === 'openai_compatible') {
+    // Every way of having no draft — a cut-off reply, prose, a schema breach,
+    // an HTTP error, the deadline, a served model other than the seat's — is
+    // the same ASK_PIPELINE_LLM_UNAVAILABLE with the typed cause. A READABLE
+    // draft that breaks the ask contract stays ASK_PIPELINE_BAD_DRAFT in the
+    // sanitizer below, as on every provider. No other model is called.
+    let call;
+    try {
+      call = await llmCall(openAiCompatibleStructuredRequest({
+        transport,
+        system: instructions,
+        user: JSON.stringify(input),
+        json: true,
+        schema: buildAskMessageSchema(),
+        schemaName: 'client_ask_message_draft',
+        pinSchema: true,
+        execution: { root: { type: 'client_ask_draft', id: String(clientProfile?.id || clientProfile?.client_id || 'client') } },
+        fetchImpl
+      }));
+    } catch (error) {
+      const typed = typedLlmCallFailure('openai_compatible', error);
+      if (!typed) throw error;
+      const receipt = typed.receipt();
+      throw askPipelineUnavailable(receipt.message || `Compatible draft request failed (${receipt.code}).`, receipt);
+    }
+    const mismatch = seatModelMismatch(transport, call.telemetry);
+    if (mismatch) {
+      throw askPipelineUnavailable(
+        `The compatible endpoint served "${mismatch.served}", not the seated "${mismatch.requested}"; no draft under either id.`,
+        { code: 'POLICY_MODEL_MISMATCH', provider: 'openai_compatible', requested: mismatch.requested, served: mismatch.served }
+      );
+    }
+    payload = { model: call.telemetry?.model_source === 'response' ? call.telemetry.model : (call.result.model || null), id: call.result.response_id };
+    parsed = call.result.parsed;
+  } else if (resolved.provider === 'anthropic') {
     // The same instructions, input and schema on the Messages API, through
     // the shared envelope. Every failure — no credit, a bad key, a rate
     // limit, a refusal, an output cut at max_tokens, an unreadable or
@@ -1197,6 +1237,8 @@ export const draftClientAskMessage = async ({
     response_id: payload.id || '',
     // The language the draft was asked to be written in — part of the same
     // receipt, so a batch can be read against what it was instructed.
-    language: input.client.language
+    language: input.client.language,
+    // The seat's honesty column on the batch receipt (null off a seat).
+    policy_basis: transport?.policy_basis || null
   };
 };

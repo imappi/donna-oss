@@ -6,9 +6,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
 import { llmCall } from './llmCall.js';
-import { missingKeyNameFor, resolveTextLaneProvider, shapeOpenAiCompatibleRequest, TEXT_LANE_DEFAULT_MODELS } from './providerEndpoints.js';
+import { missingKeyNameFor, resolveTextLaneProvider, TEXT_LANE_DEFAULT_MODELS } from './providerEndpoints.js';
 import { getLane } from './modelLanes.js';
-import { anthropicStructuredRequest, typedLlmCallFailure } from './structuredRequest.js';
+import { anthropicStructuredRequest, openAiCompatibleStructuredRequest, seatModelMismatch, typedLlmCallFailure } from './structuredRequest.js';
 // The shared provider transport (2026-09-13): one deadline over headers +
 // body, capped by the worker's execution budget, and ONE typed failure for a
 // missing key, 401/403, 429/5xx, a reset socket, a hung request and an
@@ -17,18 +17,14 @@ import { anthropicStructuredRequest, typedLlmCallFailure } from './structuredReq
 // when it is present (db/coding.js), and the convergence clock re-drives.
 import {
   callProviderJson,
-  classifyProviderStatus,
-  classifyProviderThrow,
   PROVIDER_FAILURE_CODES,
   ProviderFailureError,
   providerFailureReceipt,
   providerBudgetReserveMs,
-  providerFetchWithDeadline,
   providerInvalidOutput,
   providerKeyMissing
 } from './providerTransport.js';
 import { remainingExecutionBudgetMs } from './executionBudget.js';
-import { extractJson } from './extractJson.js';
 import { canonicalMerchantPattern, conversionDetailFor, normalizeIntelText } from './transactionIntel.js';
 import { requireCodingPolicyForClient, codingPolicyReceipt, CodingPolicyError } from './codingPolicy.js';
 import { decideJevCoding, SOURCE_DOCUMENT_QUESTION } from './jevCoding.js';
@@ -596,68 +592,44 @@ const codingViaCompatibleTransport = async ({
   executionId,
   fetchImpl = null
 } = {}) => {
-  const system = `${callInstructions}
-
-Respond with a SINGLE JSON object only — no markdown fences, no prose. The object must be valid against this JSON Schema ("${schemaName}"):
-${JSON.stringify(schema)}`;
-  const user = JSON.stringify(input);
+  // 2026-11-10 (SELF_HOSTED_DECISION): the call is built by the one
+  // compatible seam (structuredRequest.js) — the same pinned schema wording,
+  // now with finish_reason typed and the answer held to the lane's FULL
+  // schema after parsing (a breach is PROVIDER_INVALID_OUTPUT, never a
+  // suggestion). sanitizeSuggestion still runs on what passes.
   let result;
   let telemetry;
   try {
-    ({ result, telemetry } = await llmCall({
-      provider: 'openai_compatible',
-      url: transport.endpoint.url,
-      headers: transport.endpoint.headers,
-      body: shapeOpenAiCompatibleRequest({
-        model: transport.model,
-        system,
-        messages: [{ role: 'user', content: user }]
-      }),
-      sections: { system, context: user },
+    ({ result, telemetry } = await llmCall(openAiCompatibleStructuredRequest({
+      transport,
+      system: callInstructions,
+      user: JSON.stringify(input),
+      json: true,
+      schema,
+      schemaName,
+      pinSchema: true,
       execution: { root: { type: 'transaction_coding', id: executionId } },
-      parseResponse: (payload) => ({
-        text: payload?.choices?.[0]?.message?.content ?? '',
-        responseId: payload?.id || ''
-      }),
-      // The socket stays llmCall's; the deadline (headers + body, capped by
-      // the execution budget) and the typed failure come from the transport.
-      fetchImpl: providerFetchWithDeadline({ provider: 'openai_compatible', fetchImpl: fetchImpl || fetch })
-    }));
+      fetchImpl: fetchImpl || fetch
+    })));
   } catch (error) {
     if (error?.code === 'POLICY_MODEL_MISMATCH') throw error;
-    const typed = error?.code === 'LLM_CALL_PROVIDER_ERROR'
-      ? classifyProviderStatus({ provider: 'openai_compatible', status: error.status, payload: { error: { message: error.message } } })
-      : classifyProviderThrow({ provider: 'openai_compatible', error });
+    const typed = typedLlmCallFailure('openai_compatible', error);
     if (!typed) throw error;
     const receipt = providerFailureReceipt(typed);
-    return { parsed: null, provider_failure: receipt, reason: receipt.message };
+    return { parsed: null, provider_failure: receipt, reason: receipt.message, model: error?.telemetry?.model || transport.model };
   }
-  const servedModel = telemetry?.model_source === 'response'
-    && typeof telemetry?.model === 'string' && telemetry.model
-    ? telemetry.model
-    : null;
-  if (servedModel && servedModel !== transport.model) {
+  const mismatch = seatModelMismatch(transport, telemetry);
+  if (mismatch) {
     throw Object.assign(
-      new Error(`transaction_coding policy model mismatch — policy requested "${transport.model}", endpoint served "${servedModel}"; refusing the verdict (no stamp)`),
-      { code: 'POLICY_MODEL_MISMATCH', requested: transport.model, served: servedModel }
+      new Error(`transaction_coding policy model mismatch — policy requested "${mismatch.requested}", endpoint served "${mismatch.served}"; refusing the verdict (no stamp)`),
+      { code: 'POLICY_MODEL_MISMATCH', requested: mismatch.requested, served: mismatch.served }
     );
   }
-  let parsed = null;
-  try {
-    parsed = extractJson(result?.text || '');
-  } catch {
-    // An unreadable body is a transport-class failure (no judgment exists
-    // to render), typed the same as a reset socket — never a template coding.
-    const receipt = providerFailureReceipt(providerInvalidOutput('openai_compatible', {
-      detail: 'the structured suggestion was not JSON', model: telemetry?.model || transport.model
-    }));
-    return { parsed: null, provider_failure: receipt, reason: receipt.message, model: telemetry?.model || transport.model };
-  }
   return {
-    parsed,
+    parsed: result.parsed,
     model: telemetry?.model || transport.model,
     model_source: telemetry?.model_source || 'request',
-    response_id: result?.responseId || ''
+    response_id: result?.response_id || ''
   };
 };
 

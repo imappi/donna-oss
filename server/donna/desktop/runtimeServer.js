@@ -14,7 +14,7 @@ import http from 'node:http';
 import { existsSync, unlinkSync } from 'node:fs';
 
 import { applyDesktopHostRuntimeDefaults } from './hostRuntimeDefaults.js';
-import { buildModelLaneReceipt } from './capabilityReceipt.js';
+import { buildModelLaneReceipt, selfHostedSeatLine } from './capabilityReceipt.js';
 import { applyProviderKeyDotEnvDefaults } from './providerKeyDotEnv.js';
 import {
   applyDesktopBuildIdentityDefaults,
@@ -106,6 +106,18 @@ export const createDonnaRuntimeServer = async ({ listen, logger = console } = {}
     }
   } catch (error) {
     logger.error?.('[runtime-server] sole-firm default resolution FAILED:', error?.message || error);
+  }
+
+  // The lane banner's deciding half (2026-11-10, modelLanes.js
+  // SELF_HOSTED_DECISION): once the database answers, say whether any
+  // company is decided by an unqualified self-hosted model. Best-effort but
+  // loud: a failed read says so rather than claiming there are none.
+  try {
+    const { listSelfHostedSeats } = await import('../modelLanePolicy.js');
+    const seats = await withFirmDbClient((client) => listSelfHostedSeats({ client }));
+    logger.log?.(`[runtime-server] ${selfHostedSeatLine(seats, process.env)}`);
+  } catch (error) {
+    logger.error?.('[runtime-server] self-hosted seat read FAILED — the deciding models of this boot are not receipted here:', error?.message || error);
   }
 
   // S2 boot backfill (design-donna-desktop-runtime-on.md Phase 2): seed

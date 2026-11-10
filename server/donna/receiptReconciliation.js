@@ -857,6 +857,7 @@ export const runReceiptReconciliationForDocument = async ({
   if (policyActive) {
     const challengerSnapshot = await readClientConfigSnapshot(client, { firmId, clientId });
     challengerHook = makeReconciliationReasoningChallengerHook({
+      decidingPolicy,
       family: 'receipt',
       firmId,
       clientId,

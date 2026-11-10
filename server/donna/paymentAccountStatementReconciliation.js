@@ -172,6 +172,7 @@ export const runPaymentAccountStatementReconciliationForDocument = async ({
   if (policyActive) {
     const challengerSnapshot = await readClientConfigSnapshot(client, { firmId, clientId });
     challengerHook = makeReconciliationReasoningChallengerHook({
+      decidingPolicy,
       family: 'payment_account_statement',
       firmId,
       clientId,

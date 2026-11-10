@@ -31,6 +31,7 @@
 // contract. Config is the same env four as B2 (endpoint pair + candidate
 // model + cap) — one rung, one candidate, shared per-client spend cap.
 
+import { isUnqualifiedSeat } from './modelLanePolicy.js';
 import { llmCall } from './llmCall.js';
 import { dispatchChallengerRun } from './modelChallenger.js';
 import { resolveOpenAiCompatibleEndpoint, shapeOpenAiCompatibleRequest } from './providerEndpoints.js';
@@ -229,6 +230,11 @@ export const makeBankLineDispositionChallengerHook = ({
   anthropicApiKey = null
 } = {}) => {
   if (!firmId || !clientId || typeof withClient !== 'function') return null;
+  // 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): a self-hosted,
+  // unqualified seat gets neither shadow — no cloud model is called about
+  // this company's lines for this lane, and nothing here is promotion
+  // evidence.
+  if (isUnqualifiedSeat(decidingPolicy)) return null;
   const lane = getLane(BANK_LINE_DISPOSITION_CHALLENGER_LANE);
   if (!lane?.challenger?.eligible) return null;
 

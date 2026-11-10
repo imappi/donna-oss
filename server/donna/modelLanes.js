@@ -52,13 +52,33 @@ export const CLAUDE_ONLY_DECISION = '2026-11-10';
 export const DOCUMENT_LANE_PROVIDERS = Object.freeze(['anthropic', 'openai']);
 export const DOCUMENT_LANE_ANTHROPIC_DEFAULT = 'claude-opus-5-5';
 
+// 2026-11-10 — SELF-HOSTED, UNQUALIFIED (the owner's decision of 2026-11-10,
+// answering a reader's request for "an OpenAI-compatible base URL setting, so
+// it runs on a local model"): an explicit opt-in, never the default. A person
+// running their own installation may seat a model of their own choosing,
+// served by their own OpenAI-compatible endpoint, as ONE named company's
+// deciding model on a lane that declares `selfHosted` below. It is labelled for
+// what it is: basis `self_hosted_unqualified` (modelLanePolicy.js), never in a
+// qualified set, never promotion or graduation evidence, and every receipt,
+// the lane banner, Host A's lane inventory and the mounted settings say an
+// unqualified model decided. It changes WHO may be the model, never what the
+// checks require: the same instructions, parser, schema validation, gates and
+// writers run on its answers. This does not make a free picker: the seat is
+// set only through the policy writer, with an active member, a reason and an
+// audit receipt; the settings dropdown stays a selector within the qualified
+// set. A lane is offered only when its deciding call already rides the one
+// compatible request seam (structuredRequest.js openAiCompatibleStructuredRequest)
+// and its input is text only.
+export const SELF_HOSTED_DECISION = '2026-11-10';
+export const SELF_HOSTED_BASIS = 'self_hosted_unqualified';
+
 // `ledger_commit` has NO lane and never will — the ledger post path is
 // permanently unroutable to any model (spec §1.3, CLAUDE.md). Pinned by
 // test.
 
 export const LANE_KINDS = Object.freeze(['deciding', 'bulk_filter', 'capability_probe']);
 
-const lane = ({ id, title, kind, endpointClass, providers = null, promptVersion = null, modules, challenger = null, qualified = null, experimental = null, desktopDefault = null, note = null }) => Object.freeze({
+const lane = ({ id, title, kind, endpointClass, providers = null, promptVersion = null, modules, challenger = null, qualified = null, experimental = null, desktopDefault = null, selfHosted = null, note = null }) => Object.freeze({
   id,
   title,
   kind,
@@ -76,6 +96,12 @@ const lane = ({ id, title, kind, endpointClass, providers = null, promptVersion 
   qualified: qualified ? Object.freeze([...qualified]) : null,
   experimental: experimental ? Object.freeze({ ...experimental }) : null,
   desktopDefault: desktopDefault ? Object.freeze({ ...desktopDefault }) : null,
+  // SELF_HOSTED_DECISION: the lane can be decided by a self-hosted,
+  // unqualified model over the openai_compatible endpoint (`covers` names
+  // the jobs one seat on this lane decides). null = not offered.
+  selfHosted: selfHosted
+    ? Object.freeze({ endpointClass: 'openai_compatible', covers: Object.freeze([...(selfHosted.covers || [])]) })
+    : null,
   challenger: challenger
     ? Object.freeze({ eligible: true, sampling: Object.freeze({ ...challenger.sampling }) })
     : Object.freeze({ eligible: false }),
@@ -138,6 +164,7 @@ export const MODEL_LANES = Object.freeze([
     // Qwen3.8-27B-UD-Q4_K_XL artifact identity stays separate and is NOT
     // qualified here.
     qualified: ['claude-opus-4-8', 'qwen/qwen3.8-27b'],
+    selfHosted: { covers: ['document-to-bank matching (supplier bill, sales invoice, receipt, payment confirmation, payout, payment-account statement)', 'document disposition', 'the settlement entry', 'owner-reply redisposition'] },
     note: 'Isolation-list file; the product-wide DEFAULT flips last. Q7 (2026-08-16): experiment policies may seat a qualified rung as decider on a lab book; Opus then runs as the reverse shadow.'
   }),
   lane({
@@ -164,6 +191,7 @@ export const MODEL_LANES = Object.freeze([
     // id in the ai_suggestion receipt) and per-flip receipts as Q6c/Q7.
     // Product-wide promotion still requires the signed §5.2 gate verdict.
     qualified: ['claude-opus-5-5', 'gpt-5.4', 'qwen/qwen3.8-27b'],
+    selfHosted: { covers: ['transaction coding (single and batch)'] },
     note: 'Q9 (2026-08-16): governed for the sole-model lab — experiment policies may seat the qualified 27B as the coding decider; the strong default holds absent a policy row (claude-opus-5-5 since 2026-11-10; gpt-5.4 only without an Anthropic key).'
   }),
   lane({
@@ -248,6 +276,7 @@ export const MODEL_LANES = Object.freeze([
     // measured before this change merges.
     providers: ['anthropic', 'openai'],
     qualified: ['claude-opus-5-5', 'gpt-5.4'],
+    selfHosted: { covers: ['drafting the question to the owner'] },
     modules: ['server/donna/askPipeline.js']
   }),
   lane({
@@ -407,6 +436,7 @@ export const MODEL_LANES = Object.freeze([
     // seats qwen firm-wide as the lab decider. Cloud id ≠ the local
     // Q4_K_XL artifact id — the identities never alias.
     qualified: ['claude-opus-4-8', 'Qwen/Qwen3.5-397B-A17B', 'Qwen/Qwen3.5-35B-A3B', 'Qwen3.8-27B-UD-Q4_K_XL', 'qwen/qwen3.8-27b'],
+    selfHosted: { covers: ['bare bank-line disposition'] },
     note: 'PILOT LANE since Q6a (2026-08-13, superseding B2): the LIVE bare-bank-line decider (auto_explain / needs_human / chase_*), swept by the hourly cron and the loops terminal drain. Text-only, pure exported prompt builders + parser — the challenger replays the exact deciding observation via bankLineDispositionChallenger.js, post-stamp. Q6c (2026-08-16): model-lab experiment policies can seat a qualified rung as the decider (modelLanePolicy.js); the strong default then runs as the REVERSE shadow.'
   }),
 
@@ -440,6 +470,13 @@ export const MODEL_LANES = Object.freeze([
 ]);
 
 export const getLane = (id) => MODEL_LANES.find((entry) => entry.id === id) || null;
+
+// SELF_HOSTED_DECISION: the lanes a self-hosted seat may take, and whether a
+// model id sits in ANY lane's qualified set (a self-hosted seat never wears a
+// qualified id — the two labels never collide).
+export const selfHostedLanes = (lanes = MODEL_LANES) => lanes.filter((entry) => entry.selfHosted);
+export const isQualifiedAnywhere = (model, lanes = MODEL_LANES) =>
+  lanes.some((entry) => Array.isArray(entry.qualified) && entry.qualified.includes(model));
 
 // A lane's deciding-model flip is a CONFIG-PLANE staged change (spec §6:
 // `LANE_MODEL_<LANE>` through clientFlagActs, never an env pair). This

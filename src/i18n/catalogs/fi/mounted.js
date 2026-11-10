@@ -349,6 +349,8 @@ const mounted = Object.freeze({
   "mounted.settings.ai.pair": "{deciding} vs. {challenger}: {percent}, ajoja {runs}",
   "mounted.settings.ai.defaultStrong": "Oletus (vahva malli)",
   "mounted.settings.ai.experiment": "kokeilu",
+  "mounted.settings.ai.unqualifiedSeat": "Arvioimaton paikallinen malli",
+  "mounted.settings.ai.unqualifiedSeatDesc": "{model} päättää kohdan {lane} yritykselle {client}, asetettu {date} tämän asennuksen omaan päätepisteeseen. Donna ei ole mitannut tätä mallia: se on arvioimaton, sitä ei koskaan lueta hyväksytyksi, ja kaikki tarkistukset ja portit koskevat sen vastauksia. Poista se komennolla node scripts/seat_local_model.js --clear.",
   "mounted.settings.ai.dormant": "Lepäävät kaistat",
   "mounted.settings.ai.dormantDesc": "Kaikki muut mallikutsujen kohdat on kartoitettu ja valmiita haastajille, mutta ne otetaan käyttöön vasta oman arviointiporttinsa jälkeen — ei koskaan mieltymyksen tai hinnan perusteella.",
   "mounted.settings.ai.laneCount": "{count, plural, one {# kaista} other {# kaistaa}}",

@@ -24,6 +24,7 @@ import {
   storeLocalEvidenceBytes
 } from './evidenceStorage.js';
 import { queryFirmDb } from './firmDb.js';
+import { listSelfHostedSeats } from './modelLanePolicy.js';
 import { LANE_KINDS, MODEL_LANES } from './modelLanes.js';
 import { ENDPOINT_CLASSES, OPENAI_COMPATIBLE_ENV_KEYS } from './providerEndpoints.js';
 
@@ -67,7 +68,17 @@ import { ENDPOINT_CLASSES, OPENAI_COMPATIBLE_ENV_KEYS } from './providerEndpoint
 // the host digest entity generations were certified against does not move.
 // Persisted v7 receipts keep naming the shape that scored them; the next
 // boot or renewal mints v8.
-export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v8';
+// v9 (2026-11-10, "run on a local model", modelLanes.js
+// SELF_HOSTED_DECISION): the predicate is unchanged — `model_routes` still
+// scores the lane inventory only — but its detail now NAMES every active
+// self-hosted, UNQUALIFIED seat on this host's database
+// (`detail.unqualified_seats`: firm, company, lane, the seated model id;
+// null when the database was not read) and the lanes that can take one
+// (`detail.self_hostable_lanes`). A receipt, outside the compatibility
+// projection and the lane manifest digest: seating or clearing a local model
+// does not move the host digest. Persisted v8 receipts keep naming the shape
+// that scored them; the next boot or renewal mints v9.
+export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v9';
 export const HOST_COMPATIBILITY_CONTRACT_VERSION = 'donna.host-compatibility.v1';
 export const HOST_CERTIFICATE_FRESHNESS_CONTRACT_VERSION = 'donna.host-certificate-freshness.v1';
 export const HOST_CERTIFICATE_RENEWAL_INTERVAL_MS = 5 * 60 * 1000;
@@ -694,7 +705,7 @@ const storageCheck = async ({ env, observedAt, commitSha, fetchImpl, storageOps,
 // a human reads "anthropic dark" from the certificate, the boot line and
 // /firms/health — every consumer already fails soft without its key
 // (desktop/capabilityReceipt.js). Nothing here invokes a model.
-const modelRouteCheck = (env, modelLanes = MODEL_LANES) => {
+const modelRouteCheck = (env, modelLanes = MODEL_LANES, { unqualifiedSeats = null } = {}) => {
   const inventory = (Array.isArray(modelLanes) ? modelLanes : []).map((lane) => ({
     lane_id: clean(lane?.id),
     kind: clean(lane?.kind) || null,
@@ -750,7 +761,11 @@ const modelRouteCheck = (env, modelLanes = MODEL_LANES) => {
     failures,
     dark_providers: [...new Set(dark.map(({ provider }) => provider))].sort(),
     dark_lanes: dark.map(({ lane_id }) => lane_id),
-    lanes
+    lanes,
+    self_hostable_lanes: (modelLanes || []).filter((lane) => lane?.selfHosted).map((lane) => lane.id),
+    unqualified_seats: Array.isArray(unqualifiedSeats)
+      ? unqualifiedSeats.map(({ firm_id, client_id, lane, deciding_model }) => ({ firm_id, client_id, lane, deciding_model, qualified: false }))
+      : null
   });
 };
 
@@ -868,7 +883,7 @@ export const observeHostCertificateA = async ({
     }),
     await runtimeCheck({ query, manifest, schedulerEnabled }),
     await storageCheck({ env, observedAt, commitSha: build.detail.commit_sha, fetchImpl, storageOps }),
-    modelRouteCheck(env, modelLanes),
+    modelRouteCheck(env, modelLanes, { unqualifiedSeats: query ? await listSelfHostedSeats({ client: { query } }).catch(() => null) : null }),
     await staticArtifactCheck({ rootDir }),
     await configPlaneCheck({ query }),
     accountingCheck(),

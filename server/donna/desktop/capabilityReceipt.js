@@ -14,6 +14,8 @@
 // `ANTHROPIC_API_KEY|OPENAI_API_KEY` over server/ — update them when a lane
 // gains or loses a provider (the test pins the shape, not the census).
 
+import { buildSelfHostedLanePlan, lanePlanSummary } from '../selfHostedPlan.js';
+
 const present = (value) => typeof value === 'string' && value.trim().length > 0;
 
 // 2026-11-10 (owner's decision: Donna runs on Claude only): the text lanes —
@@ -104,7 +106,40 @@ const compatibleLine = (env) => {
     + `cap ${env.MODEL_CHALLENGER_CAP_TOKENS.trim()} tokens/client/mo (${lanes})`;
 };
 
-export const buildModelLaneReceipt = (env = process.env) => {
+// 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): the DECIDING half of the
+// compatible endpoint. The line above is env-only and names the shadow
+// challenger; a self-hosted seat is a policy ROW, so the boot (once the
+// database answers) hands the active seats in and the banner says, per seat,
+// that an UNQUALIFIED model decides — the model id the seat names, the host,
+// the lanes, and that every other lane stays where it was. No seats ⇒ the
+// endpoint, if configured, decides nothing, and the banner says that too.
+// `seats` = [{ firm_id, client_id, lane, deciding_model }]; null = not read.
+export const selfHostedSeatLine = (seats, env = process.env) => {
+  if (!Array.isArray(seats)) return null;
+  let host = present(env?.OPENAI_COMPATIBLE_BASE_URL) ? env.OPENAI_COMPATIBLE_BASE_URL.trim() : null;
+  if (host) { try { host = new URL(host).host; } catch { /* raw value; not a secret */ } }
+  if (!seats.length) {
+    return host
+      ? `openai_compatible endpoint ${host} configured — decides NOTHING (no self-hosted seat; the env alone changes no deciding model)`
+      : 'no self-hosted seat (every deciding model is a qualified default)';
+  }
+  const byModel = new Map();
+  for (const seat of seats) {
+    const key = seat.deciding_model;
+    if (!byModel.has(key)) byModel.set(key, { companies: new Set(), lanes: new Set() });
+    byModel.get(key).companies.add(`${seat.firm_id}/${seat.client_id}`);
+    byModel.get(key).lanes.add(seat.lane);
+  }
+  const parts = [...byModel.entries()].map(([model, entry]) => {
+    const others = lanePlanSummary(buildSelfHostedLanePlan({ seatedLanes: [...entry.lanes], env }));
+    return `UNQUALIFIED self-hosted model "${model}" decides ${[...entry.lanes].sort().join(', ')} for ${entry.companies.size} compan${entry.companies.size === 1 ? 'y' : 'ies'}`
+      + ` (their other lanes — ${others || 'none'})`;
+  });
+  return `openai_compatible DECIDING — ${parts.join('; ')} via ${host || 'NO ENDPOINT (those lanes fail loud: OPENAI_COMPATIBLE_NOT_CONFIGURED)'}`
+    + ' (unqualified: not measured by Donna, never promotion evidence; every other lane stays on its cloud provider or dark)';
+};
+
+export const buildModelLaneReceipt = (env = process.env, { selfHostedSeats = null } = {}) => {
   const openaiLit = present(env?.OPENAI_API_KEY);
   const anthropicLit = present(env?.ANTHROPIC_API_KEY);
   const compatibleLit = present(env?.OPENAI_COMPATIBLE_API_KEY)
@@ -115,7 +150,9 @@ export const buildModelLaneReceipt = (env = process.env) => {
     openai: openaiLit,
     anthropic: anthropicLit,
     openai_compatible: compatibleLit,
+    ...(Array.isArray(selfHostedSeats) ? { self_hosted_unqualified_seats: selfHostedSeats.length } : {}),
     line: `model lanes: ${providerLine('openai', 'OPENAI_API_KEY', env)}; `
       + `${providerLine('anthropic', 'ANTHROPIC_API_KEY', env)}; ${compatibleLine(env)}`
+      + (Array.isArray(selfHostedSeats) ? `; ${selfHostedSeatLine(selfHostedSeats, env)}` : '')
   };
 };

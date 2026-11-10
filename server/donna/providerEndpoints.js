@@ -88,15 +88,33 @@ export const OPENAI_COMPATIBLE_ENV_KEYS = Object.freeze({
 // Fail-loud resolution: an unconfigured endpoint is a typed refusal, never
 // a silent default host (there IS no default — the host is a data-governance
 // decision, not a fallback).
+//
+// 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): a server on THIS machine's
+// loopback address (localhost, 127.0.0.0/8, ::1) — a llama.cpp / Ollama /
+// vLLM process the operator runs — may have no auth, so for a loopback base
+// URL a blank key is allowed and no Authorization header is sent. Any other
+// host still needs the key (a server that checks none takes any value). The
+// cloud providers' keys are resolved elsewhere (resolveLaneProvider) and keep
+// their blank-key refusal unchanged.
+export const isLoopbackBaseUrl = (baseUrl) => {
+  try {
+    const host = new URL(String(baseUrl || '').trim()).hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return host === 'localhost' || host === '::1' || /^127(\.\d{1,3}){3}$/.test(host);
+  } catch {
+    return false;
+  }
+};
+
 export const resolveOpenAiCompatibleEndpoint = ({ env = process.env } = {}) => {
   const baseUrl = String(env[OPENAI_COMPATIBLE_ENV_KEYS.baseUrl] || '').trim();
   const apiKey = String(env[OPENAI_COMPATIBLE_ENV_KEYS.apiKey] || '').trim();
-  if (!baseUrl || !apiKey) {
+  const keylessLoopback = Boolean(baseUrl) && !apiKey && isLoopbackBaseUrl(baseUrl);
+  if (!baseUrl || (!apiKey && !keylessLoopback)) {
     throw Object.assign(
       new Error(
         `openai_compatible endpoint is not configured — set ${OPENAI_COMPATIBLE_ENV_KEYS.baseUrl} and `
         + `${OPENAI_COMPATIBLE_ENV_KEYS.apiKey} (there is deliberately no default host; the host choice is `
-        + 'a data-terms decision, spec §9.5)'
+        + 'a data-terms decision, spec §9.5; a loopback base URL needs no key)'
       ),
       { code: 'OPENAI_COMPATIBLE_NOT_CONFIGURED' }
     );
@@ -106,7 +124,7 @@ export const resolveOpenAiCompatibleEndpoint = ({ env = process.env } = {}) => {
     url: `${baseUrl.replace(/\/+$/, '')}/chat/completions`,
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`
+      ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {})
     }
   };
 };
@@ -305,4 +323,28 @@ export const resolveTextLaneProvider = ({
 export const missingKeyNameFor = (resolved, providers = []) => {
   const name = resolved?.provider || providers[0] || null;
   return { provider: name, keyName: LANE_PROVIDER_KEY_ENV[name] || null };
+};
+
+// ── a policy seat → the deciding transport (one spelling) ─────────────────
+// 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION). A policy row naming a
+// model that is neither one of the lane's strong defaults nor a cloud
+// provider's family (claude-*, gpt-*) is decided over the openai_compatible
+// endpoint — the rule the lab lanes already applied inline. A self-hosted
+// seat can never name a cloud family (the policy writer refuses it), so it
+// always lands here. An active seat with no endpoint THROWS
+// OPENAI_COMPATIBLE_NOT_CONFIGURED: never quietly back to another model.
+// `onlyBasis` restricts which bases the caller honours (a lane that never
+// read policy before reads only the self-hosted basis, so an installation
+// that does not opt in is unchanged).
+export const resolveSeatTransport = ({ policy, strongDefaults = [], onlyBasis = null, env = process.env } = {}) => {
+  const model = String(policy?.deciding_model || '').trim();
+  if (!model) return null;
+  if (onlyBasis && policy?.basis !== onlyBasis) return null;
+  if (strongDefaults.includes(model) || inferProviderFromModel(model)) return null;
+  return {
+    provider: 'openai_compatible',
+    endpoint: resolveOpenAiCompatibleEndpoint({ env }),
+    model,
+    policy_basis: policy?.basis || null
+  };
 };
