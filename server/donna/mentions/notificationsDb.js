@@ -91,7 +91,10 @@ export const listOpenSeatAsksForPrincipal = async ({
   const result = await queryFirmDb(
     `select cer.id, cer.firm_id, cer.client_id, cer.transaction_id,
             cer.request_payload->>'document_id' as document_id,
-            cer.question, cer.status, cer.created_by, cer.created_at,
+            cer.question, cer.status, cer.created_by, cer.created_at, cer.evidence_type,
+            -- A ledger adjustment a firm member must post: the lane renders
+            -- these stored facts through its catalog message.
+            cer.request_payload->'ledger_adjustment' as ledger_adjustment,
             case when cer.transaction_id is not null then 'transaction'
                  when cer.request_payload->>'document_id' is not null then 'document'
                  when cer.canonical_anchor like 'physical\\_count\\_line:%' then 'physical_count_line'
