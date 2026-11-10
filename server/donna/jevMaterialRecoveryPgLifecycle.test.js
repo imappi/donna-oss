@@ -5,6 +5,11 @@ import pg from 'pg';
 import {__setFirmDbPoolForTests,__resetFirmDbPoolForTests} from './firmDb.js';
 import {recoverJevMaterialExceptionsInDb} from './jevMaterialException.js';
 
+// The first-line lane decides only on a host with its provider configured
+// (firstLineLane.js, 2026-11-10); these cases are about the lane deciding.
+process.env.TYPESAFE_API_KEY ||= 'fixture-first-line-key';
+process.env.TYPESAFE_MODEL ||= 'fixture-first-line';
+
 const pgUrl=process.env.DONNA_PG_TEST_URL;
 test('real PG: renewed material decisions dispatch grounded authoring and reject changed full evidence before asking', {skip:!pgUrl&&'DONNA_PG_TEST_URL required'},async t=>{
   const admin=new pg.Client({connectionString:pgUrl});await admin.connect();

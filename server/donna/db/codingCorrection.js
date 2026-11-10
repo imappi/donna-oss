@@ -8,6 +8,7 @@ export { correctionDeltaLines } from '../ledgerCorrectionLines.js';
 import { hash } from '../jevEvidenceContract.js';
 import { readJevCase, jevCasePrompt, codingCaseRevision, caseReplyProvenance } from '../jevPreview.js';
 import { clientFlagActs, readClientConfigSnapshot } from '../clientConfig.js';
+import { firstLineLaneDecides } from '../firstLineLane.js';
 import { makeJevTrialProvider, readJevDecisionPolicy } from '../jevTrialProvider.js';
 import { suggestTransactionCoding } from '../transactionLlm.js';
 import { hasJevResolvedCoding, JEV_DOCUMENT_ASK_SELECTIONS } from '../jevDecisionReceipt.js';
@@ -62,7 +63,7 @@ const blockerIdentity = recovery => hash({code:recovery?.code,
 // member. Ordinary coding/experiment enrollment is not retroactive authority.
 async function authorityWithClient({client,firmId,clientId}) {
   const snapshot = await readClientConfigSnapshot(client,{firmId,clientId,strict:true});
-  if (!acts(snapshot,CODING_CORRECTION_FLAG) || !acts(snapshot,'JEV_RECONCILIATION')
+  if (!acts(snapshot,CODING_CORRECTION_FLAG) || !firstLineLaneDecides({snapshot})
     || !acts(snapshot,'CODING_AUTO_POST') || !acts(snapshot,'LEDGER_AUTO_POST')) fail('CODING_CORRECTION_AUTHORITY_REQUIRED');
   const grant = (await client.query(`select c.id,c.stage,c.reason,c.set_by_actor_id
     from client_capability_config c join firm_members m on m.firm_id=c.firm_id and m.id=c.set_by_actor_id

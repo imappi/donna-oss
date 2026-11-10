@@ -36,6 +36,11 @@ import { computeConvergenceForDocuments } from './reconcileConvergenceState.js';
 import { setClientFlagStage } from './clientConfig.js';
 import { requestDonnaApi } from './testSupport/apiSeamHarness.js';
 
+// The first-line lane decides only on a host with its provider configured
+// (firstLineLane.js, 2026-11-10); these cases are about the lane deciding.
+process.env.TYPESAFE_API_KEY ||= 'fixture-first-line-key';
+process.env.TYPESAFE_MODEL ||= 'fixture-first-line';
+
 const PG_URL = process.env.DONNA_PG_TEST_URL || '';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FIRM = 'firm-fi09';

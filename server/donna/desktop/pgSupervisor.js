@@ -11,6 +11,8 @@ import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import { parseLocalDatabaseUrl } from './backupPackage.js';
+
 // The product generation is pinned to PG 16 (plan §3): a data dir initdb'd by
 // one major cannot be read by another, and backup packages restore with the
 // same major they were dumped from.
@@ -96,6 +98,21 @@ export const findPgBin = () => {
     `Postgres ${PG_MAJOR} binaries not found. Install them (macOS with Homebrew: \`brew install postgresql@${PG_MAJOR}\`; without Homebrew: Postgres.app from postgresapp.com) or set PG_BIN to the directory containing pg_ctl/initdb.`
   );
 };
+
+// The storage-schema stub for a GIVEN database (attachGivenPostgres below):
+// the same statements ensureLocalPostgres runs inline on the supervised path
+// and scripts/prepare_ci_host_postgres.js runs on CI's. Kept as a copy so
+// ensureLocalPostgres, a reviewed SQL boundary pinned in
+// memoryWriterRegistry.js, stays byte-identical.
+export const STORAGE_SCHEMA_STUB_SQL = `
+      create schema if not exists storage;
+      create table if not exists storage.buckets (
+        id text primary key, name text, public boolean,
+        file_size_limit bigint, allowed_mime_types text[]);
+      create table if not exists storage.objects (
+        id uuid default gen_random_uuid() primary key,
+        bucket_id text references storage.buckets(id), name text, metadata jsonb);
+    `;
 
 // Brings local Postgres up (initdb on first run) and returns its coordinates
 // plus a stop(). Idempotent per data dir; safe to call on every app launch.
@@ -252,5 +269,51 @@ export const ensureLocalPostgres = ({
     attached,
     databaseUrl: `postgresql://${dbUser}@localhost/${dbName}?host=${encodeURIComponent(socketDir)}&port=${pgPort}`,
     stop
+  };
+};
+
+// Which PostgreSQL scripts/desktop-boot.mjs uses. Attaching is an explicit
+// choice made by one dedicated setting, DONNA_DESKTOP_DATABASE_URL (set by
+// docker-compose.yml). DATABASE_URL is deliberately NOT read here: a shell
+// that exported it for the test suite, or for some other database, must
+// still get the supervised book, and desktop-boot overwrites it as before.
+export const resolveDesktopPostgresSource = (env = process.env) => {
+  const given = String(env.DONNA_DESKTOP_DATABASE_URL ?? '').trim();
+  return given ? { mode: 'given', databaseUrl: given } : { mode: 'supervised' };
+};
+
+// A PostgreSQL 16 this process was GIVEN (DONNA_DESKTOP_DATABASE_URL) instead of one it
+// supervises: the compose start (docker-compose.yml) runs PostgreSQL in its
+// own container and shares only its Unix socket with the runtime. Nothing is
+// initialised, started or stopped here — the database belongs to whoever
+// started it. The URL must name a Unix socket, the same shape the supervised
+// path hands out, because the backup packages (backupPackage.js) drive
+// pg_dump/psql over that socket; a TCP URL is refused before anything runs.
+// The PostgreSQL major is Host A's to judge (database_schema reads the
+// server's version), as on the supervised path.
+export const attachGivenPostgres = ({ databaseUrl, logger = console } = {}) => {
+  if (!databaseUrl) throw new Error('attachGivenPostgres needs databaseUrl');
+  let db;
+  try {
+    db = parseLocalDatabaseUrl(databaseUrl);
+  } catch {
+    throw new Error(
+      'DONNA_DESKTOP_DATABASE_URL must name a PostgreSQL Unix socket (postgresql://user@localhost/db?host=<socket dir>&port=<n>); the local runtime\'s backups run over that socket.'
+    );
+  }
+  const pgBin = findPgBin();
+  logger.log?.(`[pg-supervisor] using the given postgres on ${db.socketDir} (database ${db.database}); it is not started or stopped here`);
+  execFileSync(path.join(pgBin, 'psql'), [
+    '-h', db.socketDir, '-p', String(db.port), '-U', db.user, '-d', db.database,
+    '-v', 'ON_ERROR_STOP=1', '-Atc', STORAGE_SCHEMA_STUB_SQL
+  ], { stdio: 'pipe', encoding: 'utf8' });
+  return {
+    pgBin,
+    pgData: null,
+    socketDir: db.socketDir,
+    port: Number(db.port),
+    attached: true,
+    databaseUrl,
+    stop: () => logger.log?.('[pg-supervisor] leaving the given postgres running')
   };
 };

@@ -18,6 +18,12 @@
 //   DONNA_DESKTOP_DATA_DIR  data root   (default: ~/.donna-desktop; the real
 //                           app uses ~/Library/Application Support/Donna)
 //   DONNA_DESKTOP_PORT      API port    (default 8787, loopback only)
+//   DONNA_DESKTOP_DATABASE_URL
+//                           a PostgreSQL 16 on a Unix socket to use instead
+//                           of supervising one (set by docker-compose.yml for
+//                           its database service). Unset, Postgres is
+//                           supervised; an inherited DATABASE_URL is ignored
+//                           and overwritten, as it always was.
 //   DONNA_DESKTOP_PG_PORT   socket name suffix (default 5433)
 //   PG_BIN                  Postgres bin dir (autodetected if unset)
 //   DONNA_ACCESS_TOKEN      runtime token (generated per boot if unset)
@@ -29,7 +35,9 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import { ensureLocalPostgres } from '../server/donna/desktop/pgSupervisor.js';
+import {
+  attachGivenPostgres, ensureLocalPostgres, resolveDesktopPostgresSource
+} from '../server/donna/desktop/pgSupervisor.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const SEED = process.argv.includes('--seed');
@@ -39,7 +47,11 @@ const API_PORT = Number(process.env.DONNA_DESKTOP_PORT || 8787);
 
 const log = (line) => console.log(`[desktop-boot] ${line}`);
 
-const pg = ensureLocalPostgres({ dataDir: DATA_DIR, logger: { log, error: (l) => console.error(l) } });
+const pgLogger = { log, error: (l) => console.error(l) };
+const pgSource = resolveDesktopPostgresSource(process.env);
+const pg = pgSource.mode === 'given'
+  ? attachGivenPostgres({ databaseUrl: pgSource.databaseUrl, logger: pgLogger })
+  : ensureLocalPostgres({ dataDir: DATA_DIR, logger: pgLogger });
 
 try {
   process.env.DATABASE_URL = pg.databaseUrl;

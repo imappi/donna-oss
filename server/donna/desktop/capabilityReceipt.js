@@ -14,6 +14,8 @@
 // `ANTHROPIC_API_KEY|OPENAI_API_KEY` over server/ — update them when a lane
 // gains or loses a provider (the test pins the shape, not the census).
 
+import { FIRST_LINE_PROVIDER_ENV, firstLineProviderMissing } from '../firstLineLane.js';
+
 const present = (value) => typeof value === 'string' && value.trim().length > 0;
 
 export const MODEL_LANES = Object.freeze({
@@ -38,6 +40,11 @@ export const MODEL_LANES = Object.freeze({
   // weeks-later "why are there no receipts" session.
   openai_compatible: Object.freeze([
     'shadow challenger — bank-line classification (evidence-only)'
+  ]),
+  // The first-line lane (firstLineLane.js). Optional: dark, the lanes above
+  // decide every line, as under the JEV_RECONCILIATION kill switch.
+  typesafe: Object.freeze([
+    'first-line decisions (matching, bank/document disposition, coding) where the client flag is on'
   ])
 });
 
@@ -86,6 +93,15 @@ const compatibleLine = (env) => {
     + `cap ${env.MODEL_CHALLENGER_CAP_TOKENS.trim()} tokens/client/mo (${lanes})`;
 };
 
+// Both rows are needed (firstLineLane.FIRST_LINE_PROVIDER_ENV); the receipt
+// names each missing one and, lit, prints the model id (not a secret).
+const firstLineLine = (env) => {
+  const lanes = MODEL_LANES.typesafe.join(', ');
+  const missing = firstLineProviderMissing(env);
+  if (missing.length) return `typesafe DARK — no ${missing.join(', no ')} (${lanes}; the other lit lanes decide)`;
+  return `typesafe LIT — ${FIRST_LINE_PROVIDER_ENV[1]}: ${env[FIRST_LINE_PROVIDER_ENV[1]].trim()} (${lanes})`;
+};
+
 export const buildModelLaneReceipt = (env = process.env) => {
   const openaiLit = present(env?.OPENAI_API_KEY);
   const anthropicLit = present(env?.ANTHROPIC_API_KEY);
@@ -97,7 +113,8 @@ export const buildModelLaneReceipt = (env = process.env) => {
     openai: openaiLit,
     anthropic: anthropicLit,
     openai_compatible: compatibleLit,
+    typesafe: firstLineProviderMissing(env).length === 0,
     line: `model lanes: ${providerLine('openai', 'OPENAI_API_KEY', env)}; `
-      + `${providerLine('anthropic', 'ANTHROPIC_API_KEY', env)}; ${compatibleLine(env)}`
+      + `${providerLine('anthropic', 'ANTHROPIC_API_KEY', env)}; ${compatibleLine(env)}; ${firstLineLine(env)}`
   };
 };

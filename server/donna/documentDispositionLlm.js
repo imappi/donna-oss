@@ -1246,7 +1246,7 @@ export const runDocumentDispositionForClient = async ({
     ? documentIds.map((id) => String(id)).filter(Boolean)
     : null;
   if (scoped && !scoped.length) return stats;
-  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride);
+  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride, { decidedBy: 'document_disposition' });
   const policyModel = !jevEnabled && typeof decidingPolicy?.deciding_model === 'string' && decidingPolicy.deciding_model.trim()
     ? decidingPolicy.deciding_model.trim()
     : null;
@@ -1610,7 +1610,7 @@ export const runOwnerReplyRedisposition = async ({
     result.skipped = 'missing_ids';
     return result;
   }
-  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride);
+  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride, { decidedBy: 'document_disposition' });
   const policyModel = !jevEnabled && typeof decidingPolicy?.deciding_model === 'string' && decidingPolicy.deciding_model.trim()
     ? decidingPolicy.deciding_model.trim()
     : null;
