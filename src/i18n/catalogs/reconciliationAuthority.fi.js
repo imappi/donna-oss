@@ -13,6 +13,7 @@ export default Object.freeze({
   "firm.reconAuthority.preview.heading": "Olet myöntämässä",
   "firm.reconAuthority.preview.scope": "Laajuus",
   "firm.reconAuthority.preview.scopeValue": "Saaja {vendor} · {label} · tili {account}",
+  "firm.reconAuthority.preview.scopeValueKeyOnly": "Saajan nimi puuttuu (toimittajan tunniste {code}) · {label} · tili {account}",
   "firm.reconAuthority.preview.archetype": "Tyyppi",
   "firm.reconAuthority.archetype.recurring_rent_lease": "Toistuva vuokra tai leasing",
   "firm.reconAuthority.archetype.verified_card_payment": "Vahvistettu korttimaksu",

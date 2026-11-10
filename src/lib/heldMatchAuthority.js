@@ -107,6 +107,22 @@ export const authorityDocumentType = (intl, value) => {
   return code ? docTypeLabel(code, intl.formatMessage) : NO_VALUE;
 };
 
+// The scope line (payee · document type · account). A grant carries its payee
+// as the scope key's merchant slug; the readable name is the example's vendor
+// name. With no name, the slug is not passed off as one (it is lossy:
+// "Kiinteistö Oy" slugs to "kiinteisto-oy"): the line says the payee is not
+// named and shows the stored key as a key.
+export const authorityScopeValue = (intl, { vendorName = null, scope = {}, documentType = null } = {}) => {
+  const name = String(vendorName || '').trim();
+  const key = String(scope?.merchant || '').trim();
+  const values = {
+    label: authorityDocumentType(intl, documentType || scope?.document_type),
+    account: scope?.account || NO_VALUE
+  };
+  if (!name && key) return intl.formatMessage({ id: 'firm.reconAuthority.preview.scopeValueKeyOnly' }, { ...values, code: key });
+  return intl.formatMessage({ id: 'firm.reconAuthority.preview.scopeValue' }, { ...values, vendor: name || NO_VALUE });
+};
+
 export const authorityGrantStatus = (intl, status) =>
   codeMessage(intl, 'firm.reconAuthority.grants.status', status, 'firm.reconAuthority.grants.status.unknown');
 

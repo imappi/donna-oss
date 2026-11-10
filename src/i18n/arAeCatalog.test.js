@@ -99,9 +99,9 @@ const intentionalCanonicalValues = new Set([
 // Re-pin deliberately, in the same change as the keys.
 test('AR-3A plus AR-3B install one immutable 2,621-message Alpha catalog for AR-3C activation', () => {
   assert.equal(AR_AE_CATALOG_VERSION, '2026-09-28.sg-native-intake.1');
-  assert.equal(Object.keys(en).length, 2699);
-  assert.equal(Object.keys(arAE).length, 2699);
-  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2699);
+  assert.equal(Object.keys(en).length, 2731);
+  assert.equal(Object.keys(arAE).length, 2731);
+  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2731);
   assert.equal(AR_AE_CATALOG_METADATA.maturity, 'alpha');
   assert.equal(AR_AE_CATALOG_METADATA.displayLabel, 'العربية · إصدار تجريبي');
   assert.equal(AR_AE_CATALOG_METADATA.authorship, 'machine-authored');

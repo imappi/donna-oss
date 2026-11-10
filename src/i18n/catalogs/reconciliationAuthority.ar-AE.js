@@ -16,6 +16,7 @@ export default Object.freeze({
   'firm.reconAuthority.preview.heading': 'أنت تمنح',
   'firm.reconAuthority.preview.scope': 'النطاق',
   'firm.reconAuthority.preview.scopeValue': 'المستفيد {vendor} · {label} · الحساب {account}',
+  'firm.reconAuthority.preview.scopeValueKeyOnly': 'المستفيد غير مسمّى (مفتاح المورد {code}) · {label} · الحساب {account}',
   'firm.reconAuthority.preview.archetype': 'النوع',
   'firm.reconAuthority.archetype.recurring_rent_lease': 'إيجار أو تأجير متكرر',
   'firm.reconAuthority.archetype.verified_card_payment': 'دفعة بطاقة موثّقة',

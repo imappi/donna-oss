@@ -7,6 +7,7 @@
 //
 // TTL: terminal rows drop after 24h; whole batches expire after 7d.
 
+import { trayDocumentTypeLabel } from './interfaceValueLabels.js';
 import { getBookPrincipalId, getBookSessionIdentity } from './bookSessionIdentity.js';
 import { hasDesktopRuntimeAccess } from './desktopShell.js';
 import { customerReference, documentFactFallback, documentFactMessageId } from './customerFailure.js';
@@ -937,7 +938,10 @@ export const labelForTrayRow = (row = {}, formatMessage = null, formatAmount = n
     // firm.
     const guess = String(summary.document_type_guess || '').trim().toLowerCase();
     if (guess && guess !== 'generic_document' && guess !== 'unknown') {
-      const documentType = guess.replace(/[_-]+/g, ' ');
+      // The guess is the generic extractor's free text: a known type reads as
+      // its catalog label, anything else as "other document" — never as the
+      // model's English.
+      const documentType = trayDocumentTypeLabel(guess, formatMessage);
       return {
         label: trayMessage(formatMessage, 'upload.row.savedGuess', `Saved · ${documentType}`, { documentType }),
         tone: 'success'
@@ -952,8 +956,8 @@ export const labelForTrayRow = (row = {}, formatMessage = null, formatAmount = n
         label: trayMessage(
           formatMessage,
           'upload.row.savedAs',
-          `Saved as ${summary.document_type}`,
-          { documentType: summary.document_type }
+          `Saved as ${trayDocumentTypeLabel(summary.document_type)}`,
+          { documentType: trayDocumentTypeLabel(summary.document_type, formatMessage) }
         ),
         tone: 'success'
       };
@@ -1074,7 +1078,7 @@ export const labelForTrayRow = (row = {}, formatMessage = null, formatAmount = n
       if (!docType || docType === 'unknown') {
         return { label: trayMessage(formatMessage, 'upload.row.unknownDocument', "Saved — couldn't tell what this document is"), tone: 'warning' };
       }
-      const documentType = String(docType).replace(/[_-]+/g, ' ');
+      const documentType = trayDocumentTypeLabel(docType, formatMessage);
       return {
         label: trayMessage(formatMessage, 'upload.row.noParser', `Saved — no parser for ${documentType} yet`, { documentType }),
         tone: 'muted'

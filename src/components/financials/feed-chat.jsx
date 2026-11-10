@@ -51,6 +51,7 @@ import { documentTargetForAction, financialReportTargetForAction } from '../../l
 import { useInterfaceLocale } from '../../i18n/LocaleProvider.jsx';
 import { BidiText, FormattedValue, IdentifierText } from '../../i18n/BidiText.jsx';
 import { OPERATOR_ACTION_TYPE_MESSAGE_IDS } from '../../i18n/catalogs/remainingSurfaces.en.js';
+import { feedActionStatusLabel } from '../../lib/interfaceValueLabels.js';
 
 
 const CLIENT_PROMPTS = [
@@ -517,7 +518,7 @@ function ActionCard({ action, index, messageId, clientId, appliable, applyState,
         ) : (
           <span style={{ fontSize: 11.5, color: T.mutedSoft }}>
             {action.status && action.status !== 'proposed'
-              ? <IdentifierText>{action.status}</IdentifierText>
+              ? feedActionStatusLabel(action.status, intl.formatMessage)
               : <FormattedMessage id="feed.action.notAppliable" />}
           </span>
         )}

@@ -19,7 +19,7 @@ import {
   authorityAmount,
   authorityArchetype,
   authorityDate,
-  authorityDocumentType,
+  authorityScopeValue,
   authorityIneligibleReason,
   authorityRefusal,
   defaultReviewDate,
@@ -71,9 +71,7 @@ export const GrantPreviewForm = ({ clientId, preview, onMinted, onCancel, mint =
       <div style={{ fontSize: 13, fontWeight: 600, color: D.ink, marginBottom: 8 }}>{message('firm.reconAuthority.preview.heading')}</div>
       <div style={row}>
         <span style={label}>{message('firm.reconAuthority.preview.scope')}</span>
-        <span style={value} data-testid="grant-scope">{message('firm.reconAuthority.preview.scopeValue', {
-          vendor: example.vendor_name || scope.merchant || '—', label: authorityDocumentType(intl, example.document_type || scope.document_type), account: scope.account || '—'
-        })}</span>
+        <span style={value} data-testid="grant-scope">{authorityScopeValue(intl, { vendorName: example.vendor_name, scope, documentType: example.document_type })}</span>
         <span style={label}>{message('firm.reconAuthority.preview.archetype')}</span>
         <span style={value} data-testid="grant-archetype">{authorityArchetype(intl, preview.archetype)}</span>
         <span style={label}>{message('firm.reconAuthority.preview.action')}</span>

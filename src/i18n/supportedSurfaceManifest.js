@@ -20,6 +20,7 @@ export const SUPPORTED_SURFACE_GROUPS = Object.freeze({
     'src/components/FirstRunOnboarding.jsx',
     'src/components/FirmNewEntity.jsx',
     'src/components/ClientPortalGate.jsx',
+    'src/components/ClientPortalRestoring.jsx',
     'src/components/WebBooksUnavailable.jsx'
   ]),
   shell: Object.freeze([
