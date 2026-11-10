@@ -14,6 +14,7 @@ import { hasJevResolvedCoding, JEV_DOCUMENT_ASK_SELECTIONS } from '../jevDecisio
 import { assertExecutionBudgetActive } from '../executionBudget.js';
 import { checkEntityReadinessAdmissionWithClient, EntityReadinessAdmissionError, evaluateRetainedProcessingScopeWithClient } from '../runtimeReadinessAdmission.js';
 import { withFirmDbClient } from './pool.js';
+import { isFenceContention } from './codingPolicyContext.js';
 import { taxRegistrationRuleFor, taxRegistrationPeriodState } from './taxRegistrationChange.js';
 import { isTransactionSyncedToXero } from './xero.js';
 import { rowToTransactionPayload } from './transactions.js';
@@ -43,6 +44,16 @@ const needsReconsideration = recovery => [
   'CODING_CORRECTION_SOURCE_USE_CONFLICT'
 ].includes(recovery?.code) || (recovery?.code === 'CODING_CORRECTION_EXECUTION_REFUSED'
   && ['statutory_evidence_required','revenue_source_required','cross_entity_relation'].includes(recovery.details?.reason));
+// A NOWAIT fence that lost to another holder (a producer, or autovacuum's
+// SHARE UPDATE EXCLUSIVE) is not an outcome of the case. A blocker stored
+// under that code before this rule is pending again: its decision, if any, is
+// ready to replay; without one the case reasons as if never blocked.
+const contentionBlocker = recovery => ['blocked','failed'].includes(recovery?.state) && isFenceContention(recovery);
+const pendingAfterContention = requirement => {
+  if (!contentionBlocker(requirement?.recovery)) return requirement;
+  const {code,details,state,retrying_blocker,...recovery}=requirement.recovery;
+  return {...requirement,recovery:recovery.decision?{...recovery,state:'ready'}:recovery};
+};
 const blockerIdentity = recovery => hash({code:recovery?.code,
   reason_code:recovery?.details?.reason_code,reason:recovery?.details?.reason,
   constraint:recovery?.details?.constraint});
@@ -153,7 +164,12 @@ async function readInputs({client,firmId,clientId,transactionId}) {
     // projection. Exclude this consumer's own housekeeping and observer clocks.
     transaction:{...transaction,coding_correction_required:undefined,updated_at:undefined,
       convergence_state:undefined,convergence_reason:undefined},
-    version:5,original:journal,adjustments,originalLines,policy,profile,transport,accounts,clientRules,facts,authority:authority.receipt});
+    version:5,original:journal,adjustments,originalLines,policy,profile,transport,
+    // The chart reader orders by code and name only; same-name rows tie, and
+    // PostgreSQL may return ties in either order between two reads. The
+    // revision binds the menu's content, not that order.
+    accounts:[...accounts].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    clientRules,facts,authority:authority.receipt});
   return {row,transaction,requirement,current,journal,originalLines,policy,profile,accounts,clientRules,facts,authority,transport,asks,revision};
 }
 
@@ -166,6 +182,24 @@ async function saveRequirement({client,firmId,clientId,transactionId,requirement
     [firmId,clientId,transactionId,JSON.stringify(requirement),requirement.status==='corrected'?'resolved':'open']);
   if(action)await client.query(`insert into audit_events(firm_id,client_id,actor_type,actor_id,action,resource_type,resource_id,metadata)
     values($1,$2,'system',$3,$4,'transaction',$5,$6::jsonb)`,[firmId,clientId,ACTOR,action,transactionId,JSON.stringify(requirement)]);
+}
+
+// A registration case on a line Donna will not correct herself (a locked
+// period or a filed VAT return: CODING_CORRECTION_TAX_PERIOD_CLOSED) waits on
+// a person. A person's own full reversal and replacement of that journal,
+// through the adjustment writer and in its transaction, is that decision: the
+// case closes with the adjustment as its receipt. Other cases keep their own
+// closing rule (codingEvidence.js completeCodingEvidenceCorrectionWithClient).
+export async function closeRegistrationCaseByPersonAdjustmentWithClient({client,firmId,clientId,transactionId,originalJournalId,correctionJournalIds,actorId,reason}) {
+  if(!transactionId || !correctionJournalIds?.length)return false;
+  const requirement=(await client.query('select payload from transactions where firm_id=$1 and client_id=$2 and id=$3 for update',
+    [firmId,clientId,transactionId])).rows[0]?.payload?.coding_correction_required;
+  if(requirement?.status!=='pending' || !requirement.tax_registration || requirement.original_journal_id!==originalJournalId)return false;
+  await saveRequirement({client,firmId,clientId,transactionId,action:'coding.correction_completed',requirement:{...requirement,
+    status:'corrected',next_action:null,actor_id:actorId,
+    correction_journal_ids:[...new Set([...(requirement.correction_journal_ids || []),...correctionJournalIds])],
+    authority_basis:{basis:'person_ledger_adjustment',actor_id:actorId,reason,correction_journal_ids:correctionJournalIds}}});
+  return true;
 }
 
 export async function prepareCodingCorrectionWithClient(args) {
@@ -261,6 +295,9 @@ export async function recoverPostedCodingCorrectionsInDb({firmId,limit=3,runWork
   const results=[];
   for(const row of candidates){
     const scope={firmId,clientId:row.client_id,transactionId:row.id};
+    // The reasoning claim as committed, and the case it replaced. Contention
+    // after the claim returns the case to what it was before it.
+    let claimed=null;
     try {
       const staged=await runWorkerAdmissionFn({...scope,work:()=>withFirmDbClient(async client=>{
         const args={...scope,client};
@@ -281,6 +318,10 @@ export async function recoverPostedCodingCorrectionsInDb({firmId,limit=3,runWork
               and payload->'coding_correction_required'->>'status'='pending'`,[firmId,row.client_id,row.id]);
           let input;
           try{input=await readInputs(args);}catch(error){await client.query('rollback');throw error;}
+          // Probe the final-write fence after a real refusal had its chance and
+          // before any claim or model call: a held fence rolls this scan back,
+          // so the case is skipped for the tick exactly as it was.
+          if(!input.completed)await lockCodingSourceInputs(client);
           await client.query('commit');
           if(input.completed)return {state:'completed'};
           const prior=input.requirement.recovery;
@@ -299,6 +340,7 @@ export async function recoverPostedCodingCorrectionsInDb({firmId,limit=3,runWork
           if(hash(claim)!==hash(input.requirement))fail('CODING_CORRECTION_STALE');
           await saveRequirement({...args,requirement:{...input.requirement,recovery},action:'coding.correction_attempt'});
           await client.query('commit');
+          claimed={from:input.requirement,to:JSON.parse(JSON.stringify({...input.requirement,recovery}))};
           const replied=input.asks.find(r=>r.status==='replied' && r.response_payload?.reply?.trim()
             && r.response_payload?.reply_processing?.actor_id && r.response_payload.reply_processing.actor_id!=='system');
           const transaction={...input.transaction,case_evidence:jevCasePrompt(input.current.caseEvidence),
@@ -378,6 +420,24 @@ export async function recoverPostedCodingCorrectionsInDb({firmId,limit=3,runWork
         results.push({...scope,state:'completed',journal_ids:result.ledger_adjustment?.journals.map(j=>j.ledger_journal_id)||[]});
       }else results.push({...scope,...staged});
     }catch(error){
+      if(isFenceContention(error)){
+        // Someone else held a source table for a moment. Nothing was decided
+        // or refused: no receipt, no blocked code, no attempt spent. The case
+        // is taken again on the next tick; this tick moves to the next case.
+        await withFirmDbClient(async client=>{
+          await client.query('begin');
+          try{
+            const current=(await client.query('select payload from transactions where firm_id=$1 and client_id=$2 and id=$3 for update',[firmId,row.client_id,row.id])).rows[0]?.payload?.coding_correction_required;
+            if(current?.status==='pending'){
+              const restored=pendingAfterContention(claimed && hash(current)===hash(claimed.to)?claimed.from:current);
+              if(hash(restored)!==hash(current))await saveRequirement({client,...scope,requirement:restored});
+            }
+            await client.query('commit');
+          }catch(writeError){await client.query('rollback');throw writeError;}
+        });
+        results.push({...scope,state:'contended',retryable:true});
+        continue;
+      }
       const code=error.code || 'CODING_CORRECTION_FAILED',details=error.details || null;
       const state=needsReconsideration({code,details})?'failed':'blocked';
       await withFirmDbClient(async client=>{
