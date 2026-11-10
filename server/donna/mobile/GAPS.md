@@ -19,6 +19,9 @@ changes are proposals for this one. Nothing here is worked around in code.
 | `ApprovalPayload.batch_key` | `null` | No persisted batch grain for held actions. | — |
 | `Entity.business_profile` | `null` | No canonical business-profile aggregate (DESIGN-NOTES smell 9). | Donna: a profile aggregate and its single writer. |
 | `QueueCard.counterparty` (asks) | `null` | The ask's persisted `request_payload` carries a descriptor, amount, currency and date, not a counterparty. | Donna: persist the counterparty at ask-mint time. |
+| `MobileSettings.financial_year.*` | `null` when the book has no `fiscal_years` rows | Read only from persisted `fiscal_years` (via `GET /clients/:id/fiscal-periods`). A self-provisioned book has none until the fiscal-period intake or the close records one; the calendar projection is not persisted data. `first` is shown only when the earliest persisted year starts on the recorded incorporation date. | Donna: record the first tilikausi at birth when the incorporation date is known. |
+| `MobileSettings.vat_period` (UK) | `quarter` when `profile.gb.vat_stagger` is recorded, else `null` | An HMRC stagger (1/2/3) is a quarterly stagger; monthly and annual UK filers have no home in the profile. | Donna: a UK filing-frequency fact. |
+| `MobileSettings.notification_delivery` | `not_configured` | No push sender exists; the switches are stored (migration 167) and nothing reads them to send. | — |
 | `Entity.currency` / `country` | Client profile currency → firm currency → `EUR`; client jurisdiction → firm jurisdiction → `ZZ` | Both are required strings; a client with neither persisted has no true value. | Contract: allow `null`. |
 
 ## Behaviour the contract wants that Donna does not offer to an owner
@@ -54,6 +57,19 @@ changes are proposals for this one. Nothing here is worked around in code.
   `emitsApplyReceipt: 'none'` (DESIGN-NOTES smell 2). The reply writer does
   write its `evidence_request.reply` audit row in the same transaction; the
   adapter's receipt is that row. No ApplyReceipt object exists for it.
+- **Settings refusals.** `POST /settings` lists only 200/400/401/404, but a
+  VAT-period declaration can be refused `409`: `VAT_PERIOD_IN_USE` (an ALV
+  return is pending or filed on another cadence — the draft writer's uniqueness
+  is per period key, not per date range, so a cadence change could let a new
+  return overlap a filed one), `VAT_PERIOD_FROM_HMRC_STAGGER` (UK: the period
+  is the HMRC stagger in filing details, not declarable from the phone),
+  `VAT_PERIOD_NOT_SUPPORTED` (no other market), and the profile writer's own
+  `FI_PROFILE_PILOT_PREPARED` lock, passed through. Contract proposal: add the
+  409 to `updateSettings`.
+- **Settings receipt attribution.** The VAT-period receipt is the profile
+  writer's `client.profile.update` row: `actor_id` is the owner's principal,
+  but that writer records `actor_type: 'system'`. The notification writer
+  records `actor_type: 'owner'`.
 - **Draft asks.** The web portal lists `draft` asks as open questions too
   (`openEvidenceStatuses` in `donna-client-portal.jsx`); the mobile queue shows
   only sent (`open`) asks, as the contract mapping says. One of the two is
@@ -63,7 +79,7 @@ changes are proposals for this one. Nothing here is worked around in code.
 
 Chat (list, send, apply), artifact conversations, mileage, activity, onboarding
 voice/text drafts and profile confirmation, business setup and lookup,
-settings, reviews, account deletion request, push registration. Each has no
+reviews, account deletion request, push registration. Each has no
 existing Donna reader or writer to route to, or (chat) one whose action
 vocabulary does not match the contract's (`answer_evidence_request` /
 `record_mileage` vs `answer_card` / `approve_card` / `record_mileage`, with

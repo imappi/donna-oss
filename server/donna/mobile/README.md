@@ -54,5 +54,10 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
   close verdicts, sign-out, kill switch, and the staff / foreign-entity /
   expired-token / admin-token refusals; every response validated against the
   contract.
+- `mobileSettings.test.js` / `mobileSettingsPgLifecycle.test.js` — the
+  Settings resource (`mobileSettings.js`, `mobileSettingsDb.js`): VAT period
+  through the client-profile writer with its history guard, persisted fiscal
+  years, the owner's notification switches (migration 167) and phone number,
+  and the refusals.
 
 `GAPS.md` lists what the contract asks for that Donna cannot say yet.
