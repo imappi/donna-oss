@@ -27,7 +27,7 @@
       "journal": [
         {
           "role": "bank",
-          "account": "Business Checking · EUR",
+          "account": "1910",
           "direction": "debit",
           "amount": 2843.38,
           "tax_code": "NONE"
@@ -61,7 +61,7 @@
       "journal": [
         {
           "role": "bank",
-          "account": "Business Checking · EUR",
+          "account": "1910",
           "direction": "debit",
           "amount": 2843.38,
           "tax_code": "NONE"
