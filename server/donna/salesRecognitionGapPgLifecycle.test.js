@@ -643,3 +643,241 @@ test('real PG: a part-paid invoice or bill names its unpaid remainder; a supplie
       await stop();
     }
   });
+
+// The owner's answers to the two census questions, through the real reply
+// route (resolveClientEvidenceRequestInDb, then the owner-reply clock). The
+// model is scripted to follow the instructions it is given: it can only
+// return an answer the asking lane offers, and anything else is unclear.
+//   1. "The credit note was deducted from bill 4730": Donna records the
+//      supplier-side credit application (the one writer, its checks, its
+//      receipt), and the census then counts both documents as represented.
+//      Nothing is posted. An unclear answer, a bill of another supplier and a
+//      bill that does not exist all take the existing unclear path.
+//   2. A sales invoice paid 2,50 short: no fee is recorded on the match, so
+//      the census does not guess. The filing start asks the owner whether it
+//      was a bank fee or a part-payment; "bank fee" is recorded on the match
+//      and the invoice is then represented; "part-payment" keeps the
+//      remainder open with the owner.
+const LANE_REPLIES = {
+  'Se vähennettiin laskun 4730 maksusta 15.2.': { disposition: 'credit_deducted', deducted_from_bill: '4730' },
+  'It was taken off our payment of bill 4741.': { disposition: 'credit_deducted', deducted_from_bill: '4741' },
+  'Vähennettiin laskusta 5100.': { disposition: 'credit_deducted', deducted_from_bill: '5100' },
+  'Vähennettiin laskusta 9999.': { disposition: 'credit_deducted', deducted_from_bill: '9999' },
+  'Se oli pankin palvelumaksu.': { disposition: 'shortfall_bank_fee' },
+  'Osamaksu, loput tulee maaliskuussa.': { disposition: 'obligation_open' }
+};
+const scriptedLaneReplyModel = (calls) => async (endpoint, init) => {
+  assert.equal(endpoint, 'https://api.anthropic.com/v1/messages');
+  const body = JSON.parse(init.body);
+  const prompt = body.messages.map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))).join('\n');
+  const reply = /The owner answered: "([^"]*)"/.exec(prompt)?.[1] || '';
+  const system = String(body.system || '');
+  const scripted = LANE_REPLIES[reply] || null;
+  const offered = Boolean(scripted) && system.includes(`"${scripted.disposition}"`);
+  calls.push({ reply, offered });
+  const base = { materiality: 'material', expense_kind: 'unknown', settlement_channel: 'unknown', funding_source: 'unknown', confidence: 0.9, reasoning: 'Scripted read of the owner answer.' };
+  const verdict = offered ? { ...base, ...scripted } : { ...base, disposition: 'needs_human', confidence: 0.3 };
+  return { ok: true, status: 200, json: async () => ({ id: `msg-${calls.length}`, type: 'message', role: 'assistant', model: 'fixture-model',
+    content: [{ type: 'text', text: JSON.stringify(verdict) }], stop_reason: 'end_turn', usage: { input_tokens: 0, output_tokens: 0 } }) };
+};
+
+test('real PG: the owner says a supplier credit note was deducted from bill X; Donna records the application and the census represents both; unclear or impossible answers stay on the unclear path',
+  { skip: !PG_URL && 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async (t) => {
+    const { seed, url, stop } = await boot();
+    const prior = { DATABASE_URL: process.env.DATABASE_URL, DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY };
+    process.env.DATABASE_URL = url; process.env.DATABASE_POOL_MAX = '3'; process.env.ANTHROPIC_API_KEY = 'test-credit-deducted';
+    const calls = [];
+    t.mock.method(globalThis, 'fetch', scriptedLaneReplyModel(calls));
+    const { ensureNoSettlementAskWithClient } = await import('./salesRecognitionGap.js');
+    const { resolveClientEvidenceRequestInDb } = await import('./firmDb.js');
+    const { recoverOwnerRepliesInDb } = await import('./ownerReplyRecovery.js');
+    try {
+      const EN = 'client-fi09-accrual-en';
+      await seed.query(`insert into clients (id, firm_id, company_name, jurisdiction, entity_type, status, profile) values ($1, $2, 'Studio English Oy', 'fi', 'fi-oy', 'active', $3)`,
+        [EN, FIRM, { jurisdiction: 'fi', locale: 'en', accounting_system: 'none', accounting_basis: 'accrual' }]);
+      for (const clientId of [ACCRUAL, EN]) {
+        await setClientFlagStage(seed, { firmId: FIRM, clientId, flagKey: 'DOCUMENT_NO_LINE_DISPOSITION', stage: 'auto', source: 'default', reason: 'credit deducted proof' });
+        await setClientFlagStage(seed, { firmId: FIRM, clientId, flagKey: 'JEV_RECONCILIATION', stage: 'off', source: 'manual', reason: 'credit deducted proof' });
+      }
+      const mint = async ({ id, clientId }) => {
+        const minted = await withFirmDbClient((client) => ensureNoSettlementAskWithClient({ client, firmId: FIRM, clientId, documentId: id, documentType: 'supplier_bill' }));
+        assert.equal(minted.minted, true, JSON.stringify(minted));
+        await seed.query(`update client_evidence_requests set status = 'open', send_count = 1, first_sent_at = now() - interval '1 day',
+          last_sent_at = now() - interval '1 day', due_at = now() + interval '6 days' where id = $1`, [minted.evidence_request_id]);
+        return minted.evidence_request_id;
+      };
+      const ask = async (askId) => (await seed.query('select * from client_evidence_requests where id = $1', [askId])).rows[0];
+      const reply = (askId, text) => resolveClientEvidenceRequestInDb({ firmId: FIRM, evidenceRequestId: askId, reply: text, actorId: 'owner-credit', actorType: 'client' });
+      const applications = async (creditId) => (await seed.query(`select credit_document_id, invoice_document_id, amount::text as amount, currency, status, settlement_match_id, applied_by, payload
+        from document_credit_applications where credit_document_id = $1`, [creditId])).rows;
+      const journals = async () => (await seed.query('select count(*)::int as n from ledger_journals')).rows[0].n;
+      const clarifications = async (documentId) => (await seed.query(`select count(*)::int as n from client_evidence_requests
+        where request_payload->>'document_id' = $1 and request_payload->>'lane' = 'owner_reply_clarification'`, [documentId])).rows[0].n;
+
+      // Bill 4730 248,00 (48,00 ALV), paid 186,00 net of credit note HL-30 −62,00 (−12,00 ALV).
+      await insertBill(seed, { id: 'bill-net', total: 248, tax: 48, date: '2025-02-05', number: '4730', paymentStatus: 'partial' });
+      await insertBill(seed, { id: 'bill-net-cn', total: -62, tax: -12, date: '2025-02-09', number: 'HL-30', paymentStatus: 'credit_note' });
+      await instalment(seed, { documentId: 'bill-net', type: 'supplier_bill', txId: 'tx-bill-net', date: '2025-02-15', amount: 186, journalDate: '2025-02-15' });
+      const journalsBefore = await journals();
+      const askId = await mint({ id: 'bill-net-cn', clientId: ACCRUAL });
+      await reply(askId, 'Se vähennettiin laskun 4730 maksusta 15.2.');
+      await recoverOwnerRepliesInDb({ firmId: FIRM });
+      const answered = await ask(askId);
+      assert.equal(calls.at(-1).offered, true, 'the credit-note question offers the "deducted from bill X" answer');
+      assert.equal(answered.response_payload.reply_processing.driven_action, 'owner_stated_credit_deduction', JSON.stringify(answered.response_payload));
+      assert.equal(answered.status, 'resolved');
+      assert.equal(await clarifications('bill-net-cn'), 0);
+      const [application] = await applications('bill-net-cn');
+      assert.ok(application, 'the owner answer is recorded as a supplier credit application');
+      assert.deepEqual([application.invoice_document_id, application.amount, application.currency, application.status, application.settlement_match_id, application.applied_by],
+        ['bill-net', '62.00', 'EUR', 'applied', 'm-tx-bill-net', 'owner-credit']);
+      assert.equal(application.payload.source, 'owner_reply');
+      assert.equal(application.payload.authority.evidence_request_id, askId);
+      // Receipted: the application's audit event, written with the row.
+      const receipt = (await seed.query(`select metadata from audit_events where action = 'reconciliation.credit_note_applied' and resource_id = 'bill-net-cn'`)).rows;
+      assert.equal(receipt.length, 1);
+      assert.equal(receipt[0].metadata.invoice_document_id, 'bill-net');
+      // The bill is paid in full now that its credit is recorded.
+      assert.equal((await seed.query(`select payment_status from documents where id = 'bill-net'`)).rows[0].payment_status, 'paid');
+      // The census: both documents represented, nothing excluded.
+      const alv = await getFinlandAlvReturnFromDb({ firmId: FIRM, clientId: ACCRUAL, period: '2025-02' });
+      assert.equal(alv.review.unrecognizedPurchases, undefined, JSON.stringify(alv.review.unrecognizedPurchases));
+      // Recording the application posts nothing.
+      assert.equal(await journals(), journalsBefore);
+      // The same answer re-driven is not a second application.
+      await recoverOwnerRepliesInDb({ firmId: FIRM });
+      assert.equal((await applications('bill-net-cn')).length, 1);
+
+      // English: the same answer in English, the same record.
+      await insertBill(seed, { id: 'bill-en', clientId: EN, total: 124, tax: 24, date: '2025-02-05', number: '4741' });
+      await insertBill(seed, { id: 'bill-en-cn', clientId: EN, total: -24.8, tax: -4.8, date: '2025-02-07', number: 'CN-41', paymentStatus: 'credit_note' });
+      const enAsk = await mint({ id: 'bill-en-cn', clientId: EN });
+      assert.match((await ask(enAsk)).question, /^Supplier credit note CN-41 from Tukku Oy \(24\.80 EUR, dated 2025-02-07\)/);
+      await reply(enAsk, 'It was taken off our payment of bill 4741.');
+      assert.equal((await ask(enAsk)).response_payload.reply_processing.driven_action, 'owner_stated_credit_deduction');
+      assert.deepEqual((await applications('bill-en-cn')).map((a) => [a.invoice_document_id, a.amount, a.settlement_match_id]), [['bill-en', '24.80', null]]);
+
+      // Answers Donna cannot record go to the existing unclear path.
+      const unclear = [
+        // Not an answer at all.
+        { credit: 'cn-unclear', number: 'HL-31', text: 'hmm, en muista', bill: null, reason: null },
+        // A bill of another supplier: the same-counterparty check refuses it.
+        { credit: 'cn-other-vendor', number: 'HL-32', text: 'Vähennettiin laskusta 5100.', bill: { id: 'bill-other', vendor: 'Rautakulma Oy', number: '5100' },
+          reason: 'owner_answer_not_recordable:credit_vendor_mismatch' },
+        // A bill Donna does not hold.
+        { credit: 'cn-missing', number: 'HL-33', text: 'Vähennettiin laskusta 9999.', bill: null, reason: 'owner_answer_not_recordable:credit_bill_not_found' }
+      ];
+      for (const c of unclear) {
+        if (c.bill) await insertBill(seed, { id: c.bill.id, vendor: c.bill.vendor, total: 248, tax: 48, date: '2025-02-05', number: c.bill.number });
+        await insertBill(seed, { id: c.credit, total: -62, tax: -12, date: '2025-02-09', number: c.number, paymentStatus: 'credit_note' });
+        const id = await mint({ id: c.credit, clientId: ACCRUAL });
+        await reply(id, c.text);
+        const after = await ask(id);
+        assert.equal(after.response_payload.reply_processing.driven_action, 'owner_clarification', `${c.credit}: ${JSON.stringify(after.response_payload)}`);
+        assert.equal(await clarifications(c.credit), 1, c.credit);
+        assert.deepEqual(await applications(c.credit), [], c.credit);
+        // The receipt says why a clear answer could not be recorded.
+        if (c.reason) {
+          const stamp = (await seed.query(`select unmatchable_reason as reason from reconciliation_evaluations where target_id = $1`, [c.credit])).rows;
+          assert.deepEqual(stamp.map((r) => r.reason), [c.reason], c.credit);
+        }
+      }
+      assert.equal(await journals(), journalsBefore);
+    } finally {
+      await __endFirmDbPoolForTests().catch(() => {});
+      for (const [k, v] of Object.entries(prior)) { if (v == null) delete process.env[k]; else process.env[k] = v; }
+      await stop();
+    }
+  });
+
+test('real PG: a sales payment short by an unrecorded amount is asked as "bank fee or part-payment?"; a bank-fee answer is recorded on the match and settles it; a part-payment answer keeps the remainder open',
+  { skip: !PG_URL && 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async (t) => {
+    const { seed, url, stop } = await boot();
+    const prior = { DATABASE_URL: process.env.DATABASE_URL, DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY };
+    process.env.DATABASE_URL = url; process.env.DATABASE_POOL_MAX = '3'; process.env.ANTHROPIC_API_KEY = 'test-shortfall';
+    const calls = [];
+    t.mock.method(globalThis, 'fetch', scriptedLaneReplyModel(calls));
+    const { resolveClientEvidenceRequestInDb } = await import('./firmDb.js');
+    try {
+      await setClientFlagStage(seed, { firmId: FIRM, clientId: ACCRUAL, flagKey: 'JEV_RECONCILIATION', stage: 'off', source: 'manual', reason: 'shortfall proof' });
+      await setClientFlagStage(seed, { firmId: FIRM, clientId: ACCRUAL, flagKey: 'FINLAND_ALV_FILING', stage: 'auto', source: 'manual', reason: 'shortfall proof' });
+      // Invoice 1020 1 004,00 (204,00 ALV) paid 1 001,50; invoice 1021 the same, paid 1 001,50.
+      // Neither match records a fee.
+      for (const [id, number, tx] of [['doc-fee', '1020', 'tx-fee'], ['doc-part', '1021', 'tx-part']]) {
+        await insertDocument(seed, { id, customer: 'Pankkikulu Oy', total: 1004, tax: 204, date: '2025-02-04', number, paymentStatus: 'partial' });
+        await instalment(seed, { documentId: id, type: 'sales_invoice', txId: tx, date: '2025-02-20', amount: 1001.5, journalDate: '2025-02-20' });
+      }
+      // Neighbours the census already handles the same way as before: a
+      // cross-currency line and a line with no stated amount keep the whole
+      // document represented (nothing persisted states the part in the
+      // invoice's currency) and nobody is asked about them.
+      await insertDocument(seed, { id: 'doc-usd', customer: 'Valuutta Oy', total: 1004, tax: 204, date: '2025-02-04', number: '1022', paymentStatus: 'paid' });
+      await instalment(seed, { documentId: 'doc-usd', type: 'sales_invoice', txId: 'tx-usd', date: '2025-02-20', amount: 1050, journalDate: '2025-02-20' });
+      await seed.query(`update transactions set currency = 'USD' where id = 'tx-usd'`);
+      await insertDocument(seed, { id: 'doc-noamount', customer: 'Summaton Oy', total: 1004, tax: 204, date: '2025-02-04', number: '1023', paymentStatus: 'paid' });
+      await instalment(seed, { documentId: 'doc-noamount', type: 'sales_invoice', txId: 'tx-noamount', date: '2025-02-20', amount: 1004, journalDate: '2025-02-20' });
+      await seed.query(`update reconciliation_matches set match_amount = null where id = 'm-tx-noamount'`);
+      const journalsBefore = (await seed.query('select count(*)::int as n from ledger_journals')).rows[0].n;
+
+      const census = async () => (await getFinlandAlvReturnFromDb({ firmId: FIRM, clientId: ACCRUAL, period: '2025-02' })).review.unrecognizedSales;
+      const before = await census();
+      assert.deepEqual(before.items.map((i) => [i.document_id, i.rests, i.gross, i.tax]), [['doc-fee', 'part_settled_in_period', 2.5, 0.51], ['doc-part', 'part_settled_in_period', 2.5, 0.51]]);
+      assert.deepEqual(before.represented.map((r) => r.document_id).sort(), ['doc-noamount', 'doc-usd']);
+
+      // The filing start escalates and, for each unexplained shortfall, asks the owner.
+      const started = await startFinlandAlvReturnFilingInDb({ firmId: FIRM, clientId: ACCRUAL, period: '2025-02', actorId: 'fi09-test',
+        deliverAsksImpl: async () => ({ skipped: true }), scopeDriftImpl: async () => null });
+      assert.equal(started.action, 'escalated');
+      const shortfallAsk = async (documentId) => (await seed.query(`select * from client_evidence_requests
+        where request_payload->>'document_id' = $1 and request_payload->>'recognition' = 'unexplained_settlement_shortfall'`, [documentId])).rows;
+      const [feeAsk] = await shortfallAsk('doc-fee');
+      assert.ok(feeAsk, 'the unexplained shortfall is put to the owner');
+      assert.equal((await shortfallAsk('doc-part')).length, 1);
+      assert.deepEqual(await shortfallAsk('doc-usd'), []);
+      assert.equal(feeAsk.request_payload.lane, 'sales_invoice_recognition');
+      assert.equal(feeAsk.request_payload.shortfall.amount, '2.50');
+      // A Finnish book: the question in Finnish, with the amount as Finns write it.
+      assert.match(feeAsk.question, /^Myyntilasku 1020 \(Pankkikulu Oy, 1004,00 EUR, päivätty 4\.2\.2025\): /);
+      assert.match(feeAsk.question, /2,50 EUR/);
+      assert.match(feeAsk.question, /pankin palvelumaksu vai osamaksu/);
+      // Asked: both items are held by the owner now.
+      const held = await census();
+      assert.deepEqual(held.items.map((i) => [i.document_id, i.on_nobody]), [['doc-fee', false], ['doc-part', false]]);
+      // Never twice.
+      await startFinlandAlvReturnFilingInDb({ firmId: FIRM, clientId: ACCRUAL, period: '2025-02', actorId: 'fi09-test',
+        deliverAsksImpl: async () => ({ skipped: true }), scopeDriftImpl: async () => null });
+      assert.equal((await shortfallAsk('doc-fee')).length, 1);
+
+      // "A bank fee": recorded on the match; the invoice is then represented.
+      const open = async (id) => seed.query(`update client_evidence_requests set status = 'open', send_count = 1 where id = $1`, [id]);
+      await open(feeAsk.id);
+      await resolveClientEvidenceRequestInDb({ firmId: FIRM, evidenceRequestId: feeAsk.id, reply: 'Se oli pankin palvelumaksu.', actorId: 'owner-fee', actorType: 'client' });
+      const feeAfter = (await shortfallAsk('doc-fee'))[0];
+      assert.equal(calls.at(-1).offered, true);
+      assert.equal(feeAfter.status, 'resolved', JSON.stringify(feeAfter.response_payload));
+      assert.equal(feeAfter.response_payload.reply_processing.driven_action, 'owner_stated_bank_fee');
+      const feeMatch = (await seed.query(`select payload from reconciliation_matches where id = 'm-tx-fee'`)).rows[0].payload;
+      assert.deepEqual([feeMatch.settlement_shortfall.kind, feeMatch.settlement_shortfall.amount, feeMatch.settlement_shortfall.currency, feeMatch.settlement_shortfall.source],
+        ['bank_fee', '2.50', 'EUR', 'owner_reply']);
+      assert.equal(feeMatch.settlement_shortfall.evidence_request_id, feeAsk.id);
+      // "A part-payment": the remainder is open; the ask stays with the owner.
+      const [partAsk] = await shortfallAsk('doc-part');
+      await open(partAsk.id);
+      await resolveClientEvidenceRequestInDb({ firmId: FIRM, evidenceRequestId: partAsk.id, reply: 'Osamaksu, loput tulee maaliskuussa.', actorId: 'owner-fee', actorType: 'client' });
+      const partAfter = (await shortfallAsk('doc-part'))[0];
+      assert.equal(partAfter.status, 'open');
+      assert.equal(partAfter.response_payload.reply_processing.driven_action, 'owner_reported_still_open');
+      assert.equal((await seed.query(`select payload from reconciliation_matches where id = 'm-tx-part'`)).rows[0].payload.settlement_shortfall, undefined);
+
+      const after = await census();
+      assert.deepEqual(after.items.map((i) => [i.document_id, i.rests, i.gross, i.on_nobody]), [['doc-part', 'part_settled_in_period', 2.5, false]]);
+      assert.deepEqual(after.represented.find((r) => r.document_id === 'doc-fee'),
+        { document_id: 'doc-fee', by: 'settlement_journal', net_of_bank_fee: { amount: 2.5, match_ids: ['m-tx-fee'] } });
+      // Nothing was posted by any of it.
+      assert.equal((await seed.query('select count(*)::int as n from ledger_journals')).rows[0].n, journalsBefore);
+    } finally {
+      await __endFirmDbPoolForTests().catch(() => {});
+      for (const [k, v] of Object.entries(prior)) { if (v == null) delete process.env[k]; else process.env[k] = v; }
+      await stop();
+    }
+  });

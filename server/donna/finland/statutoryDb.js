@@ -35,11 +35,11 @@ import { CASH_ACCOUNT_CODES, EU_OR_IMPORT_TAX_CODES, EU_REVENUE_ACCOUNT_CODES, e
 import { ALV_THRESHOLD_EVIDENCE_TYPE, buildAlvRegistrationWatch, buildAlvThresholdEscalationQuestion, FINLAND_ALV_THRESHOLD_WATCH_FLAG_KEY } from './alvRegistrationThreshold.js';
 import { withFirmDbClient } from '../db/pool.js';
 import { shortHash } from '../db/shared.js';
-import { clientAccountingBasisFromProfile, DEFAULT_FIRM_ID, requireClientInFirm } from '../db/clients.js';
+import { clientAccountingBasisFromProfile, DEFAULT_FIRM_ID, getClientOwnerLanguageInDb, requireClientInFirm } from '../db/clients.js';
 import { deliverEvidenceAsksOnAllChannels, rowToClientEvidenceRequestPayload } from '../db/asks.js';
 import { rowToLedgerLinePayload } from '../db/ledger.js';
 import { getLedgerPeriodPreviewFromDb } from '../db/close.js';
-import { readRecognitionGapWithClient, recognitionStatement } from '../salesRecognitionGap.js';
+import { readRecognitionGapWithClient, recognitionStatement, ensureSettlementShortfallAsksWithClient } from '../salesRecognitionGap.js';
 
 // Every owner question these Finnish flows raise is delivered through the ONE
 // gated fan-out (db/asks.js deliverEvidenceAsksOnAllChannels, gated by
@@ -2335,6 +2335,63 @@ export const getSuomifiMandateStatusInDb = async ({
 };
 
 
+// The ALV escalation question, per owner language (preferredOwnerTemplateLanguage).
+// A census item resting part_settled_in_period is part-paid: only its unpaid
+// remainder is missing from the figures, so it is named apart from a document
+// that is not recorded at all (the wording of salesRecognitionGap.js
+// recognitionStatement).
+const ALV_REVIEW_QUESTION_COPY = Object.freeze({
+  fi: Object.freeze({
+    notReady: (key) => `ALV-ilmoitus (${key}) ei ole vielä valmis lähetettäväksi.`,
+    uncoded: (n) => `${n} tulotapahtumaa ilman ALV-käsittelyä — kerro, mitä myyntiä nämä ovat.`,
+    incompatible: (n) => `${n} kirjausta, joiden ALV-koodi ei sovi tilille — tarkistan ne kanssasi.`,
+    salesUnrecorded: (n) => `${n} ladattua myyntilaskua tai hyvityslaskua ei ole vielä kirjattu tämän kauden myyntiin, joten niiden myynti ja ALV puuttuvat laskelmasta.`,
+    salesPartPaid: (n) => (n === 1
+      ? '1 ladattu myyntilasku on maksettu tällä kaudella vain osittain, joten sen maksamattoman loppuosan myynti ja ALV puuttuvat laskelmasta.'
+      : `${n} ladattua myyntilaskua on maksettu tällä kaudella vain osittain, joten niiden maksamattoman loppuosan myynti ja ALV puuttuvat laskelmasta.`),
+    purchasesUnrecorded: (n) => `${n} ladattua ostolaskua tai ostohyvityslaskua ei ole vielä kirjattu tämän kauden ostoihin, joten niiden kulut ja vähennettävä ALV puuttuvat laskelmasta.`,
+    purchasesPartPaid: (n) => (n === 1
+      ? '1 ladattu ostolasku on maksettu tällä kaudella vain osittain, joten sen maksamattoman loppuosan kulut ja vähennettävä ALV puuttuvat laskelmasta.'
+      : `${n} ladattua ostolaskua on maksettu tällä kaudella vain osittain, joten niiden maksamattoman loppuosan kulut ja vähennettävä ALV puuttuvat laskelmasta.`),
+    drift: 'Kirjanpidossa on toimintaa, jonka ALV-käsittely tarkistetaan ennen lähetystä (mm. rakennusalan käännetty ALV) — selvitän sen kanssasi.'
+  }),
+  en: Object.freeze({
+    notReady: (key) => `The VAT return (${key}) is not ready to file yet.`,
+    uncoded: (n) => `${n} income ${n === 1 ? 'transaction has' : 'transactions have'} no VAT treatment yet. Tell me what sales ${n === 1 ? 'this is' : 'these are'}.`,
+    incompatible: (n) => `${n} ${n === 1 ? 'entry has a VAT code that does' : 'entries have a VAT code that does'} not fit the account. I will go through ${n === 1 ? 'it' : 'them'} with you.`,
+    salesUnrecorded: (n) => `${n} uploaded sales ${n === 1 ? 'invoice or credit note is' : 'invoices or credit notes are'} not yet recorded in this period's sales, so ${n === 1 ? 'its' : 'their'} sales and VAT are missing from the calculation.`,
+    salesPartPaid: (n) => `${n} uploaded sales ${n === 1 ? 'invoice is' : 'invoices are'} paid only in part in this period, so the sales and VAT of ${n === 1 ? 'its' : 'their'} unpaid remainder are missing from the calculation.`,
+    purchasesUnrecorded: (n) => `${n} uploaded purchase ${n === 1 ? 'invoice or supplier credit note is' : 'invoices or supplier credit notes are'} not yet recorded in this period's purchases, so ${n === 1 ? 'its' : 'their'} costs and deductible VAT are missing from the calculation.`,
+    purchasesPartPaid: (n) => `${n} uploaded purchase ${n === 1 ? 'invoice is' : 'invoices are'} paid only in part in this period, so the costs and deductible VAT of ${n === 1 ? 'its' : 'their'} unpaid remainder are missing from the calculation.`,
+    drift: 'Your books show activity whose VAT treatment has to be checked before filing (for example reverse-charge VAT in construction). I will sort it out with you.'
+  })
+});
+
+const PART_PAID_REST = 'part_settled_in_period';
+const censusCounts = (side) => {
+  const items = Array.isArray(side?.items) ? side.items : [];
+  const partPaid = items.filter((item) => item?.rests === PART_PAID_REST).length;
+  return { unrecorded: items.length - partPaid, partPaid };
+};
+
+export const buildFinlandAlvReviewQuestion = ({ review = {}, periodKey = '', driftBlocked = false, language = 'fi' } = {}) => {
+  const copy = ALV_REVIEW_QUESTION_COPY[language] || ALV_REVIEW_QUESTION_COPY.fi;
+  const uncoded = review?.uncodedRevenueLines?.length || 0;
+  const incompatible = review?.incompatibleLines?.length || 0;
+  const sales = censusCounts(review?.unrecognizedSales);
+  const purchases = censusCounts(review?.unrecognizedPurchases);
+  return [
+    copy.notReady(periodKey),
+    uncoded ? copy.uncoded(uncoded) : '',
+    incompatible ? copy.incompatible(incompatible) : '',
+    sales.unrecorded ? copy.salesUnrecorded(sales.unrecorded) : '',
+    sales.partPaid ? copy.salesPartPaid(sales.partPaid) : '',
+    purchases.unrecorded ? copy.purchasesUnrecorded(purchases.unrecorded) : '',
+    purchases.partPaid ? copy.purchasesPartPaid(purchases.partPaid) : '',
+    driftBlocked ? copy.drift : ''
+  ].filter(Boolean).join(' ');
+};
+
 // startFinlandAlvReturnFilingInDb — the lane's start motion. Computes the period
 // return (the same deterministic read as getFinlandAlvReturnFromDb), then drives
 // it to one of the two sanctioned places:
@@ -2358,7 +2415,11 @@ export const startFinlandAlvReturnFilingInDb = async ({
   createDraftImpl = null,
   createAskImpl = null,
   scopeDriftImpl = null,
-  liveOverlapImpl = null
+  liveOverlapImpl = null,
+  // The owner's language: the one resolver over the client row ('en' on a
+  // failed read), the language the owner-facing question is written in.
+  ownerLanguageImpl = null,
+  shortfallAsksImpl = null
 } = {}) => {
   if (!clientId) {
     const error = new Error('Client id is required to start an ALV return filing.');
@@ -2393,22 +2454,26 @@ export const startFinlandAlvReturnFilingInDb = async ({
     ? drift.triggers.filter((t) => t.severity === 'filing_blocked').map((t) => `scope_drift_${t.id}`)
     : [];
 
+  const readOwnerLanguage = ownerLanguageImpl || getClientOwnerLanguageInDb;
+  const language = await Promise.resolve()
+    .then(() => readOwnerLanguage({ firmId, clientId }))
+    .catch(() => 'en');
+
   if (computed.review?.status !== 'ready' || driftBlockers.length) {
     const blockers = [...(computed.review?.blockers || []), ...driftBlockers];
-    const uncoded = computed.review?.uncodedRevenueLines?.length || 0;
-    const incompatible = computed.review?.incompatibleLines?.length || 0;
-    const unrecognized = computed.review?.unrecognizedSales?.items?.length || 0;
-    const unrecognizedPurchases = computed.review?.unrecognizedPurchases?.items?.length || 0;
-    const question = [
-      `ALV-ilmoitus (${computed.period.key}) ei ole vielä valmis lähetettäväksi.`,
-      uncoded ? `${uncoded} tulotapahtumaa ilman ALV-käsittelyä — kerro, mitä myyntiä nämä ovat.` : '',
-      incompatible ? `${incompatible} kirjausta, joiden ALV-koodi ei sovi tilille — tarkistan ne kanssasi.` : '',
-      unrecognized ? `${unrecognized} ladattua myyntilaskua tai hyvityslaskua ei ole vielä kirjattu tämän kauden myyntiin, joten niiden myynti ja ALV puuttuvat laskelmasta.` : '',
-      unrecognizedPurchases ? `${unrecognizedPurchases} ladattua ostolaskua tai ostohyvityslaskua ei ole vielä kirjattu tämän kauden ostoihin, joten niiden kulut ja vähennettävä ALV puuttuvat laskelmasta.` : '',
-      driftBlockers.length
-        ? 'Kirjanpidossa on toimintaa, jonka ALV-käsittely tarkistetaan ennen lähetystä (mm. rakennusalan käännetty ALV) — selvitän sen kanssasi.'
-        : ''
-    ].filter(Boolean).join(' ');
+    const question = buildFinlandAlvReviewQuestion({
+      review: computed.review,
+      periodKey: computed.period.key,
+      driftBlocked: driftBlockers.length > 0,
+      language
+    });
+    // A sales payment short of its invoice with nothing recorded about why is
+    // its own question to the owner (bank fee or part-payment), never twice.
+    const unexplainedShortfalls = (computed.review?.unrecognizedSales?.items || []).some((i) => i.shortfall && i.on_nobody);
+    const shortfallAsks = unexplainedShortfalls
+      ? await (shortfallAsksImpl || ((args) => withFirmDbClient((client) => ensureSettlementShortfallAsksWithClient({ client, ...args }))))({
+        firmId, clientId, period: computed.review.unrecognizedSales.period, actorId })
+      : null;
     const createAsk = createAskImpl || createAlvReturnEvidenceRequestInDb;
     const ask = await createAsk({
       firmId,
@@ -2420,8 +2485,9 @@ export const startFinlandAlvReturnFilingInDb = async ({
     });
     const deliver = deliverAsksImpl
       || ((args) => withFirmDbClient((client) => deliverStatutoryAsks({ client, surface: 'finland_alv_return', ...args })));
-    await deliver({ firmId, clientId, evidenceRequestIds: [ask.id] });
-    return { action: 'escalated', blockers, ask, period: computed.period };
+    // The shortfall questions go out through the same gate as the escalation.
+    await deliver({ firmId, clientId, evidenceRequestIds: [ask.id, ...(shortfallAsks?.asked || [])] });
+    return { action: 'escalated', blockers, ask, period: computed.period, ...(shortfallAsks ? { shortfall_asks: shortfallAsks } : {}) };
   }
 
   const createDraft = createDraftImpl || createAlvReturnDraftInDb;
@@ -2433,7 +2499,7 @@ export const startFinlandAlvReturnFilingInDb = async ({
     model: null,
     actorId
   });
-  const question = alvReturnConfirmQuestion({ periodKey: row.period_key, verdict: row.verdict });
+  const question = alvReturnConfirmQuestion({ periodKey: row.period_key, verdict: row.verdict, language });
   const createAsk = createAskImpl || createAlvReturnEvidenceRequestInDb;
   const ask = await createAsk({
     firmId,

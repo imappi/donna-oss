@@ -19,7 +19,7 @@ export const documentOwnerReplyDocumentId = (request) => (!request?.transaction_
 const SOURCE_INVALID_SKIPS = new Set(['missing_ids', 'document_not_found']);
 // Outcomes that are not a provider gap (the re-disposition reached its own
 // write and it did not land, or a live-match resolve rolled back).
-const PROCESSING_FAILED_SKIPS = new Set(['live_match']);
+const PROCESSING_FAILED_SKIPS = new Set(['live_match', 'lane_answer_record_failed']);
 
 // Gated on the SAME plane flag the ask leg acts under. Dynamic import: the
 // static chain documentDispositionLlm → reconciliationLlmCore → firmDb is a cycle.
@@ -40,7 +40,10 @@ export const redisposeDocumentOwnerReplyWithClient = async ({ client, firmId, re
   const { runOwnerReplyRedisposition } = await import('./documentDispositionLlm.js');
   // The asking lane's "still unpaid" answer, where it has one (the
   // no-settlement lanes); the reader is told it is valid on that lane.
-  const { noSettlementAskStillOpen } = await import('./salesRecognitionGap.js');
+  // Its record-settling answers too ("deducted from bill X", "a bank fee"),
+  // with the writers that record them.
+  const { noSettlementAskStillOpen, noSettlementAskLaneAnswers, recordOwnerStatedCreditDeductionWithClient, recordOwnerStatedBankFeeWithClient } = await import('./salesRecognitionGap.js');
+  const laneAnswers = noSettlementAskLaneAnswers(request.request_payload?.lane, request.request_payload?.recognition);
   // The #1748 shape: the reconciliation_reasoning lane's seat decides when a
   // non-claude rung is seated. Best-effort read; null ⇒ the strong default.
   let decidingPolicy = null;
@@ -56,7 +59,12 @@ export const redisposeDocumentOwnerReplyWithClient = async ({ client, firmId, re
     replyDocumentIds: request.response_payload?.document_ids || [],
     actorId,
     decidingPolicy,
-    stillOpen: noSettlementAskStillOpen(request.request_payload?.lane, request.request_payload?.recognition)
+    stillOpen: noSettlementAskStillOpen(request.request_payload?.lane, request.request_payload?.recognition),
+    laneAnswers,
+    laneRecorders: laneAnswers ? {
+      creditDeducted: (args) => recordOwnerStatedCreditDeductionWithClient(args),
+      bankFee: (args) => recordOwnerStatedBankFeeWithClient(args)
+    } : null
   });
 };
 
@@ -80,6 +88,7 @@ export const processDocumentOwnerReplyWithClient = async ({ client, firmId, requ
   }
   const processing = { reply_key: expectedReplyKey, state: 'completed', attempts: attempts + 1,
     driven_action: disposition.obligation_open ? 'owner_reported_still_open'
+      : ['owner_stated_credit_deduction', 'owner_stated_bank_fee'].includes(disposition.lane?.kind) ? disposition.lane.kind
       : disposition.lane?.kind === 'owner_ask' ? 'owner_clarification'
       : disposition.lane?.kind === 'owner_ask_exhausted' ? 'owner_clarification_exhausted'
         : disposition.skipped === 'live_match' ? 'live_match' : 'document_redisposition',

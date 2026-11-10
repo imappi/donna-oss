@@ -41,12 +41,17 @@ const DEBIT = {
 };
 const CREDIT = { ...DEBIT, id: 'tx-fi-2', money_in: '1250', money_out: null, description: 'MAKSUPALVELU ESIMERKKI' };
 
-test('owner language — the needs-human bank-line question, in Finnish and byte-identical English', () => {
+test('owner language — the needs-human bank-line question, in Finnish and English, never quoting the internal reasoning', () => {
   const semantic = { reasoning: NEEDS_HUMAN.reasoning };
+  // The model's `reasoning` is an internal receipt (it stays on the stamped
+  // verdict); the owner is asked a plain question about a fact they know. It
+  // was quoted into the English question before.
   assert.equal(buildNeedsHumanOwnerQuestion({ transaction: DEBIT, direction: 'money_out', semantic }),
-    'We could not tell what the EUR 41.20 paid on 2026-05-14 ("KAUPPA ESIMERKKI") was for. The counterparty is not one the firm knows. Was it a business expense, what was it for, and is there a receipt or bill for it?');
+    'We could not tell what the EUR 41.20 paid on 2026-05-14 ("KAUPPA ESIMERKKI") was for. Was it a business expense, what was it for, and is there a receipt or bill for it?');
   assert.equal(buildNeedsHumanOwnerQuestion({ transaction: CREDIT, direction: 'money_in', semantic }),
-    'We could not tell what the EUR 1250.00 received on 2026-05-14 ("MAKSUPALVELU ESIMERKKI") was. The counterparty is not one the firm knows. What was it for — a customer payment, a payout, a loan or transfer, a refund — and is there a document for it?');
+    'We could not tell what the EUR 1250.00 received on 2026-05-14 ("MAKSUPALVELU ESIMERKKI") was. What was it for — a customer payment, a payout, a loan or transfer, a refund — and is there a document for it?');
+  assert.equal(buildNeedsHumanOwnerQuestion({ transaction: DEBIT, direction: 'money_out', semantic }),
+    buildNeedsHumanOwnerQuestion({ transaction: DEBIT, direction: 'money_out', semantic: {} }), 'the reasoning changes nothing the owner reads');
   // Finnish: wholly code-built; the internal English reasoning is not spliced in.
   assert.equal(buildNeedsHumanOwnerQuestion({ transaction: DEBIT, direction: 'money_out', semantic, language: 'fi' }),
     'Maksu tililtä (41,20 EUR, 14.5.2026, "KAUPPA ESIMERKKI"): Emme tunnistaneet, mistä tässä maksussa on kyse. Oliko se yrityksen kulu, ja mihin se liittyi? Onko sinulla siitä kuitti tai lasku?');
@@ -86,5 +91,6 @@ test('owner language — the bank-line mint reads the owner language from the cl
   // An owner who chose English keeps English, byte for byte.
   const en = await mintFor({ profile: { jurisdiction: 'FI', locale: 'en' } });
   assert.equal(en.mints[0].question,
-    'We could not tell what the EUR 41.20 paid on 2026-05-14 ("KAUPPA ESIMERKKI") was for. The counterparty is not one the firm knows. Was it a business expense, what was it for, and is there a receipt or bill for it?');
+    'We could not tell what the EUR 41.20 paid on 2026-05-14 ("KAUPPA ESIMERKKI") was for. Was it a business expense, what was it for, and is there a receipt or bill for it?');
+  assert.doesNotMatch(en.mints[0].question, /counterparty is not one the firm knows/, 'the internal reasoning never reaches the owner');
 });

@@ -49,7 +49,10 @@ const ArtifactPanel = ({
   onSuggestTransactionCoding,
   onApplyLifecycle = null,
   dock = null,
-  dockOpen = false
+  dockOpen = false,
+  // The firm snapshot's clients: a transaction artifact writes a question to
+  // its client's owner in that owner's language, read from this record.
+  clients = []
 }) => {
   const intl = useIntl();
   const message = (id) => intl.formatMessage({ id });
@@ -220,6 +223,7 @@ const ArtifactPanel = ({
                 <TransactionArtifact
                   artifact={visible}
                   setArtifact={setArtifact}
+                  client={(Array.isArray(clients) ? clients : []).find((entry) => entry?.id && entry.id === (visible.data.transaction?.client_id || visible.data.clientId)) || null}
                   onRefreshRef={refreshRef}
                   onSuggestTransactionCoding={onSuggestTransactionCoding}
                   onApplyLifecycle={onApplyLifecycle}

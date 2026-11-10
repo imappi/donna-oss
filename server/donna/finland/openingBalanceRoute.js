@@ -37,21 +37,27 @@ const confirmsCashOnly = (text) => /(only|just|sole|pelkk[aä]|pelk[aä]ll[aä]|
 
 // The route's own owner lines, per owner language (preferredOwnerTemplateLanguage,
 // passed in as `language`). English is the historical copy, unchanged; anything
-// but 'fi' gets it. Lines that were already Finnish-only stay as they are.
+// but 'fi' gets it. The confirm tail and the posted line were Finnish for every
+// owner; an owner who chose English now gets them in English (the English tail
+// invites “yes”, which isAffirmative reads).
 const OPENING_ROUTE_COPY = Object.freeze({
   en: Object.freeze({
     openingLine: 'Opening line',
     summaryLine: (label, amount, currency) => `• ${label} — ${amount.toFixed(2)} ${currency}`,
     total: (total, currency) => `Total: ${total.toFixed(2)} ${currency}`,
     nudge: 'Please reply “kyllä” or “yes” if you want me to post this opening balance. If anything is wrong, send the corrected figures instead.',
-    clarify: 'Could you clarify your opening balance figures?'
+    clarify: 'Could you clarify your opening balance figures?',
+    confirmTail: 'Confirm by replying “yes” and I will post the opening balance.',
+    posted: 'Opening balance posted.'
   }),
   fi: Object.freeze({
     openingLine: 'Avaava erä',
     summaryLine: (label, amount, currency) => `• ${label}: ${amount.toFixed(2).replace('.', ',')} ${currency}`,
     total: (total, currency) => `Yhteensä: ${total.toFixed(2).replace('.', ',')} ${currency}`,
     nudge: 'Vastaa “kyllä”, jos haluat, että kirjaan tämän avaavan taseen. Jos jokin on väärin, lähetä korjatut luvut.',
-    clarify: 'Voisitko tarkentaa avaavan taseen lukuja?'
+    clarify: 'Voisitko tarkentaa avaavan taseen lukuja?',
+    confirmTail: 'Vahvista vastaamalla “kyllä”, niin kirjaan avaavan taseen.',
+    posted: 'Avaava tase kirjattu.'
   })
 });
 const routeCopyFor = (language) => OPENING_ROUTE_COPY[language] || OPENING_ROUTE_COPY.en;
@@ -169,7 +175,7 @@ export const resolveOpeningBalanceInbound = async ({
     const verdict = state.verdict;
     const receipt = await confirmOpeningBalanceIntakeImpl({ firmId, clientId, asOf, verdict, authorityBasis, actorId, postImpl });
     await closeAnsweredAsk('opening_balance_posted');
-    if (typeof sendText === 'function') await sendText({ text: 'Avaava tase kirjattu.' });
+    if (typeof sendText === 'function') await sendText({ text: copy.posted });
     return { action: 'confirm_and_post', verdict, authorityBasis, actorId, receipt };
   }
 
@@ -200,7 +206,7 @@ export const resolveOpeningBalanceInbound = async ({
 
   if (verdict?.terminal === 'proposal') {
     const summary = summarizeOpeningBalanceProposal(verdict, { language });
-    const question = `${summary}\n\nVahvista vastaamalla “kyllä”, niin kirjaan avaavan taseen.`;
+    const question = `${summary}\n\n${copy.confirmTail}`;
     const confirmationAsk = await createOpeningAsk({
       createAsk,
       firmId,
