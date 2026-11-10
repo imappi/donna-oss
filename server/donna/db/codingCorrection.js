@@ -168,6 +168,24 @@ async function saveRequirement({client,firmId,clientId,transactionId,requirement
     values($1,$2,'system',$3,$4,'transaction',$5,$6::jsonb)`,[firmId,clientId,ACTOR,action,transactionId,JSON.stringify(requirement)]);
 }
 
+// A registration case on a line Donna will not correct herself (a locked
+// period or a filed VAT return: CODING_CORRECTION_TAX_PERIOD_CLOSED) waits on
+// a person. A person's own full reversal and replacement of that journal,
+// through the adjustment writer and in its transaction, is that decision: the
+// case closes with the adjustment as its receipt. Other cases keep their own
+// closing rule (codingEvidence.js completeCodingEvidenceCorrectionWithClient).
+export async function closeRegistrationCaseByPersonAdjustmentWithClient({client,firmId,clientId,transactionId,originalJournalId,correctionJournalIds,actorId,reason}) {
+  if(!transactionId || !correctionJournalIds?.length)return false;
+  const requirement=(await client.query('select payload from transactions where firm_id=$1 and client_id=$2 and id=$3 for update',
+    [firmId,clientId,transactionId])).rows[0]?.payload?.coding_correction_required;
+  if(requirement?.status!=='pending' || !requirement.tax_registration || requirement.original_journal_id!==originalJournalId)return false;
+  await saveRequirement({client,firmId,clientId,transactionId,action:'coding.correction_completed',requirement:{...requirement,
+    status:'corrected',next_action:null,actor_id:actorId,
+    correction_journal_ids:[...new Set([...(requirement.correction_journal_ids || []),...correctionJournalIds])],
+    authority_basis:{basis:'person_ledger_adjustment',actor_id:actorId,reason,correction_journal_ids:correctionJournalIds}}});
+  return true;
+}
+
 export async function prepareCodingCorrectionWithClient(args) {
   const {client,firmId,clientId,transactionId,expectedDecisionDigest}=args;
   await admission(args);

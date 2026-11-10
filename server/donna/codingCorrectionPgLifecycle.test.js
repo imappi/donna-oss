@@ -223,6 +223,25 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal((await pool.query("select count(*)::int n from client_evidence_requests where transaction_id='personal'")).rows[0].n,0,'missing execution authority must not manufacture a question');
  const beforeRetry=calls;await tick();assert.equal(calls,beforeRetry,'saved semantic decision is reused after writer refusal');
  await withClient(client=>setClientFlagStage(client,{...scope,flagKey:'CODING_OWNER_TRANSFER_POST',stage:'canary',actorId:'member',actorType:'firm_member',reason:'Synthetic owner-transfer authority'}));
+ // The line's ALV return is filed: this correction moves its input ALV, so the
+ // adjustment writer refuses Donna (she never acknowledges a filed return).
+ // The case stores the refusal and its amounts, names it in its convergence
+ // reason, spends no model call and mints no second failure event.
+ await pool.query(`insert into alv_returns(id,firm_id,client_id,period_key,period_type,starts_on,ends_on,status,filed_at,filed_by)
+  values('alv-2025-q1','f','c','2025-Q1','quarter','2025-01-01','2025-03-31','filed',now(),'member')`);
+ const filedCalls=calls,filedFailures=await failureCount('personal');
+ clockResult=await tick();
+ assert.equal(clockResult.posted_correction_recovery[0].code,'LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN',JSON.stringify(clockResult));
+ const filedBlock=(await tx('personal')).payload.coding_correction_required;
+ assert.equal(filedBlock.status,'pending');assert.equal(filedBlock.recovery.state,'blocked');
+ assert.equal(filedBlock.recovery.details.filed_return_id,'alv-2025-q1');
+ assert.deepEqual(filedBlock.recovery.details.tax_moved,[{tax_type:'ALV_25_5_INPUT',currency:'EUR',amount:-41.51},{tax_type:'ALV_OUT_OF_SCOPE',currency:'EUR',amount:52.1}]);
+ assert.equal(convergenceForTransaction(await tx('personal')).reason,'posted_evidence_correction_blocked:LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN');
+ assert.equal((await pool.query("select count(*)::int n from ledger_journals where correction_of_journal_id=(select payload->>'ledger_journal_id' from transactions where id='personal')")).rows[0].n,0);
+ assert.equal(await failureCount('personal'),filedFailures+1);
+ await tick();assert.equal(calls,filedCalls,'no model call');assert.equal(await failureCount('personal'),filedFailures+1,'one failure receipt');
+ // Fixture only: the rest of this lifecycle runs on an open book.
+ await pool.query("delete from alv_returns where id='alv-2025-q1'");
  clockResult=await tick();assert.equal(clockResult.posted_correction_recovery[0].state,'completed',JSON.stringify(clockResult));
  const privateReq=(await tx('personal')).payload.coding_correction_required;
  const privateDelta=(await pool.query('select account_name,debit,credit from ledger_lines where journal_id=any($1::text[])',[privateReq.correction_journal_ids])).rows;

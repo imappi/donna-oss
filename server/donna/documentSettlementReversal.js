@@ -91,6 +91,8 @@ const ZERO_STATS = () => ({
   self_healed: 0,
   rested_proposed: 0,
   post_failures: 0,
+  needs_person: 0,
+  needs_person_document_ids: [],
   reversed_document_ids: [],
   mode: 'shadow',
   disabled: false,
@@ -120,9 +122,84 @@ const GATHER_SQL = `
    where d.firm_id = $1 and d.client_id = $2
      and coalesce(d.payload->'settlement_entry'->>'journal_id', '') <> ''
      and d.payload->'settlement_entry'->'reversal' is null
+     -- A refusal only a person can resolve leaves the sweep until a reversal
+     -- of the settlement journal exists (then the self-heal below merges it).
+     and (d.payload->'settlement_entry'->'reversal_refusal' is null
+       or exists (select 1 from ledger_journals j where j.firm_id = d.firm_id and j.client_id = d.client_id
+         and j.reversal_of_journal_id = d.payload->'settlement_entry'->>'journal_id' and j.status in ('posted', 'closed')))
      and ($3::text[] is null or d.id = any($3::text[]))
    order by d.document_date nulls last, d.id
    limit ${REVERSAL_SWEEP_LIMIT}`;
+
+// The adjustment writer's refusals that only a person can resolve: the
+// settlement journal sits in a filed VAT return and the reversal moves its tax
+// codes, or the reversal's own date falls inside a filed return. Donna never
+// acknowledges a filed return for herself. The refusal is recorded once on the
+// document (settlement_entry.reversal_refusal, with
+// late_bank_line.needs_ledger_adjustment true), on the card's target (a failed apply
+// receipt) and in an audit row; later sweeps do not post again. A person's own
+// reversal through the adjustment route is then found by the derived
+// idempotency check above and self-heals the marker.
+export const SETTLEMENT_REVERSAL_PERSON_REQUIRED_CODES = Object.freeze([
+  'LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN',
+  'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN'
+]);
+
+const recordPersonRequiredRefusal = async ({ client, firmId, clientId, document, settlementEntry, proposalId, error }) => {
+  const refusal = { code: error.code, message: error.message || null, details: error.details || null,
+    refused_at: new Date().toISOString() };
+  const updated = await client.query(
+    `update documents
+        set payload = jsonb_set(
+              jsonb_set(payload, '{settlement_entry,reversal_refusal}', $4::jsonb, true),
+              '{settlement_entry,late_bank_line}',
+              coalesce(payload->'settlement_entry'->'late_bank_line', '{}'::jsonb) || '{"needs_ledger_adjustment": true}'::jsonb,
+              true),
+            updated_at = now()
+      where id = $1 and firm_id = $2 and client_id = $3
+        and payload->'settlement_entry'->'reversal' is null
+        and payload->'settlement_entry'->'reversal_refusal' is null
+      returning id`,
+    [document.id, firmId, clientId, JSON.stringify(refusal)]
+  );
+  if (!updated.rows.length) return { recorded: false };
+  const audit = await client.query(
+    `insert into audit_events (firm_id, client_id, actor_type, action, resource_type, resource_id, metadata)
+     values ($1, $2, 'system', 'ledger.document_settlement_reversal_refused', 'document', $3, $4::jsonb)
+     returning id`,
+    [firmId, clientId, document.id, JSON.stringify({
+      original_journal_id: settlementEntry?.journal_id || null,
+      needs_ledger_adjustment: true,
+      refusal_code: refusal.code,
+      refusal_details: refusal.details
+    })]
+  );
+  await persistApplyReceipt({
+    client, firmId, clientId,
+    receipt: {
+      proposal_id: proposalId,
+      model: '',
+      prompt_version: null,
+      context_snapshot_id: null,
+      candidate_ids_seen: [String(document.id)],
+      candidate_ids_rejected: [],
+      facts_available: [],
+      facts_used: [],
+      facts_conflicted: [],
+      examples_available: [],
+      examples_used: [],
+      playbooks_used: [],
+      policies_used: [],
+      checks: null,
+      final_writer: 'postLedgerAdjustmentInDb',
+      audit_event_ids: audit.rows[0]?.id != null ? [String(audit.rows[0].id)] : [],
+      rows_touched: [String(document.id)],
+      per_target: [{ target: String(document.id), applied: false, error: refusal.code }],
+      operator_words: null
+    }
+  });
+  return { recorded: true };
+};
 
 const reversalReasonFor = (document, match) => {
   const counterparty = document?.vendor_name || document?.customer_name || 'this receipt';
@@ -398,6 +475,12 @@ export const runDocumentSettlementReversalsForClient = async ({
         }
 
         if (stats.mode !== 'act') continue;
+        // A recorded person-required refusal: a person posts this reversal.
+        if (SETTLEMENT_REVERSAL_PERSON_REQUIRED_CODES.includes(settlementEntry.reversal_refusal?.code)) {
+          stats.needs_person += 1;
+          stats.needs_person_document_ids.push(String(document.id));
+          continue;
+        }
         const appliable = checks.status === 'pass' && proposalCardIsAppliable(card);
         if (!appliable) {
           stats.rested_proposed += 1;
@@ -419,6 +502,23 @@ export const runDocumentSettlementReversalsForClient = async ({
             actorId: 'system'
           });
         } catch (error) {
+          if (SETTLEMENT_REVERSAL_PERSON_REQUIRED_CODES.includes(error?.code)) {
+            await client.query('begin');
+            try {
+              await recordPersonRequiredRefusal({ client, firmId, clientId, document, settlementEntry, proposalId, error });
+              await client.query('commit');
+              stats.needs_person += 1;
+              stats.needs_person_document_ids.push(String(document.id));
+            } catch (recordError) {
+              await client.query('rollback');
+              stats.post_failures += 1;
+              console.warn(`[${LOG_TAG}] person-required refusal record failed`, {
+                document_id: document.id,
+                error: recordError?.message || String(recordError)
+              });
+            }
+            continue;
+          }
           stats.post_failures += 1;
           console.warn(`[${LOG_TAG}] reversal post failed (card rests proposed)`, {
             document_id: document.id,

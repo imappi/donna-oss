@@ -4105,6 +4105,16 @@ const donnaFirmsApiHandler = async (req, res) => {
         requireMember: true
       });
       const actorId = access.principal?.principalId || access.principal?.userId || access.principal?.email || 'system';
+      // The acknowledgement that an adjustment restates a filed VAT return
+      // (LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN names its digest) is a
+      // person's: an identified firm member, never a shared access token.
+      const acknowledgedDigest = String(body?.acknowledge_filed_return_digest || '').trim();
+      if (acknowledgedDigest && access.principal?.principalType !== 'firm_member') {
+        const error = new Error('Only an identified firm member can acknowledge an adjustment that restates a filed VAT return.');
+        error.statusCode = 403;
+        error.code = 'LEDGER_ADJUSTMENT_ACKNOWLEDGEMENT_PERSON_REQUIRED';
+        throw error;
+      }
       const result = await postLedgerAdjustmentInDb({
         firmId,
         clientId,
@@ -4114,7 +4124,10 @@ const donnaFirmsApiHandler = async (req, res) => {
         reason: body?.reason || body?.correction_reason || body?.correctionReason || '',
         lines: Array.isArray(body?.lines) ? body.lines : [],
         reverseOriginal: body?.reverse_original !== false && body?.reverseOriginal !== false,
-        actorId
+        actorId,
+        filedReturnAcknowledgement: acknowledgedDigest
+          ? { digest: acknowledgedDigest, acknowledged_by: actorId, principal_type: access.principal.principalType }
+          : null
       });
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');

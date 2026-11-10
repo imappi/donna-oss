@@ -17,3 +17,23 @@ export function correctionDeltaLines(originalLines,targetLines) {
     debit:cents>0?cents/100:0,credit:cents<0?-cents/100:0,amount:Math.abs(cents)/100}));
 }
 
+
+// What a correction moves per tax code: the reversal plus the replacement
+// lines, netted by tax code and currency (debit minus credit). A line with no
+// tax code, or with the ledger's 'NONE' placeholder (db/ledger.js writes it
+// where a line has none), moves no tax code. [] when every tax code nets to zero. Sorted, so
+// the same correction always reads the same (it is digested for the
+// acknowledgement of a filed VAT return, db/ledger.js).
+export function correctionTaxMovement(lines = []) {
+  const moved = new Map();
+  for (const line of lines) {
+    const taxType = String(line.account?.tax_type || line.tax_type || '').trim();
+    if (!taxType || taxType.toUpperCase() === 'NONE') continue;
+    const currency = String(line.currency || '').trim().toUpperCase();
+    const key = JSON.stringify([taxType, currency]);
+    moved.set(key, (moved.get(key) || 0) + Math.round((Number(line.debit || 0) - Number(line.credit || 0)) * 100));
+  }
+  return [...moved.entries()].filter(([, cents]) => cents)
+    .map(([key, cents]) => { const [tax_type, currency] = JSON.parse(key); return { tax_type, currency, amount: cents / 100 }; })
+    .sort((a, b) => a.tax_type.localeCompare(b.tax_type) || a.currency.localeCompare(b.currency));
+}
