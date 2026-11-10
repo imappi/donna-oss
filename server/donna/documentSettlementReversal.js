@@ -196,7 +196,8 @@ const settlementReversalQuestion = (subject) => {
   const why = subject.refusal_code === 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN'
     ? `the reversal would be dated inside the filed VAT return ${filed} and change what it reads`
     : `the entry is in the filed VAT return ${filed} and its reversal changes what that return reads`;
-  return `Reverse the paid-from-own-funds entry ${subject.settlement_journal_id} for ${subject.document_label} `
+  const entry = subject.funding_source === 'company_cash' ? 'paid-from-company-cash' : 'paid-from-own-funds';
+  return `Reverse the ${entry} entry ${subject.settlement_journal_id} for ${subject.document_label} `
     + `(${Number(subject.amount || 0).toFixed(2)} ${subject.currency || ''}): bank line ${subject.bank_line_date || ''} `
     + `${subject.bank_line_description || subject.bank_transaction_id} also paid it. Donna did not post the reversal because ${why}`
     + `${subject.tax_moved?.length ? ` (${ledgerMovementText(subject.tax_moved)})` : ''}. `
@@ -226,6 +227,8 @@ const ensurePersonAsk = async ({ client, firmId, clientId, document, settlementE
     bank_line_date: line.transaction_date ? String(line.transaction_date).slice(0, 10) : null,
     bank_line_description: line.description || null,
     settlement_journal_id: settlementEntry?.journal_id || null,
+    // Whose money the entry being reversed said paid (documentSettlementFunding.js).
+    funding_source: companyCashEntry(settlementEntry) ? 'company_cash' : 'owner',
     original_journal_date: details.original_journal_date || null,
     filed_return_id: details.filed_return_id || null,
     filed_return_period: details.filed_return_period || null,

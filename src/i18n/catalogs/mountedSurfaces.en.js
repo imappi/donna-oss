@@ -1045,7 +1045,8 @@ export const MOUNTED_SURFACE_MESSAGES = Object.freeze({
   'mounted.financial.waitingProviderCredit': '{provider} has no credit left on this account: not read yet. It is read once credit is added.',
   // A firm member's ledger adjustment (seat ask, Mentions lane): Donna's
   // settlement-entry reversal refused because the entry is in a filed VAT return.
-  'mounted.financial.ledgerAdjustmentAsk.settlementReversal': 'Reverse {journal} for {document} ({amount} {currency}): bank line {date} {transaction} also paid it.',
+  'mounted.financial.ledgerAdjustmentAsk.settlementReversal': 'Reverse the paid-from-own-funds entry {journal} for {document} ({amount} {currency}): bank line {date} {transaction} also paid it.',
+  'mounted.financial.ledgerAdjustmentAsk.settlementReversalCompanyCash': 'Reverse the paid-from-company-cash entry {journal} for {document} ({amount} {currency}): bank line {date} {transaction} also paid it.',
   'mounted.financial.ledgerAdjustmentAsk.restatesFiledReturn': 'Donna did not post the reversal: the entry is in the filed VAT return {period}, and reversing it changes what that return reads ({detail}).',
   'mounted.financial.ledgerAdjustmentAsk.dateInFiledReturn': 'Donna did not post the reversal: it would be dated inside the filed VAT return {period} and change what it reads ({detail}).',
   'mounted.financial.ledgerAdjustmentAsk.todo': 'Post the reversal of {journal} as a ledger adjustment and acknowledge the filed return change. This closes when the reversal is posted.',
