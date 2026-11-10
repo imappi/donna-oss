@@ -502,3 +502,37 @@ test('deliverWhatsAppEvidenceAsksAfterSend names a missing period in the owner l
   assert.deepEqual(await run({ jurisdiction: 'FI' }), ['tämä kausi']);
   assert.deepEqual(await run({ jurisdiction: 'US' }), ['this period']);
 });
+
+test('blocked sensitive ask: the WhatsApp redirect template\'s {{1}} follows the template language actually sent', async () => {
+  const phoneHash = hashPhoneE164('+358401234567');
+  const binding = { id: 'binding', firm_id: 'firm', client_id: 'client', phone_e164: '+358401234567', phone_hash: phoneHash, revoked_at: null };
+  const run = async ({ profile, finnishLive }) => {
+    const db = makeFakeClient({
+      profile,
+      bindings: [binding],
+      asks: [{ id: 'ask_x', firm_id: 'firm', client_id: 'client', question: 'reply with your full card number', request_payload: {} }],
+      configStages: [{ flag_key: 'OWNER_PORTAL_LINK', stage: 'canary', source: 'test', client_id: 'client' }]
+    });
+    const attempts = [];
+    await deliverWhatsAppEvidenceAsksAfterSend({
+      client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask_x'],
+      env: { WHATSAPP_ENABLED: 'true', WHATSAPP_CLIENTS: 'client' },
+      deps: {
+        deliverOwnerMessage: async (msg) => {
+          attempts.push([msg.template.languageCode, ...msg.template.bodyParameters]);
+          if (msg.template.languageCode === 'fi' && !finnishLive) return { ok: false, status: 400, body: { error: { code: 132001, message: 'Template name does not exist in the translation' } } };
+          return { ok: true, id: 'wamid.notice', body: {} };
+        },
+        OWNER_CHANNELS: { WHATSAPP: 'whatsapp' }
+      }
+    });
+    return attempts;
+  };
+  // A Finnish owner: the Finnish template carries the Finnish phrase.
+  assert.deepEqual(await run({ profile: { jurisdiction: 'FI' }, finnishLive: true }), [['fi', 'seuraava kysymykseni sinulle', 'ASKX']]);
+  // The English retry carries the English phrase, not the Finnish one.
+  assert.deepEqual(await run({ profile: { jurisdiction: 'FI' }, finnishLive: false }),
+    [['fi', 'seuraava kysymykseni sinulle', 'ASKX'], ['en', 'my next question for you', 'ASKX']]);
+  // An English owner: unchanged.
+  assert.deepEqual(await run({ profile: { jurisdiction: 'US' }, finnishLive: true }), [['en', 'my next question for you', 'ASKX']]);
+});

@@ -157,12 +157,13 @@ test('owner-ask delivery loose ends: re-check, held clarification, portal stamp,
     assert.equal(heldRow.question, clarification, 'the clarification is kept for release');
 
     // Neighbour: gate allows, the follow-up is delivered by email, the reply
-    // acknowledges it (unchanged).
+    // acknowledges it, in the owner's language (this Finnish owner read it in
+    // English before).
     await seedClient('c-free', { fi: true, email: 'owner-free@example.test', flags: ['OWNER_CHANNEL_SMS', 'OWNER_EMAIL_ASKS'] });
     await bindPhone('c-free', 'sms', '+15555550112');
     await seedTotalsAsk('c-free');
     const free = await ownerWrites('c-free', '+15555550112');
-    assert.deepEqual(free.sent, ['Thanks. I sent you a follow-up question.']);
+    assert.deepEqual(free.sent, ['Kiitos. Lähetin sinulle vielä tarkentavan kysymyksen.']);
     assert.match(emails.at(-1).text, /corrected copy/);
 
     // Neighbour: gate allows, nothing delivered: the question rides the reply

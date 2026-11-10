@@ -64,7 +64,92 @@ export const buildQuoteIssuanceAuthorityBasis = ({ message = {}, phoneHash = nul
 // Finnish rate display (decimal comma, no trailing zeros): 25.5 → "25,5".
 const fiRateText = (value) => String(Number(value)).replace('.', ',');
 
-export const summarizeInvoiceDraft = (draft = {}) => {
+// The route's owner lines, per owner language (preferredOwnerTemplateLanguage,
+// passed in as `language`). This is a Finnish lane, so an absent language keeps
+// the historical Finnish copy, unchanged; 'en' (an owner who chose English) gets
+// English. The invoice and quote documents themselves are not owner texts and do
+// not change. The English lines invite only replies the route reads: “yes” /
+// “no” (isAffirmative / isNegative) or a correction, which the intake reads in
+// either language.
+const amountText = (value) => (Number(value) || 0).toFixed(2);
+const ISSUANCE_ROUTE_COPY = Object.freeze({
+  fi: Object.freeze({
+    line: (description, amount, currency, rate) => `• ${description} — ${amount} ${currency}${rate == null ? '' : ` (alv ${fiRateText(rate)} %)`}`,
+    creditHeading: (number, original, buyer) => `Hyvityslasku ${number} laskulle ${original} — ${buyer}`,
+    invoiceHeading: (number, buyer) => `Lasku ${number} — ${buyer}`,
+    totalWithAlv: (total, alv, currency) => `Yhteensä ${total} ${currency} (sis. ALV ${alv} ${currency})`,
+    totalExempt: (total, currency) => `Yhteensä ${total} ${currency} (ei ALV, AVL 3 §)`,
+    dueDate: (date) => `Eräpäivä ${date}`,
+    artifact: { credit_note: 'hyvityslaskun', pdf: 'laskun', finvoice: 'verkkolaskun', quote: 'tarjouksen' },
+    sendPdf: (artifact, to) => `Lähetän ${artifact} PDF-muodossa sähköpostilla osoitteeseen ${to}.`,
+    sendEmail: (artifact, to) => `Lähetän ${artifact} sähköpostilla osoitteeseen ${to}.`,
+    fromQuote: (number) => `Tarjouksesta ${number}.`,
+    quoteExpired: 'Huom: tarjouksen voimassaolo on päättynyt.',
+    quoteHeading: (number, buyer) => `Tarjous ${number} — ${buyer}`,
+    validUntil: (date) => `Voimassa ${date} asti`,
+    confirm: 'Vahvista vastaamalla “kyllä”. Peru vastaamalla “ei”. Voit myös korjata laskua (esim. “muuta summaksi 600 €”).',
+    nudge: `Vastaa “kyllä” niin lähetän laskun, tai “ei” niin perun sen. ${'Voit myös korjata laskua (esim. “muuta summaksi 600 €”).'}`,
+    issueFailed: 'Laskun lähetys ei onnistunut. Vastaa “kyllä” niin yritän uudelleen, tai “ei” niin perun laskun.',
+    quoteConfirm: 'Vahvista vastaamalla “kyllä”. Peru vastaamalla “ei”. Voit myös korjata tarjousta (esim. “muuta summaksi 3000 €”).',
+    quoteNudge: 'Vastaa “kyllä” niin lähetän tarjouksen, tai “ei” niin perun sen. Voit myös korjata tarjousta (esim. “muuta summaksi 3000 €”).',
+    quoteSendFailed: 'Tarjouksen lähetys ei onnistunut. Vastaa “kyllä” niin yritän uudelleen, tai “ei” niin perun tarjouksen.',
+    clarify: 'Kerro vielä laskun tiedot, niin jatkan.',
+    quoteDeclined: (number) => `Merkitsin tarjouksen ${number} hylätyksi.`,
+    quoteStale: 'Tämä tarjous on jo käsitelty.',
+    invoiceStale: 'Tämä lasku on jo käsitelty.',
+    quoteSent: (number, to) => `Tarjous ${number} lähetetty osoitteeseen ${to}.`,
+    quoteValidUntil: (date) => `Voimassa ${date} asti.`,
+    quoteConvertHint: (number) => `Kun asiakas hyväksyy, sano vaikka "tee lasku tarjouksesta ${number}".`,
+    quoteCancelled: (number) => `Tarjous ${number} peruttu.`,
+    issued: (isCredit, number, to) => `${isCredit ? 'Hyvityslasku' : 'Lasku'} ${number} lähetetty osoitteeseen ${to}.`,
+    cashBasisCredit: 'Hyvitys huomioidaan maksuperusteisessa kirjanpidossa maksutapahtumien kautta.',
+    cashBasisInvoice: 'Tulo kirjataan, kun maksu saapuu tilille (maksuperusteinen kirjanpito).',
+    postedWithVoucher: (isCredit, voucher) => `${isCredit ? 'Myyntisaaminen hyvitetty' : 'Kirjattu myyntisaamisiin'} (tosite #${voucher}).`,
+    posted: (isCredit) => (isCredit ? 'Myyntisaaminen hyvitetty.' : 'Kirjattu myyntisaamisiin.'),
+    invoiceCancelled: (number) => `Lasku ${number} peruttu.`,
+    textOnly: 'Vastaa tekstillä: “kyllä”, “ei” tai korjaus.'
+  }),
+  en: Object.freeze({
+    line: (description, amount, currency, rate) => `• ${description} — ${amount} ${currency}${rate == null ? '' : ` (VAT ${Number(rate)} %)`}`,
+    creditHeading: (number, original, buyer) => `Credit note ${number} for invoice ${original} — ${buyer}`,
+    invoiceHeading: (number, buyer) => `Invoice ${number} — ${buyer}`,
+    totalWithAlv: (total, alv, currency) => `Total ${total} ${currency} (incl. VAT ${alv} ${currency})`,
+    totalExempt: (total, currency) => `Total ${total} ${currency} (no VAT, AVL 3 §)`,
+    dueDate: (date) => `Due date ${date}`,
+    artifact: { credit_note: 'credit note', pdf: 'invoice', finvoice: 'e-invoice', quote: 'quote' },
+    sendPdf: (artifact, to) => `I will email the ${artifact} as a PDF to ${to}.`,
+    sendEmail: (artifact, to) => `I will email the ${artifact} to ${to}.`,
+    fromQuote: (number) => `From quote ${number}.`,
+    quoteExpired: 'Note: the quote has expired.',
+    quoteHeading: (number, buyer) => `Quote ${number} — ${buyer}`,
+    validUntil: (date) => `Valid until ${date}`,
+    confirm: 'Reply “yes” to confirm. Reply “no” to cancel. You can also correct the invoice (for example “change the amount to 600 €”).',
+    nudge: 'Reply “yes” and I will send the invoice, or “no” and I will cancel it. You can also correct the invoice (for example “change the amount to 600 €”).',
+    issueFailed: 'Sending the invoice did not go through. Reply “yes” and I will try again, or “no” and I will cancel the invoice.',
+    quoteConfirm: 'Reply “yes” to confirm. Reply “no” to cancel. You can also correct the quote (for example “change the amount to 3000 €”).',
+    quoteNudge: 'Reply “yes” and I will send the quote, or “no” and I will cancel it. You can also correct the quote (for example “change the amount to 3000 €”).',
+    quoteSendFailed: 'Sending the quote did not go through. Reply “yes” and I will try again, or “no” and I will cancel the quote.',
+    clarify: 'Tell me the invoice details and I will carry on.',
+    quoteDeclined: (number) => `I marked quote ${number} as declined.`,
+    quoteStale: 'This quote has already been handled.',
+    invoiceStale: 'This invoice has already been handled.',
+    quoteSent: (number, to) => `Quote ${number} sent to ${to}.`,
+    quoteValidUntil: (date) => `Valid until ${date}.`,
+    quoteConvertHint: (number) => `When the customer accepts, just say "invoice from quote ${number}".`,
+    quoteCancelled: (number) => `Quote ${number} cancelled.`,
+    issued: (isCredit, number, to) => `${isCredit ? 'Credit note' : 'Invoice'} ${number} sent to ${to}.`,
+    cashBasisCredit: 'With cash-basis bookkeeping, the credit is recorded through the payments.',
+    cashBasisInvoice: 'The income is recorded when the payment reaches your account (cash-basis bookkeeping).',
+    postedWithVoucher: (isCredit, voucher) => `${isCredit ? 'Taken off what the customer owes you' : 'Recorded as money the customer owes you'} (voucher #${voucher}).`,
+    posted: (isCredit) => (isCredit ? 'Taken off what the customer owes you.' : 'Recorded as money the customer owes you.'),
+    invoiceCancelled: (number) => `Invoice ${number} cancelled.`,
+    textOnly: 'Please reply in text: “yes”, “no” or a correction.'
+  })
+});
+export const invoiceRouteCopyFor = (language) => ISSUANCE_ROUTE_COPY[language] || ISSUANCE_ROUTE_COPY.fi;
+
+export const summarizeInvoiceDraft = (draft = {}, { language = 'fi' } = {}) => {
+  const copy = invoiceRouteCopyFor(language);
   const invoice = draft.invoice || {};
   const isCreditNote = invoice.kind === 'credit_note';
   const sign = isCreditNote ? -1 : 1;
@@ -74,51 +159,45 @@ export const summarizeInvoiceDraft = (draft = {}) => {
   // a re-inference. An exempt draft keeps the AVL 3 § note byte-identically.
   const alv = invoice.alvExempt === false;
   const lines = Array.isArray(invoice.lines) ? invoice.lines : [];
-  const rendered = lines.map((l) => `• ${l.description} — ${(sign * (Number(l.net) || 0)).toFixed(2)} ${currency}${alv ? ` (alv ${fiRateText(l.alvRate || 0)} %)` : ''}`);
+  const rendered = lines.map((l) => copy.line(l.description, amountText(sign * (Number(l.net) || 0)), currency, alv ? (l.alvRate || 0) : null));
   const out = [
     isCreditNote
-      ? `Hyvityslasku ${invoice.invoiceNumber} laskulle ${invoice.creditsInvoiceNumber || ''} — ${invoice.buyer?.name || ''}`.replace(/\s+/g, ' ').trim()
-      : `Lasku ${invoice.invoiceNumber} — ${invoice.buyer?.name || draft.intent?.buyer_name || ''}`.trim()
+      ? copy.creditHeading(invoice.invoiceNumber, invoice.creditsInvoiceNumber || '', invoice.buyer?.name || '').replace(/\s+/g, ' ').trim()
+      : copy.invoiceHeading(invoice.invoiceNumber, invoice.buyer?.name || draft.intent?.buyer_name || '').trim()
   ];
   out.push(...rendered);
   out.push(alv
-    ? `Yhteensä ${(sign * (Number(invoice.total) || 0)).toFixed(2)} ${currency} (sis. ALV ${(sign * (Number(invoice.alvTotal) || 0)).toFixed(2)} ${currency})`
-    : `Yhteensä ${(sign * (Number(invoice.total) || 0)).toFixed(2)} ${currency} (ei ALV, AVL 3 §)`);
-  if (!isCreditNote && invoice.dueDate) out.push(`Eräpäivä ${invoice.dueDate}`);
+    ? copy.totalWithAlv(amountText(sign * (Number(invoice.total) || 0)), amountText(sign * (Number(invoice.alvTotal) || 0)), currency)
+    : copy.totalExempt(amountText(sign * (Number(invoice.total) || 0)), currency));
+  if (!isCreditNote && invoice.dueDate) out.push(copy.dueDate(invoice.dueDate));
   // The summary says which artifact goes out (D-FI10-P1): a consumer buyer (no
   // Y-tunnus) gets the PDF lane; a missing format is a pre-PDF-lane XML draft.
-  const artifactWord = isCreditNote ? 'hyvityslaskun' : (draft.transmit?.format === 'pdf' ? 'laskun' : 'verkkolaskun');
+  const artifactWord = copy.artifact[isCreditNote ? 'credit_note' : (draft.transmit?.format === 'pdf' ? 'pdf' : 'finvoice')];
   out.push(draft.transmit?.format === 'pdf'
-    ? `Lähetän ${artifactWord} PDF-muodossa sähköpostilla osoitteeseen ${draft.transmit?.to || ''}.`.trim()
-    : `Lähetän ${artifactWord} sähköpostilla osoitteeseen ${draft.transmit?.to || ''}.`.trim());
+    ? copy.sendPdf(artifactWord, draft.transmit?.to || '').trim()
+    : copy.sendEmail(artifactWord, draft.transmit?.to || '').trim());
   // C-1 conversion: the summary STATES the quote link + a read-time expiry note
   // (an expired quote still converts — the owner's kyllä is the call, D-C1-2).
   if (!isCreditNote && draft.from_quote_number) {
-    out.push(`Tarjouksesta ${draft.from_quote_number}.`);
-    if (draft.from_quote_expired) out.push('Huom: tarjouksen voimassaolo on päättynyt.');
+    out.push(copy.fromQuote(draft.from_quote_number));
+    if (draft.from_quote_expired) out.push(copy.quoteExpired);
   }
   return out.join('\n');
 };
 
 // C-1: the quote confirm summary renders the PERSISTED quote draft.
-export const summarizeQuoteDraft = (draft = {}) => {
+export const summarizeQuoteDraft = (draft = {}, { language = 'fi' } = {}) => {
+  const copy = invoiceRouteCopyFor(language);
   const quote = draft.quote || {};
   const currency = quote.currency || 'EUR';
   const lines = Array.isArray(quote.lines) ? quote.lines : [];
-  const out = [`Tarjous ${quote.quoteNumber} — ${quote.buyer?.name || draft.intent?.buyer_name || ''}`.trim()];
-  out.push(...lines.map((l) => `• ${l.description} — ${(Number(l.net) || 0).toFixed(2)} ${currency}`));
-  out.push(`Yhteensä ${(Number(quote.total) || 0).toFixed(2)} ${currency} (ei ALV, AVL 3 §)`);
-  if (quote.validUntil) out.push(`Voimassa ${quote.validUntil} asti`);
-  out.push(`Lähetän tarjouksen PDF-muodossa sähköpostilla osoitteeseen ${draft.transmit?.to || ''}.`.trim());
+  const out = [copy.quoteHeading(quote.quoteNumber, quote.buyer?.name || draft.intent?.buyer_name || '').trim()];
+  out.push(...lines.map((l) => copy.line(l.description, amountText(l.net), currency, null)));
+  out.push(copy.totalExempt(amountText(quote.total), currency));
+  if (quote.validUntil) out.push(copy.validUntil(quote.validUntil));
+  out.push(copy.sendPdf(copy.artifact.quote, draft.transmit?.to || '').trim());
   return out.join('\n');
 };
-
-const CONFIRM_INSTRUCTION = 'Vahvista vastaamalla “kyllä”. Peru vastaamalla “ei”. Voit myös korjata laskua (esim. “muuta summaksi 600 €”).';
-const NUDGE_CONFIRM = `Vastaa “kyllä” niin lähetän laskun, tai “ei” niin perun sen. ${'Voit myös korjata laskua (esim. “muuta summaksi 600 €”).'}`;
-const ISSUE_FAILED_TEXT = 'Laskun lähetys ei onnistunut. Vastaa “kyllä” niin yritän uudelleen, tai “ei” niin perun laskun.';
-const QUOTE_CONFIRM_INSTRUCTION = 'Vahvista vastaamalla “kyllä”. Peru vastaamalla “ei”. Voit myös korjata tarjousta (esim. “muuta summaksi 3000 €”).';
-const NUDGE_QUOTE_CONFIRM = 'Vastaa “kyllä” niin lähetän tarjouksen, tai “ei” niin perun sen. Voit myös korjata tarjousta (esim. “muuta summaksi 3000 €”).';
-const QUOTE_SEND_FAILED_TEXT = 'Tarjouksen lähetys ei onnistunut. Vastaa “kyllä” niin yritän uudelleen, tai “ei” niin perun tarjouksen.';
 
 // The ask payload is the ONLY conversation state source; the issued_invoices row is
 // the ONLY draft source. Flat state (the FI-6 lesson): phase/invoice_id/request live
@@ -240,10 +319,10 @@ const quoteDraftBuilder = ({ verdict, sellerContext, requestText, today }) => ({
 };
 
 const requestConfirmation = async ({
-  firmId, clientId, parentAsk, actorId, createAsk, sendText, row
+  firmId, clientId, parentAsk, actorId, createAsk, sendText, row, language = 'fi'
 }) => {
-  const summary = summarizeInvoiceDraft(row.draft);
-  const question = `${summary}\n\n${CONFIRM_INSTRUCTION}`;
+  const summary = summarizeInvoiceDraft(row.draft, { language });
+  const question = `${summary}\n\n${invoiceRouteCopyFor(language).confirm}`;
   const confirmationAsk = await createIssuanceAsk({
     createAsk,
     firmId,
@@ -260,10 +339,10 @@ const requestConfirmation = async ({
 
 // C-1: the quote confirm ask — same ask kind, quote phase + quote_id state.
 const requestQuoteConfirmation = async ({
-  firmId, clientId, parentAsk, actorId, createAsk, sendText, row
+  firmId, clientId, parentAsk, actorId, createAsk, sendText, row, language = 'fi'
 }) => {
-  const summary = summarizeQuoteDraft(row.draft);
-  const question = `${summary}\n\n${QUOTE_CONFIRM_INSTRUCTION}`;
+  const summary = summarizeQuoteDraft(row.draft, { language });
+  const question = `${summary}\n\n${invoiceRouteCopyFor(language).quoteConfirm}`;
   const confirmationAsk = await createIssuanceAsk({
     createAsk,
     firmId,
@@ -279,9 +358,9 @@ const requestQuoteConfirmation = async ({
 };
 
 const escalate = async ({
-  firmId, clientId, parentAsk, actorId, createAsk, sendText, escalation, state
+  firmId, clientId, parentAsk, actorId, createAsk, sendText, escalation, state, language = 'fi'
 }) => {
-  const question = escalation?.question || 'Kerro vielä laskun tiedot, niin jatkan.';
+  const question = escalation?.question || invoiceRouteCopyFor(language).clarify;
   const escalationAsk = await createIssuanceAsk({
     createAsk,
     firmId,
@@ -335,9 +414,12 @@ export const startInvoiceIssuance = async ({
   createQuoteDraftImpl = null,
   declineQuoteImpl = null,
   message = {},
-  phoneHash = null
+  phoneHash = null,
+  // The owner's language (preferredOwnerTemplateLanguage); absent ⇒ Finnish.
+  language = 'fi'
 } = {}) => {
   if (!flagActs) return { action: 'skipped', reason: 'flag_off' };
+  const copy = invoiceRouteCopyFor(language);
   const timestamp = now();
   const today = timestamp.slice(0, 10);
   // The ONE ALV verdict for this invoice date, from the LIVE profile's
@@ -361,14 +443,15 @@ export const startInvoiceIssuance = async ({
     transport,
     resolveCreditContext,
     quotesEnabled,
-    resolveQuoteContext
+    resolveQuoteContext,
+    language
   });
 
   if (verdict.terminal === 'not_invoice') return { action: 'not_invoice', verdict };
 
   if (verdict.terminal === 'escalate') {
     const result = await escalate({
-      firmId, clientId, parentAsk: null, actorId, createAsk, sendText,
+      firmId, clientId, parentAsk: null, actorId, createAsk, sendText, language,
       escalation: verdict.escalation,
       state: { request: clean(messageText) }
     });
@@ -385,7 +468,7 @@ export const startInvoiceIssuance = async ({
       actorId,
       buildDraft: quoteDraftBuilder({ verdict, sellerContext, requestText: clean(messageText), today })
     });
-    const result = await requestQuoteConfirmation({ firmId, clientId, parentAsk: null, actorId, createAsk, sendText, row });
+    const result = await requestQuoteConfirmation({ firmId, clientId, parentAsk: null, actorId, createAsk, sendText, row, language });
     return { ...result, verdict };
   }
 
@@ -403,7 +486,7 @@ export const startInvoiceIssuance = async ({
       actorId
     });
     const quoteNumber = declined?.draft?.quote?.quoteNumber || verdict.quoteRow.draft?.quote?.quoteNumber || '';
-    if (typeof sendText === 'function') await sendText({ text: `Merkitsin tarjouksen ${quoteNumber} hylätyksi.`.replace(/\s+/g, ' ').trim() });
+    if (typeof sendText === 'function') await sendText({ text: copy.quoteDeclined(quoteNumber).replace(/\s+/g, ' ').trim() });
     return { action: 'quote_declined', quote: declined, verdict };
   }
 
@@ -413,7 +496,7 @@ export const startInvoiceIssuance = async ({
     actorId,
     buildDraft: draftBuilder({ verdict, sellerContext, requestText: clean(messageText), today, timestamp, alvContext })
   });
-  const result = await requestConfirmation({ firmId, clientId, parentAsk: null, actorId, createAsk, sendText, row });
+  const result = await requestConfirmation({ firmId, clientId, parentAsk: null, actorId, createAsk, sendText, row, language });
   return { ...result, verdict };
 };
 
@@ -470,9 +553,12 @@ export const resolveInvoiceIssuanceInbound = async ({
   supersedeQuoteDraftImpl,
   cancelQuoteImpl,
   markQuoteSentImpl,
-  sendQuoteImpl = sendConfirmedQuote
+  sendQuoteImpl = sendConfirmedQuote,
+  // The owner's language (preferredOwnerTemplateLanguage); absent ⇒ Finnish.
+  language = 'fi'
 } = {}) => {
   if (!flagActs) return { action: 'skipped', reason: 'flag_off' };
+  const copy = invoiceRouteCopyFor(language);
 
   const state = stateFromAsk({ ask });
   const phase = state.phase || state.kind || 'clarification';
@@ -512,7 +598,8 @@ export const resolveInvoiceIssuanceInbound = async ({
     transport,
     resolveCreditContext,
     quotesEnabled,
-    resolveQuoteContext
+    resolveQuoteContext,
+    language
   });
 
   const loadQuoteRow = async (quoteId) => {
@@ -601,7 +688,7 @@ export const resolveInvoiceIssuanceInbound = async ({
     const row = await loadQuoteRow(state.quote_id);
     if (!row || row.status !== 'draft_pending_confirmation') {
       await closeAnsweredAsk('quote_issuance_stale_ask');
-      if (typeof sendText === 'function') await sendText({ text: 'Tämä tarjous on jo käsitelty.' });
+      if (typeof sendText === 'function') await sendText({ text: copy.quoteStale });
       return { action: 'stale', quoteId: state.quote_id || null };
     }
 
@@ -625,15 +712,15 @@ export const resolveInvoiceIssuanceInbound = async ({
       } catch (error) {
         // A failed send leaves the row pending and the ask OPEN (still on the
         // owner) — the next "kyllä" retries.
-        if (typeof sendText === 'function') await sendText({ text: QUOTE_SEND_FAILED_TEXT });
+        if (typeof sendText === 'function') await sendText({ text: copy.quoteSendFailed });
         return { action: 'quote_send_failed', error: error?.code || error?.message || 'unknown', ask };
       }
       await closeAnsweredAsk('quote_sent');
       const quoteNumber = row.draft?.quote?.quoteNumber || '';
       const validUntil = row.draft?.quote?.validUntil || null;
-      const parts = [`Tarjous ${quoteNumber} lähetetty osoitteeseen ${row.draft?.transmit?.to}.`];
-      if (validUntil) parts.push(`Voimassa ${validUntil} asti.`);
-      parts.push(`Kun asiakas hyväksyy, sano vaikka "tee lasku tarjouksesta ${quoteNumber}".`);
+      const parts = [copy.quoteSent(quoteNumber, row.draft?.transmit?.to)];
+      if (validUntil) parts.push(copy.quoteValidUntil(validUntil));
+      parts.push(copy.quoteConvertHint(quoteNumber));
       if (typeof sendText === 'function') await sendText({ text: parts.join(' ') });
       return { action: 'confirm_and_send_quote', authorityBasis, actorId, ...sent };
     }
@@ -642,7 +729,7 @@ export const resolveInvoiceIssuanceInbound = async ({
       const authorityBasis = buildQuoteIssuanceAuthorityBasis({ message, phoneHash });
       const cancelled = await cancelQuoteImpl({ firmId, clientId, quoteId: row.id, reason: 'owner_declined', authorityBasis, actorId });
       await closeAnsweredAsk('quote_cancelled');
-      if (typeof sendText === 'function') await sendText({ text: `Tarjous ${row.draft?.quote?.quoteNumber || ''} peruttu.`.replace(/\s+/g, ' ').trim() });
+      if (typeof sendText === 'function') await sendText({ text: copy.quoteCancelled(row.draft?.quote?.quoteNumber || '').replace(/\s+/g, ' ').trim() });
       return { action: 'quote_cancelled', quote: cancelled };
     }
 
@@ -652,19 +739,19 @@ export const resolveInvoiceIssuanceInbound = async ({
     if (isQuoteDraftVerdict(verdict)) {
       const updated = await persistQuoteDraft({ verdict, ctx, requestText: text, existingRow: row });
       await closeAnsweredAsk('quote_draft_superseded');
-      const result = await requestQuoteConfirmation({ firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, row: updated });
+      const result = await requestQuoteConfirmation({ firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, row: updated, language });
       return { ...result, superseded: true, verdict };
     }
     if (verdict.terminal === 'escalate') {
       const result = await escalate({
-        firmId, clientId, parentAsk: ask, actorId, createAsk, sendText,
+        firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, language,
         escalation: verdict.escalation,
         state: { quote_id: row.id, request: `${clean(row.draft?.request_text || '')}\n${text}`.trim() }
       });
       await closeAnsweredAsk('quote_issuance_clarification_requested');
       return { ...result, verdict };
     }
-    if (typeof sendText === 'function') await sendText({ text: NUDGE_QUOTE_CONFIRM });
+    if (typeof sendText === 'function') await sendText({ text: copy.quoteNudge });
     return { action: 'nudge', reason: 'ambiguous_quote_confirmation', ask };
   }
 
@@ -673,7 +760,7 @@ export const resolveInvoiceIssuanceInbound = async ({
     if (!row || row.status !== 'draft_pending_confirmation') {
       // The row already reached a terminal (issued/cancelled) — the ask is stale.
       await closeAnsweredAsk('invoice_issuance_stale_ask');
-      if (typeof sendText === 'function') await sendText({ text: 'Tämä lasku on jo käsitelty.' });
+      if (typeof sendText === 'function') await sendText({ text: copy.invoiceStale });
       return { action: 'stale', invoiceId: state.invoice_id || null };
     }
 
@@ -700,7 +787,7 @@ export const resolveInvoiceIssuanceInbound = async ({
       } catch (error) {
         // Any failed leg leaves the row pending and the ask OPEN (still on the
         // owner) — the next "kyllä" retries; the post leg is idempotent.
-        if (typeof sendText === 'function') await sendText({ text: ISSUE_FAILED_TEXT });
+        if (typeof sendText === 'function') await sendText({ text: copy.issueFailed });
         return { action: 'issue_failed', error: error?.code || error?.message || 'unknown', ask };
       }
       await closeAnsweredAsk('invoice_issued');
@@ -725,15 +812,13 @@ export const resolveInvoiceIssuanceInbound = async ({
       }
       const invoiceNumber = issued.invoice?.draft?.invoice?.invoiceNumber || row.draft?.invoice?.invoiceNumber;
       const isCreditRow = (row.kind || row.draft?.invoice?.kind) === 'credit_note';
-      const parts = [`${isCreditRow ? 'Hyvityslasku' : 'Lasku'} ${invoiceNumber} lähetetty osoitteeseen ${row.draft?.transmit?.to}.`];
+      const parts = [copy.issued(isCreditRow, invoiceNumber, row.draft?.transmit?.to)];
       if (issued.cashBasisSkip) {
-        parts.push(isCreditRow
-          ? 'Hyvitys huomioidaan maksuperusteisessa kirjanpidossa maksutapahtumien kautta.'
-          : 'Tulo kirjataan, kun maksu saapuu tilille (maksuperusteinen kirjanpito).');
+        parts.push(isCreditRow ? copy.cashBasisCredit : copy.cashBasisInvoice);
       } else if (issued.tositeNumber != null) {
-        parts.push(`${isCreditRow ? 'Myyntisaaminen hyvitetty' : 'Kirjattu myyntisaamisiin'} (tosite #${issued.tositeNumber}).`);
+        parts.push(copy.postedWithVoucher(isCreditRow, issued.tositeNumber));
       } else {
-        parts.push(isCreditRow ? 'Myyntisaaminen hyvitetty.' : 'Kirjattu myyntisaamisiin.');
+        parts.push(copy.posted(isCreditRow));
       }
       if (typeof sendText === 'function') await sendText({ text: parts.join(' ') });
       return { action: 'confirm_and_issue', authorityBasis, actorId, ...issued };
@@ -743,7 +828,7 @@ export const resolveInvoiceIssuanceInbound = async ({
       const authorityBasis = buildInvoiceIssuanceAuthorityBasis({ message, phoneHash });
       const cancelled = await cancelImpl({ firmId, clientId, invoiceId: row.id, reason: 'owner_declined', authorityBasis, actorId });
       await closeAnsweredAsk('invoice_cancelled');
-      if (typeof sendText === 'function') await sendText({ text: `Lasku ${row.draft?.invoice?.invoiceNumber || ''} peruttu.`.replace('  ', ' ') });
+      if (typeof sendText === 'function') await sendText({ text: copy.invoiceCancelled(row.draft?.invoice?.invoiceNumber || '').replace('  ', ' ') });
       return { action: 'cancelled', invoice: cancelled };
     }
 
@@ -753,19 +838,19 @@ export const resolveInvoiceIssuanceInbound = async ({
     if (isDraftVerdict(verdict)) {
       const updated = await persistDraft({ verdict, ctx, requestText: text, existingRow: row });
       await closeAnsweredAsk('invoice_draft_superseded');
-      const result = await requestConfirmation({ firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, row: updated });
+      const result = await requestConfirmation({ firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, row: updated, language });
       return { ...result, superseded: true, verdict };
     }
     if (verdict.terminal === 'escalate') {
       const result = await escalate({
-        firmId, clientId, parentAsk: ask, actorId, createAsk, sendText,
+        firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, language,
         escalation: verdict.escalation,
         state: { invoice_id: row.id, request: `${clean(row.draft?.request_text || '')}\n${text}`.trim() }
       });
       await closeAnsweredAsk('invoice_issuance_clarification_requested');
       return { ...result, verdict };
     }
-    if (typeof sendText === 'function') await sendText({ text: NUDGE_CONFIRM });
+    if (typeof sendText === 'function') await sendText({ text: copy.nudge });
     return { action: 'nudge', reason: 'ambiguous_confirmation', ask };
   }
 
@@ -785,7 +870,7 @@ export const resolveInvoiceIssuanceInbound = async ({
   if (isDraftVerdict(verdict)) {
     const row = await persistDraft({ verdict, ctx, requestText: combined, existingRow: existingRow && existingRow.status === 'draft_pending_confirmation' ? existingRow : null });
     await closeAnsweredAsk('invoice_draft_ready');
-    const result = await requestConfirmation({ firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, row });
+    const result = await requestConfirmation({ firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, row, language });
     return { ...result, verdict };
   }
   if (isQuoteDraftVerdict(verdict) && typeof createQuoteDraftImpl === 'function') {
@@ -796,12 +881,12 @@ export const resolveInvoiceIssuanceInbound = async ({
       existingRow: existingQuoteRow && existingQuoteRow.status === 'draft_pending_confirmation' ? existingQuoteRow : null
     });
     await closeAnsweredAsk('quote_draft_ready');
-    const result = await requestQuoteConfirmation({ firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, row });
+    const result = await requestQuoteConfirmation({ firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, row, language });
     return { ...result, verdict };
   }
   if (verdict.terminal === 'escalate') {
     const result = await escalate({
-      firmId, clientId, parentAsk: ask, actorId, createAsk, sendText,
+      firmId, clientId, parentAsk: ask, actorId, createAsk, sendText, language,
       escalation: verdict.escalation,
       state: {
         ...(state.invoice_id ? { invoice_id: state.invoice_id } : {}),
@@ -813,6 +898,6 @@ export const resolveInvoiceIssuanceInbound = async ({
     return { ...result, verdict };
   }
   // not_invoice mid-flow: keep the ask open and re-ask — still on the owner.
-  if (typeof sendText === 'function') await sendText({ text: ask?.question || 'Kerro vielä laskun tiedot, niin jatkan.' });
+  if (typeof sendText === 'function') await sendText({ text: ask?.question || copy.clarify });
   return { action: 'nudge', reason: 'clarification_unresolved', ask };
 };
