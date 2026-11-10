@@ -241,10 +241,9 @@ export const documentLaneAnthropicRequest = ({
   }
   return {
     ...options,
-    // The lane's wall reaches the envelope too: inside a worker llmCall
-    // re-wraps the fetch in the deadline transport, which would otherwise
-    // apply the 90 s default over the whole stream.
-    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
+    // The lane's wall: anthropicStructuredRequest owns it — one deadline
+    // transport per call (laneDeadlineFetch) and the top-level `timeoutMs`
+    // llmCall hands to the deadline inside a worker. `options` carries both.
     parseResponse: (payload) => {
       try {
         return read(payload);
