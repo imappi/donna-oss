@@ -12,9 +12,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
-import { BidiText, FormattedValue, IdentifierText } from '../i18n/BidiText.jsx';
+import { BidiText, FormattedValue } from '../i18n/BidiText.jsx';
 import { useInterfaceLocale } from '../i18n/LocaleProvider.jsx';
 import { D } from './shared/design-tokens.js';
+import {
+  ownerIntentBlockerLabel,
+  ownerIntentKindLabel,
+  ownerIntentStatusLabel,
+  portalChannelLabel
+} from '../lib/interfaceValueLabels.js';
+import { OPERATOR_ACTION_TYPE_MESSAGE_IDS } from '../i18n/catalogs/remainingSurfaces.en.js';
 import {
   acceptClientPortalOwnerIntent,
   applyClientPortalChatAction,
@@ -234,7 +241,7 @@ export default function ClientPortalChatPanel({ clientId, onBooksChanged, onUplo
       }
       await send(`Uploaded: ${names.join(', ')}`);
     } catch (err) {
-      setErrorLine(err?.message || message('portal.chat.error.upload'));
+      setErrorLine(message('portal.chat.error.upload'));
     } finally {
       setUploading(false);
     }
@@ -483,7 +490,7 @@ export default function ClientPortalChatPanel({ clientId, onBooksChanged, onUplo
                   >
                     <div style={{ ...monoCaps, color: D.inkMute, marginBottom: '0.35rem' }}>
                       {message('portal.chat.open.topic')}
-                      {card.channel && <> · <IdentifierText>{card.channel}</IdentifierText></>}
+                      {card.channel && <> · {portalChannelLabel(card.channel, intl.formatMessage)}</>}
                     </div>
                     <div style={{ fontFamily: D.body, fontSize: 14, lineHeight: D.leading.body, color: D.ink }}>
                       <BidiText direction="auto">{card.currentNeed || message('portal.chat.open.body')}</BidiText>
@@ -520,7 +527,7 @@ export default function ClientPortalChatPanel({ clientId, onBooksChanged, onUplo
                   >
                     <div style={{ ...monoCaps, color: D.inkMute, marginBottom: '0.35rem' }}>
                       {message('portal.chat.intent.suggestions', { count: 1 })}
-                      {card.intentKind && <> · <IdentifierText>{card.intentKind}</IdentifierText></>}
+                      {card.intentKind && <> · {ownerIntentKindLabel(card.intentKind, intl.formatMessage)}</>}
                     </div>
                     <div style={{ fontFamily: D.body, fontSize: 14, lineHeight: D.leading.body, color: D.ink }}>
                       <BidiText direction="auto">{card.summary}</BidiText>
@@ -531,7 +538,7 @@ export default function ClientPortalChatPanel({ clientId, onBooksChanged, onUplo
                     {card.memoryCandidate && (
                       <div style={{ ...monoCaps, color: D.inkMute, marginTop: '0.25rem' }}>
                         {message('portal.chat.intent.memoryCandidate', {
-                          status: <IdentifierText>{card.memoryCandidate.status || 'suggested'}</IdentifierText>
+                          status: ownerIntentStatusLabel(card.memoryCandidate.status || 'suggested', intl.formatMessage)
                         })}
                       </div>
                     )}
@@ -539,48 +546,48 @@ export default function ClientPortalChatPanel({ clientId, onBooksChanged, onUplo
                       <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         <div style={{ ...monoCaps, color: D.inkMute }}>
                           {message('portal.chat.intent.preflight', {
-                            status: <IdentifierText>{card.preflight.status || 'prepared'}</IdentifierText>
+                            status: ownerIntentStatusLabel(card.preflight.status || 'prepared', intl.formatMessage)
                           })}
                         </div>
                         {card.preflight.apply_plan?.selected_mutation && (
                           <div style={{ fontFamily: D.body, fontSize: 12, color: D.inkSoft }}>
                             {message('portal.chat.intent.route', {
-                              route: <IdentifierText>
-                                {card.preflight.apply_plan.selected_mutation.verb}
-                                {' → '}
-                                {card.preflight.apply_plan.selected_mutation.writer}
-                              </IdentifierText>
+                              // The planned change by name; the internal writer stays internal.
+                              route: OPERATOR_ACTION_TYPE_MESSAGE_IDS[card.preflight.apply_plan.selected_mutation.verb]
+                                ? message(OPERATOR_ACTION_TYPE_MESSAGE_IDS[card.preflight.apply_plan.selected_mutation.verb])
+                                : message('portal.chat.intent.route.unknown')
                             })}
                           </div>
                         )}
                         {card.preflight.consequence_diff && (
                           <div style={{ fontFamily: D.body, fontSize: 12, color: D.inkSoft }}>
                             {message('portal.chat.intent.consequence', {
-                              consequence: <IdentifierText>{card.preflight.consequence_diff.status || 'not_computed'}</IdentifierText>
+                              consequence: ownerIntentStatusLabel(card.preflight.consequence_diff.status || 'not_computed', intl.formatMessage)
                             })}
                           </div>
                         )}
                         {card.preflight.authority && (
                           <div style={{ fontFamily: D.body, fontSize: 12, color: D.inkSoft }}>
                             {message('portal.chat.intent.authority', {
-                              status: <IdentifierText>{card.preflight.authority.status || 'blocked'}</IdentifierText>
+                              status: ownerIntentStatusLabel(card.preflight.authority.status || 'blocked', intl.formatMessage)
                             })}
                           </div>
                         )}
                         {card.preflight.execution_gate && (
                           <div style={{ fontFamily: D.body, fontSize: 12, color: D.inkSoft }}>
                             {message('portal.chat.intent.execution', {
-                              status: <IdentifierText>{card.preflight.execution_gate.status || 'blocked'}</IdentifierText>
+                              status: ownerIntentStatusLabel(card.preflight.execution_gate.status || 'blocked', intl.formatMessage)
                             })}
                             {card.preflight.execution_gate.writer_invoked === false && <> · {message('portal.chat.intent.noWriter')}</>}
                             {card.preflight.execution_gate.apply_receipt_required && <> · {message('portal.chat.intent.receiptRequired')}</>}
                           </div>
                         )}
-                        {(card.preflight.blockers || []).slice(0, 3).map((blocker) => (
-                          <div key={`${card.proposalId}:${blocker.code}:${blocker.capability || ''}`} style={{ fontFamily: D.body, fontSize: 12, color: D.inkSoft }}>
-                            • {blocker.detail
-                              ? <BidiText direction="auto">{blocker.detail}</BidiText>
-                              : <IdentifierText>{blocker.code}</IdentifierText>}
+                        {/* A blocker reads as its label (the server's detail is
+                            English engineering text); repeated labels show once. */}
+                        {[...new Set((card.preflight.blockers || []).slice(0, 3)
+                          .map((blocker) => ownerIntentBlockerLabel(blocker?.code, intl.formatMessage)))].map((label) => (
+                          <div key={`${card.proposalId}:${label}`} style={{ fontFamily: D.body, fontSize: 12, color: D.inkSoft }}>
+                            • {label}
                           </div>
                         ))}
                       </div>
@@ -697,9 +704,7 @@ export default function ClientPortalChatPanel({ clientId, onBooksChanged, onUplo
                             ? message('portal.chat.action.proposed')
                             : card.status === 'superseded'
                               ? message('portal.chat.action.superseded')
-                              : message('portal.chat.action.fallback', {
-                                  status: <IdentifierText>{card.status}</IdentifierText>
-                                })}
+                              : message('portal.chat.action.unknown')}
                       </div>
                       <div style={{ fontFamily: D.body, fontSize: 14, lineHeight: D.leading.body, color: D.ink }}>
                         “<BidiText direction="auto">{card.replyText}</BidiText>”

@@ -43,7 +43,7 @@
 // message_id and the action's index — two calls, never one. K-mcp-1 (no
 // path from a chat surface to an unstaged mutation) holds by construction.
 
-import { DEFAULT_FIRM_ID, withFirmDbClient } from '../firmDb.js';
+import { DEFAULT_FIRM_ID, getClientOwnerLanguageInDb, withFirmDbClient } from '../firmDb.js';
 import { getFinancialReportFromDb } from '../db/close.js';
 import { assertClientEntitled } from '../clientSubscriptionDb.js';
 import { isBillingEnabled } from '../stripeBilling.js';
@@ -126,6 +126,9 @@ const executorDeps = (deps = {}) => ({
   withFirmDbClient,
   resolveOwnerPortalLink,
   recordOwnerPortalLinkShare: (args) => withFirmDbClient((dbClient) => recordOwnerPortalLinkShare(dbClient, args)),
+  // The one resolver (preferredOwnerTemplateLanguage) over the client row;
+  // 'en' on any read failure.
+  getOwnerLanguage: getClientOwnerLanguageInDb,
   env: process.env,
   now: () => new Date(),
   warn: (...args) => console.warn(...args),
@@ -348,7 +351,17 @@ export const runAskDonna = async ({
       portalLink = { ...portalLink, audit: 'failed' };
     }
   }
-  const replyText = portalLink ? composePortalLinkReply({ text: finalReply.text, link: portalLink }) : finalReply.text;
+  // The deterministic link lines follow the owner's language, as on the
+  // messaging channels; the model's own text is kept as written.
+  const replyText = portalLink
+    ? composePortalLinkReply({
+      text: finalReply.text,
+      link: portalLink,
+      language: await Promise.resolve()
+        .then(() => d.getOwnerLanguage({ firmId: effectiveFirmId || firmId, clientId }))
+        .catch(() => 'en')
+    })
+    : finalReply.text;
 
   const modelId = finalReply.model || reply.model || null;
   const assistantMessage = await d.persistClientPortalTurnMessage({

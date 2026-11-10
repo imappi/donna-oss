@@ -27,7 +27,10 @@ export const fiBornAccount = (paletteName) => {
 export const FI_PROFILE = Object.freeze({
   companyName: 'Lumo Kahvila Oy', jurisdiction: 'FI', entityType: 'fi-oy', currency: 'EUR',
   incorporationDate: '2021-05-03', accounting_system: 'none', accounting_basis: 'accrual',
-  accounting_view: 'management_books', businessId: '3312244-7'
+  accounting_view: 'management_books', businessId: '3312244-7',
+  // The business posts ALV, so it is ALV-registered on its record
+  // (finland/postingPolicy.js refuses an ALV code without one).
+  alv_registration: { status: 'registered', registered_from: '2021-05-03' }
 });
 
 // One March month. Amounts foot per document unless `misprint` says otherwise.

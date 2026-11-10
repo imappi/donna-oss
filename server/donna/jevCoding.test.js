@@ -824,7 +824,7 @@ test('real PG: a matched Finnish line whose strong coder still answers the unsur
       const firmId = 'jev-firm', clientId = 'jev-company';
       await pool.query("insert into firms(id,name,slug) values('jev-firm','Jev FI Matched Unsure Test','jev-fi-matched-unsure')");
       await pool.query(`insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile)
-        values('jev-company','jev-firm','Kampaamo Oy','FI','fi-oy','{"jurisdiction":"fi","accounting_system":"none"}')`);
+        values('jev-company','jev-firm','Kampaamo Oy','FI','fi-oy','{"jurisdiction":"fi","accounting_system":"none","alv_registration":{"status":"registered","registered_from":"2020-01-01"}}')`);
       for (const flag of ['JEV_RECONCILIATION', 'CODING_AUTO_POST', 'LEDGER_AUTO_POST', 'FINLAND_ALV_CODING']) {
         await pool.query(`insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,'jev-firm','jev-company',$1,'auto','manual')`, [flag]);
       }

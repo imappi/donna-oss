@@ -42,7 +42,7 @@ test('real PG: the real coder consumes late evidence, posts principal/interest s
 
   const firmId='fi-proof', clientId='salon';
   await pool.query("insert into firms(id,name,slug) values($1,'FI Proof','fi-proof')",[firmId]);
-  await pool.query(`insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Salong Test Oy','fi','fi-oy',$3)`,[clientId,firmId,{jurisdiction:'fi',accounting_system:'none',accounting_basis:'cash'}]);
+  await pool.query(`insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Salong Test Oy','fi','fi-oy',$3)`,[clientId,firmId,{jurisdiction:'fi',accounting_system:'none',accounting_basis:'cash',alv_registration:{status:'registered',registered_from:'2020-01-01'}}]);
   for (const flag of ['FINLAND_ALV_CODING','JURISDICTION_ACCOUNT_PALETTE','RECONCILIATION_CODE_MATCHED_NO_REVIEW','CODING_AUTO_POST','LEDGER_AUTO_POST']) await pool.query(`insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$4,'auto','manual')`,[flag,firmId,clientId,flag]);
   const tx = async (id, amount) => pool.query(`insert into transactions(id,firm_id,client_id,transaction_date,description,money_out,money_in,currency,status,payload) values($1,$2,$3,'2025-02-28',$1,$4,0,'EUR','needs_review','{}')`,[id,firmId,clientId,amount]);
   const doc = async (id, filename, total, tax, components) => {

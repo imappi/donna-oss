@@ -26,7 +26,7 @@ test('real PG: a non-deductible FI purchase posts gross with its code, no 2940 l
   for (const file of (await readdir(migrations)).filter(n => n.endsWith('.sql')).sort()) await pool.query(await readFile(new URL(file, migrations), 'utf8'));
   const firmId = 'nondeductible-proof', clientId = 'fi-nondeductible';
   await pool.query("insert into firms(id,name,slug) values($1,'Synthetic non-deductible proof',$1)", [firmId]);
-  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic Edustus Oy','FI','fi-oy',$3)", [clientId, firmId, { jurisdiction: 'FI', accounting_system: 'none', accounting_basis: 'cash' }]);
+  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic Edustus Oy','FI','fi-oy',$3)", [clientId, firmId, { jurisdiction: 'FI', accounting_system: 'none', accounting_basis: 'cash', alv_registration: { status: 'registered', registered_from: '2020-01-01' } }]);
   for (const flag of ['FINLAND_ALV_CODING', 'FINLAND_ALV_RETURN', 'JURISDICTION_ACCOUNT_PALETTE', 'RECONCILIATION_CODE_MATCHED_NO_REVIEW', 'CODING_AUTO_POST', 'LEDGER_AUTO_POST']) await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$1,'auto','manual')", [flag, firmId, clientId]);
   await seedPackPaletteChartWithClient(pool, { firmId, clientId });
   // Every receipt prints 25,5 % VAT. Only the coder's treatment decides whether
@@ -118,7 +118,7 @@ test('real PG: a document allocation mixes a non-deductible component with a ded
   for (const file of (await readdir(migrations)).filter(n => n.endsWith('.sql')).sort()) await pool.query(await readFile(new URL(file, migrations), 'utf8'));
   const firmId = 'nondeductible-alloc', clientId = 'fi-nondeductible-alloc', id = 'hotel-stay';
   await pool.query("insert into firms(id,name,slug) values($1,'Synthetic allocation proof',$1)", [firmId]);
-  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic Matka Oy','FI','fi-oy',$3)", [clientId, firmId, { jurisdiction: 'FI', accounting_system: 'none', accounting_basis: 'cash' }]);
+  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic Matka Oy','FI','fi-oy',$3)", [clientId, firmId, { jurisdiction: 'FI', accounting_system: 'none', accounting_basis: 'cash', alv_registration: { status: 'registered', registered_from: '2020-01-01' } }]);
   for (const flag of ['FINLAND_ALV_CODING', 'JURISDICTION_ACCOUNT_PALETTE']) await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$1,'auto','manual')", [flag, firmId, clientId]);
   await seedPackPaletteChartWithClient(pool, { firmId, clientId });
   await pool.query("insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,payload) values($1,$2,$3,'2025-02-21',$1,0,123.2,'EUR','needs_review','{}')", [id, firmId, clientId]);

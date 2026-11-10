@@ -28,7 +28,7 @@ test('real PG: a coded account posts to the account it names, never to a neighbo
  insert into firm_members(id,firm_id,email,name,role,status) values('member','f','fixture@example.invalid','Fixture','admin','active');`);
  // 'plain': the uncoded palette book. 'oy': born with the coded statutory chart.
  for(const[clientId,entityType]of[['plain',null],['oy','fi-oy']]){
-  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,'f',$2,'fi',$3,'{\"jurisdiction\":\"fi\",\"accounting_system\":\"none\",\"accounting_basis\":\"cash\"}')",[clientId,`Synthetic ${clientId} company`,entityType]);
+  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,'f',$2,'fi',$3,'{\"jurisdiction\":\"fi\",\"accounting_system\":\"none\",\"accounting_basis\":\"cash\",\"alv_registration\":{\"status\":\"registered\",\"registered_from\":\"2020-01-01\"}}')",[clientId,`Synthetic ${clientId} company`,entityType]);
   for(const flag of ['JURISDICTION_ACCOUNT_PALETTE','JEV_RECONCILIATION','CODING_AUTO_POST','FINLAND_ALV_CODING'])await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,'f',$2,$3,'auto','manual')",[`${clientId}-${flag}`,clientId,flag]);
   const c=await pool.connect();
   try{

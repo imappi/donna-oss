@@ -141,26 +141,54 @@ export const buildQuoteArtifacts = ({
   };
 };
 
+// The owner questions the quote gates ask, per owner language
+// (preferredOwnerTemplateLanguage, passed in as `language`). A Finnish lane: an
+// absent language keeps the historical Finnish copy, unchanged.
+const QUOTE_INTAKE_COPY = Object.freeze({
+  fi: Object.freeze({
+    unreadable: 'En saanut tarjousohjeesta selvää — kerro kenelle tarjous tehdään, mistä ja mihin hintaan (esim. "tee tarjous Asiakas Oy:lle 2500 € verkkosivuista").',
+    incomplete: 'Kerro vielä kenelle tarjous tehdään ja mistä summasta (esim. "tee tarjous Asiakas Oy:lle 2500 € verkkosivuista").',
+    missingBuyerEmail: 'Mihin sähköpostiosoitteeseen lähetän tarjouksen?',
+    artifactInvalid: (errors) => `Tarjouksessa on korjattavaa: ${errors}`,
+    declineUnreadable: 'En saanut viestistä selvää — minkä tarjouksen asiakas hylkäsi? Kerro tarjouksen numero (esim. "asiakas hylkäsi tarjouksen T2026001").',
+    missingQuoteNumber: 'Minkä tarjouksen asiakas hylkäsi? Kerro tarjouksen numero (esim. "T2026001").',
+    unknownSentQuote: (number) => `En löytänyt lähetettyä tarjousta numerolla ${number}. Tarkista numero.`,
+    notDeclinable: (number, status) => `Tarjousta ${number} ei voi merkitä hylätyksi (tila: ${status}).`
+  }),
+  en: Object.freeze({
+    unreadable: 'I couldn\'t make out the quote instructions. Tell me who the quote is for, what it covers and the price (for example "make a quote to Asiakas Oy for 2500 € for a website").',
+    incomplete: 'Tell me who the quote is for and the amount (for example "make a quote to Asiakas Oy for 2500 € for a website").',
+    missingBuyerEmail: 'Which email address should I send the quote to?',
+    artifactInvalid: (errors) => `The quote needs fixing: ${errors}`,
+    declineUnreadable: 'I couldn\'t make out the message. Which quote did the customer turn down? Tell me the quote number (for example "the customer turned down quote T2026001").',
+    missingQuoteNumber: 'Which quote did the customer turn down? Tell me the quote number (for example "T2026001").',
+    unknownSentQuote: (number) => `I couldn't find a sent quote with the number ${number}. Please check the number.`,
+    notDeclinable: (number, status) => `Quote ${number} can't be marked as declined (status: ${status}).`
+  })
+});
+const quoteIntakeCopyFor = (language) => QUOTE_INTAKE_COPY[language] || QUOTE_INTAKE_COPY.fi;
+
 // ---------------------------------------------------------------------------------
 // classifyQuoteIssuance — DETERMINISTIC (the quote twin of
 // classifyInvoiceIssuance). Gates escalate the ONE question only the owner can
 // answer. No seller-IBAN / seller-Y-tunnus gates: a quote carries no payment
 // block and no OVT lane exists to want the buyer's Y-tunnus.
 // ---------------------------------------------------------------------------------
-export const classifyQuoteIssuance = ({ parsed = {}, sellerContext = {}, today = null, timestamp = null } = {}) => {
+export const classifyQuoteIssuance = ({ parsed = {}, sellerContext = {}, today = null, timestamp = null, language = 'fi' } = {}) => {
+  const copy = quoteIntakeCopyFor(language);
   today = today || (timestamp ? String(timestamp).slice(0, 10) : null);
   if (!parsed.ok || parsed.unextractable_reason) {
-    return { terminal: 'escalate', escalation: { reason: parsed.unextractable_reason || 'unreadable', question: 'En saanut tarjousohjeesta selvää — kerro kenelle tarjous tehdään, mistä ja mihin hintaan (esim. "tee tarjous Asiakas Oy:lle 2500 € verkkosivuista").' }, model: parsed.model || null };
+    return { terminal: 'escalate', escalation: { reason: parsed.unextractable_reason || 'unreadable', question: copy.unreadable }, model: parsed.model || null };
   }
   if (parsed.intent !== 'quote') return { terminal: 'not_invoice', model: parsed.model || null };
 
   const ask = (reason, question) => ({ terminal: 'escalate', escalation: { reason, question }, intent: parsed, model: parsed.model || null });
 
   if (!isNonEmptyString(parsed.buyer_name) || !(parsed.lines || []).length || !(parsed.lines || []).every((l) => isNonEmptyString(l.description) && Number.isFinite(l.unit_price) && l.unit_price > 0)) {
-    return ask('incomplete_instruction', 'Kerro vielä kenelle tarjous tehdään ja mistä summasta (esim. "tee tarjous Asiakas Oy:lle 2500 € verkkosivuista").');
+    return ask('incomplete_instruction', copy.incomplete);
   }
   if (!isEmail(parsed.buyer_email)) {
-    return ask('missing_buyer_email', 'Mihin sähköpostiosoitteeseen lähetän tarjouksen?');
+    return ask('missing_buyer_email', copy.missingBuyerEmail);
   }
 
   // KEEP-layer dry run with a placeholder number: an unfooted or unrenderable
@@ -173,7 +201,7 @@ export const classifyQuoteIssuance = ({ parsed = {}, sellerContext = {}, today =
     date: today
   });
   if (!dryRun.ok) {
-    return ask('artifact_invalid', `Tarjouksessa on korjattavaa: ${dryRun.errors.join('; ')}`);
+    return ask('artifact_invalid', copy.artifactInvalid(dryRun.errors.join('; ')));
   }
   return { terminal: 'quote_draft', intent: parsed, artifacts: dryRun.artifacts, model: parsed.model || null };
 };
@@ -183,9 +211,10 @@ export const classifyQuoteIssuance = ({ parsed = {}, sellerContext = {}, today =
 // rejection ("asiakas hylkäsi tarjouksen T2026001"); nothing is sent. The
 // caller supplies the resolved quote row (or null).
 // ---------------------------------------------------------------------------------
-export const classifyQuoteDecline = ({ parsed = {}, quoteRow = null } = {}) => {
+export const classifyQuoteDecline = ({ parsed = {}, quoteRow = null, language = 'fi' } = {}) => {
+  const copy = quoteIntakeCopyFor(language);
   if (!parsed.ok || parsed.unextractable_reason) {
-    return { terminal: 'escalate', escalation: { reason: parsed.unextractable_reason || 'unreadable', question: 'En saanut viestistä selvää — minkä tarjouksen asiakas hylkäsi? Kerro tarjouksen numero (esim. "asiakas hylkäsi tarjouksen T2026001").' }, model: parsed.model || null };
+    return { terminal: 'escalate', escalation: { reason: parsed.unextractable_reason || 'unreadable', question: copy.declineUnreadable }, model: parsed.model || null };
   }
   if (parsed.intent !== 'quote_decline') return { terminal: 'not_invoice', model: parsed.model || null };
 
@@ -193,13 +222,13 @@ export const classifyQuoteDecline = ({ parsed = {}, quoteRow = null } = {}) => {
 
   const number = parsed.quote?.number || null;
   if (!isNonEmptyString(number)) {
-    return ask('missing_quote_number', 'Minkä tarjouksen asiakas hylkäsi? Kerro tarjouksen numero (esim. "T2026001").');
+    return ask('missing_quote_number', copy.missingQuoteNumber);
   }
   if (!quoteRow) {
-    return ask('unknown_quote', `En löytänyt lähetettyä tarjousta numerolla ${number}. Tarkista numero.`);
+    return ask('unknown_quote', copy.unknownSentQuote(number));
   }
   if (quoteRow.status !== 'sent') {
-    return ask('quote_not_declinable', `Tarjousta ${quoteRow.draft?.quote?.quoteNumber || number} ei voi merkitä hylätyksi (tila: ${quoteRow.status}).`);
+    return ask('quote_not_declinable', copy.notDeclinable(quoteRow.draft?.quote?.quoteNumber || number, quoteRow.status));
   }
   return {
     terminal: 'quote_decline',

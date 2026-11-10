@@ -18,6 +18,8 @@ import {
   citedInvoiceNumbersOf,
   classifyCreditLinkage,
   classifyCreditNoteEligibility,
+  centsText,
+  CREDIT_SIDES,
   creditRefForIndex,
   customerNamesCorrespond,
   formatCreditNotes,
@@ -247,4 +249,31 @@ test('the owned transaction probes for an enclosing transaction and rolls back w
   assert.deepEqual(calls, ['savepoint donna_credit_application', 'rollback to savepoint donna_credit_application', 'release savepoint donna_credit_application']);
   assert.match(makeCreditApplicationId({ clientId: 'c', creditDocumentId: 'doc-cn-1', invoiceDocumentId: 'doc-inv-1' }), /^credapp-doc-cn-1-doc-inv-1-/);
   assert.match(makeCreditApplicationId({ clientId: 'c', creditDocumentId: 'doc-cn-1', invoiceDocumentId: 'doc-inv-1', generation: 2 }), /-g2-/);
+});
+
+test('the supplier side: the same eligibility, with the vendor as the counterparty and supplier documents only', () => {
+  const bill = { id: 'bill-4730', document_type: 'supplier_bill', vendor_name: 'Tukku Oy', customer_name: null, currency: 'EUR', total_amount: '248.00',
+    document_date: '2025-02-05', reference_number: '4730', parse_summary: { references: [{ type: 'invoice_number', value: '4730' }] } };
+  const supplierCredit = (over = {}) => credit({ id: 'cn-hl30', document_type: 'supplier_bill', vendor_name: 'Tukku Oy', customer_name: null,
+    total_amount: '-62.00', reference_number: 'HL-30', document_date: '2025-02-09', parse_summary: { references: [] }, ...over });
+  assert.deepEqual(CREDIT_SIDES.supplier.documentTypes, ['supplier_bill']);
+  assert.deepEqual(classifyCreditNoteEligibility({ invoice: bill, credit: supplierCredit(), side: 'supplier' }),
+    { eligible: true, reasons: [], linkage: 'unlinked', remaining: 62 });
+  const refusal = (over, side = 'supplier', invoice = bill) => classifyCreditNoteEligibility({ invoice, credit: supplierCredit(over), side }).reasons;
+  assert.deepEqual(refusal({ vendor_name: 'Rautakulma Oy' }), [CREDIT_REFUSAL_CODES.VENDOR_MISMATCH]);
+  assert.deepEqual(refusal({ vendor_name: '' }), [CREDIT_REFUSAL_CODES.VENDOR_UNKNOWN]);
+  assert.deepEqual(refusal({ currency: 'SEK' }), [CREDIT_REFUSAL_CODES.CURRENCY_MISMATCH]);
+  assert.deepEqual(refusal({ document_date: '2025-01-30' }), [CREDIT_REFUSAL_CODES.PREDATES_INVOICE]);
+  assert.deepEqual(refusal({ applied_total: '62.00' }), [CREDIT_REFUSAL_CODES.EXHAUSTED]);
+  assert.deepEqual(refusal({ parse_summary: { references: [{ type: 'invoice_number', value: '4999' }] } }), [CREDIT_REFUSAL_CODES.OTHER_INVOICE]);
+  // A customer credit note is not a supplier credit, and the sides never cross.
+  assert.ok(refusal({ document_type: 'sales_invoice' }).includes(CREDIT_REFUSAL_CODES.SIDE_MISMATCH));
+  assert.ok(refusal({}, 'customer').includes(CREDIT_REFUSAL_CODES.SIDE_MISMATCH));
+  assert.throws(() => classifyCreditNoteEligibility({ invoice: bill, credit: supplierCredit(), side: 'vendor' }), { code: 'CREDIT_SIDE_INVALID' });
+  // The customer side is unchanged when document types are not stated.
+  assert.equal(classifyCreditNoteEligibility({ invoice: INVOICE, credit: credit() }).eligible, true);
+});
+
+test('cents back to the stored decimal text', () => {
+  assert.deepEqual([6200, 250, 5, 0, -6200, 100150].map(centsText), ['62.00', '2.50', '0.05', '0.00', '-62.00', '1001.50']);
 });

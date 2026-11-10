@@ -225,8 +225,9 @@ modules branch on.
 
 ## Contract file quirks
 
-YAML flow mappings with an unquoted comma inside a description parse the
-comma as a second key: `QueueCard.amount` (`Signed, major units.`) and
-`Document.document_type` (`Backend classification, display only.`) each gain a
-stray `"major units." / "display only.": null` key. Proposal: quote those
-descriptions. The conformance validator ignores null-valued stray keys.
+None at the pinned commit. Two descriptions (`QueueCard.amount`,
+`Document.document_type`) used to carry an unquoted comma inside a YAML flow
+mapping, which parsed as a stray null-valued key. The app repository quoted
+them and added a test that rejects such keys; this pin was refreshed to that
+version. The conformance validator still ignores a null-valued stray key, so a
+future slip of the same kind cannot change what a response is checked against.

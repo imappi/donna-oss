@@ -1306,6 +1306,38 @@ test('parser (owner-reply) — obligation_open is an answer only on a lane that 
   assert.match(offered, /"disposition": "auto_explain" \| "chase_evidence" \| "needs_human" \| "obligation_open"/);
 });
 
+// The record-settling answers: "deducted from bill X" (a supplier credit-note
+// ask) and "a bank fee" (a sales shortfall ask). Valid only where the asking
+// lane offers them; anything else reads as before.
+test('parser (owner-reply) — credit_deducted and shortfall_bank_fee are answers only on a lane that offers them', async () => {
+  const { buildOwnerReplySystemPrompt, CREDIT_DEDUCTED, SHORTFALL_BANK_FEE } = await import('./documentDispositionLlm.js');
+  const laneAnswers = { creditDeducted: { meaning: 'the credit note was deducted from the payment of a supplier bill' }, bankFee: { meaning: 'the shortfall was a bank fee' } };
+  const mode = { ownerReply: { answeredEvidenceType: 'payment_method', laneAnswers } };
+  const base = { materiality: 'material', expense_kind: 'unknown', settlement_channel: 'unknown', confidence: 0.9, reasoning: 'Read.' };
+  const deducted = parseDocumentDispositionResponse(JSON.stringify({ ...base, disposition: CREDIT_DEDUCTED, deducted_from_bill: ' 4730 ' }), mode);
+  assert.deepEqual([deducted.disposition, deducted.deducted_from_bill, deducted.unmatchable_reason], [CREDIT_DEDUCTED, '4730', null]);
+  // No bill named, or too hesitant: unclear.
+  const noBill = parseDocumentDispositionResponse(JSON.stringify({ ...base, disposition: CREDIT_DEDUCTED }), mode);
+  assert.deepEqual([noBill.disposition, noBill.unmatchable_reason, noBill.deducted_from_bill], ['needs_human', 'owner_reply_unclear', undefined]);
+  assert.equal(parseDocumentDispositionResponse(JSON.stringify({ ...base, disposition: SHORTFALL_BANK_FEE, confidence: 0.3 }), mode).disposition, 'needs_human');
+  assert.equal(parseDocumentDispositionResponse(JSON.stringify({ ...base, disposition: SHORTFALL_BANK_FEE }), mode).disposition, SHORTFALL_BANK_FEE);
+  // Not offered: unclear, as before; never a sweep disposition.
+  for (const disposition of [CREDIT_DEDUCTED, SHORTFALL_BANK_FEE]) {
+    const raw = JSON.stringify({ ...base, disposition, deducted_from_bill: '4730' });
+    assert.equal(parseDocumentDispositionResponse(raw, OWNER_REPLY_MODE).disposition, 'needs_human', disposition);
+    assert.equal(parseDocumentDispositionResponse(raw).disposition, 'needs_human', disposition);
+  }
+  assert.equal(parseDocumentDispositionResponse(JSON.stringify({ ...base, disposition: SHORTFALL_BANK_FEE }),
+    { ownerReply: { answeredEvidenceType: 'payment_method', laneAnswers: { creditDeducted: laneAnswers.creditDeducted } } }).disposition, 'needs_human');
+  // The prompt offers each only where the lane does; otherwise it is the historical one.
+  assert.equal(buildOwnerReplySystemPrompt(), buildOwnerReplySystemPrompt({ stillOpen: null, laneAnswers: null }));
+  assert.equal(buildOwnerReplySystemPrompt().includes(CREDIT_DEDUCTED), false);
+  const offered = buildOwnerReplySystemPrompt({ laneAnswers: { creditDeducted: laneAnswers.creditDeducted } });
+  assert.match(offered, /"credit_deducted": the owner says the credit note was deducted from the payment of a supplier bill\./);
+  assert.match(offered, /"disposition": "auto_explain" \| "chase_evidence" \| "needs_human" \| "credit_deducted",\n  "deducted_from_bill"/);
+  assert.equal(offered.includes(SHORTFALL_BANK_FEE), false);
+});
+
 test('runOwnerReplyRedisposition — "still unpaid" puts the ask back on the owner: nothing stamped, no clarification, due later', async () => {
   const { OBLIGATION_OPEN } = await import('./documentDispositionLlm.js');
   const calls = [];

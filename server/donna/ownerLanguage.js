@@ -34,12 +34,21 @@ const countryKey = (value) => {
   return country === 'uk' ? 'gb' : country === 'unknown' ? '' : country;
 };
 
-const ownerCountry = (columnJurisdiction, profileJurisdiction) => {
+// The client's country as Donna reads it for the owner, by the rule in (2)
+// above: the column wins; the legacy profile value is read only when the column
+// is empty; two set values that disagree give no country (''). Returns the
+// stored value as written (trimmed), so a caller that shows the country (the ask
+// drafter's input, askPipeline.js) reads the same answer the resolver does.
+export const ownerClientCountry = (columnJurisdiction, profileJurisdiction) => {
   const column = countryKey(columnJurisdiction);
   const profile = countryKey(profileJurisdiction);
-  if (column && profile && column !== profile) return null;
-  return column || profile || null;
+  if (column && profile && column !== profile) return '';
+  if (column) return String(columnJurisdiction).trim();
+  return profile ? String(profileJurisdiction).trim() : '';
 };
+
+const ownerCountry = (columnJurisdiction, profileJurisdiction) =>
+  countryKey(ownerClientCountry(columnJurisdiction, profileJurisdiction)) || null;
 
 export const preferredOwnerTemplateLanguage = (profile, client = null) => {
   const locale = String(profile?.locale || profile?.language || profile?.preferredLanguage || '').trim().toLowerCase();

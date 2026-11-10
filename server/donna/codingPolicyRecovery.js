@@ -10,7 +10,18 @@
 //     statement-only line (the clock decides that from the live match);
 //   - the source re-read lane (codingRefusalRecovery.js) rechecks a settled
 //     source's printed tax for the two codes below.
+// A bank line refused because the business is not recorded as VAT/ALV
+// registered on its date, one per country posting policy that raises it (each
+// declares it on its taxRegistration). The clock re-runs the coder with the
+// refusal on posting_recovery; the coder's contract (transactionLlm.js) turns
+// it into the owner's registration question while the record still does not
+// say registered. Nothing here lets the line post: the policy still decides.
+export const TAX_REGISTRATION_REFUSALS = Object.freeze([
+  'TRANSACTION_ALV_REGISTRATION_REQUIRED',
+  'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED'
+]);
 export const CODING_EVIDENCE_RECONSIDERED_REFUSALS = Object.freeze([
+  ...TAX_REGISTRATION_REFUSALS,
   'TRANSACTION_ALV_CODING_SOURCE_CONFLICT',
   'TRANSACTION_ALV_EVIDENCE_REQUIRED',
   'TRANSACTION_GB_VAT_EVIDENCE_REQUIRED',

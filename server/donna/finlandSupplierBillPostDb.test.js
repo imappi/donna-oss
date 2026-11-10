@@ -34,7 +34,7 @@ const billRow = ({
 // `queries` records every SQL for gate-ordering assertions.
 const fakeClient = ({
   flags = { FINLAND_EINVOICE_RECEIVE: 'auto' },
-  profile = { accounting_basis: 'accrual' },
+  profile = { accounting_basis: 'accrual', alv_registration: { status: 'registered', registered_from: '2020-01-01' } },
   document = billRow(),
   lockedAtDate = false,
   existingJournal = null

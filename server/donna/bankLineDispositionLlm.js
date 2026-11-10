@@ -296,9 +296,10 @@ const finnishBankLineHeader = ({ dir, amount, transaction, day, desc }) => {
 };
 
 // `language` is the owner's (preferredOwnerTemplateLanguage); the caller that
-// holds the client profile passes it. The Finnish question is wholly
-// code-built: the verdict's `reasoning` is an internal English receipt, so it
-// is not spliced into Finnish text (the English wording keeps it, unchanged).
+// holds the client profile passes it. The question is wholly code-built in both
+// languages: it asks the owner a plain question about a fact they know. The
+// verdict's `reasoning` is an internal receipt; it stays on the stamped verdict
+// (bank_line_disposition.reasoning) and is never shown to the owner.
 export const buildNeedsHumanOwnerQuestion = ({ transaction = {}, direction = DEFAULT_DIRECTION, semantic = {}, language = 'en' } = {}) => {
   const dir = normalizeDirection(direction);
   const amount = Number(transaction?.[dir] ?? transaction?.amount ?? 0);
@@ -316,10 +317,9 @@ export const buildNeedsHumanOwnerQuestion = ({ transaction = {}, direction = DEF
   const when = day ? ` on ${day}` : '';
   const desc = String(transaction.description || transaction.raw_description || '').trim().slice(0, 80);
   const label = desc ? ` ("${desc}")` : '';
-  const why = semantic.reasoning ? ` ${String(semantic.reasoning).trim()}` : '';
   return dir === 'money_in'
-    ? `We could not tell what the ${money} received${when}${label} was.${why} What was it for — a customer payment, a payout, a loan or transfer, a refund — and is there a document for it?`
-    : `We could not tell what the ${money} paid${when}${label} was for.${why} Was it a business expense, what was it for, and is there a receipt or bill for it?`;
+    ? `We could not tell what the ${money} received${when}${label} was. What was it for — a customer payment, a payout, a loan or transfer, a refund — and is there a document for it?`
+    : `We could not tell what the ${money} paid${when}${label} was for. Was it a business expense, what was it for, and is there a receipt or bill for it?`;
 };
 
 // Audit-as-precondition writer for the lane receipts (resource_type

@@ -67,7 +67,7 @@ test('real PG + registered Inngest HTTP: hung providers and expired row-lock wai
   const documentId = 'fi-inngest-statement', parseRunId = '10000000-0000-4000-8000-000000000001';
   await pool.query("insert into firms(id,name,slug,metadata) values($1,'Synthetic hosted proof',$1,$2)", [firmId, { loops: { tier: 'canary' } }]);
   await pool.query(`insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile)
-    values($1,$2,'Lumo Kahvila Oy','fi','fi-oy',$3)`, [clientId, firmId, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'accrual' }]);
+    values($1,$2,'Lumo Kahvila Oy','fi','fi-oy',$3)`, [clientId, firmId, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'accrual', alv_registration: { status: 'registered', registered_from: '2020-01-01' } }]);
   for (const flag of ['FINLAND_ALV_CODING', 'JURISDICTION_ACCOUNT_PALETTE', 'RECONCILIATION_CODE_MATCHED_NO_REVIEW', 'CODING_AUTO_POST', 'LEDGER_AUTO_POST']) {
     await pool.query(`insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source)
       values($1,$2,$3,$1,'auto','manual')`, [flag, firmId, clientId]);
