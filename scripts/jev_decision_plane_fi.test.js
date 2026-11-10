@@ -23,7 +23,8 @@ const pgUrl = process.env.DONNA_PG_TEST_URL;
 const PG = { skip: pgUrl ? false : 'DONNA_PG_TEST_URL not set — FIK-3 lane not exercised against a real book' };
 const corpus = loadFiCorpus();
 const byId = id => corpus.find(c => c.id === id);
-const B = 'Business Checking · EUR';
+// The bank leg as the real writer posts it on a Finnish book: the chart's 1910.
+const B = '1910';
 const L = (role, account, direction, amount, tax_code = 'NONE') => ({ role, account, direction, amount, tax_code });
 
 // ── Pure: corpus, labels, split ─────────────────────────────────────────────

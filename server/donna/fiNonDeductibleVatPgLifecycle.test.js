@@ -62,7 +62,7 @@ test('real PG: a non-deductible FI purchase posts gross with its code, no 2940 l
   for (const f of fixtures.filter(f => f.treatment !== 'ALV 25,5 %')) {
     const rows = await journal(f.id);
     assert.deepEqual(shape(rows), [
-      ['Business Checking · EUR', f.incoming ? f.gross : 0, f.incoming ? 0 : f.gross, 'NONE'],
+      ['Pankkitili', f.incoming ? f.gross : 0, f.incoming ? 0 : f.gross, 'NONE'],
       [f.account, f.incoming ? 0 : f.gross, f.incoming ? f.gross : 0, 'ALV_NONDEDUCTIBLE_INPUT']
     ].sort(), f.id);
     assert.ok(rows.every(r => !r.payload.role?.startsWith('alv_')), `${f.id}: no VAT control leg`);
@@ -73,7 +73,7 @@ test('real PG: a non-deductible FI purchase posts gross with its code, no 2940 l
   }
   // The neighbouring deductible purchase still splits exactly as before.
   assert.deepEqual(shape(await journal('supplies')), [
-    ['Business Checking · EUR', 0, 251, 'NONE'], ['Operating supplies', 200, 0, 'ALV_25_5_INPUT'], ['Vähennettävä arvonlisävero', 51, 0, 'NONE']
+    ['Pankkitili', 0, 251, 'NONE'], ['Operating supplies', 200, 0, 'ALV_25_5_INPUT'], ['Vähennettävä arvonlisävero', 51, 0, 'NONE']
   ].sort());
 
   // The return: the non-deductible lines are coded (not uncoded expenses),
@@ -134,7 +134,7 @@ test('real PG: a document allocation mixes a non-deductible component with a ded
   await postLedgerTransactionInDb({ firmId, clientId, transactionId: id, dryRun: false });
   const rows = (await pool.query("select l.account_name,l.tax_type,l.debit,l.credit,l.payload from ledger_journals j join ledger_lines l on l.journal_id=j.id where j.firm_id=$1 and j.source_id=$2 order by l.line_no", [firmId, id])).rows;
   assert.deepEqual(rows.map(r => [r.account_name, Number(r.debit), Number(r.credit), r.tax_type || null]).sort(), [
-    ['Business Checking · EUR', 0, 123.2, 'NONE'],
+    ['Pankkitili', 0, 123.2, 'NONE'],
     ['Meals and entertainment', 100.4, 0, 'ALV_NONDEDUCTIBLE_INPUT'],
     ['Travel', 20, 0, 'ALV_14_INPUT'],
     ['Vähennettävä arvonlisävero', 2.8, 0, 'NONE']
