@@ -125,6 +125,7 @@ for (const locale of LOCALES) {
       const draft = document.querySelector('textarea')?.value || '';
       assert.equal(draft, previewed, 'the composer holds exactly the previewed text');
       assert.ok(text(document.body).includes(COMPOSER_LANGUAGE[locale][owner]), `the composer says which language: ${text(document.body)}`);
+      if (locale === 'fi') assert.ok(!text(document.body).includes('This message will be sent'), 'the composer notice reads in Finnish');
       const send = [...document.querySelectorAll('button[aria-label]')].find((b) => /^(Send to client|Lähetä asiakkaalle)$/.test(b.getAttribute('aria-label')));
       assert.ok(send, 'the client-mode send button renders');
       await click(send);

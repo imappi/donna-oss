@@ -2405,10 +2405,12 @@ const Composer = ({
             }}
           >
             <span style={{ fontWeight: 600 }}>{message('transaction.composer.clientMode')}</span>
-            <span style={{ color: T.muted }}>{message('transaction.composer.clientModeBody')}</span>
-            {ASK_CLIENT_COMPOSER_LANGUAGE_MESSAGE_IDS[clientDraftLocale] && (
-              <span style={{ color: T.muted }}>{message(ASK_CLIENT_COMPOSER_LANGUAGE_MESSAGE_IDS[clientDraftLocale])}</span>
-            )}
+            <span style={{ color: T.muted }}>
+              {message('transaction.composer.clientModeBody')}
+              {ASK_CLIENT_COMPOSER_LANGUAGE_MESSAGE_IDS[clientDraftLocale]
+                ? <> {message(ASK_CLIENT_COMPOSER_LANGUAGE_MESSAGE_IDS[clientDraftLocale])}</>
+                : null}
+            </span>
             <button
               type="button"
               onClick={onCancelClientMode}
@@ -2537,7 +2539,7 @@ const Composer = ({
               marginTop: 8
             }}
           >
-            This message will be sent to the client portal as an evidence request.
+            {message('transaction.composer.evidenceNotice')}
           </div>
         )}
         {sendError && (
