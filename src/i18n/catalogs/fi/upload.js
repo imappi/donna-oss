@@ -93,7 +93,7 @@ const upload = Object.freeze({
   "upload.row.tooFewCount": "{count, plural, one {Tallennettu — löytyi vain # tapahtumarivi, ei käsitelty tiliotteena} other {Tallennettu — löytyi vain # tapahtumariviä, ei käsitelty tiliotteena}}",
   "upload.row.tooFew": "Tallennettu — liian vähän tapahtumarivejä tiliotteeksi",
   "upload.row.unknownDocument": "Tallennettu — tositteen tyyppiä ei tunnistettu",
-  "upload.row.noParser": "Tallennettu — tyypille {documentType} ei vielä ole lukijaa",
+  "upload.row.noParser": "Tallennettu — tätä tyyppiä ({documentType}) ei vielä osata lukea",
   "upload.row.noParsing": "Tallennettu (tätä tyyppiä ei lueta)",
   "upload.row.periodOverlapNamed": "Menee päällekkäin jo luetun tiliotteen kanssa (kausi {period})",
   "upload.row.periodOverlap": "Menee päällekkäin aiemman tiliotteen kauden kanssa",

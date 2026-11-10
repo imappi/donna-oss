@@ -73,6 +73,7 @@ import {
   OPERATOR_ACTION_TYPE_MESSAGE_IDS,
   TRANSACTION_REJECTION_MESSAGE_IDS
 } from '../../i18n/catalogs/remainingSurfaces.en.js';
+import { askClientBusinessUse, askClientTransactionPhrase } from '../../lib/interfaceValueLabels.js';
 import {
   buildOptimisticUserMessage,
   removeOptimisticChatTurn,
@@ -1684,7 +1685,15 @@ const QuickPrompts = ({
   const dateAmount = [date, amount].filter((value) => value && value !== '—').join(' for ');
   if (dateAmount) askPromptParts.push(`on ${dateAmount}`);
   const promptTransaction = askPromptParts.join(' ');
-  const businessUse = Number(tx.money_in || 0) > 0 ? 'business income' : 'a business expense';
+  const moneyIn = Number(tx.money_in || 0) > 0;
+  const businessUse = moneyIn ? 'business income' : 'a business expense';
+  // The draft below is what Send transmits and stays as it was. The pill's
+  // preview reads in the interface language: the same phrases through the
+  // catalog, never the English fragments inside a translated sentence.
+  const askClientValues = {
+    transaction: askClientTransactionPhrase({ vendor: merchantHint, date, amount }, intl.formatMessage),
+    businessUse: askClientBusinessUse(moneyIn, intl.formatMessage)
+  };
   const askClientPrompt = `Hi — quick check on ${promptTransaction}. Could you let me know what this was for and confirm whether it's ${businessUse}? Thanks!`;
 
   const prompts = [];
@@ -1755,7 +1764,7 @@ const QuickPrompts = ({
     prompts.push({
       labelId: OPERATOR_ACTION_TYPE_MESSAGE_IDS.ask_client,
       promptId: 'transaction.question.example',
-      values: { transaction: promptTransaction, businessUse },
+      values: askClientValues,
       prompt: askClientPrompt,
       sendMode: 'client_question'
     });

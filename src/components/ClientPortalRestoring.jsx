@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { useIntl } from 'react-intl';
 
 import { D } from './shared/design-tokens.js';
-import { SurfaceInterfaceLocaleDefault } from '../i18n/LocaleProvider.jsx';
+import { SurfaceInterfaceLocaleDefault, useSurfaceInterfaceLocaleDefault } from '../i18n/LocaleProvider.jsx';
+import { rememberPortalLocale, rememberedPortalLocale } from '../i18n/portalInterfaceLocale.js';
 
 // Client-portal equivalent of the firm restoring/lock screen. An owner is a
 // client, not a firm member, so the "Donna firm access / verify your sign-in"
@@ -12,7 +14,7 @@ import { SurfaceInterfaceLocaleDefault } from '../i18n/LocaleProvider.jsx';
 // `.firm-access` oatmeal canvas made an old-styled screen flash between the new
 // branded loaders — so it mirrors the WorkspaceProvisioner loader exactly (D.paper
 // shell, small mono caps) for a continuous transition.
-export const ClientPortalRestoring = () => {
+const ClientPortalRestoringScreen = () => {
   const intl = useIntl();
   return (
   <div
@@ -46,7 +48,19 @@ export const ClientPortalRestoring = () => {
 };
 
 
-// The portal's surface-default language (src/i18n/portalInterfaceLocale.js).
-export const ClientPortalLocaleDefault = ({ locale, children }) => (
-  <SurfaceInterfaceLocaleDefault locale={locale}>{children}</SurfaceInterfaceLocaleDefault>
+// Shown before the client is known, so it follows the language the portal last
+// opened in on this device (a saved choice still wins; see
+// src/i18n/portalInterfaceLocale.js).
+export const ClientPortalRestoring = ({ storage = undefined }) => (
+  <SurfaceInterfaceLocaleDefault locale={rememberedPortalLocale(storage)}>
+    <ClientPortalRestoringScreen />
+  </SurfaceInterfaceLocaleDefault>
 );
+
+// The portal's surface-default language (its owner's language), remembered on
+// this device for the next load's loader.
+export const ClientPortalLocaleDefault = ({ locale, storage = undefined, children }) => {
+  useSurfaceInterfaceLocaleDefault(locale);
+  useEffect(() => { rememberPortalLocale(locale, storage); }, [locale, storage]);
+  return children;
+};

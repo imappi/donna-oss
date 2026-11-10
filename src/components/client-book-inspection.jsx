@@ -5,6 +5,7 @@ import AlvReturnPanel from './financials/alv-return-panel.jsx';
 import { defaultAlvPeriodKey, alvPeriodForJournalMonth } from '../lib/alvReturnView.js';
 import { D } from './shared/design-tokens.js';
 import { useInterfaceLocale } from '../i18n/LocaleProvider.jsx';
+import { journalStatusLabel } from '../lib/interfaceValueLabels.js';
 
 const JOURNAL_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -75,7 +76,7 @@ export default function ClientBookInspection({ clientId, databaseMode, jurisdict
     {current?.error && <p role="alert">{current.error}</p>}
     {current?.data && !(current.data.native_ledger?.journals?.length) && <p>{message('empty')}</p>}
     {(current?.data?.native_ledger?.journals || []).map(journal => <details key={journal.id} style={{ padding: '0.6rem 0' }}>
-      <summary><bdi>{formatDate(journal.journal_date)}</bdi> · <bdi>{journal.description || journal.memo || journal.id}</bdi> · <bdi>{journal.status}</bdi></summary>
+      <summary><bdi>{formatDate(journal.journal_date)}</bdi> · <bdi>{journal.description || journal.memo || journal.id}</bdi> · <bdi>{journalStatusLabel(journal.status, intl.formatMessage)}</bdi></summary>
       {journal.correction_reason && <p>{journal.correction_reason}</p>}
       <div style={{ overflowX: 'auto' }}><table>
         <thead><tr><th>{message('account')}</th><th>{message('debit')}</th><th>{message('credit')}</th><th>{message('taxCode')}</th></tr></thead>

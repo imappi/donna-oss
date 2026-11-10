@@ -3,6 +3,7 @@ import pilotSetup from './pilotSetup.en.js';
 import remainingSurfacesEn from './remainingSurfaces.en.js';
 import mountedSurfacesEn from './mountedSurfaces.en.js';
 import reconciliationAuthority from './reconciliationAuthority.en.js';
+import interfaceValues from './interfaceValues.en.js';
 
 const en = Object.freeze({
   "portal.documents.receipt.title": "Files on record · all periods",
@@ -20,6 +21,7 @@ const en = Object.freeze({
   ...fiDetails,
   ...pilotSetup,
   ...reconciliationAuthority,
+  ...interfaceValues,
   "operator.providerFailure.operatorAction": "Review the provider configuration and rejected request.",
   "operator.providerFailure.recovery.recovery_failed": "A later recovery attempt failed for another reason; the recorded provider failure has not been cleared.",
 

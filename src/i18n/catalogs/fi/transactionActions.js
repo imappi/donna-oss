@@ -8,7 +8,7 @@ const transactionActions = Object.freeze({
   "transaction.action.clientReplied": "← Asiakas vastasi",
   "transaction.action.unsupported": "Tämän toiminnon toteutus tulee myöhemmässä päivityksessä.",
   "transaction.candidate.vendorMissing": "(ei toimittajaa)",
-  "transaction.question.example": "Hei! Tarkistaisin vielä tapahtuman {transaction}. Kertoisitko, mihin se liittyi? Onko kyseessä {businessUse}? Kiitos!",
+  "transaction.question.example": "Hei! Tarkistaisin vielä {transaction}. Kertoisitko, mihin se liittyi? Onko kyseessä {businessUse}? Kiitos!",
   "transaction.reject.title": "Mikä tässä vastineessa on vialla?",
   "transaction.reject.instruction": "Kerro Donnalle, mikä on vialla",
   "transaction.reject.back": "Takaisin",

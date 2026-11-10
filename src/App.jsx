@@ -69,7 +69,7 @@ import {
 } from './lib/supabaseAuth.js';
 import { readPendingOffer } from './lib/pendingOffer.js';
 import { D } from './components/shared/design-tokens.js';
-import { ClientPortalRestoring } from './components/ClientPortalRestoring.jsx';
+import { ClientPortalLocaleDefault, ClientPortalRestoring } from './components/ClientPortalRestoring.jsx';
 import { emitToast } from './lib/toastBus.js';
 import {
   isLocaleSettingsPreview,
@@ -77,7 +77,7 @@ import {
   isLocaleMountedPreview,
   isLocaleWorkspacePreview
 } from './i18n/localeRegistry.js';
-import { SurfaceInterfaceLocaleDefault, useInterfaceLocale } from './i18n/LocaleProvider.jsx';
+import { useInterfaceLocale } from './i18n/LocaleProvider.jsx';
 import { portalClientForDefault, portalDefaultInterfaceLocale } from './i18n/portalInterfaceLocale.js';
 import { getInterfaceCatalogVersion } from './i18n/localeCatalog.js';
 
@@ -1440,7 +1440,7 @@ const AppSession = ({ oauthRedirect }) => {
     // The portal opens in its owner's language unless this device holds the
     // person's own choice (src/i18n/portalInterfaceLocale.js states the rule).
     return (
-      <SurfaceInterfaceLocaleDefault
+      <ClientPortalLocaleDefault
         locale={portalDefaultInterfaceLocale(portalClientForDefault(firmClients, getClientPortalEntityId()))}
       >
       <ClientPortalGate clientId={getClientPortalEntityId()}>
@@ -1458,7 +1458,7 @@ const AppSession = ({ oauthRedirect }) => {
           onSnapshotInvalidated={refreshDatabaseSnapshot}
         />
       </ClientPortalGate>
-      </SurfaceInterfaceLocaleDefault>
+      </ClientPortalLocaleDefault>
     );
   }
 

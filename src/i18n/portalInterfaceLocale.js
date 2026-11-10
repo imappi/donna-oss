@@ -34,3 +34,46 @@ export const portalClientForDefault = (clients, clientId) => {
   const list = Array.isArray(clients) ? clients : [];
   return clientId ? list.find((client) => client?.id === clientId) || null : list[0] || null;
 };
+
+// The loader shown before the client is known ("Loading your books…") cannot
+// apply rule 2: the owner's language arrives with the client. So the portal
+// remembers, on this device, the language it last opened in, and the loader
+// uses that as its surface default. It is a hint for the loader only: never a
+// saved choice (rule 1 still wins, and nothing is written to the person's
+// interface preferences), never sent anywhere, and replaced the next time the
+// portal opens with a known client.
+export const PORTAL_LAST_LOCALE_KEY = 'donna.portal.last_interface_locale.v1';
+
+const deviceStorage = (storage) => {
+  if (storage !== undefined) return storage;
+  try {
+    return typeof window !== 'undefined' ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+};
+
+export const rememberPortalLocale = (locale, storage = undefined) => {
+  const target = deviceStorage(storage);
+  if (!target || !locale) return;
+  const resolved = resolveInterfaceLocale(locale);
+  if (resolved.fallbackReason || resolved.locale !== locale) return;
+  try {
+    target.setItem(PORTAL_LAST_LOCALE_KEY, locale);
+  } catch {
+    // Storage unavailable or full: the loader keeps the registry default.
+  }
+};
+
+export const rememberedPortalLocale = (storage = undefined) => {
+  const target = deviceStorage(storage);
+  if (!target) return null;
+  try {
+    const locale = target.getItem(PORTAL_LAST_LOCALE_KEY);
+    if (!locale) return null;
+    const resolved = resolveInterfaceLocale(locale);
+    return resolved.fallbackReason ? null : resolved.locale;
+  } catch {
+    return null;
+  }
+};

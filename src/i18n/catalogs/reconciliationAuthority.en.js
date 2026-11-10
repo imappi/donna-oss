@@ -17,6 +17,8 @@ export default Object.freeze({
   'firm.reconAuthority.preview.heading': 'You are granting',
   'firm.reconAuthority.preview.scope': 'Scope',
   'firm.reconAuthority.preview.scopeValue': 'Payee {vendor} · {label} · account {account}',
+  // No vendor name on the grant: the stored scope key is shown as a key, not as a name.
+  'firm.reconAuthority.preview.scopeValueKeyOnly': 'Payee not named (vendor key {code}) · {label} · account {account}',
   'firm.reconAuthority.preview.archetype': 'Kind',
   'firm.reconAuthority.archetype.recurring_rent_lease': 'Recurring rent or lease',
   'firm.reconAuthority.archetype.verified_card_payment': 'Verified card payment',

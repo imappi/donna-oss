@@ -1,6 +1,7 @@
 import fiDetails from './fiDetails.ar-AE.js';
 import pilotSetup from './pilotSetup.ar-AE.js';
 import reconciliationAuthority from './reconciliationAuthority.ar-AE.js';
+import interfaceValues from './interfaceValues.ar-AE.js';
 import foundation from './ar-AE/foundation.js';
 import upload from './ar-AE/upload.js';
 import documentFirm from './ar-AE/documentFirm.js';
@@ -254,7 +255,7 @@ export const AR_AE_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-01.ar2-remaining-surfaces-contract',
   catalogVersion: AR_AE_CATALOG_VERSION,
-  expectedMessageCount: 2699,
+  expectedMessageCount: 2731,
   sourceContext: Object.freeze([
     'docs/design-donna-arabic-localization.md',
     'docs/ar4f-ae-native-review-packet.md'
@@ -334,6 +335,7 @@ const arAE = Object.freeze({
   ...fiDetails,
   ...pilotSetup,
   ...reconciliationAuthority,
+  ...interfaceValues,
   ...foundation,
   ...upload,
   ...documentFirm,

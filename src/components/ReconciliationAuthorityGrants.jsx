@@ -15,9 +15,9 @@ import {
   authorityAmount,
   authorityArchetype,
   authorityDate,
-  authorityDocumentType,
   authorityGrantStatus,
   authorityRefusal,
+  authorityScopeValue,
   authoritySuspensionCause,
   defaultReviewDate,
   describeGrantScope,
@@ -74,7 +74,7 @@ const GrantRow = ({ grant, clientId, delegatedAuthorityActs, api, onChanged }) =
     <li data-testid={`grant-${grant.id}`} style={{ listStyle: 'none', padding: '12px 0', borderTop: `1px solid ${D.ruleSoft}`, fontSize: 12.5, color: D.ink }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
         <strong data-testid="grant-status">{authorityGrantStatus(intl, grant.status)}</strong>
-        <span data-testid="grant-scope">{message('firm.reconAuthority.preview.scopeValue', { vendor: grant.example?.vendor_name || scope.merchant || '—', label: authorityDocumentType(intl, scope.document_type), account: scope.account || '—' })}</span>
+        <span data-testid="grant-scope">{authorityScopeValue(intl, { vendorName: grant.example?.vendor_name, scope })}</span>
       </div>
       <div style={{ marginTop: 4, color: D.inkSoft, display: 'grid', gap: 2 }}>
         <span data-testid="grant-ceiling">{authorityArchetype(intl, grant.archetype)} · {message('firm.reconAuthority.grants.ceilingValue', { amount: authorityAmount(grant.amount_ceiling, grant.currency, formatAmount) })}</span>

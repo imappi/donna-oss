@@ -43,8 +43,12 @@ test('the mounted portal route proposes the default and the portal mounts a lang
   const app = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   assert.match(
     app,
-    /<SurfaceInterfaceLocaleDefault\s+locale=\{portalDefaultInterfaceLocale\(portalClientForDefault\(firmClients, getClientPortalEntityId\(\)\)\)\}\s*>\s*<ClientPortalGate/
+    /<ClientPortalLocaleDefault\s+locale=\{portalDefaultInterfaceLocale\(portalClientForDefault\(firmClients, getClientPortalEntityId\(\)\)\)\}\s*>\s*<ClientPortalGate/
   );
+  // The wrapper proposes exactly that default (and remembers it for the next
+  // load's loader, src/interfaceRawValues.test.js).
+  const wrapper = await readFile(new URL('../components/ClientPortalRestoring.jsx', import.meta.url), 'utf8');
+  assert.match(wrapper, /export const ClientPortalLocaleDefault = \(\{ locale, storage = undefined, children \}\) => \{\s*useSurfaceInterfaceLocaleDefault\(locale\);/);
   const portal = await readFile(new URL('../components/donna-client-portal.jsx', import.meta.url), 'utf8');
   assert.match(portal, /onChange=\{\(event\) => setInterfaceLocale\(event\.target\.value\)\}/);
   assert.match(portal, /PRODUCTION_INTERFACE_LOCALES\.map\(\(entry\) => \(\s*<option key=\{entry\.tag\} value=\{entry\.tag\}/);
