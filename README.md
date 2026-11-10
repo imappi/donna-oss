@@ -116,8 +116,8 @@ cp .env.example .env
 sed -i.bak "s/^DONNA_ACCESS_TOKEN=.*/DONNA_ACCESS_TOKEN=$(openssl rand -hex 24)/" .env && rm .env.bak
 ```
 
-To use model providers, put their keys in `.env` now. A document uploaded
-without a key is not read again by itself once a key is added (see
+To use model providers, put their keys in `.env` now. You can also add
+them later: a document uploaded without a key waits for it (see
 Troubleshooting).
 
 **3. Start the runtime.** In a terminal of its own:
@@ -204,7 +204,8 @@ then press **Upload 1 file** (Lähetä 1 tiedosto).
 Watch the runtime terminal: a `parse-document` job starts within seconds
 and logs what it found. With keys, the receipt is read and appears as a
 row of its own on the firm view, beside the bank line of the same amount.
-Without keys, the log says `openai_not_configured` and the job retries.
+Without keys, the log says `waiting for the model provider; no attempt
+spent` and the document waits for its key (see Troubleshooting).
 
 **9. Stop and reset.** Press Ctrl-C in the runtime and web terminals. The
 data stays in `~/.donna-desktop` (or `DONNA_DESKTOP_DATA_DIR`) for the next
@@ -233,9 +234,20 @@ rm -rf ~/.donna-desktop
 - **Uploads fail with `Evidence storage upload failed with 404`**: the web
   app is being served by `npm run dev`. The Vite dev server does not route
   the local document store. Use `npm run local:web`.
-- **The statement stays "Stalled" after you add a key**: a document
-  uploaded without a key is not read again by itself. Stop both, reset
-  (step 9), and run steps 3 to 5 again.
+- **A document is "Stalled" with `No OPENAI_API_KEY on this
+  installation: not read yet`**: it was uploaded without the key it needs.
+  Nothing is lost and no attempt is spent while it waits. Add the key to
+  `.env` and restart the runtime (step 3); each waiting document is read
+  within five minutes, under the same upload, with no new upload and no
+  reset. The owner's view says only that the file is saved and taking
+  longer. The same holds when the provider refuses the key (`… refused
+  OPENAI_API_KEY`: fix the key), when the account has no credit left (`…
+  has no credit left on this account`: add credit; no restart needed), and
+  when the provider cannot be reached at all: the row names the cause and
+  is read once the provider answers. A book from an earlier release that left
+  such a document failed, or a scanned statement with no lines, reads it
+  again once on the first start of this release (also one failed on a
+  refused key or after four "no credit" or rate-limit answers).
 - **Every bank line is "Stalled" although OpenAI and Anthropic are lit**:
   the runtime log shows `Configure the first-line provider model for this
   host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`, or switch that lane

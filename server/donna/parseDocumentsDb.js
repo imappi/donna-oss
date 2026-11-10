@@ -1190,8 +1190,11 @@ export const __claimParseRunWithAdmissionWithClient = async ({
     }
     const claimed = await __claimParseRunWithClient({ client, firmId, documentId, parseRunId });
     await client.query('commit');
+    // `prior_hold`: the hold the claim just stripped. A provider wait that
+    // recurs carries its `since` and wait count forward from it.
+    const priorHold = row.payload?.parse_hold && typeof row.payload.parse_hold === 'object' ? row.payload.parse_hold : null;
     return claimed
-      ? { claimed, outcome: 'claimed', decision, hold: null }
+      ? { claimed, outcome: 'claimed', decision, hold: null, prior_hold: priorHold }
       : { claimed: null, outcome: 'not_pending', decision, hold: null };
   } catch (error) {
     await client.query('rollback').catch(() => {});
@@ -1207,13 +1210,23 @@ export const claimParseRunInDb = async (args = {}) =>
 // Retry hand-off for the SAME run id. The processing predicate makes this a
 // compare-and-set release: a manual retry that already minted a new run, or a
 // terminal writer that won the race, cannot be moved backwards to pending.
+//
+// `providerHold` (a provider wait — parseErrors.buildProviderWaitHold): the
+// failure was the installation's (no key, provider unreachable), not the
+// document's. The same release then writes the hold as the row's persisted
+// reason (payload.parse_hold, the key the tray, the parse-status projection,
+// the drain's recheck window and the convergence verdict already read) and
+// hands back the attempt the claim counted, so a configuration wait never
+// spends the document's automatic budget. The next claim strips the hold.
 export const __releaseParseRunForRetryWithClient = async ({
   client,
   firmId,
   documentId,
-  parseRunId
+  parseRunId,
+  providerHold = null
 } = {}) => {
   if (!firmId || !documentId || !parseRunId) return null;
+  const hold = providerHold && typeof providerHold === 'object' ? JSON.stringify(providerHold) : null;
   const result = await client.query(
     `update documents
      set parse_status='pending',
@@ -1221,13 +1234,34 @@ export const __releaseParseRunForRetryWithClient = async ({
          parse_progress_current=null,
          parse_progress_total=null,
          parse_heartbeat_at=now(),
+         parse_attempts=case when $4::jsonb is null then parse_attempts else greatest(0, parse_attempts - 1) end,
+         payload=case when $4::jsonb is null then payload
+                      else coalesce(payload, '{}'::jsonb) || jsonb_build_object('parse_hold', $4::jsonb) end,
          updated_at=now()
      where firm_id=$1 and id=$2 and parse_run_id=$3::uuid
        and parse_status='processing'
      returning ${DOC_THIN_COLUMNS}`,
-    [firmId, documentId, parseRunId]
+    [firmId, documentId, parseRunId, hold]
   );
-  return result.rows.length ? rowToThinParseStatus(result.rows[0]) : null;
+  if (!result.rows.length) return null;
+  if (hold && (Number(providerHold.waits) || 0) <= 1) {
+    // One audit per distinct wait (the first), never one per recheck.
+    await audit(client, {
+      firmId,
+      clientId: result.rows[0].client_id,
+      documentId,
+      action: 'document.parse.provider_wait',
+      metadata: {
+        parse_run_id: parseRunId,
+        reason_code: providerHold.reason_code,
+        provider: providerHold.provider || null,
+        key_name: providerHold.key_name || null,
+        code: providerHold.code || null,
+        reason: providerHold.reason || null
+      }
+    });
+  }
+  return rowToThinParseStatus(result.rows[0]);
 };
 
 // Crash recovery for the SAME run id (2026-09-12, FI reliability pass). A

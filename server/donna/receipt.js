@@ -20,7 +20,7 @@ import { resolve as resolvePath } from 'node:path';
 
 import { buildClientIdentityPromptFragment } from './clientIdentityPrompt.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
-import { extractionFailureForStatus } from './inngest/parseErrors.js';
+import { extractionFailureForStatus, readProviderError } from './inngest/parseErrors.js';
 
 // Slice A of the LLM-trust downgrade plan (see CLAUDE.md +
 // docs/donna-llm-trust-strategy.md) — bump from nano to gpt-5.4. Env
@@ -578,6 +578,9 @@ export const extractReceiptFromBase64 = async ({
 
   if (!response?.ok) {
     const status = Number(response?.status || 0);
+    // The provider's error body tells an empty account from a rate limit or a
+    // rejection of this file (parseErrors.providerFaultOfResponse).
+    const providerError = await readProviderError(response);
     console.error('[receipt] OpenAI returned non-OK', {
       correlation_id: correlationId,
       status,
@@ -591,7 +594,7 @@ export const extractReceiptFromBase64 = async ({
     // 2026-07-21 photo carousel). 408/429/5xx stay retryable.
     // Terminal-unreadable is still reserved for the LLM's own "I can't
     // read it" signal.
-    return { ...extractionFailureForStatus(status), model: config.model };
+    return { ...extractionFailureForStatus(status, { providerError }), model: config.model };
   }
 
   let payload;

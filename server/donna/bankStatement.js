@@ -16,6 +16,7 @@ import {
   ocrPdfWithOpenAiVision
 } from './bankStatementVision.js';
 import { toUtcIsoDay } from './dates.js';
+import { providerFaultOfResponse } from './inngest/parseErrors.js';
 
 const OCR_SCRIPT_PATH = fileURLToPath(new URL('./pdfOcr.swift', import.meta.url));
 const OCR_MAX_PAGES = 80;
@@ -1284,6 +1285,7 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
     // and surface a clear reason so the caller can render guidance
     // instead of waiting for the function-kill.
     let visionTimedOut = null;
+    let visionProviderFault = null;
     try {
       const structured = await extractStructuredFromOpenAiVisionPaginated({
         base64,
@@ -1330,6 +1332,14 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
       // burn ANOTHER 240s; the function dies at 300s with no result.
       // Skip the fallback and surface the timeout so the caller can
       // render guidance and the worker can persist a useful reason.
+      // A refused key or an account with no credit (status + the provider's
+      // error body): the installation's fault, not the statement's. The plain
+      // vision fallback would hit the same wall; say which fault it was so the
+      // parse worker waits on it instead of resting "no transactions".
+      const fault = error?.code === 'OPENAI_VISION_REQUEST_FAILED'
+        ? providerFaultOfResponse({ status: error.statusCode, providerError: error.details?.error })
+        : null;
+      if (fault) visionProviderFault = { fault, status: error.statusCode || null, provider: 'openai' };
       const isAbort = error?.name === 'AbortError' || error?.code === 'ABORT_ERR';
       if (isAbort) {
         visionTimedOut = {
@@ -1337,6 +1347,14 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
           elapsed_ms: Date.now() - visionStart
         };
       }
+    }
+    if (visionProviderFault) {
+      return {
+        ...bestTextLayer,
+        vision_skipped: 'provider_fault',
+        vision_skipped_details: visionProviderFault,
+        vision_elapsed_ms: Date.now() - visionStart
+      };
     }
     if (!visionTooLarge && !visionTimedOut) {
       try {
@@ -1385,6 +1403,14 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
         vision_elapsed_ms: Date.now() - visionStart
       };
     }
+  }
+  // No text layer, no local OCR, and no cloud OCR key on this installation:
+  // the statement was never read, so this is not "no transactions". Say so
+  // the same way the size and timeout guardrails do; the parse worker turns
+  // it into a provider wait (parseErrors.providerWaitFor) instead of a
+  // terminal skip.
+  if (bestTextLayer.lineCount === 0 && safeOcrCandidate.lineCount === 0 && !isOpenAiVisionConfigured()) {
+    return { ...bestTextLayer, vision_skipped: 'not_configured', vision_skipped_details: { fault: 'not_configured', provider: 'openai' } };
   }
   return bestTextLayer;
 };
@@ -1844,6 +1870,8 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
     warnings.push(
       `PDF is ${sizeMb} MB, which exceeds the ${limitMb} MB cloud OCR limit. Re-upload as a smaller file (e.g. split by month) or paste the statement text directly.`
     );
+  } else if (extraction.vision_skipped === 'not_configured' || extraction.vision_skipped === 'provider_fault') {
+    warnings.push('Cloud OCR could not be used on this installation (no key, a refused key, or no credit), so this scanned statement has not been read yet.');
   } else if (extraction.vision_skipped === 'timeout') {
     // The structured vision call hit its per-chunk AbortController and
     // surfaced an AbortError. Without this branch the caller would fall
@@ -1916,6 +1944,7 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
       vision_elapsed_ms: extraction.vision_elapsed_ms ?? null,
       vision_cache_hit: extraction.vision_cache_hit ?? null,
       vision_skipped: extraction.vision_skipped ?? null,
+      vision_skipped_details: ['not_configured', 'provider_fault'].includes(extraction.vision_skipped) ? extraction.vision_skipped_details : null,
       llm_elapsed_ms: extraction.llm_elapsed_ms ?? null,
       llm_cache_hit: extraction.llm_cache_hit ?? null
     }

@@ -75,6 +75,13 @@ export const PARSE_JOB_OWNERSHIP_RECHECK_MS = 60_000;
 // rested `failed`/STUCK — instead of deferring until a human clicks retry.
 export const PARSE_ABANDONED_HEARTBEAT_SECONDS = 300;
 
+// A provider wait (parseErrors.providerWaitFor — no key on this installation,
+// or the provider unreachable) re-checks on a growing cadence: a minute after
+// the first wait, doubling, capped at the hold recheck window (300s by
+// default). The wait spends no attempt, so this cadence — not the budget — is
+// what keeps a dark provider from being asked at full speed.
+export const PROVIDER_WAIT_FIRST_RECHECK_MS = 60_000;
+
 const positiveInt = (raw, fallback) => {
   const n = Number(raw);
   return Number.isFinite(n) && n >= 1 ? Math.floor(n) : fallback;
@@ -91,6 +98,12 @@ export const parseDocumentConcurrency = (env = process.env) =>
 // until the hold is stale enough to be worth re-evaluating.
 export const parseHoldRecheckMs = (env = process.env) =>
   positiveInt(env?.PARSE_HOLD_RECHECK_SECONDS, PARSE_HOLD_RECHECK_SECONDS_DEFAULT) * 1000;
+
+export const providerWaitRecheckMs = (waits, env = process.env) => {
+  const n = Math.max(1, Math.floor(Number(waits) || 1));
+  const cap = parseHoldRecheckMs(env);
+  return Math.min(cap, PROVIDER_WAIT_FIRST_RECHECK_MS * 2 ** Math.min(n - 1, 20));
+};
 
 // The manifest declaration (handlerManifest.js spreads `run` onto it). Host
 // Certificate A digests these fields, so a change here moves the digest —
@@ -228,6 +241,19 @@ export const runParseDocumentJob = async ({ step, payload, job, logger, deps = {
         step,
         runAt: new Date(now().getTime() + parseHoldRecheckMs(env)),
         reason: `admission_refused:${reason}`
+      });
+    }
+    if (outcome === 'provider_wait') {
+      // The worker released the run with a typed provider hold on the row
+      // (its persisted reason) and handed back the row-side attempt. The job
+      // waits with it — no attempt spent here either — so a missing key never
+      // dead-letters a document, and the next recheck that finds the
+      // provider answering reads it under the same run id.
+      const hold = result.hold || {};
+      await deferParseJob({
+        step,
+        runAt: new Date(now().getTime() + providerWaitRecheckMs(hold.waits, env)),
+        reason: `provider_wait:${hold.reason_code || 'provider_unavailable'}:${hold.provider || 'unknown'}`
       });
     }
     if (outcome === 'not_pending') {

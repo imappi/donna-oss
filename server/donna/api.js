@@ -14504,6 +14504,7 @@ export const runParseDrainTick = async ({
     exhausted: 0,
     admission_refused: 0,
     held: 0,
+    provider_wait: 0,
     not_claimed: 0
   };
   const errors = [];
@@ -14548,6 +14549,21 @@ export const runParseDrainTick = async ({
             reason_code: reasonCode,
             receipt_id: result.hold?.receipt_id ?? null
           });
+          continue;
+        }
+        if (result.claim_outcome === 'provider_wait') {
+          // The provider this row needs is not configured or unreachable: the
+          // worker released it with its typed hold (no attempt spent), and this
+          // drain re-checks it once the hold is older than the recheck window.
+          counts.provider_wait += 1;
+          if (holds.length < 10) {
+            holds.push({
+              document_id: row.id,
+              client_id: row.client_id,
+              reason_code: result.reason_code || null,
+              provider: result.hold?.provider || null
+            });
+          }
           continue;
         }
         // stale_run / not_pending: another owner has this run. Not ours.

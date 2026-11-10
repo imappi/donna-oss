@@ -375,7 +375,7 @@ for (const sweepFirst of [false, true]) {
   });
 }
 
-test('FI appliance: an invalid provider key is named as a credential failure and the corrected key finishes the run', { skip: applianceHarnessSkipReason() }, async () => {
+test('FI appliance: an invalid provider key is named as a credential failure, waits without spending attempts, and the corrected key finishes the run', { skip: applianceHarnessSkipReason() }, async () => {
   const app = await bootFi(`fi-auth-${process.pid}`);
   try {
     const { clientId } = await app.createClient({ profile: FI_PROFILE });
@@ -385,24 +385,26 @@ test('FI appliance: an invalid provider key is named as a credential failure and
     app.providers.script('unified_extraction', [{ status: 401, body: { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } } }]);
     app.providers.script('supplier_bill_extraction', [{ status: 401, body: { error: { message: 'Incorrect API key provided', type: 'invalid_request_error', code: 'invalid_api_key' } } }]);
     const upload = await app.uploadDocument({ clientId, bytes: await fiDocumentBytes(source), filename: `${source.reference}.pdf`, mimeType: 'application/pdf', documentType: source.type });
-    await app.tick({ functions: [PARSE] });
-    const failed = await app.read.document(upload.documentId);
-    assert.equal(failed.parse_status, 'failed', JSON.stringify(failed.parse_error));
-    assert.equal(failed.parse_error?.code, 'DOCUMENT_EXTRACTION_UNAUTHORIZED', JSON.stringify(failed.parse_error));
-    assert.match(failed.parse_error?.reason || '', /_401$/);
-    assert.match(failed.parse_error?.safe_user_message || '', /key/i);
-    assert.doesNotMatch(failed.parse_error?.safe_user_message || '', /rejected this file/i, 'a bad key is never blamed on the document');
-    assert.equal(failed.parse_error?.retryable, false);
-    assert.equal(failed.parse_error?.retry_owner, 'manual');
+    // 2026-11-10 (provider waits, PR #71): a refused key is the installation's
+    // fault, so the document no longer rests terminal on a manual retry. It
+    // waits with the stored reason, spending no attempt, and is read on the
+    // next recheck once the key is corrected — no click.
+    await app.tick({ functions: [PARSE], collapseWaits: false, maxRounds: 1 });
+    const waiting = await app.read.document(upload.documentId);
+    assert.equal(waiting.parse_status, 'pending', JSON.stringify(waiting.parse_error));
+    const hold = waiting.payload?.parse_hold;
+    assert.equal(hold?.reason_code, 'provider_unauthorized', JSON.stringify(hold));
+    assert.equal(hold?.code, 'DOCUMENT_EXTRACTION_UNAUTHORIZED');
+    assert.match(hold?.reason || '', /_401$/);
+    assert.equal(hold?.key_name, 'OPENAI_API_KEY', 'the refused key is named — never the document');
+    assert.equal(waiting.parse_attempts, 0);
     assert.equal((await counts(app, clientId)).asks, 0, 'a credential failure never becomes a client question');
     const jobs = await app.read.jobs({ functionId: PARSE_DOCUMENT_FUNCTION_ID });
-    assert.equal(jobs.length, 1); assert.equal(jobs[0].status, 'succeeded', 'a deterministic refusal spends one attempt, not four');
-    // The key is corrected in Settings; the ordinary retry route re-runs the document.
+    assert.equal(jobs.length, 1); assert.equal(jobs[0].status, 'pending'); assert.equal(jobs[0].attempt_count, 0, 'a refused key spends no attempt');
+    // The key is corrected in Settings; the next recheck reads the document.
     app.providers.script('document_routing', [fiRoutingFixture(source.type)]);
     app.providers.script('unified_extraction', [fiExtractionFixture(source)]);
-    const retried = await api(app, '/api/donna/firms/documents/retry-parse', { document_ids: [upload.documentId] });
-    assert.equal(retried.documents?.length, 1, JSON.stringify(retried));
-    assert.equal(retried.documents[0].parse_status, 'pending');
+    await app.query("update local_jobs set run_at = now() where function_id = $1 and status = 'pending'", [PARSE_DOCUMENT_FUNCTION_ID]);
     await app.tick({ functions: [PARSE] });
     const recovered = await app.read.document(upload.documentId);
     assert.equal(recovered.parse_status, 'completed', JSON.stringify(recovered.parse_error));

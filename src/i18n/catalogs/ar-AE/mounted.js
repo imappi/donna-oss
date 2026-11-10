@@ -640,7 +640,12 @@ const KEY_OVERRIDES = Object.freeze({
   'mounted.financial.keyboard.accept': 'قبول',
   'mounted.financial.keyboard.nav': 'تنقّل',
   'mounted.financial.ukWatch': 'متابعة المتطلبات النظامية في المملكة المتحدة',
-  'mounted.financial.box': 'الخانة {box}: {value}'
+  'mounted.financial.box': 'الخانة {box}: {value}',
+  // Machine-written, unreviewed: a document's stored provider wait.
+  'mounted.financial.waitingProviderKey': 'لا يوجد {code} في هذا التثبيت: لم يُقرأ بعد. ستتم قراءته بمجرد إضافة المفتاح.',
+  'mounted.financial.waitingProviderKeyRefused': 'رفض {provider} المفتاح {code}: لم يُقرأ بعد. ستتم قراءته بمجرد تصحيح المفتاح.',
+  'mounted.financial.waitingProviderCredit': 'لا يوجد رصيد متبقٍ في حساب {provider}: لم يُقرأ بعد. ستتم قراءته بمجرد إضافة الرصيد.',
+  'mounted.financial.waitingProvider': 'تعذّر الوصول إلى {provider}: لم يُقرأ بعد. ستتم قراءته بمجرد أن يستجيب.'
 });
 
 const mounted = Object.freeze(Object.fromEntries(
