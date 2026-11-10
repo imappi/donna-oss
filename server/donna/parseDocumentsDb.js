@@ -451,6 +451,19 @@ export const registerDocumentInDb = async ({
       // including replays: caller ids and independent FKs do not prove scope.
       await lockUploadClientInFirm({ client, firmId, clientId: document.client_id });
 
+      // Registrations of one document id run one at a time, from before the
+      // Layer 1 read to commit. Without this, a retry that passed its
+      // `on conflict (id)` check before the first registration's row existed
+      // holds a speculative documents_pkey entry for the id and waits on the
+      // first in documents_storage_object_unique, while the first's
+      // commit-time convergence settle (`update documents … where id`, not HOT
+      // once the row's page is full) needs a documents_pkey entry for the same
+      // id and waits on the retry: PostgreSQL reports a deadlock and one of
+      // them answers 500. Serialised, the retry reads the committed row at
+      // Layer 1 and answers it as a replay. The id is the pkey's own key, so
+      // registrations of other documents never wait here.
+      await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [`document-register:${document.id}`]);
+
       // Layer 1: storage_object_key idempotency. An API replay must
       // return the exact same row, not a phantom duplicate. The unique
       // index in 011 enforces this; the lookup is just so we can return
