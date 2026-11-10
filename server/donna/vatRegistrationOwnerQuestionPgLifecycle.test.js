@@ -81,6 +81,20 @@ const run = async ({ t, pool, clientId, verdict, refusalCode, expectedQuestion, 
   await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
   assert.equal((await asks()).length, 1);
   assert.equal(await journals(), 0);
+  // 6. The owner answers. The reply re-runs the coder; the record still does
+  //    not say registered, so the line is neither asked again nor applied: a
+  //    person records the registration first.
+  await pool.query("update client_evidence_requests set status='replied',responded_at=now(),response_payload=$2 where transaction_id=$1 and status in ('draft','open')",
+    [id, { reply: 'Yes, the business has been registered since 2026-01-01.' }]);
+  await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
+  const answered = await row();
+  assert.equal(answered.payload.ai_suggestion?.tax_unresolved_guard?.owner_answered, true);
+  assert.equal(answered.payload.ai_suggestion?.ask_client_question, '');
+  assert.notEqual(answered.coding_state, 'applied');
+  const afterReply = await runCodingAutoPostForTransaction({ firmId, clientId, transactionId: id, env: {}, configSnapshot: { CODING_AUTO_POST: { stage: 'auto' } } });
+  assert.equal(afterReply.owner_asked, 0, JSON.stringify(afterReply));
+  assert.equal((await asks()).length, 0, 'no new question to the owner');
+  assert.equal(await journals(), 0);
 };
 
 test('real PG (GB): a line refused for VAT registration becomes the owner\'s registration question', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
