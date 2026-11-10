@@ -91,8 +91,8 @@ changes are proposals for this one. Nothing here is worked around in code.
 ## Endpoints answering `501 NOT_IMPLEMENTED`
 
 Chat (list, send, apply), artifact conversations, mileage, activity, onboarding
-voice/text drafts and profile confirmation, business setup and lookup,
-settings, reviews, account deletion request. Each has no
+voice/text drafts and profile confirmation, business register lookup, settings,
+reviews, account deletion request. Each has no
 existing Donna reader or writer to route to, or (chat) one whose action
 vocabulary does not match the contract's (`answer_evidence_request` /
 `record_mileage` vs `answer_card` / `approve_card` / `record_mileage`, with
@@ -101,6 +101,31 @@ messages without their proposals would hide them, so the whole chat unit
 waits. Mileage exists only as a chat-proposal verb. The reviews endpoint could
 answer `source: not_configured`, but that would claim a configured-ness
 decision Donna never made; it answers 501 like the rest.
+
+## Business register (`business-setup`)
+
+GET and POST are served (`mobileBusinessSetup.js`); every change is one
+`profile_patch` through the firm route `POST /clients/:id/profile` and its
+writer `updateClientProfileInDb`, whose `client.profile.update` audit row is the
+receipt. Homes: `profile.businessId` (the Y-tunnus the invoice seller contexts
+read), `profile.legalName` (the legal name; `company_name` is written only when
+empty), `profile.business_register` (legal form, form code, registered address,
+source, who confirmed and when), `profile.business_setup` (stage, deferred).
+`entity_type` is never written: it is the statutory axis the Finnish tax
+modules branch on.
+
+| Contract field / behaviour | What the adapter does | Why | Proposal |
+| --- | --- | --- | --- |
+| `POST …/business-setup/lookup` | `501 NOT_IMPLEMENTED` | The PRH open-data response shape could not be confirmed: the official API description (avoindata.prh.fi) and the open-data portal (avoindata.suomi.fi) are unreachable from the build sandbox, and Donna does not write a provider's shape from memory (the same reason `finland/prepaymentRegister.js` ships no live adapter). | Donna: confirm the v3 `companies` shape from the official description or a live response, then add the transport (injected, with a timeout), its host in `providerEndpoints.js`, and an entity-scoped 15-minute candidate store. |
+| `confirm_registry` | `409 REGISTRY_CANDIDATE_EXPIRED` for every candidate id | No lookup issues candidates, so none is ever current; this is the contract's own answer for one that is not. | Follows the lookup. |
+| `BusinessIdentity.registered_address` (manual) | `''` | `confirm_manual` carries no address. | Contract: allow `null`, or add an address to `confirm_manual`. |
+| `BusinessSetup.identity` | `null` unless the owner confirmed it on this surface | A Business ID recorded another way (the firm, the invoice chat) has no source the contract can name (`prh_ytj` or `owner`). It still counts as associated: a different ID is `409 BUSINESS_ID_LOCKED`, the same ID may be confirmed. | Contract: a `firm` source, or an `associated_business_id` field. |
+| `legal_form` vs the book's legal form | Stored as said, beside `entity_type`, never reconciled | Changing `entity_type` changes tax and filing behaviour; this surface must not. | Donna: surface a mismatch to the firm as a review item. |
+| `prior_record_ids` | `[]` | Background records are not supported by this server (`purpose: prior_records` answers 501). | Follows background records. |
+| `next_step` | identify_business → business_stage → first_receipt → done; never `prior_records` | Sending the owner to a step this server cannot store would fail. | Follows background records. |
+| `suggestion_available` | `true` once the entity has any document | The contract's reference timing; Donna can say it from `documents`. | — |
+| `capabilities` | The contract's fixed values | Each enum has one value; they are not verdicts about this book. | Contract: real verdicts if the app should rely on them. |
+| `confirm_manual` outside Finland | `400 BUSINESS_REGISTER_FINLAND_ONLY` | The Business ID format and register are Finnish; the contract lists no country refusal for this POST. | Contract: name the refusal. |
 
 ## Contract file quirks
 
