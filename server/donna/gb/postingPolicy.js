@@ -4,7 +4,7 @@ import {
   gbVatControlAccountFromChart, gbVatDirectionForTransaction, gbVatOutputCodeForRate, resolveGbVatCode, resolveGbVatCodeForCoding,
   resolveGbVatSplitForPosting, splitGbVatGross
 } from './vatCodes.js';
-import { resolveGbVatRegistrationOnDate } from './vatRegistration.js';
+import { normalizeGbVatRegistration, resolveGbVatRegistrationOnDate } from './vatRegistration.js';
 import { ledgerAccountTypeFor } from '../ledger.js';
 import { assertTaxSourceEvidence } from '../taxSourceEvidence.js';
 import { toIsoDay } from '../dates.js';
@@ -54,6 +54,40 @@ const GB_TAX_REGISTRATION = Object.freeze({
     return registered === false
       ? `${line}our records say the business was not VAT-registered on ${at}. Has the business registered for VAT since then? If so, from what date is the registration effective?`
       : `${line}we have no record of whether the business is VAT-registered. Is the business registered for VAT? If so, from what date is the registration effective?`;
+  },
+  // Recording the owner's answer (taxRegistrationReply.js), the FI twin: the
+  // one record the UK keeps, through vatRegistration.js's own normaliser. No
+  // UK profile guard locks the record today.
+  profileField: 'vat_registration',
+  recordLockedCodes: Object.freeze([]),
+  // A stated end makes it deregistered; a plain "no" is not_registered and
+  // carries no VAT number (the normaliser refuses one). The VAT number, basis
+  // and return period the firm recorded stay with a registered record. An
+  // owner answer is not primary verification, so verified_* are never set.
+  recordFromAnswer: ({ current = null, registered, registeredFrom = null, registeredUntil = null } = {}) => {
+    const status = registeredUntil ? 'deregistered' : registered ? 'registered' : 'not_registered';
+    const kept = status !== 'not_registered' && current && typeof current === 'object' && !Array.isArray(current)
+      ? Object.fromEntries(['vat_registration_number', 'registration_basis', 'vat_return_period'].filter((key) => current[key] != null).map((key) => [key, current[key]])) : {};
+    return normalizeGbVatRegistration({ ...kept, status, registered_from: registeredFrom, registered_until: registeredUntil });
+  },
+  answerQuestion: ({ language = 'en', kind = 'unclear' } = {}) => {
+    if (language === 'fi') return kind === 'date'
+      ? 'Kiitos. Mistä päivästä alkaen yrityksen VAT-rekisteröinti on voimassa? Kerro tarkka päivämäärä niin kuin se lukee HMRC:n rekisteröintitodistuksessa (VAT4).'
+      : kind === 'exhausted'
+        ? 'Emme vielä pysty kirjaamaan VAT-rekisteröintiä. Kerro rekisteröinnin tarkka voimaantulopäivä tai lähetä kopio HMRC:n rekisteröintitodistuksesta (VAT4).'
+        : 'Kiitos vastauksesta. Emme saaneet siitä varmaa tietoa: onko yritys rekisteröity arvonlisäverovelvolliseksi (VAT)? Vastaa kyllä tai ei, ja jos kyllä, kerro rekisteröinnin voimaantulopäivä.';
+    return kind === 'date'
+      ? 'Thanks. From what date is the VAT registration effective? Please give the exact date shown on the HMRC registration certificate (VAT4).'
+      : kind === 'exhausted'
+        ? 'We cannot record the VAT registration yet. Please tell us the exact effective date of registration, or send a copy of the HMRC registration certificate (VAT4).'
+        : 'Thanks for your reply. We could not tell from it whether the business is VAT-registered. Please answer yes or no, and if yes, the date the registration is effective from.';
+  },
+  recordedNotice: ({ language = 'en', record = null } = {}) => {
+    const from = record?.registered_from || '', until = record?.registered_until || '';
+    if (language === 'fi') return `${record?.status === 'not_registered' ? 'Kirjasimme, että yritys ei ole rekisteröity arvonlisäverovelvolliseksi (VAT).'
+      : until ? `Kirjasimme, että yrityksen VAT-rekisteröinti oli voimassa ${from ? `${from} – ` : ''}${until}.` : `Kirjasimme, että yrityksen VAT-rekisteröinti on voimassa ${from} alkaen.`} Vastaa tähän, jos tieto ei ole oikein.`;
+    return `${record?.status === 'not_registered' ? 'We recorded that the business is not VAT-registered.'
+      : until ? `We recorded that the business was VAT-registered ${from ? `from ${from} ` : ''}until ${until}.` : `We recorded that the business has been VAT-registered since ${from}.`} Reply here if that is not right.`;
   }
 });
 

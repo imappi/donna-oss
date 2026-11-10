@@ -1105,6 +1105,71 @@ export const createClientEvidenceRequestInDb = async ({
     };
   });
 
+// The VAT/ALV registration question is one fact per client (one record,
+// clients.profile.alv_registration / vat_registration), so it is asked once per
+// client however many lines the ledger refused for it. The first refused line
+// mints it through the one chokepoint above (its anchor, wording, receipt and
+// `asked` transition), tagged with the registration lane so its answer reaches
+// the lane reader (taxRegistrationReply.js). A later refused line of the same
+// client, while that question is live, joins it instead: the line is named on
+// the question (request_payload.tax_registration.lines), stamped as waiting on
+// the client and moved to `asked`, with a receipt. The answer settles every
+// line the question names.
+export const mintTaxRegistrationQuestionInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId, transactionId, reviewItemId,
+  question, evidenceType, guard = {}, actorId = 'coding_auto_post' } = {}) =>
+  withFirmDbClient(async (client) => {
+    const { TAX_REGISTRATION_LANE } = await import('../taxRegistrationReply.js');
+    const line = { transaction_id: transactionId, refusal_code: guard.refusal_code || null, as_of: guard.as_of || null };
+    const mintOutcome = {};
+    let request = null;
+    let joined = false;
+    await client.query('begin');
+    try {
+      // Serialise per client: two lines refused at once must not mint two questions.
+      await client.query('select id from clients where firm_id = $1 and id = $2 for update', [firmId, clientId]);
+      const live = (await client.query(`select * from client_evidence_requests
+        where firm_id = $1 and client_id = $2 and audience = 'client' and status in ('draft', 'open', 'replied')
+          and request_payload->>'lane' = $3
+        order by created_at, id limit 1 for update`, [firmId, clientId, TAX_REGISTRATION_LANE])).rows[0] || null;
+      if (!live || live.transaction_id === transactionId) {
+        request = await createClientEvidenceRequestWithClient({ client, firmId, clientId, transactionId, reviewItemId,
+          question, evidenceType, actorId, mintOutcome,
+          requestContext: { lane: TAX_REGISTRATION_LANE, tax_registration: { client_id: clientId,
+            refusal_code: line.refusal_code, as_of: line.as_of, language: guard.language || null,
+            lines: [...(Array.isArray(live?.request_payload?.tax_registration?.lines) ? live.request_payload.tax_registration.lines
+              .filter((item) => item?.transaction_id !== transactionId) : []), line] } } });
+      } else {
+        joined = true;
+        const already = (live.request_payload?.tax_registration?.lines || []).some((item) => item?.transaction_id === transactionId);
+        if (!already) {
+          await client.query(`update client_evidence_requests
+              set request_payload = jsonb_set(request_payload, '{tax_registration,lines}',
+                    coalesce(request_payload->'tax_registration'->'lines', '[]'::jsonb) || jsonb_build_array($4::jsonb), true),
+                  updated_at = now()
+            where firm_id = $1 and client_id = $2 and id = $3`, [firmId, clientId, live.id, JSON.stringify(line)]);
+        }
+        await client.query(`update transactions set status = 'needs_client', payload = payload || $4::jsonb, updated_at = now()
+          where firm_id = $1 and client_id = $2 and id = $3`, [firmId, clientId, transactionId, JSON.stringify({
+          status: 'needs_client', transaction_status: 'needs_client', client_question: live.question,
+          tax_registration_question_id: live.id })]);
+        await applyCodingTransitionIfAllowed(client, { firmId, clientId, transactionId, to: 'asked' });
+        if (!already) {
+          await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+            values ($1, $2, 'system', $3, 'evidence_request.line_joined', 'client_evidence_request', $4, $5::jsonb)`,
+          [firmId, clientId, actorId, live.id, JSON.stringify({ ...line, anchor_transaction_id: live.transaction_id,
+            reason: 'one_registration_question_per_client' })]);
+        }
+        request = rowToClientEvidenceRequestPayload(live);
+      }
+      await client.query('commit');
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    }
+    if (request && !joined) await onEvidenceRequestCreated({ client, firmId, clientId, evidenceRequest: request });
+    return { evidence_request: request, minted: joined ? false : (mintOutcome.minted ?? null), joined };
+  });
+
 // Applied coding outranks an open ask: once an account lands on the
 // line (human apply, batch auto-apply, or reply-driven re-code), any
 // still-open evidence request on that transaction is moot — leaving it

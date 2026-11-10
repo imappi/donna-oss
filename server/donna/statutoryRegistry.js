@@ -6,6 +6,7 @@ import * as ae from './ae/statutoryDb.js';
 import * as singapore from './singapore/statutoryDb.js';
 import { normalizeJurisdictionKey } from './taxCodeJurisdiction.js';
 import { totalsMismatchReplyAdapter } from './totalsMismatchReply.js';
+import { taxRegistrationReplyAdapter } from './taxRegistrationReply.js';
 
 export {
   getSingaporeGstDraftArtifactFromDb,
@@ -126,11 +127,13 @@ export const resolveStatutoryHandler = ({ jurisdiction, operation, registry = ST
 // type AND `request_payload.lane`, so a generic evidence type such as
 // 'supporting_document' is never claimed wholesale. Their key in the listing
 // below is '<evidence_type>#<lane>', which the discovery SQL matches.
-const LANE_OWNER_REPLY_ADAPTERS = Object.freeze([totalsMismatchReplyAdapter]);
+// A lane whose question is minted on a bank line but is about the business
+// (the VAT/ALV registration question, taxRegistrationReply.js) declares
+// `transactionAnchored`; only such a lane claims a line-anchored ask.
+const LANE_OWNER_REPLY_ADAPTERS = Object.freeze([totalsMismatchReplyAdapter, taxRegistrationReplyAdapter]);
 const laneKey = adapter => `${adapter.evidenceType}#${adapter.lane}`;
-const laneOwnerReplyAdapter = request => (request?.transaction_id ? null
-  : LANE_OWNER_REPLY_ADAPTERS.find(adapter => adapter.evidenceType === request?.evidence_type
-    && adapter.lane === request?.request_payload?.lane) || null);
+const laneOwnerReplyAdapter = request => LANE_OWNER_REPLY_ADAPTERS.find(adapter => adapter.evidenceType === request?.evidence_type
+  && adapter.lane === request?.request_payload?.lane && (!request?.transaction_id || adapter.transactionAnchored === true)) || null;
 export const listStructuredOwnerReplyEvidenceTypes = ({ registry = STATUTORY_REGISTRY } = {}) =>
   [...new Set([...Object.values(registry).flatMap(handlers => handlers.getOwnerReplyAdapters?.() || [])
     .map(adapter => adapter.evidenceType), ...LANE_OWNER_REPLY_ADAPTERS.map(laneKey)])];

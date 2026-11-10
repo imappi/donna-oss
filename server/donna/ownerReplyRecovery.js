@@ -6,7 +6,7 @@ import { __recodeTransactionAfterClientReplyWithClient } from './db/asks.js';
 import { isCodingPolicyError } from './codingPolicy.js';
 import { resolveClientCodingPolicyWithClient } from './db/coding.js';
 import { withCodingPolicyIncidentLock } from './codingPolicyRecovery.js';
-import { listStructuredOwnerReplyEvidenceTypes, supportsStructuredOwnerReply } from './statutoryRegistry.js';
+import { listStructuredOwnerReplyEvidenceTypes, resolveStructuredOwnerReplyAdapter, supportsStructuredOwnerReply } from './statutoryRegistry.js';
 import { processStructuredOwnerReplyWithClient } from './structuredOwnerReply.js';
 import { documentOwnerReplyDocumentId, processDocumentOwnerReplyWithClient } from './documentOwnerReply.js';
 import { deliverOwnerFollowUpWithClient } from './ownerAskDelivery.js';
@@ -25,6 +25,11 @@ export const DISCOVER_OWNER_REPLIES_SQL = `
   where r.firm_id = $1 and r.status = 'replied'
     and ((r.transaction_id is not null and t.id is not null
           and coalesce(t.coding_state, '') not in ('applied', 'held', 'posted', 'synced', 'closed'))
+         -- A line-anchored lane question about the business (the registration
+         -- question): its consumer is the lane adapter, whatever its anchor
+         -- line's state (processOwnerReplyWithClient re-checks the adapter).
+         or (r.transaction_id is not null and r.audience = 'client'
+             and r.evidence_type || '#' || coalesce(r.request_payload->>'lane', '') = any($3::text[]))
          or (r.transaction_id is null and r.audience = 'client'
              and (r.evidence_type = any($3::text[])
                   or r.evidence_type || '#' || coalesce(r.request_payload->>'lane', '') = any($3::text[])))
@@ -83,7 +88,11 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
       'select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3',
       [firmId, clientId, evidenceRequestId]
     )).rows[0];
-    const structured = !request?.transaction_id && supportsStructuredOwnerReply(request);
+    // A line ask is the coder's reply, unless a lane adapter claims it as a
+    // question about the business (the registration question).
+    const structured = request?.transaction_id
+      ? resolveStructuredOwnerReplyAdapter({ request })?.transactionAnchored === true
+      : supportsStructuredOwnerReply(request);
     const documentReply = !request?.transaction_id && !structured && Boolean(documentOwnerReplyDocumentId(request));
     if (!request || request.status !== 'replied' || (!request.transaction_id && !structured && !documentReply)) return { applied: false, skipped: 'no_pending_reply' };
     const replyKey = ownerReplyIdentity(request);
@@ -115,14 +124,14 @@ export const processOwnerReplyWithClient = async ({ client, firmId, clientId, ev
     }
     if (!force && attempts >= OWNER_REPLY_MAX_ATTEMPTS && !previous.policy_failure) return { applied: false, skipped: 'reply_attempts_exhausted' };
     const tx = request.transaction_id ? (await client.query('select coding_state, transaction_date from transactions where firm_id = $1 and client_id = $2 and id = $3', [firmId, clientId, request.transaction_id])).rows[0] : null;
-    if (request.transaction_id && (!tx || ['applied', 'held', 'posted', 'synced', 'closed'].includes(tx.coding_state))) return { applied: false, skipped: 'terminal_or_missing_transaction' };
+    if (request.transaction_id && !structured && (!tx || ['applied', 'held', 'posted', 'synced', 'closed'].includes(tx.coding_state))) return { applied: false, skipped: 'terminal_or_missing_transaction' };
     let result;
     try {
       if (documentReply) {
         result = await processDocumentOwnerReplyWithClient({ client, firmId, request, expectedReplyKey: replyKey, attempts, actorId });
         return await deliverClarificationFollowUp({ client, firmId, clientId, request, result });
       }
-      if (!request.transaction_id) {
+      if (structured) {
         result = await processStructuredOwnerReplyWithClient({ client, firmId, request, expectedReplyKey: replyKey, attempts });
         return await deliverClarificationFollowUp({ client, firmId, clientId, request, result });
       }

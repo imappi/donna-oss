@@ -1,3 +1,4 @@
+import { TAX_REGISTRATION_LANE } from '../taxRegistrationReply.js';
 import { isDeepStrictEqual } from 'node:util';
 import { assertFirmAccess } from './authority.js';
 import { codingStatutoryEvidenceGap } from '../codingStatutoryEvidence.js';
@@ -1109,7 +1110,8 @@ export const __attachReplyContextToBatchPool = async ({
 } = {}) => {
   if (!transactions.length) return { pool: [], skippedWaiting: 0 };
   const requestsResult = await client.query(
-    `select distinct on (transaction_id) id, transaction_id, status, audience, question, responded_at, resolved_by, response_payload
+    `select distinct on (transaction_id) id, transaction_id, status, audience, question, responded_at, resolved_by, response_payload,
+            request_payload->>'lane' as lane, evidence_type
      from client_evidence_requests
      where firm_id = $1 and client_id = $2
        and transaction_id = any($3::text[])
@@ -1148,6 +1150,14 @@ export const __attachReplyContextToBatchPool = async ({
     // W1 (INV-14): a drafted question is on the owner as much as a sent one —
     // the line waits for the answer, it is not re-coded around the question.
     if ((request.status === 'open' || request.status === 'draft') && !transaction.coding_evidence_reconsideration) {
+      skippedWaiting += 1;
+      continue;
+    }
+    // A line-anchored lane question about the business (the registration
+    // question, taxRegistrationReply.js) is answered by its lane reader, not
+    // by re-coding this line around the reply: the line waits until the
+    // reader records the answer and re-admits it.
+    if (request.status === 'replied' && request.lane === TAX_REGISTRATION_LANE) {
       skippedWaiting += 1;
       continue;
     }
