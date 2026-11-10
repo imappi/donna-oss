@@ -13,6 +13,7 @@ import { hash } from '../jevEvidenceContract.js';
 
 import { loadTaxPostingContext, readTaxPostingEvidence, taxFactsDigest } from './taxPostingFacts.js';
 import { readPostingAdmissionWithClient, requirePostingAdmission } from '../postingAdmissionRegistry.js';
+import { resolveMarketPostingAccounts } from '../provisioningPolicyRegistry.js';
 
 import { aeOpeningDigest } from '../ae/openingBalances.js';
 import { prepareAeOpeningPostWithClient, finishAeOpeningPostWithClient } from '../ae/openingBalanceDb.js';
@@ -210,6 +211,16 @@ export const getDonnaLedgerAccountsForClient = async ({ client, firmId, clientId
   }));
 };
 
+// The market's declared cash account (FI: 1900 Käteinen raha) is offered
+// before its first posting mints it — bank and cash rows are minted, not born
+// (finland/provisioningPolicy.js), and an account the coder cannot name is a
+// cash-box payment that can only go to suspense.
+const declaredMenuAccounts = (ledgerAccounts = [], jurisdiction = null) => {
+  const cash = resolveMarketPostingAccounts(jurisdiction)?.cashAccount?.();
+  if (!cash || ledgerAccounts.some((account) => String(account.code || '').trim() === cash.code)) return [];
+  return [{ code: cash.code, name: cash.name, type: cash.account_type, canonical_role: cash.canonical_role }];
+};
+
 // Menu accounts for a Donna-chart client: their accumulated
 // ledger_accounts rows UNIONED with the base vocabulary. The union is
 // load-bearing — a client whose ledger chart has one row (the first
@@ -225,6 +236,7 @@ export const __donnaChartMenuAccounts = (ledgerAccounts = [], clientProfile = {}
   // A row the palette names is offered under that palette name (below), so
   // the coder's vocabulary is the same whether or not the book is coded.
   ...ledgerAccounts.filter((account) => !account.aliases?.length),
+  ...declaredMenuAccounts(ledgerAccounts, requireCodingPolicyForClient(clientProfile).jurisdiction),
   ...fallbackAccountOptionsForClient(clientProfile).map((name) => ({ name }))
 ];
 
@@ -1781,10 +1793,13 @@ export const upsertLedgerAccountForJournal = async ({ client, firmId, clientId, 
     canonical_role: account.canonical_role
   });
   const mintShape = __ledgerAccountMintShape({ account, canonicalRole });
+  // A market-declared posting account (FI 1910 / 1900) names its statutory
+  // group; the read model places the row by it, as it places a born row.
   const payload = {
     role: account.role || null,
     label: account.label || (code && name && code !== name ? `${code} · ${name}` : name),
-    xero_account_id: account.xero_account_id || null
+    xero_account_id: account.xero_account_id || null,
+    ...(account.statutory_group ? { statutory_group: account.statutory_group } : {})
   };
   const result = await client.query(
     `insert into ledger_accounts (

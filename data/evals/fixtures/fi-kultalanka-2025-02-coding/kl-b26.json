@@ -73,7 +73,7 @@
         },
         {
           "role": "bank",
-          "account": "Business Checking · EUR",
+          "account": "1910",
           "direction": "credit",
           "amount": 33.15,
           "tax_code": "NONE"

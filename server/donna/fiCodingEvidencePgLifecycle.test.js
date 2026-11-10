@@ -115,10 +115,10 @@ test('real PG: the real coder consumes late evidence, posts principal/interest s
   assert.equal((await pool.query("select count(*)::int n from client_evidence_requests where transaction_id='loan' and status in ('draft','open','replied')")).rows[0].n,0);
 
   const lines=(await pool.query('select a.name,l.debit,l.credit,l.tax_type from ledger_lines l join ledger_accounts a on a.id=l.account_id where l.journal_id=$1 order by l.line_no',[loanJournals[0].id])).rows;
-  assert.deepEqual(lines.map(l=>[l.name,Number(l.debit),Number(l.credit)]),[['Interest expense',67.98,0],['Loan payable',344.37,0],['Business Checking · EUR',0,412.35]]);
+  assert.deepEqual(lines.map(l=>[l.name,Number(l.debit),Number(l.credit)]),[['Interest expense',67.98,0],['Loan payable',344.37,0],['Pankkitili',0,412.35]]);
   assert.ok(lines.every(l=>l.tax_type==='NONE'));
   const withholdingLines=(await pool.query(`select a.name,l.debit,l.credit from ledger_lines l join ledger_accounts a on a.id=l.account_id join ledger_journals j on j.id=l.journal_id where j.source_id='withholding' order by l.line_no`)).rows;
-  assert.deepEqual(withholdingLines.map(l=>[l.name,Number(l.debit),Number(l.credit)]),[['Payroll withholding and employer health-insurance payable',332.88,0],['Business Checking · EUR',0,332.88]]);
+  assert.deepEqual(withholdingLines.map(l=>[l.name,Number(l.debit),Number(l.credit)]),[['Payroll withholding and employer health-insurance payable',332.88,0],['Pankkitili',0,332.88]]);
   // Rent coded before its bill; the new match must invalidate the old verdict.
   await doc('rent-bill','Vuokralasku.pdf',1450,0,[['Vuokra helmikuu',1450]]); await match('rent','rent-bill',1450);
   await assert.rejects(postLedgerTransactionInDb({firmId,clientId,transactionId:'rent',dryRun:true}),{code:'TRANSACTION_CODING_EVIDENCE_STALE'});

@@ -371,3 +371,16 @@ test('ALV confirm ask: English for an owner who chose English, Finnish otherwise
   assert.match(await confirm('en'), /Reply “yes” to confirm and I will file the return/);
   assert.match(await confirm('fi'), /^ALV-ilmoitus, verokausi 2026-06\nMaksettava vero 102,00 €\./);
 });
+
+test('the owner question gains one sentence for postings being corrected, in the owner language', async () => {
+  const { buildFinlandAlvReviewQuestion } = await import('./finland/statutoryDb.js');
+  const review = (count) => ({ status: 'needs_review', blockers: ['open_coding_corrections'], openCodingCorrections: { count, items: [] } });
+  assert.equal(buildFinlandAlvReviewQuestion({ review: review(1), periodKey: '2026-06', language: 'fi' }),
+    'ALV-ilmoitus (2026-06) ei ole vielä valmis lähetettäväksi. Yhtä tämän kauden kirjausta korjataan parhaillaan, ja ilmoitus odottaa, kunnes korjaus on tehty.');
+  assert.equal(buildFinlandAlvReviewQuestion({ review: review(3), periodKey: '2026-06', language: 'fi' }),
+    'ALV-ilmoitus (2026-06) ei ole vielä valmis lähetettäväksi. 3 tämän kauden kirjausta korjataan parhaillaan, ja ilmoitus odottaa, kunnes korjaukset on tehty.');
+  assert.equal(buildFinlandAlvReviewQuestion({ review: review(2), periodKey: '2026-06', language: 'en' }),
+    'The VAT return (2026-06) is not ready to file yet. 2 postings in this period are being corrected, and the return waits until that is done.');
+  assert.equal(buildFinlandAlvReviewQuestion({ review: { status: 'ready', blockers: [] }, periodKey: '2026-06', language: 'en' }),
+    'The VAT return (2026-06) is not ready to file yet.', 'no case, no sentence');
+});
