@@ -21,6 +21,7 @@ import { recoverChangedCodingEvidenceInDb } from './db/codingEvidence.js';
 import { runCodingAutoPostForTransaction } from './codingAutoPost.js';
 import { DISCOVER_OWNER_REPLIES_SQL } from './ownerReplyRecovery.js';
 import { listStructuredOwnerReplyEvidenceTypes } from './statutoryRegistry.js';
+import { ownerNoticeStatementOf } from './ownerReplyNotice.js';
 import { processWhatsAppInboundMessage } from './channels/whatsappInbound.js';
 import { hashPhoneE164 } from './channels/whatsappWebhookCore.js';
 import { GB_DEFAULT_CHART } from './gb/defaultChart.js';
@@ -81,7 +82,8 @@ const mockModels = (t, state) => {
       state.reads += 1;
       const body = JSON.parse(init.body);
       assert.equal(body.tool_choice?.name, 'interpret_owner_reply');
-      const input = state.reading(JSON.parse(body.messages[0].content));
+      state.context = JSON.parse(body.messages[0].content);
+      const input = state.reading(state.context);
       return new Response(JSON.stringify({ model: READER_MODEL, stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'interpret_owner_reply', input }] }), { status: 200 });
     }
     assert.equal(url, 'https://api.openai.com/v1/responses');
@@ -143,6 +145,8 @@ for (const country of [FI, GB]) {
     await answer(ask.id, first);
     const closed = await questionOf(pool, ask.id);
     assert.equal(closed.status, 'resolved');
+    const recordedStatement = ownerNoticeStatementOf(closed);
+    assert.ok(recordedStatement, 'the answered question shows what was recorded');
     const record = (await profileOf(pool, clientId))[country.field];
     assert.equal(record.registered_from, '2026-01-01');
     const before = await lineOf(pool, lineId);
@@ -154,6 +158,8 @@ for (const country of [FI, GB]) {
     const correction = 'Actually it was from a later date, 2026-04-01.';
     const result = await answer(ask.id, correction);
     assert.equal(state.reads, 2, 'the registration reader read the correction');
+    assert.equal(state.context.reply, correction);
+    assert.equal(state.context.correction_of_earlier_answer?.earlier_reply, first, 'the reader sees the earlier answer beside the correction');
 
     const after = await questionOf(pool, ask.id);
     assert.equal(after.status, 'resolved', 'the question is closed again: nothing is asked of anyone');
@@ -182,6 +188,8 @@ for (const country of [FI, GB]) {
     // The owner is told the earlier answer stands, in their language.
     assert.equal(result.recode.correction?.outcome, 'not_recorded');
     assert.match(result.recode.owner_notice, country.language === 'fi' ? /aiemp/i : /earlier/i);
+    // Where the closed question shows what was recorded, it still shows the earlier answer's record.
+    assert.equal(ownerNoticeStatementOf(after), recordedStatement);
   });
 
   test(`real PG (${country.label}): a correction the registration reader records is written with its receipt and the question closes again`, { skip }, async t => {

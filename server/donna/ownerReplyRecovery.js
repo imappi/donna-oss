@@ -65,10 +65,6 @@ export const clarificationFollowUpAskIds = (request, result) => {
   ].filter(Boolean))];
 };
 
-// One delivery for all three: the gated fan-out, with the re-ask sweep's
-// precedent when nothing delivers (ownerAskDelivery.js). Runs after the
-// consumer committed, under this clock's lease and outside any transaction. A
-// delivery problem never turns a processed answer into a processing failure.
 // A correction (ownerReplyCorrection.js) whose line was finished before the
 // coder could read it: no reader can take it now, so nothing on the line
 // moves and the question goes back to its closed state, with both receipts.
@@ -91,6 +87,10 @@ const restoreUnreadCorrection = async ({ client, firmId, clientId, request, repl
   return { applied: false, skipped: reason, correction: { outcome: CORRECTION_OUTCOMES.notRecorded }, owner_notice: notice, owner_notice_statement: notice };
 };
 
+// One delivery for all three: the gated fan-out, with the re-ask sweep's
+// precedent when nothing delivers (ownerAskDelivery.js). Runs after the
+// consumer committed, under this clock's lease and outside any transaction. A
+// delivery problem never turns a processed answer into a processing failure.
 const deliverClarificationFollowUp = async ({ client, firmId, clientId, request, result, deliverFollowUp = deliverOwnerFollowUpWithClient }) => {
   const ids = clarificationFollowUpAskIds(request, result);
   if (!ids.length) return result;

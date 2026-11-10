@@ -57,7 +57,17 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
     ...(request.response_payload?.document_ids || [])].filter(Boolean))];
   const documents = await loadReplyDocumentsWithContent({ client, firmId, clientId, documentIds });
   if (documents.length !== documentIds.length) refuse('OWNER_REPLY_SOURCE_INVALID', 'An answer document does not belong to this client.');
-  const context = { ask_id: request.id, reply_key: expectedReplyKey, ...askContext(request), client: profile, documents };
+  // A correction to the answer the closed question holds
+  // (ownerReplyCorrection.js): read only by an adapter that declares it can,
+  // with the earlier answer beside the new text so "a later date" has its
+  // reference; never turned into a clarification turn (the earlier answer
+  // stands until a correction is recorded); and the question goes back as it
+  // was when the adapter records nothing.
+  const correction = correctionOf(request);
+  if (correction && adapter.readsCorrections !== true) refuse('OWNER_REPLY_KIND_UNSUPPORTED', 'This question kind does not read corrections.');
+  const context = { ask_id: request.id, reply_key: expectedReplyKey, ...askContext(request), client: profile, documents,
+    ...(correction ? { correction_of_earlier_answer: { earlier_reply: correction.earlier_reply ?? null,
+      earlier_replied_at: correction.earlier_responded_at || null } } : {}) };
   // Optional adapter contract (FI-03): `settle` answers from the evidence alone
   // (no model call; the writer re-validates it under the commit locks), and
   // `maxClarifications` bounds the clarification turns — past the bound the
@@ -71,13 +81,6 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
     .filter(turn => ['clarification_requested', 'clarification_exhausted'].includes(turn?.outcome)).length;
   const bounded = Number.isInteger(adapter.maxClarifications);
   const exhaustedAlready = bounded && request.request_payload?.evidence_topic?.last_assessment?.reason === 'clarification_bound_exhausted';
-  // A correction to the answer the closed question holds
-  // (ownerReplyCorrection.js): read only by an adapter that declares it can,
-  // never turned into a clarification turn (the earlier answer stands until a
-  // correction is recorded), and the question goes back as it was when the
-  // adapter records nothing.
-  const correction = correctionOf(request);
-  if (correction && adapter.readsCorrections !== true) refuse('OWNER_REPLY_KIND_UNSUPPORTED', 'This question kind does not read corrections.');
   const settled = adapter.settle ? await adapter.settle({ client, firmId, request }) : null;
   const interpretation = settled
     ? { answer: settled, confidence: 1, clarification: null, needsClarification: false, model: null, promptVersion: null, settledBy: 'evidence' }
@@ -150,8 +153,13 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
         reason: outcome?.correction_unclear ? 'unclear' : outcome?.drivenAction || adapter.action });
       correctionOutcome = restored ? CORRECTION_OUTCOMES.notRecorded : CORRECTION_OUTCOMES.recorded;
       if (restored) {
+        // In-band: the earlier answer stands. Where the closed question shows
+        // what was recorded (the portal's answered questions), it keeps
+        // showing the earlier answer's statement, which is still true.
         const notice = correctionNotRecordedNotice({ profile: currentProfile?.profile, client: currentProfile });
-        outcome = { ...outcome, owner_notice: notice, owner_notice_statement: notice };
+        const earlierStatement = typeof current.response_payload?.owner_notice_statement === 'string'
+          && current.response_payload.owner_notice_reply_key === correction.earlier_reply_key ? current.response_payload.owner_notice_statement : null;
+        outcome = { ...outcome, owner_notice: notice, owner_notice_statement: earlierStatement || notice };
       }
     }
     const clarified = Boolean(outcome?.needsClarification);

@@ -428,7 +428,9 @@ export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language 
   // same line on the answered question (ownerReplyNotice.js).
   // A correction to a closed question's answer (ownerReplyCorrection.js)
   // always says what came of it, recorded or not.
-  const notice = !replyInvitation && typeof recode?.owner_notice_statement === 'string' && recode.owner_notice_statement.trim()
+  // (A correction's in-band line invites nothing; its statement is what the
+  // question shows, which is not what was said in reply.)
+  const notice = !replyInvitation && !recode?.correction && typeof recode?.owner_notice_statement === 'string' && recode.owner_notice_statement.trim()
     ? recode.owner_notice_statement : recode?.owner_notice;
   if ((recode?.applied === true || recode?.correction) && typeof notice === 'string' && notice.trim()) return notice.trim();
   if (!recode || recode.applied !== true) {
