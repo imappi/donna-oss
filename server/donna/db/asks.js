@@ -1980,7 +1980,11 @@ export const resolveClientEvidenceRequestInDb = async ({
   // out-of-band (phone / their own email / in person). Rides the SAME resolve
   // spine as a portal reply — recode, evidence link, loops inbox event — the
   // affordance is attribution plumbing, never a second reply pipeline.
-  answerSource = null
+  answerSource = null,
+  // The surface that carried the reply ('mobile' for the phone app), set by
+  // the route from the in-process request only; absent for the web portal.
+  // Audit attribution only.
+  channel = null
 } = {}) => {
   const cleanRequestId = String(evidenceRequestId || '').trim();
   const cleanReply = String(reply || '').trim();
@@ -2148,7 +2152,8 @@ export const resolveClientEvidenceRequestInDb = async ({
               reply: responsePayload.reply,
               responded_at: responsePayload.responded_at
             } : {}),
-            ...(cleanAnswerSource ? { answer_source: cleanAnswerSource } : {})
+            ...(cleanAnswerSource ? { answer_source: cleanAnswerSource } : {}),
+            ...(channel === 'mobile' ? { channel } : {})
           }),
           cleanNextReviewState ? 'evidence_request.resolve' : 'evidence_request.reply',
           actorType || 'system'

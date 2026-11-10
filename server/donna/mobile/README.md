@@ -21,7 +21,13 @@ router over Donna's existing reads and writers.
   carries the same access, entitlement, readiness and capability checks and
   has the same consequences as the web portal. Projections back to the
   contract are pure (`mobileProjection.js`); receipts are the audit rows the
-  writer committed in its own transaction.
+  writer committed in its own transaction. The dispatched request carries
+  `req.donnaChannel = 'mobile'` (never settable over HTTP), which the decision
+  and reply writers record as `metadata.channel` on those rows; the owner's
+  note on a reject or a "this was wrong" is `metadata.note` on the same row.
+- **Uploads on a Finnish cloud-pilot book:** the register passes the type and
+  size the server itself signed for that upload (the intake's intent row),
+  which the existing intake checks along with the stored bytes.
 - **Sign-in:** the identity provider's password grant, server-side
   (`mobileAuth.js`), rate-limited per email and per client address
   (in-process: a floor in front of the provider's own limit). Sign-out ends
@@ -53,10 +59,17 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
 - `mobileApiPgLifecycle.test.js` — PostgreSQL 16 + the real runtime (appliance
   harness): sign-in, capture to parsed (with concurrent identical registers
   collapsing), Donna's question answered through the portal's reply route,
-  approval and FYI through the outbound owner writers, status from persisted
-  close verdicts, sign-out, kill switch, and the staff / foreign-entity /
-  expired-token / admin-token refusals; every response validated against the
-  contract.
+  approval and FYI through the outbound owner writers (the note and the
+  `mobile` channel on their audit rows; a web decision records no channel),
+  status from persisted close verdicts, sign-out, kill switch, and the staff /
+  foreign-entity / expired-token / admin-token refusals; every response
+  validated against the contract.
+- `mobilePilotUploadPgLifecycle.test.js` — a fresh PostgreSQL database on the
+  cloud host's identity, through the real router: a Finnish pilot book, the
+  real signer's refusal while pilot processing is not enabled, and a register
+  of the owner's signed intent passing the intake's type/size check, while
+  another person's, a never-signed or a different-checksum upload is still
+  refused.
 - `mobileSettings.test.js` / `mobileSettingsPgLifecycle.test.js` — the
   Settings resource (`mobileSettings.js`, `mobileSettingsDb.js`): VAT period
   through the client-profile writer with its history guard, persisted fiscal
@@ -77,8 +90,8 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
 - `mobileBusinessProfile.test.js` / `mobileBusinessProfilePgLifecycle.test.js`
   — the Business page's facts (`PUT …/onboarding/profile`): server-side request
   rules, the receipt with previous values, `business_profile` on `/me` and
-  refresh, the business-name refusal, and the owner-only / foreign-entity /
-  no-token refusals.
+  refresh, the business-name refusal, the owner-only / foreign-entity /
+  no-token refusals, and the `/me` name of an owner with books in two firms.
 
 - `mobileDeletionRequest.test.js` / `mobileDeletionRequestPgLifecycle.test.js` —
   `POST /me/deletion-request`: the server-written message in both languages,

@@ -278,7 +278,7 @@ const assertInvoiceAdmission = async (client, { firmId, clientId, actionId }) =>
 // anchor's own state, which the executor already re-checks. `null` stays null
 // and the send-time check is a no-op — byte-identical to before for them.
 export const approveOutboundAction = async (client, {
-  firmId, clientId, actionId, actorType, actorId = null
+  firmId, clientId, actionId, actorType, actorId = null, channel = null
 }) => {
   if (!actorType || actorType === 'system') {
     throw new Error('approveOutboundAction requires a non-system acting principal');
@@ -319,7 +319,10 @@ export const approveOutboundAction = async (client, {
       action_type: rows[0].action_type,
       approved_consequence_fingerprint: fingerprint,
       approved_delivery_contract_version: deliveryContract?.version || null,
-      approved_delivery_contract_fingerprint: deliveryContract?.fingerprint || null
+      approved_delivery_contract_fingerprint: deliveryContract?.fingerprint || null,
+      // channel: which surface carried the decision ('mobile' for the phone
+      // app); absent for the web portal and the digest link. Attribution only.
+      ...(channel ? { channel } : {})
     }
   });
   // S5 role event: the owner decided — the held item leaves their queue and
@@ -549,7 +552,7 @@ export const editHeldOutboundActionDraft = async (client, {
 // marker is stamped in the same UPDATE whose WHERE guard requires it absent,
 // so a second click matches zero rows and records NO second correction.
 export const markExecutedOutboundActionWrong = async (client, {
-  firmId, clientId, actionId, actorType, actorId = null, channel = null
+  firmId, clientId, actionId, actorType, actorId = null, channel = null, note = null
 }) => {
   if (!actorType || actorType === 'system') {
     throw new Error('markExecutedOutboundActionWrong requires a non-system acting principal');
@@ -577,8 +580,9 @@ export const markExecutedOutboundActionWrong = async (client, {
     firmId, clientId, actorType, actorId,
     action: 'outbound_action.marked_wrong', resourceType: 'outbound_action', resourceId: actionId,
     // channel: which surface carried the owner's "wrong" — absent for the
-    // v1 workspace click, 'email_reply' for the v2 ingestion sweep.
-    metadata: { action_type: action.action_type, ...(channel ? { channel } : {}) }
+    // v1 workspace click, 'email_reply' for the v2 ingestion sweep, 'mobile'
+    // for the phone app. note: the owner's own words, when they gave any.
+    metadata: { action_type: action.action_type, ...(channel ? { channel } : {}), ...(note ? { note } : {}) }
   });
   return action;
 };
@@ -659,7 +663,7 @@ export const reverseExecutedOutboundArPost = async (client, {
 // held draft from a pre-send pullback.
 export const cancelOutboundAction = async (client, {
   firmId, clientId, actionId, reason, actorType = 'system', actorId = null,
-  approvedBy = null, authority = null, checks = []
+  approvedBy = null, authority = null, checks = [], note = null, channel = null
 }) => {
   const { rows } = await client.query(
     `with prior as (
@@ -698,7 +702,10 @@ export const cancelOutboundAction = async (client, {
   await auditEvent(client, {
     firmId, clientId, actorType, actorId,
     action: 'outbound_action.cancelled', resourceType: 'outbound_action', resourceId: actionId,
-    metadata: { reason: String(reason || 'unspecified'), action_type: action.action_type }
+    // note: the owner's reason in their own words (a decline); channel: the
+    // surface that carried it ('mobile'), absent for the web. Attribution only.
+    metadata: { reason: String(reason || 'unspecified'), action_type: action.action_type,
+      ...(note ? { note } : {}), ...(channel ? { channel } : {}) }
   });
   // S5 role event: a cancel of a HELD row is the item leaving the owner's
   // queue — declined by the owner, or withdrawn by Donna (settled anchor).
