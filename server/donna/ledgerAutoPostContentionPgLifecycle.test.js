@@ -139,8 +139,12 @@ test('real PG: a transient database condition is never a posting refusal; named 
   // does not damp it, withdraws the stamp with its own receipt, and posts. It
   // heals even when that tick is contended again.
   await addLine(pool, 'legacy');
-  await recordRefusalViaDb({ firmId: FIRM, clientId: CLIENT, transactionId: 'legacy',
-    error: Object.assign(new Error('could not obtain lock on row in relation "documents"'), { code: '55P03' }) });
+  // Written as the pre-rule receipt wrote it (the receipt now refuses to).
+  const legacyRefusal = { error: 'could not obtain lock on row in relation "documents"', code: '55P03', details: null, source: 'ledger_auto_post_sweep' };
+  await pool.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+    values ($1, $2, 'system', 'ledger_auto_post', 'ledger.auto_post_refused', 'transaction', 'legacy', $3)`, [FIRM, CLIENT, legacyRefusal]);
+  await pool.query(`update transactions set payload = payload || jsonb_build_object('ledger_post_refusal', $1::jsonb) where id = 'legacy'`,
+    [{ ...legacyRefusal, refused_at: new Date().toISOString() }]);
   const legacy = await recorded(pool, 'legacy');
   assert.equal(legacy.convergence_reason, 'ledger_post_refused:55P03', 'the stored state this rule must heal');
   const healing = await holdingDocument(pool, 'doc-legacy', () => sweep(configSnapshot, 'legacy'));
@@ -157,6 +161,16 @@ test('real PG: a transient database condition is never a posting refusal; named 
   assert.equal(posted.posted, 1, JSON.stringify(posted));
   assert.equal(posted.withdrawn, undefined, 'nothing left to withdraw');
   assert.equal((await recorded(pool, 'legacy')).coding_state, 'posted');
+  // The receipt is the one owner of the rule for every caller (the coding
+  // batch's inline post calls it too): a transient condition records nothing.
+  await addLine(pool, 'inline');
+  for (const code of ['55P03', '40001', '40P01']) {
+    assert.equal(await recordRefusalViaDb({ firmId: FIRM, clientId: CLIENT, transactionId: 'inline', source: 'coding_batch_inline_post',
+      error: Object.assign(new Error('transient'), { code }) }), false);
+  }
+  const inline = await recorded(pool, 'inline');
+  assert.equal(inline.refusal, null);
+  assert.deepEqual(inline.audits, []);
   // A named refusal stamp is never withdrawn by that rule.
   const stillRefused = await sweep(configSnapshot, 'locked-period');
   assert.equal(stillRefused.eligible, 0, 'a named refusal keeps its retry damping');

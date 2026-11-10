@@ -137,7 +137,21 @@ const loadEligibleLinesViaDb = async ({ firmId, clientId, limit, transactionId =
 // `updated_at` alone on purpose: the eligibility SQL damps retries by
 // comparing the audit row's created_at against it.
 export const LEDGER_POST_REFUSAL_PAYLOAD_KEY = 'ledger_post_refusal';
-export const recordRefusalViaDb = async ({ firmId, clientId, transactionId, error, actorId = 'ledger_auto_post', source = 'ledger_auto_post_sweep' }) => {
+// This receipt is the one owner of the posting-refusal rule for every caller
+// (the sweep below and the coding batch's inline post, db/coding.js): a
+// transient database condition records nothing and returns false.
+// What the receipt says. A named refusal is recorded as itself; anything else
+// is an unexpected failure, recorded under that name with its message.
+const refusalReceiptFor = (error) => isUnexpectedFailure(error)
+  ? Object.assign(new Error(error?.pgMessage || error?.message || String(error)), {
+    code: 'LEDGER_POST_UNEXPECTED_FAILURE', details: unexpectedFailureDetails(error) })
+  : error;
+
+export const recordRefusalViaDb = async ({ firmId, clientId, transactionId, error: caught, actorId = 'ledger_auto_post', source = 'ledger_auto_post_sweep' }) => {
+  if (isFenceContention(caught)) return false;
+  const error = refusalReceiptFor(caught);
+  if (error !== caught) console.error('[ledger_auto_post] post failed unexpectedly (receipted as LEDGER_POST_UNEXPECTED_FAILURE)', {
+    transaction_id: transactionId, source, code: caught?.code || null, message: caught?.message || String(caught), stack: caught?.stack || null });
   try {
     await withFirmDbClient(async (client) => {
       await client.query('begin');
@@ -239,13 +253,6 @@ export const withdrawDatabaseCodeRefusalViaDb = async ({ firmId, clientId, trans
     } catch (error) { await client.query('rollback'); throw error; }
   });
 
-// What the receipt says. A named refusal is recorded as itself; anything else
-// is an unexpected failure, recorded under that name with its message.
-const refusalReceiptFor = (error) => isUnexpectedFailure(error)
-  ? Object.assign(new Error(error?.pgMessage || error?.message || String(error)), {
-    code: 'LEDGER_POST_UNEXPECTED_FAILURE', details: unexpectedFailureDetails(error) })
-  : error;
-
 // Run the sweep for one client. The flag is re-checked here (fail-closed on
 // its own, like sweepCodingAutoPost) — the cron's pre-check only keeps the
 // summary honest. Returns per-client stats; every count maps to a receipt.
@@ -311,19 +318,15 @@ export const sweepLedgerAutoPost = async ({
         });
         continue;
       }
-      const receipt = refusalReceiptFor(error);
       stats.refused += 1;
-      if (receipt !== error) stats.unexpected = (stats.unexpected || 0) + 1;
-      const receipted = await recordRefusalFn({ firmId, clientId, transactionId, error: receipt });
+      if (isUnexpectedFailure(error)) stats.unexpected = (stats.unexpected || 0) + 1;
+      const receipted = await recordRefusalFn({ firmId, clientId, transactionId, error });
       if (receipted) stats.refusal_receipts += 1;
-      (receipt === error ? console.warn : console.error)(receipt === error
-        ? '[ledger_auto_post] post refused (line stays accepted, receipted)'
-        : '[ledger_auto_post] post failed unexpectedly (line stays accepted, receipted as LEDGER_POST_UNEXPECTED_FAILURE)', {
+      console.warn('[ledger_auto_post] post refused (line stays accepted, receipted)', {
         client_id: clientId,
         transaction_id: transactionId,
         error_message: error?.message || String(error),
-        code: error?.code || null,
-        ...(receipt === error ? {} : { stack: error?.stack || null })
+        code: error?.code || null
       });
     }
   }
