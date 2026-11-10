@@ -1381,7 +1381,7 @@ const xeroConnectorTaxCoding = (bankTransaction = {}) => ({ provider: 'xero',
 const xeroPostingCoding = ({ transaction, preview, postingContext }) => {
   const { policy, taxCodingEnabled } = postingContext;
   const input = { coding: preview.coding || codingInputFromTransaction(transaction),
-    sourceCoding: authoritativeTaxCoding(transaction), transaction, taxCodingEnabled };
+    sourceCoding: authoritativeTaxCoding(transaction), transaction, taxCodingEnabled, profile: postingContext.profile };
   const coding = policy.capabilities.enrichCoding
     ? executePostingPolicyOperation(policy, 'enrichCoding', input) : input.coding;
   assertPostableTaxCoding(policy, { ...input, coding });
@@ -1596,7 +1596,7 @@ export const writebackXeroTransactionInDb = async ({
         }
         if (existingTransactions.length) {
           assertPostableTaxCoding(postingContext.policy, { transaction, coding: prepared.postingCoding,
-            taxCodingEnabled: postingContext.taxCodingEnabled,
+            taxCodingEnabled: postingContext.taxCodingEnabled, profile: postingContext.profile,
             connectorTaxCoding: xeroConnectorTaxCoding(existingTransactions[0]) });
           xeroResponse = {
             Id: existingByReference?.Id || null,
@@ -1634,7 +1634,7 @@ export const writebackXeroTransactionInDb = async ({
             });
             if (recoveredMatches.length !== 1) throw createError;
             assertPostableTaxCoding(postingContext.policy, { transaction, coding: prepared.postingCoding,
-              taxCodingEnabled: postingContext.taxCodingEnabled,
+              taxCodingEnabled: postingContext.taxCodingEnabled, profile: postingContext.profile,
               connectorTaxCoding: xeroConnectorTaxCoding(recoveredMatches[0]) });
             xeroResponse = {
               Id: recovered?.Id || null,

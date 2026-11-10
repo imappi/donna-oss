@@ -22,7 +22,7 @@ import { readClientCodingContextWithClient, isFenceContention, nativeSourceFence
 import { toIsoDay } from '../dates.js';
 import { codingSourceBusinessUseConflict, sourceBusinessUseQuestion, sourceBusinessUseFact } from '../sourceBusinessUse.js';
 import { hasJevResolvedCoding } from '../jevDecisionReceipt.js';
-import { CODING_EVIDENCE_RECONSIDERED_REFUSALS, CODING_CONFLICT_MAX_RECONSIDERATIONS, CODING_RECONSIDERATION_CONTRACT, codingReconsiderationAttempts, unsettledTreatmentOnClearSource, refusedCrossWindowGroup, REFUSED_CROSS_WINDOW_GROUP_SQL, CROSS_WINDOW_GROUP_REFUSAL, recordCodingPolicyFailure, recordCodingPolicyRecovery, CODING_POLICY_FAILED_ACTION } from '../codingPolicyRecovery.js';
+import { CODING_EVIDENCE_RECONSIDERED_REFUSALS, UNRESOLVED_TREATMENT_REFUSALS, CODING_CONFLICT_MAX_RECONSIDERATIONS, CODING_RECONSIDERATION_CONTRACT, codingReconsiderationAttempts, unsettledTreatmentOnClearSource, refusedCrossWindowGroup, REFUSED_CROSS_WINDOW_GROUP_SQL, CROSS_WINDOW_GROUP_REFUSAL, recordCodingPolicyFailure, recordCodingPolicyRecovery, CODING_POLICY_FAILED_ACTION } from '../codingPolicyRecovery.js';
 
 // Derived routing metadata is not new source material. Keep the original
 // content digest compatible while still carrying family into the coding menu.
@@ -536,7 +536,7 @@ const requiresCodingReconsideration = (row, document, refusal = row.payload.ledg
     // named cause. A coding that already carries that cause is never
     // re-admitted (codingPolicyRecovery.js); a legacy coding without it is
     // re-admitted once, within the attempts bound, to receive it.
-    || (refusal?.code === 'TRANSACTION_ALV_TREATMENT_UNRESOLVED' && (!['confirmed','auto_matched'].includes(document?.match_status)
+    || (UNRESOLVED_TREATMENT_REFUSALS.includes(refusal?.code) && (!['confirmed','auto_matched'].includes(document?.match_status)
       || (verifiedSourceRecheck(row) && !unsettledTreatmentOnClearSource({ ...row, payload: { ...row.payload, ledger_post_refusal: refusal } }))));
 };
 // The source-recheck lane's settled receipt: the original file was re-read and
@@ -883,7 +883,7 @@ export const recoverChangedCodingEvidenceInDb = async ({ firmId, limit = 50, run
         await client.query(`insert into audit_events(firm_id,client_id,actor_type,actor_id,action,resource_type,resource_id,metadata)
           values($1,$2,'system','coding_convergence','coding.evidence_changed','transaction',$3,$4::jsonb)`,
           [firmId, clientId, row.id, JSON.stringify({ previous_suggestion: row.payload.ai_suggestion, current_evidence_digest: codingEvidenceDigest(document) })]);
-        const recheck = recodeRefusal && refusal?.code === 'TRANSACTION_ALV_TREATMENT_UNRESOLVED' ? verifiedSourceRecheck(row) : null;
+        const recheck = recodeRefusal && UNRESOLVED_TREATMENT_REFUSALS.includes(refusal?.code) ? verifiedSourceRecheck(row) : null;
         await client.query(`update transactions set status='needs_review',
           payload=(payload - 'ai_suggestion' - 'ai_suggestion_status' - 'ledger_post_refusal' - 'accepted_coding_policy' - 'posting_recovery') || $4::jsonb, updated_at=now()
           where firm_id=$1 and client_id=$2 and id=$3`, [firmId, clientId, row.id, JSON.stringify({coding_evidence_reconsideration:{digest:revision, contract:CODING_RECONSIDERATION_CONTRACT, attempts:recodeRefusal?attempts+1:0, reason:recodeRefusal?'coding_source_conflict':'source_evidence_changed'}, ...(recodeRefusal ? {posting_recovery:{...(recheck||{}),review:{...(recheck?.review||{}),source_validation:refusal?.details?.source_validation || null,previous_refusal:refusal,recovery:'recode_current_evidence'}}}: {})})]);
