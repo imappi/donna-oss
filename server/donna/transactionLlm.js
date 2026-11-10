@@ -1,5 +1,5 @@
 import { codingSourceBusinessUseConflict, sourceUseOwnerReplyReceipt, sourceBusinessUseQuestion, codingRelatedPartyRelationshipGuard, relatedPartyRelationshipQuestion } from './sourceBusinessUse.js';
-import { hasVerifiedSourceForDiscrepancy, sourceTaxClarity } from './documentAllocationComponents.js';
+import { hasVerifiedSourceForDiscrepancy, salesSourcePrintedTax, sourceTaxClarity } from './documentAllocationComponents.js';
 import { UNSETTLED_TREATMENT_CLEAR_SOURCE } from './codingPolicyRecovery.js';
 import { hasJevResolvedCoding } from './jevDecisionReceipt.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -879,11 +879,44 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
   // (the guard is silent below); a line it does not cover is not asked again.
   const registrationAnswer=transaction.tax_registration_answer && typeof transaction.tax_registration_answer==='object'
     ? transaction.tax_registration_answer : null;
-  const registrationGuard=taxRegistration && taxRegistration.refusalCodes.includes(registrationRefusal?.code) ? (()=>{
+  // A sale whose own sales document shows VAT on a date the record says not
+  // registered (taxSourceEvidence.js assertSalesSourceTaxRegistration): the
+  // posting policy refused it whatever the coding, and Donna does not know the
+  // treatment, because the document contradicts the record. While the held
+  // source still shows that VAT, the refusal is the owner's registration
+  // question, worded with what was seen (salesSourceShowsTax.ownerQuestion:
+  // which document, the VAT it shows, what the record says), even though the
+  // record says not registered. After the owner's answer is recorded and the
+  // record still says not registered, the document must be corrected: the
+  // line becomes the request for the corrected invoice or the credit note
+  // (correctionRequest), the country's corrected-document question where
+  // that contract applies and the held source is verified, otherwise an
+  // owner question. No posting is invented for the VAT shown. A "yes" the
+  // record now covers makes the guard silent: the line is coded with its VAT.
+  const salesSourceRule=taxRegistration?.salesSourceShowsTax || null;
+  const salesSourceRefused=Boolean(salesSourceRule) && registrationRefusal?.code===salesSourceRule.refusalCode;
+  const heldSalesSource=salesSourceRefused ? salesSourcePrintedTax(transaction.matched_document) : null;
+  const registrationGuard=taxRegistration && taxRegistration.refusalCodes.includes(registrationRefusal?.code)
+    && !(salesSourceRefused && !heldSalesSource) ? (()=>{
     const asOf=String(registrationRefusal.details?.as_of || transaction.date || transaction.transaction_date || '').slice(0, 10) || null;
     let status;
     try { status=taxRegistration.onDate({ profile: clientProfile || {}, onDate: asOf }); } catch { status={ registered: null, reason: 'registration_unavailable' }; }
     if (status?.registered===true) return null;
+    if (salesSourceRefused && status?.registered===false && !['record_locked','record_conflict'].includes(registrationAnswer?.state)) {
+      const language=preferredOwnerTemplateLanguage(clientProfile || {}, { jurisdiction: clientProfile?.jurisdiction ?? policy.jurisdiction });
+      const words={ language, lineLabel, onDate: asOf, source: heldSalesSource };
+      const receipt={ treatment: suggestion.tax_treatment || fallback.tax_treatment || '', refusal_code: registrationRefusal.code, as_of: asOf,
+        registered: false, registration_reason: status?.reason || null, language, sales_source: heldSalesSource };
+      if (registrationAnswer?.state==='recorded') {
+        const correction=salesSourceRule.correctionAsk==='document_discrepancy' && hasVerifiedSourceForDiscrepancy(transaction) ? 'document_discrepancy' : 'owner_fact';
+        return { correction: true, posting_requirement: correction,
+          receipt: { ...receipt, constraint: 'sales_source_shows_vat_unregistered', owner_answered: true,
+            answer: { evidence_request_id: registrationAnswer.evidence_request_id || null, receipt_id: registrationAnswer.receipt_id || null, state: registrationAnswer.state } },
+          question: String(salesSourceRule.correctionRequest(words) || '').slice(0, 500) };
+      }
+      return { receipt: { ...receipt, constraint: 'tax_registration_unrecorded', owner_answered: false },
+        question: String(salesSourceRule.ownerQuestion(words) || '').slice(0, 500) };
+    }
     // Not registered on the date: Donna knows the treatment (no VAT charged
     // or deducted, the gross is the cost or the revenue), so this is never an
     // owner question. The coder was told the fact (taxRegistrationFactFor)
@@ -989,11 +1022,15 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
     ...(registrationFact ? { tax_registration_fact: registrationFact, remember_candidate: false } : {}),
     // The registration question (above) outranks every tax guard: until the
     // record says registered on this date no tax treatment can post the line.
-    ...(registrationGuard && !registrationGuard.receipt.owner_answered ? { tax_unresolved_guard: registrationGuard.receipt,
+    ...(registrationGuard?.correction ? { tax_unresolved_guard: registrationGuard.receipt,
+      posting_requirement: registrationGuard.posting_requirement, evidence_required: true, remember_candidate: false, auto_explain_limit: 0,
+      ask_client_question: registrationGuard.question,
+      support_note: `${String(suggestion.support_note || '').slice(0, 300)} The ledger refused this line (${registrationGuard.receipt.refusal_code}): the business's own sales document shows VAT, and the owner's answer leaves the business not registered for VAT on ${registrationGuard.receipt.as_of || 'its date'}. The owner is asked for the corrected invoice or the credit note; nothing is posted for the VAT shown.`.trim().slice(0, 500) } : {}),
+    ...(registrationGuard && !registrationGuard.correction && !registrationGuard.receipt.owner_answered ? { tax_unresolved_guard: registrationGuard.receipt,
       posting_requirement: 'owner_fact', evidence_required: true, remember_candidate: false, auto_explain_limit: 0,
       ask_client_question: registrationGuard.question,
       support_note: `${String(suggestion.support_note || '').slice(0, 300)} The ledger refused this line (${registrationGuard.receipt.refusal_code}): the business is not recorded as registered for VAT on ${registrationGuard.receipt.as_of || 'its date'}. The owner is asked whether, and from when, it is registered.`.trim().slice(0, 500) } : {}),
-    ...(registrationGuard?.receipt.owner_answered ? { tax_unresolved_guard: registrationGuard.receipt,
+    ...(registrationGuard?.receipt.owner_answered && !registrationGuard.correction ? { tax_unresolved_guard: registrationGuard.receipt,
       posting_requirement: 'single_account', evidence_required: false, confidence: 'low', remember_candidate: false, auto_explain_limit: 0,
       ask_client_question: '',
       support_note: `${String(suggestion.support_note || '').slice(0, 300)} ${registrationGuard.receipt.answer?.state==='record_conflict'

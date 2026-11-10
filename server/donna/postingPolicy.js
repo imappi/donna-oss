@@ -56,8 +56,22 @@ const stringList = (value) => Array.isArray(value) && value.every(nonemptyString
 const validWithoutTax = (rule) => Boolean(rule) && typeof rule === 'object' && Boolean(rule.treatments)
   && nonemptyString(rule.treatments.purchase) && nonemptyString(rule.treatments.sale)
   && ['instruction', 'needsRegistration'].every((key) => typeof rule[key] === 'function');
+// A sale whose own sales document shows VAT on a date the record says not
+// registered (salesSourceShowsTax; taxSourceEvidence.js
+// assertSalesSourceTaxRegistration): the bank-line refusal code, one of
+// refusalCodes so the registration question and its answer cover the line;
+// the owner question that says what was seen (ownerQuestion) and, after the
+// owner says the business was not registered, the request for the corrected
+// invoice or the credit note (correctionRequest); and correctionAsk, the
+// corrected-document question kind that carries that request where the held
+// source is verified ('document_discrepancy'), or null for an owner question.
+const validSalesSourceShowsTax = (rule, refusalCodes) => Boolean(rule) && typeof rule === 'object'
+  && nonemptyString(rule.refusalCode) && refusalCodes.includes(rule.refusalCode)
+  && (rule.correctionAsk === null || rule.correctionAsk === 'document_discrepancy')
+  && ['ownerQuestion', 'correctionRequest'].every((key) => typeof rule[key] === 'function');
 const validTaxRegistration = (rule) => Boolean(rule) && typeof rule === 'object' && stringList(rule.refusalCodes)
   && nonemptyString(rule.profileField) && stringList(rule.recordLockedCodes) && validWithoutTax(rule.withoutTax)
+  && validSalesSourceShowsTax(rule.salesSourceShowsTax, rule.refusalCodes)
   && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice', 'notRecordedNotice'].every((key) => typeof rule[key] === 'function');
 
 // The country's no-VAT treatment labels (withoutTax.treatments), for the

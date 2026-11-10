@@ -192,6 +192,26 @@ test('a tax-registration declaration must say what posting without VAT means for
   }
 });
 
+// The sale-side rule (salesSourceShowsTax): its refusal code is one of the
+// declaration's refusal codes, both owner wordings are the country's, and the
+// corrected-document kind is named or null.
+test('a tax-registration declaration must say how a sale whose own document shows VAT is refused and asked', () => {
+  for (const country of ['fi', 'gb']) {
+    const declared = POSTING_POLICY_REGISTRY[country].taxRegistration;
+    const rule = declared.salesSourceShowsTax;
+    const { salesSourceShowsTax: _rule, ...missing } = declared;
+    for (const taxRegistration of [missing,
+      { ...declared, salesSourceShowsTax: { ...rule, refusalCode: 'NOT_A_DECLARED_REFUSAL' } },
+      { ...declared, refusalCodes: declared.refusalCodes.filter((code) => code !== rule.refusalCode) },
+      { ...declared, salesSourceShowsTax: { ...rule, correctionAsk: 'supporting_document' } },
+      { ...declared, salesSourceShowsTax: { ...rule, correctionRequest: null } },
+      { ...declared, salesSourceShowsTax: { ...rule, ownerQuestion: 'text' } }]) {
+      assert.throws(() => resolvePostingPolicy({ jurisdiction: country, registry: { ...POSTING_POLICY_REGISTRY, [country]: { ...POSTING_POLICY_REGISTRY[country], taxRegistration } } }),
+        hasCode('posting_policy_invalid'));
+    }
+  }
+});
+
 test('a fixture country registers operations and code ownership without editing shared algorithms', () => {
   const fixture = { ...POSTING_POLICY_REGISTRY.au, jurisdiction: 'nz', policyId: 'nz_fixture_posting',
     nativeTaxCodePrefixes: ['NZ_FIXTURE_'], nativeTaxCodes: ['NZ_FIXTURE_INPUT'],

@@ -365,6 +365,25 @@ test('real PG: an owner signs in, captures a receipt, answers Donna, and reads s
   assert.equal(replay.applied, false);
   assert.equal(replay.already, decided.card.state);
   assert.equal((await appliance.query("select count(*)::int n from audit_events where resource_id = $1 and action in ('evidence_request.reply', 'evidence_request.resolve')", [askId])).rows[0].n, 1);
+  // An answered or closed card invites no answer: the decision route takes
+  // none (above), so the card says so rather than promise a reply path.
+  const answeredCard = conform('/entities/{entityId}/queue/cards/{cardId}', 'GET', await api({ path: cardPath, token }));
+  assert.notEqual(answeredCard.state, 'open');
+  assert.equal(answeredCard.ask.allows_text, false, 'no text reply invited on an answered card');
+  assert.equal(answeredCard.ask.allows_documents, false);
+  // Closed (resolved), the same: a reply from the phone writes nothing.
+  await appliance.query("update client_evidence_requests set status = 'resolved', resolved_at = now() where id = $1", [askId]);
+  const before = (await appliance.query('select status, response_payload, updated_at from client_evidence_requests where id = $1', [askId])).rows[0];
+  const closedCard = conform('/entities/{entityId}/queue/cards/{cardId}', 'GET', await api({ path: cardPath, token }));
+  assert.equal(closedCard.state, 'resolved');
+  assert.equal(closedCard.ask.allows_text, false, 'no text reply invited on a resolved card');
+  const late = conform('/entities/{entityId}/queue/cards/{cardId}/decision', 'POST', await api({
+    method: 'POST', path: `${cardPath}/decision`, token, body: { type: 'answer', answer: { text: 'Actually it was for a client.' } }
+  }));
+  assert.equal(late.applied, false);
+  assert.equal(late.already, 'resolved');
+  assert.deepEqual((await appliance.query('select status, response_payload, updated_at from client_evidence_requests where id = $1', [askId])).rows[0], before,
+    'the resolved question is not reopened from the phone');
 
   // ── Approval and FYI through the outbound owner writers ─────────────────
   // One reminder held for the owner's say, one Donna sent under staged
