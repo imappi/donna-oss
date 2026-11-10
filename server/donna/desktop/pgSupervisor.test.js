@@ -9,7 +9,9 @@ import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { PG_MAJOR, findPgBin, pgBinCandidates } from './pgSupervisor.js';
+import {
+  PG_MAJOR, attachGivenPostgres, findPgBin, pgBinCandidates, resolveDesktopPostgresSource
+} from './pgSupervisor.js';
 
 // A bin dir whose pg_ctl reports the given version, the way the real probe
 // reads it.
@@ -235,4 +237,60 @@ test('default reclaim still stops a running server and restarts it (the orphan p
   const starts = fx.calls().split('\n').filter((l) => l.includes('start')).length;
   assert.equal(starts, 2, 'failed start, reclaim, then a clean start');
   assert.ok(!existsSync(fx.marker), 'the orphan was stopped');
+});
+
+// resolveDesktopPostgresSource — attaching is chosen only by the dedicated
+// setting; an inherited DATABASE_URL (README "Running the tests" exports one)
+// leaves the host start on its supervised book, as on main.
+test('DATABASE_URL set, DONNA_DESKTOP_DATABASE_URL unset: supervised path, as before', () => {
+  assert.deepEqual(
+    resolveDesktopPostgresSource({ DATABASE_URL: 'postgresql://donna:donna_ci@127.0.0.1:5432/donna_ci' }),
+    { mode: 'supervised' }
+  );
+  assert.deepEqual(
+    resolveDesktopPostgresSource({ DATABASE_URL: 'postgresql://other@localhost/other?host=%2Ftmp&port=5432' }),
+    { mode: 'supervised' }
+  );
+  assert.deepEqual(resolveDesktopPostgresSource({}), { mode: 'supervised' });
+  assert.deepEqual(resolveDesktopPostgresSource({ DONNA_DESKTOP_DATABASE_URL: '  ' }), { mode: 'supervised' });
+});
+
+test('DONNA_DESKTOP_DATABASE_URL set: the given database, whatever DATABASE_URL says', () => {
+  const url = 'postgresql://donna@localhost/donna_local?host=%2Frun%2Fdonna-pg&port=5432';
+  assert.deepEqual(
+    resolveDesktopPostgresSource({ DONNA_DESKTOP_DATABASE_URL: url, DATABASE_URL: 'postgresql://x@127.0.0.1/y' }),
+    { mode: 'given', databaseUrl: url }
+  );
+});
+
+// attachGivenPostgres — the compose start's database (docker-compose.yml).
+// The backups drive pg_dump/psql over a Unix socket, so a TCP URL is refused
+// before anything runs; a socket URL runs the storage stub through the given
+// bin dir's psql and leaves the server alone on stop.
+test('attachGivenPostgres refuses a DATABASE_URL that names no Unix socket', () => {
+  assert.throws(
+    () => attachGivenPostgres({ databaseUrl: 'postgresql://donna:secret@db:5432/donna_local', logger: {} }),
+    /must name a PostgreSQL Unix socket/
+  );
+});
+
+test('attachGivenPostgres runs the storage stub over the given socket and never stops the server', () => {
+  const dir = fakeBin(`${PG_MAJOR}.15`);
+  const argsFile = path.join(dir, 'psql-args');
+  const psql = path.join(dir, 'psql');
+  writeFileSync(psql, `#!/bin/sh\nprintf '%s\\n' "$@" > '${argsFile}'\n`);
+  chmodSync(psql, 0o755);
+  const lines = [];
+  const pg = withPgBin(dir, () => attachGivenPostgres({
+    databaseUrl: 'postgresql://donna@localhost/donna_local?host=%2Frun%2Fdonna-pg&port=5432',
+    logger: { log: (line) => lines.push(line) }
+  }));
+  const args = readFileSync(argsFile, 'utf8').split('\n');
+  assert.deepEqual(args.slice(0, 8), ['-h', '/run/donna-pg', '-p', '5432', '-U', 'donna', '-d', 'donna_local']);
+  assert.match(args.join('\n'), /create schema if not exists storage/);
+  assert.equal(pg.pgBin, dir);
+  assert.equal(pg.attached, true);
+  assert.equal(pg.socketDir, '/run/donna-pg');
+  pg.stop();
+  assert.match(lines.at(-1), /leaving the given postgres running/);
 });
