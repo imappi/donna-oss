@@ -325,6 +325,146 @@ export const settleSupersededDeadParseJobsWithClient = async ({ client, firmId, 
   return (result.rows || []).map((row) => Number(row.id)).sort((a, b) => a - b);
 };
 
+// ── Prompt recovery of a dead scheduled tick ──
+//
+// A cron tick re-sweeps current state, so a dead one costs a delay, not lost
+// work — but Host A counts it as unsuperseded until the function next
+// succeeds, and for a daily function that kept every book refused for up to
+// a day (the backup's target unreachable once, a sleep past a lease). The
+// scheduler's recovery loop therefore runs a dead tick's function again
+// soon, from stored state only:
+//
+// - the CHAIN: a dead tick (payload has `tick`) with no later success of its
+//   function is the chain's head. Its root is the head itself, or, when the
+//   head is a recovery tick, the dead tick that recovery names. Each recovery
+//   tick names its root (`recovers.dead_job_id`), the job it follows
+//   (`recovers.previous_job_id`), its ordinal (`recovery` of `of`) and when
+//   the job before it died, so local_jobs alone shows the chain;
+// - BOUNDED: at most CRON_RECOVERY_DELAYS_MS.length recovery ticks per root,
+//   the k-th due CRON_RECOVERY_DELAYS_MS[k-1] after the previous death.
+//   Exhausted, nothing more is enqueued: the next scheduled slot is the
+//   retry, as before;
+// - SINGLE: a recovery is enqueued only while the function has no pending or
+//   running job, under a dedupe key shared with the latest scheduled slot
+//   (`<function>@<slot>`), so two loops racing insert one row and a
+//   scheduled enqueue of that slot collides with it. A scheduled slot that
+//   comes due while a recovery is pending is absorbed by it
+//   (absorbScheduledTickIntoCronRecovery);
+// - SAFE ACROSS SLEEP AND RESTART: the recovery is planned from the dead
+//   row, not from memory, and carries run_at = death + delay on the DB
+//   clock. A recovery due while the machine was off is one pending job that
+//   runs once on wake; its own death (if any) starts the next delay from
+//   then, so missed delays never stack up.
+//
+// The supersede rule Host A applies is unchanged: a recovery tick that
+// succeeds is simply a later success of the same function.
+export const CRON_RECOVERY_DELAYS_MS = Object.freeze([2 * 60_000, 10 * 60_000, 30 * 60_000]);
+export const CRON_RECOVERY_MAX_TICKS = CRON_RECOVERY_DELAYS_MS.length;
+
+// `functions`: [{ functionId, handlerVersion, maxAttempts, slotTick }] for
+// the cron entries the calling dispatcher owns; `slotTick` is the latest
+// scheduled slot at or before the dispatcher's clock (ISO).
+export const enqueueCronRecoveryTicks = async ({ client, functions = [], delaysMs = CRON_RECOVERY_DELAYS_MS } = {}) => {
+  if (!client || !functions.length || !delaysMs.length) return [];
+  const result = await client.query(
+    `with manifest as (
+       select * from unnest($1::text[], $2::text[], $3::integer[], $4::text[])
+         as m(function_id, handler_version, max_attempts, slot_tick)
+     ),
+     dead_head as (
+       select distinct on (j.function_id)
+              j.id, j.function_id, j.payload, coalesce(j.completed_at, j.created_at) as died_at
+         from local_jobs j
+         join manifest m on m.function_id = j.function_id
+        where j.status = 'dead'
+          and j.payload ? 'tick'
+          and not exists (
+            select 1 from local_jobs superseding
+             where superseding.function_id = j.function_id
+               and superseding.status = 'succeeded'
+               and superseding.completed_at > coalesce(j.completed_at, j.created_at)
+          )
+        order by j.function_id, coalesce(j.completed_at, j.created_at) desc, j.id desc
+     ),
+     chain as (
+       select h.*,
+              coalesce(nullif(h.payload->'recovers'->>'dead_job_id', '')::bigint, h.id) as root_id,
+              (select count(*) from local_jobs r
+                where r.function_id = h.function_id
+                  and r.payload->'recovers'->>'dead_job_id'
+                      = coalesce(nullif(h.payload->'recovers'->>'dead_job_id', '')::bigint, h.id)::text
+              )::integer as used
+         from dead_head h
+     )
+     insert into local_jobs (function_id, handler_version, payload, dedupe_key, run_at, max_attempts)
+     select c.function_id,
+            m.handler_version,
+            jsonb_build_object(
+              'tick', m.slot_tick,
+              'recovers', jsonb_build_object(
+                'dead_job_id', c.root_id,
+                'dead_tick', coalesce(c.payload->'recovers'->>'dead_tick', c.payload->>'tick'),
+                'previous_job_id', c.id,
+                'previous_died_at', c.died_at,
+                'recovery', c.used + 1,
+                'of', cardinality($5::bigint[])
+              )
+            ),
+            c.function_id || '@' || m.slot_tick,
+            c.died_at + make_interval(secs => ($5::bigint[])[c.used + 1]::numeric / 1000),
+            m.max_attempts
+       from chain c
+       join manifest m on m.function_id = c.function_id
+      where c.used < cardinality($5::bigint[])
+        and not exists (
+          select 1 from local_jobs live
+           where live.function_id = c.function_id and live.status in ('pending', 'running')
+        )
+     on conflict (dedupe_key)
+       where dedupe_key is not null and status in ('pending', 'running')
+       do nothing
+     returning *`,
+    [
+      functions.map((entry) => entry.functionId),
+      functions.map((entry) => String(entry.handlerVersion ?? '1')),
+      functions.map((entry) => Number(entry.maxAttempts ?? 1)),
+      functions.map((entry) => entry.slotTick),
+      delaysMs.map((ms) => Math.round(Number(ms)))
+    ]
+  );
+  return result.rows || [];
+};
+
+// A scheduled slot that comes due while a recovery tick of its function is
+// live. Pending: the recovery stands for the slot — it is made due now (never
+// later than it already was) and records the slot it stands for; the caller
+// advances its cursor and enqueues nothing. Running: nothing changes and the
+// caller holds its cursor until the recovery settles, so the slot runs after
+// it rather than beside it. No live recovery: { live: null }, enqueue as usual.
+export const absorbScheduledTickIntoCronRecovery = async ({ client, functionId, tick } = {}) => {
+  if (!client || !functionId || !tick) return { live: null, absorbed: false };
+  const result = await client.query(
+    `with live as (
+       select id, status from local_jobs
+        where function_id = $1 and status in ('pending', 'running') and payload ? 'recovers'
+        order by id
+        limit 1
+     ),
+     absorbed as (
+       update local_jobs j
+          set run_at = least(j.run_at, now()),
+              payload = j.payload || jsonb_build_object('stands_for_tick', $2::text)
+         from live
+        where j.id = live.id and j.status = 'pending'
+       returning j.id
+     )
+     select live.id, live.status, exists (select 1 from absorbed) as absorbed from live`,
+    [functionId, tick]
+  );
+  const row = result.rows?.[0] || null;
+  return row ? { live: { id: row.id, status: row.status }, absorbed: Boolean(row.absorbed) } : { live: null, absorbed: false };
+};
+
 export const listLocalCronState = async ({ client } = {}) => {
   if (!client) return [];
   const result = await client.query(

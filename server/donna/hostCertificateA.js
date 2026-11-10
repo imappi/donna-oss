@@ -13,7 +13,9 @@ import path from 'node:path';
 import { ACCOUNT_ROLES } from './accountRoles.js';
 import { ACCOUNTING_SYSTEM_IDS, DEFAULT_ACCOUNTING_SYSTEM } from './accountingSystems/index.js';
 import { AUTO_FORBIDDEN_FLAGS, CONFIG_STAGES, SHADOW_CEILING_FLAGS } from './clientConfig.js';
+import { nextCronOccurrence } from './desktop/cronSchedule.js';
 import { DESKTOP_CLIENT_FLAG_SEEDS, DESKTOP_FINLAND_FLAG_SEEDS } from './desktop/hostPlaneSeed.js';
+import { CRON_RECOVERY_DELAYS_MS } from './desktop/localJobQueue.js';
 import {
   createEvidenceSignedUploadUrl,
   deleteEvidenceObjects,
@@ -54,7 +56,18 @@ import { ENDPOINT_CLASSES, OPENAI_COMPATIBLE_ENV_KEYS } from './providerEndpoint
 // deployment generation voided on every merge and could only be restored by a
 // daily cron or a manual button. Persisted v6 receipts keep naming the
 // predicate that scored them; the next boot or renewal mints v7.
-export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v7';
+// v8 (2026-11-10, "a dead scheduled job blocks every book"): the predicate is
+// unchanged — an unsuperseded dead job still fails `database_schema` with
+// `work_queue_needs_recovery` — but the check now NAMES what failed:
+// `detail.queue_failures`, one entry per function with unsuperseded dead
+// work (the job, when it died, its last error, the recovery budget spent and
+// the next recovery or scheduled run due), so a refusal can say "scheduled
+// job X failed at T; next attempt at T2" instead of only "the queue needs
+// recovery". The detail is a receipt, outside the compatibility projection:
+// the host digest entity generations were certified against does not move.
+// Persisted v7 receipts keep naming the shape that scored them; the next
+// boot or renewal mints v8.
+export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v8';
 export const HOST_COMPATIBILITY_CONTRACT_VERSION = 'donna.host-compatibility.v1';
 export const HOST_CERTIFICATE_FRESHNESS_CONTRACT_VERSION = 'donna.host-certificate-freshness.v1';
 export const HOST_CERTIFICATE_RENEWAL_INTERVAL_MS = 5 * 60 * 1000;
@@ -317,11 +330,86 @@ const DEAD_PARSE_JOB_ACCOUNTED_FOR = `(
   )
 )`;
 
-const databaseCheck = async ({ query, rootDir, observedAt, cronFunctionIds = [] }) => {
+// The work-queue rule's one predicate over a dead job `j` ($1 = the
+// manifest's cron function ids, $2 = the parse function id): dead, and
+// neither a cron tick superseded by a later success of its function nor a
+// parse job accounted for by its document. Counted for the verdict and
+// listed for `queue_failures` from this same text, so the two cannot drift.
+const DEAD_UNSUPERSEDED = `(
+  j.status = 'dead'
+  and not (
+    j.function_id = any($1::text[])
+    and exists (
+      select 1 from local_jobs superseding
+       where superseding.function_id = j.function_id
+         and superseding.status = 'succeeded'
+         and superseding.completed_at > coalesce(j.completed_at, j.created_at)
+    )
+  )
+  and not (${DEAD_PARSE_JOB_ACCOUNTED_FOR})
+)`;
+
+const QUEUE_FAILURE_LIST_LIMIT = 20;
+const isoOrNull = (value) => {
+  if (value == null) return null;
+  const millis = new Date(value).getTime();
+  return Number.isFinite(millis) ? new Date(millis).toISOString() : null;
+};
+
+// One entry per function holding unsuperseded dead work: its latest dead
+// job, and what happens next — a live job of the function (a pending or
+// running recovery or tick), else the recovery the scheduler will enqueue
+// (localJobQueue.js CRON_RECOVERY_DELAYS_MS), else the next scheduled slot.
+// A dead job of a cron-less function has no next attempt: it needs a person.
+const queueFailures = ({ rows, cronByFunctionId, observedAt }) => {
+  const byFunction = new Map();
+  for (const row of rows) {
+    const entry = byFunction.get(row.function_id);
+    if (entry) {
+      entry.dead_count += 1;
+      continue;
+    }
+    const cron = cronByFunctionId.get(row.function_id) || null;
+    const scheduledTick = Boolean(row.scheduled_tick);
+    const used = Number(row.recoveries_used || 0);
+    const max = CRON_RECOVERY_DELAYS_MS.length;
+    const diedAt = isoOrNull(row.died_at);
+    let nextAttempt = null;
+    if (row.live_job?.id != null) {
+      nextAttempt = {
+        kind: row.live_job.is_recovery ? 'recovery' : 'queued',
+        job_id: Number(row.live_job.id),
+        status: row.live_job.status,
+        at: isoOrNull(row.live_job.run_at)
+      };
+    } else if (cron && scheduledTick && used < max && diedAt) {
+      nextAttempt = { kind: 'recovery', job_id: null, status: 'planned', at: new Date(Date.parse(diedAt) + CRON_RECOVERY_DELAYS_MS[used]).toISOString() };
+    } else if (cron) {
+      let at = null;
+      try { at = nextCronOccurrence(cron, new Date(observedAt)).toISOString(); } catch { at = null; }
+      nextAttempt = { kind: 'scheduled', job_id: null, status: 'planned', at };
+    }
+    byFunction.set(row.function_id, {
+      function_id: row.function_id,
+      kind: cron ? 'scheduled' : 'job',
+      dead_job_id: Number(row.id),
+      died_at: diedAt,
+      last_error: row.last_error || null,
+      dead_count: 1,
+      recovery: cron && scheduledTick
+        ? { recovers_job_id: Number(row.root_id), used, max, exhausted: used >= max }
+        : null,
+      next_attempt: nextAttempt
+    });
+  }
+  return [...byFunction.values()].sort((a, b) => a.function_id.localeCompare(b.function_id));
+};
+
+const databaseCheck = async ({ query, rootDir, observedAt, cronFunctionIds = [], cronByFunctionId = new Map() }) => {
   if (!query) return check('database_schema', 'INCOMPLETE', { reason: 'postgresql_not_configured' });
   try {
     const expected = await expectedMigrations(rootDir);
-    const [versionResult, migrationResult, tableResult, clockResult, queueResult] = await Promise.all([
+    const [versionResult, migrationResult, tableResult, clockResult, queueResult, failureResult] = await Promise.all([
       query("select current_setting('server_version_num')::integer as server_version_num, version() as version"),
       query('select version from schema_migrations order by version'),
       query(
@@ -360,24 +448,35 @@ const databaseCheck = async ({ query, rootDir, observedAt, cronFunctionIds = [] 
            count(*) filter (where status = 'cancelled')::integer as cancelled,
            count(*) filter (where status = 'running' and lease_expires_at < now())::integer as expired_running,
            count(*) filter (where status = 'pending' and attempt_count > 0)::integer as retrying,
-           count(*) filter (
-             where status = 'dead'
-               and not (
-                 function_id = any($1::text[])
-                 and exists (
-                   select 1 from local_jobs superseding
-                    where superseding.function_id = j.function_id
-                      and superseding.status = 'succeeded'
-                      and superseding.completed_at > coalesce(j.completed_at, j.created_at)
-                 )
-               )
-               and not (${DEAD_PARSE_JOB_ACCOUNTED_FOR})
-           )::integer as dead_unsuperseded,
+           count(*) filter (where ${DEAD_UNSUPERSEDED})::integer as dead_unsuperseded,
            count(*) filter (
              where status = 'dead'
                and ${DEAD_PARSE_JOB_ACCOUNTED_FOR}
            )::integer as dead_accounted_by_document
          from local_jobs j`,
+        [cronFunctionIds, HOST_QUEUE_PARSE_DOCUMENT_FUNCTION_ID]
+      ),
+      // What the verdict counted, named: newest death first per function.
+      query(
+        `select j.id, j.function_id, coalesce(j.completed_at, j.created_at) as died_at,
+                left(j.last_error, 300) as last_error,
+                j.payload ? 'tick' as scheduled_tick,
+                coalesce(nullif(j.payload->'recovers'->>'dead_job_id', '')::bigint, j.id) as root_id,
+                (select count(*) from local_jobs r
+                  where r.function_id = j.function_id
+                    and r.payload->'recovers'->>'dead_job_id'
+                        = coalesce(nullif(j.payload->'recovers'->>'dead_job_id', '')::bigint, j.id)::text
+                )::integer as recoveries_used,
+                (select jsonb_build_object('id', l.id, 'status', l.status, 'run_at', l.run_at,
+                                           'is_recovery', l.payload ? 'recovers')
+                   from local_jobs l
+                  where l.function_id = j.function_id and l.status in ('pending', 'running')
+                  order by l.run_at, l.id
+                  limit 1) as live_job
+           from local_jobs j
+          where ${DEAD_UNSUPERSEDED}
+          order by coalesce(j.completed_at, j.created_at) desc, j.id desc
+          limit ${QUEUE_FAILURE_LIST_LIMIT * 5}`,
         [cronFunctionIds, HOST_QUEUE_PARSE_DOCUMENT_FUNCTION_ID]
       )
     ]);
@@ -409,7 +508,9 @@ const databaseCheck = async ({ query, rootDir, observedAt, cronFunctionIds = [] 
       missing_tables: missingTables,
       database_clock: databaseNow,
       clock_skew_ms: clockSkewMs,
-      queue: Object.fromEntries(Object.entries(queue).map(([key, value]) => [key, Number(value || 0)]))
+      queue: Object.fromEntries(Object.entries(queue).map(([key, value]) => [key, Number(value || 0)])),
+      queue_failures: queueFailures({ rows: failureResult.rows || [], cronByFunctionId, observedAt })
+        .slice(0, QUEUE_FAILURE_LIST_LIMIT)
     });
   } catch (error) {
     return check('database_schema', 'INCOMPLETE', { reason: 'postgresql_probe_failed', error: errorDetail(error) });
@@ -761,7 +862,10 @@ export const observeHostCertificateA = async ({
     .map((entry) => entry.functionId);
   const checks = [
     build,
-    await databaseCheck({ query, rootDir, observedAt, cronFunctionIds }),
+    await databaseCheck({
+      query, rootDir, observedAt, cronFunctionIds,
+      cronByFunctionId: new Map((manifest || []).filter((entry) => entry?.cron).map((entry) => [entry.functionId, entry.cron]))
+    }),
     await runtimeCheck({ query, manifest, schedulerEnabled }),
     await storageCheck({ env, observedAt, commitSha: build.detail.commit_sha, fetchImpl, storageOps }),
     modelRouteCheck(env, modelLanes),

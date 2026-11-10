@@ -102,7 +102,7 @@ test('Host Certificate A is deterministic, zero-model, observe-only, and proves 
 });
 
 test('v5: an OpenAI-only host is PASS — dark lanes are receipts, and key presence never rewrites the compatibility digest', async () => {
-  assert.equal(HOST_CERTIFICATE_A_VERSION, 'donna.host-certificate-a.v7');
+  assert.equal(HOST_CERTIFICATE_A_VERSION, 'donna.host-certificate-a.v8');
   const observe = (overrides) => observeHostCertificateA({
     env: { ...env, ...overrides }, rootDir: ROOT, observedAt: OBSERVED_AT, manifest, schedulerEnabled: true,
     query: makeQuery(), storageOps: makeStorage().ops

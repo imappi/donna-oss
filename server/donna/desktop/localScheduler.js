@@ -12,7 +12,14 @@
 //      complete/fail (exponential backoff with jitter; dead-letter on
 //      exhausted attempts).
 //   3. recovery — periodically release expired leases (crash, force-quit,
-//      slept past the lease) back to pending or dead.
+//      slept past the lease) back to pending or dead, then give each dead
+//      scheduled tick with no success since a prompt, bounded recovery tick
+//      (localJobQueue.js, "Prompt recovery of a dead scheduled tick"):
+//      planned from the stored dead row, never from memory, so a restart or
+//      a sleep neither loses nor multiplies it. A scheduled slot that comes
+//      due while a recovery is pending is absorbed by it; while one is
+//      running the slot waits for it (the cursor holds), so recovery never
+//      puts two live ticks of one function on the queue.
 //
 // Timeouts mirror the cloud bounds: on expiry the job FAILS (retry/dead) and
 // the zombie handler's late writes stay safe the same way they do under
@@ -51,9 +58,9 @@ import { previousCronOccurrence } from './cronSchedule.js';
 import { makeDurableStep } from './durableStep.js';
 import { createExecutionBudget, runWithExecutionBudget } from '../executionBudget.js';
 import {
-  claimNextLocalJob, completeLocalJob, deferLocalJob, enqueueLocalJob, failLocalJob,
-  isLocalJobDeferral, listLocalCronState, pruneFinishedLocalJobs, recoverAbandonedLocalJobs,
-  retireUndeclaredLocalFunctions, setLocalCronState
+  absorbScheduledTickIntoCronRecovery, claimNextLocalJob, completeLocalJob, deferLocalJob,
+  enqueueCronRecoveryTicks, enqueueLocalJob, failLocalJob, isLocalJobDeferral, listLocalCronState,
+  pruneFinishedLocalJobs, recoverAbandonedLocalJobs, retireUndeclaredLocalFunctions, setLocalCronState
 } from './localJobQueue.js';
 
 const BACKOFF_BASE_MS = 30_000;
@@ -93,6 +100,7 @@ export const createLocalScheduler = ({
     enqueueLocalJob, claimNextLocalJob, completeLocalJob, failLocalJob, deferLocalJob,
     recoverAbandonedLocalJobs, listLocalCronState, setLocalCronState,
     pruneFinishedLocalJobs, retireUndeclaredLocalFunctions, makeDurableStep,
+    enqueueCronRecoveryTicks, absorbScheduledTickIntoCronRecovery,
     ...deps
   };
 
@@ -107,6 +115,7 @@ export const createLocalScheduler = ({
   let lastRecoverAt = 0;
   let lastPruneAt = 0;
   let initialized = false;
+  const heldBehindRecovery = new Set(); // functionIds whose due slot waits on a running recovery (log once)
 
   const notifyQueueActivity = async (activity) => {
     try {
@@ -157,6 +166,24 @@ export const createLocalScheduler = ({
       const latestDue = previousCronOccurrence(entry.cron, at);
       if (!last || latestDue <= last) continue;
       const tickIso = latestDue.toISOString();
+      const recovery = await q.absorbScheduledTickIntoCronRecovery({
+        client, functionId: entry.functionId, tick: tickIso
+      });
+      if (recovery.live && !recovery.absorbed) {
+        // A recovery tick is running: the slot waits for it (cursor held).
+        if (!heldBehindRecovery.has(entry.functionId)) {
+          heldBehindRecovery.add(entry.functionId);
+          logger?.log?.(`[desktop-scheduler] ${entry.functionId} slot ${tickIso} waits for running recovery #${recovery.live.id}`);
+        }
+        continue;
+      }
+      heldBehindRecovery.delete(entry.functionId);
+      if (recovery.absorbed) {
+        logger?.log?.(`[desktop-scheduler] ${entry.functionId} slot ${tickIso} is served by pending recovery #${recovery.live.id}`);
+        cronState.set(entry.functionId, latestDue);
+        await q.setLocalCronState({ client, functionId: entry.functionId, lastEnqueuedTick: tickIso });
+        continue;
+      }
       await q.enqueueLocalJob({
         client,
         functionId: entry.functionId,
@@ -171,6 +198,40 @@ export const createLocalScheduler = ({
         client, functionId: entry.functionId, lastEnqueuedTick: tickIso
       });
     }
+  };
+
+  // Loop 3's second half: one statement plans every due recovery tick of
+  // this dispatcher's cron functions from the stored dead rows.
+  const enqueueDueCronRecoveries = async () => {
+    const at = now();
+    const functions = manifest
+      .filter((entry) => entry.cron)
+      .map((entry) => ({
+        functionId: entry.functionId,
+        handlerVersion: entry.handlerVersion ?? '1',
+        maxAttempts: entry.maxAttempts ?? 1,
+        slotTick: previousCronOccurrence(entry.cron, at).toISOString()
+      }));
+    if (!functions.length) return [];
+    const enqueued = await q.enqueueCronRecoveryTicks({ client, functions });
+    for (const row of enqueued) {
+      const recovers = row.payload?.recovers || {};
+      logger?.warn?.(
+        `[desktop-scheduler] ${row.function_id} recovery ${recovers.recovery}/${recovers.of} #${row.id} for dead tick #${recovers.dead_job_id} due ${new Date(row.run_at).toISOString()}`
+      );
+    }
+    if (enqueued.length) {
+      await notifyQueueActivity({
+        kind: 'cron_recovery_enqueued',
+        jobs: enqueued.map((row) => ({
+          job_id: row.id,
+          function_id: row.function_id,
+          recovers_job_id: row.payload?.recovers?.dead_job_id ?? null,
+          run_at: new Date(row.run_at).toISOString()
+        }))
+      });
+    }
+    return enqueued;
   };
 
   const runningCount = (functionId) => {
@@ -285,6 +346,7 @@ export const createLocalScheduler = ({
             }))
           });
         }
+        await enqueueDueCronRecoveries();
       }
       if (nowMs - lastPruneAt >= pruneIntervalMs) {
         lastPruneAt = nowMs;
