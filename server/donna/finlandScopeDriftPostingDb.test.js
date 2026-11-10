@@ -34,6 +34,11 @@ const fakeClient = ({ flags = {}, askInsertReturns = true, entityType = null } =
     queries,
     async query(sql, params = []) {
       queries.push({ sql, params });
+      // The filed-VAT-return guard's reads (db/ledger.js assertJournalDateOutsideFiledReturn,
+      // 2026-11-10): no stored chart for the journal's codes and no filed return in this fixture.
+      if (sql.includes('select code, account_type from ledger_accounts')) return { rows: [] };
+      if (sql.includes('from alv_returns')) return { rows: [] };
+      if (sql.includes('lj.journal_date::text as journal_date, ll.id as line_id')) return { rows: [] };
       if (sql === 'select id from ledger_accounts where firm_id=$1 and client_id=$2 order by id for update') {
         assert.deepEqual(params,['firm-1','client-1']);
         return {rows:[]};
@@ -176,6 +181,11 @@ const sweepClient = ({ pending = [] } = {}) => {
     queries,
     async query(sql, params = []) {
       queries.push({ sql, params });
+      // The filed-VAT-return guard's reads (db/ledger.js assertJournalDateOutsideFiledReturn,
+      // 2026-11-10): no stored chart for the journal's codes and no filed return in this fixture.
+      if (sql.includes('select code, account_type from ledger_accounts')) return { rows: [] };
+      if (sql.includes('from alv_returns')) return { rows: [] };
+      if (sql.includes('lj.journal_date::text as journal_date, ll.id as line_id')) return { rows: [] };
       if (sql === 'select id from ledger_accounts where firm_id=$1 and client_id=$2 order by id for update') {
         assert.deepEqual(params,['firm-1','client-1']);
         return {rows:[]};
