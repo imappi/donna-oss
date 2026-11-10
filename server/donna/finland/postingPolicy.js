@@ -7,7 +7,7 @@ import {
 import { SALES_INVOICE_RECEIVABLE_ACCOUNT, SUPPLIER_BILL_PAYABLES_ACCOUNT, ledgerAccountTypeFor } from '../ledger.js';
 import { documentSourceComponents } from '../documentAllocationComponents.js';
 import { planArSettlement } from './issuedInvoiceSettlement.js';
-import { assertTaxSourceEvidence } from '../taxSourceEvidence.js';
+import { assertSalesSourceTaxRegistration, assertTaxSourceEvidence } from '../taxSourceEvidence.js';
 import { ALV_REGISTRATION_STATUSES, normalizeAlvRegistrationProfile, resolveAlvRegistrationAsOf } from './alvRegistration.js';
 import { isRegistrationRecord } from '../sellerRegistration.js';
 import { toIsoDay } from '../dates.js';
@@ -75,8 +75,24 @@ const taxPosting = Object.freeze({ outputCodeForRate: alvOutputCodeForRate, cont
 // with TRANSACTION_ALV_REGISTRATION_REQUIRED becomes a question to the owner
 // for the fact only they know — whether, and from when, the business is in
 // the Finnish VAT register (arvonlisäverorekisteri). It asks no tax judgement.
+// How the owner's own sales document is named in the owner's language: its
+// file name and date, and the VAT it shows (the printed amount, or the printed
+// rates when only the lines carry tax).
+const fiSalesSourceWords = ({ language = 'fi', source = {} } = {}) => {
+  const fi = language === 'fi';
+  const file = source.filename ? ` ${source.filename}` : '';
+  const date = toIsoDay(source.document_date);
+  const dated = date ? (fi ? ` (päivätty ${date})` : ` (dated ${date})`) : '';
+  const amount = source.tax_amount != null ? (fi ? `${Number(source.tax_amount).toFixed(2).replace('.', ',')}${source.currency ? ` ${source.currency}` : ''}`
+    : `${Number(source.tax_amount).toFixed(2)}${source.currency ? ` ${source.currency}` : ''}`) : '';
+  const rates = (source.rates || []).map((rate) => `${fi ? String(rate).replace('.', ',') : rate} %`).join(fi ? ' ja ' : ' and ');
+  const document = source.document_type === 'issued_receipt' ? (fi ? 'kuitissanne' : 'your receipt') : (fi ? 'myyntilaskussanne' : 'your sales invoice');
+  const shows = amount ? (fi ? `arvonlisäveroa ${amount}` : `VAT of ${amount}`) : (fi ? `arvonlisäveroa (${rates})` : `VAT (${rates})`);
+  return { invoice: `${document}${file}${dated}`, shows };
+};
 const FI_TAX_REGISTRATION = Object.freeze({
-  refusalCodes: Object.freeze(['TRANSACTION_ALV_REGISTRATION_REQUIRED', 'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED']),
+  refusalCodes: Object.freeze(['TRANSACTION_ALV_REGISTRATION_REQUIRED', 'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED',
+    'TRANSACTION_ALV_SALE_SOURCE_SHOWS_VAT_UNREGISTERED']),
   onDate: ({ profile = null, onDate = null } = {}) =>
     resolveFiAlvRegistrationOnDate({ registration: profile?.alv_registration ?? null, onDate }),
   ownerQuestion: ({ language = 'fi', lineLabel = '', onDate = null, registered = null } = {}) => {
@@ -153,6 +169,36 @@ const FI_TAX_REGISTRATION = Object.freeze({
   filedReturnOn: async ({ query, firmId, clientId, onDate }) => (await query(
     `select id, period_key from alv_returns where firm_id = $1 and client_id = $2 and status = 'filed'
       and starts_on <= $3::date and ends_on >= $3::date order by starts_on, id limit 1`, [firmId, clientId, onDate])).rows[0] || null,
+  // A sale whose own sales invoice or receipt shows ALV, on a date the record
+  // says the business is not in the register (taxSourceEvidence.js
+  // assertSalesSourceTaxRegistration refuses it with refusalCode). The owner is
+  // asked the registration fact with what was seen: which document, the ALV it
+  // shows, and what the record says. A plain "no" leaves the document showing
+  // ALV that the books cannot carry, so the owner is asked for the corrected
+  // invoice or the credit note (correctionRequest). Neither wording says
+  // whether the ALV shown is owed or how it is reported: no statutory rule is
+  // encoded here, and a person decides that with the corrected document.
+  // correctionAsk 'document_discrepancy': Finland's corrected-document
+  // question (the reply's corrected invoice replaces the held source,
+  // db/reconcile.js) carries the request where the held source is verified.
+  salesSourceShowsTax: Object.freeze({
+    refusalCode: 'TRANSACTION_ALV_SALE_SOURCE_SHOWS_VAT_UNREGISTERED',
+    correctionAsk: 'document_discrepancy',
+    ownerQuestion: ({ language = 'fi', lineLabel = '', onDate = null, source = {} } = {}) => {
+      const at = toIsoDay(onDate) || '';
+      const line = lineLabel ? `${lineLabel}: ` : '';
+      const { invoice, shows } = fiSalesSourceWords({ language, source });
+      if (language === 'fi') return `${line}${invoice} näkyy ${shows}, mutta tietojemme mukaan yritys ei ollut arvonlisäverorekisterissä ${at}. Oliko yritys tuolloin merkitty arvonlisäverorekisteriin? Jos oli, mistä päivästä alkaen?`;
+      return `${line}${invoice} shows ${shows}, but our records say the business was not in the Finnish VAT register (arvonlisäverorekisteri) on ${at}. Was the business in the register then? If so, from what date?`;
+    },
+    correctionRequest: ({ language = 'fi', lineLabel = '', onDate = null, source = {} } = {}) => {
+      const at = toIsoDay(onDate) || '';
+      const line = lineLabel ? `${lineLabel}: ` : '';
+      const { invoice, shows } = fiSalesSourceWords({ language, source });
+      if (language === 'fi') return `${line}${invoice} näkyy ${shows}, mutta yritys ei ollut arvonlisäverorekisterissä ${at}. Lähetä meille korjattu lasku tai hyvityslasku, jolla lasku on korjattu.`;
+      return `${line}${invoice} shows ${shows}, but the business was not in the Finnish VAT register (arvonlisäverorekisteri) on ${at}. Please send us the corrected invoice, or the credit note that corrects it.`;
+    }
+  }),
   // replyInvitation: false drops the closing invitation, for a surface where
   // the closed question has no reply (ownerReplyNotice.js).
   recordedNotice: ({ language = 'fi', record = null, replyInvitation = true } = {}) => {
@@ -226,6 +272,10 @@ export const FI_POSTING_POLICY = Object.freeze({
       if (entry) registration(entry.code);
       return coding;
     }
+    // A sale whose own sales document shows ALV, for a business the record
+    // says is not registered: refused whatever treatment the coding carries
+    // (a rated one would only meet the registration rule below).
+    assertSalesSourceTaxRegistration({ registration: FI_TAX_REGISTRATION, profile, transaction, coding, document });
     const suggestion = transaction.ai_suggestion || {};
     // The component writer validates every selected code against the locked source.
     // Its complete plan, rather than the summary account's tax, owns this journal.
