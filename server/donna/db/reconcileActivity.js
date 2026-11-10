@@ -112,10 +112,11 @@ export const projectReconcileActivity = ({ transactions, documents, jobs, clock,
       }
       // A source waiting on its model provider (the persisted provider hold:
       // no key on this installation, or the provider unreachable) is not being
-      // read. Its stored reason is the named cause; never "Reading".
+      // read (no key, a refused key, no credit, or unreachable). Its stored reason
+      // is the named cause; never "Reading".
       const hold = doc.payload?.parse_hold || doc.parse_hold;
       if (doc.parse_status === 'pending' && hold?.boundary === 'parse_extract'
-        && ['provider_not_configured','provider_unreachable'].includes(hold.reason_code)) {
+        && ['provider_not_configured','provider_unauthorized','provider_no_credit','provider_unreachable'].includes(hold.reason_code)) {
         failures.set(`document:${doc.id}`,{code:hold.reason_code,receipt_id:doc.id});
       }
       const matched = matches.some(match=>match.matched_object_id===doc.id

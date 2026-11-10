@@ -240,10 +240,14 @@ rm -rf ~/.donna-desktop
   `.env` and restart the runtime (step 3); each waiting document is read
   within five minutes, under the same upload, with no new upload and no
   reset. The owner's view says only that the file is saved and taking
-  longer. If a provider cannot be reached at all, the row says so and is
-  read once the provider answers. A book from an earlier release that left
+  longer. The same holds when the provider refuses the key (`… refused
+  OPENAI_API_KEY`: fix the key), when the account has no credit left (`…
+  has no credit left on this account`: add credit; no restart needed), and
+  when the provider cannot be reached at all: the row names the cause and
+  is read once the provider answers. A book from an earlier release that left
   such a document failed, or a scanned statement with no lines, reads it
-  again once on the first start of this release.
+  again once on the first start of this release (also one failed on a
+  refused key or after four "no credit" or rate-limit answers).
 - **Every bank line is "Stalled" although OpenAI and Anthropic are lit**:
   the runtime log shows `Configure the first-line provider model for this
   host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`, or switch that lane

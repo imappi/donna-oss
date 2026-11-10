@@ -1398,16 +1398,22 @@ const extractDocumentInner = async ({
     llmFirst: isBankStatementLlmFirstEnabled({ configSnapshot }),
     ...(Number(document.parse_attempts) > 1 ? { bypassCache: true } : {})
   });
-  if (extraction?.extraction_diagnostics?.vision_skipped === 'not_configured') {
-    // The statement has no text layer and this installation has no cloud OCR
-    // key: it was never read. A provider wait (parseErrors.providerWaitFor),
-    // never `skipped / no_transactions_detected`, which reads as a fact
-    // about the statement.
-    throw new ParseError('DOCUMENT_EXTRACTION_FAILED', {
-      provider: 'openai',
-      retryable: true,
-      reason: 'openai_not_configured',
-      message: 'Bank statement extraction failed: openai_not_configured (no text layer; cloud OCR has no key)'
+  const visionSkipped = extraction?.extraction_diagnostics?.vision_skipped;
+  if (visionSkipped === 'not_configured' || visionSkipped === 'provider_fault') {
+    // The statement has no text layer and cloud OCR could not be used — no
+    // key, a refused key, or no credit on the account. It was never read: a
+    // provider wait (parseErrors.providerWaitFor), never `skipped /
+    // no_transactions_detected`, which reads as a fact about the statement.
+    // The provider and the fault come from the extractor's record.
+    const details = extraction.extraction_diagnostics.vision_skipped_details || {};
+    const provider = details.provider || 'openai';
+    const fault = visionSkipped === 'not_configured' ? 'not_configured' : details.fault;
+    const unauthorized = fault === 'unauthorized';
+    throw new ParseError(unauthorized ? 'DOCUMENT_EXTRACTION_UNAUTHORIZED' : 'DOCUMENT_EXTRACTION_FAILED', {
+      provider,
+      retryable: !unauthorized,
+      reason: unauthorized ? `${provider}_${details.status === 403 ? 403 : 401}` : `${provider}_${fault}`,
+      message: `Bank statement extraction failed: ${provider} ${fault} (no text layer; cloud OCR unavailable)`
     });
   }
   // Re-read the original PDF once when the text layer produced inconsistent

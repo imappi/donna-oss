@@ -2,7 +2,7 @@
 -- are read again, once, without a new upload.
 --
 -- Before this release a parse whose extractor reported that the installation
--- had no provider key spent the document's four automatic attempts on that
+-- had no provider key (or whose provider refused the key) spent the document's four automatic attempts on that
 -- fact and rested `failed` (retry_exhausted, retry_owner 'manual'); a scanned
 -- bank statement read without a cloud OCR key rested `skipped /
 -- no_transactions_detected`, which reads as a fact about the statement. From
@@ -20,9 +20,13 @@
 -- Selected, narrowly, by the stored receipt — never by a label:
 --   (a) `failed` rows whose parse_error.reason is a missing-key reason
 --       (`openai_not_configured`, `no_provider_key`, `no_api_key`,
---       `api_key_missing`). An unreachable-provider failure
---       (`network_error`) is NOT re-admitted: from storage alone it cannot be
---       told apart from a request the document itself breaks.
+--       `api_key_missing`), or whose code says the provider refused the key
+--       (`DOCUMENT_EXTRACTION_UNAUTHORIZED`), or that spent all four
+--       attempts on 429s (`<provider>_429` + retry_exhausted): an empty
+--       account was stored exactly like a rate limit, and one more read of a
+--       rate-limited document costs one request. Not re-admitted: an
+--       unreachable-provider failure (`network_error`), which storage alone
+--       cannot tell apart from a request the document itself breaks.
 --   (b) `skipped` bank statements whose summary says the router ran without
 --       an OpenAI key (`classification.reason = 'api_key_missing'`), nothing
 --       was read (`extraction_status = 'failed'`, no transactions, the "No
@@ -40,7 +44,9 @@ with eligible as (
      and d.parse_run_id is not null
      and (
        (d.parse_status = 'failed'
-         and d.parse_error->>'reason' in ('openai_not_configured', 'no_provider_key', 'no_api_key', 'api_key_missing'))
+         and (d.parse_error->>'reason' in ('openai_not_configured', 'no_provider_key', 'no_api_key', 'api_key_missing')
+           or d.parse_error->>'code' = 'DOCUMENT_EXTRACTION_UNAUTHORIZED'
+           or (d.parse_error->>'reason' ~ '^[a-z_]+_429$' and d.parse_error ? 'retry_exhausted')))
        or (d.parse_status = 'skipped'
          and d.document_type = 'bank_statement'
          and d.parse_summary->>'reason' = 'no_transactions_detected'

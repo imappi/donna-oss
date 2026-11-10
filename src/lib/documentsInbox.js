@@ -1047,9 +1047,10 @@ const statementActivityTime = (document = {}) =>
 
 // The persisted provider wait on a document (payload.parse_hold written by the
 // parse worker — server/donna/inngest/parseErrors.js buildProviderWaitHold):
-// the installation has no key for the provider this document needs, or the
-// provider could not be reached. Rendered from the stored receipt only.
-export const PROVIDER_WAIT_REASON_CODES = Object.freeze(['provider_not_configured', 'provider_unreachable']);
+// the installation has no key for the provider this document needs, the
+// provider refused the key, the account has no credit, or the provider could
+// not be reached. Rendered from the stored receipt only.
+export const PROVIDER_WAIT_REASON_CODES = Object.freeze(['provider_not_configured', 'provider_unauthorized', 'provider_no_credit', 'provider_unreachable']);
 export const providerWaitOf = (document = {}) => {
   const hold = document?.parse_hold || document?.payload?.parse_hold || null;
   if (!hold || typeof hold !== 'object') return null;

@@ -19,6 +19,11 @@
 //       deterministic rejection) rests failed at once and is NOT retried.
 //   (e) a scanned bank statement uploaded without a cloud OCR key waits the
 //       same way — never `skipped / no_transactions_detected`.
+//   (g) no credit on the account (Anthropic 400 "credit balance is too low",
+//       OpenAI 429 `insufficient_quota`) waits the same way, with its own
+//       stored reason; a plain 429 rate limit stays a document attempt.
+//   (h) a key the provider refuses (401) waits until the key is fixed.
+//   (i) a scanned statement whose OCR account has no credit waits too.
 //   (f) upgrade: a receipt the previous release rested `failed` on a missing
 //       key, with its dead job (which kept Host A refusing every upload), is
 //       re-admitted by migration 186 — new run, dead job settled — and read
@@ -212,7 +217,12 @@ test(
       const { clientId } = await appliance.createClient();
       appliance.providers.script('document_routing', ['document_routing/screwfix-receipt']);
       appliance.providers.script('unified_extraction', ['unified_extraction/screwfix-receipt-unreadable-openai']);
-      appliance.providers.script('receipt_extraction', [{ status: 400 }]);
+      // A content rejection: a 400 whose error body names the file, not
+      // credit or billing.
+      appliance.providers.script('receipt_extraction', [{
+        status: 400,
+        body: { error: { type: 'invalid_request_error', code: 'invalid_image', message: 'The image data you provided does not represent a valid image.' } }
+      }]);
       const upload = await appliance.uploadDocument({ clientId, fixture: 'receipt_screwfix' });
       await appliance.tick();
       const document = await appliance.read.document(upload.documentId);
@@ -289,6 +299,32 @@ test(
           where function_id = $1 and dedupe_key = $2`,
         [PARSE_FN, oldRunId]
       );
+      // Two more rows the old release rested: one after four 429s (an empty
+      // account was stored exactly like a rate limit) — re-admitted; one the
+      // provider rejected for its content — left alone.
+      const legacyRow = async (suffix, parseError) => {
+        const other = await appliance.uploadDocument({
+          clientId,
+          bytes: Buffer.concat([readFileSync(path.join(REPO_ROOT, 'server', 'donna', 'fixtures', 'appliance', 'screwfix-receipt-2026-08-22.pdf')), Buffer.from(`\n% ${suffix}\n`)]),
+          filename: `${suffix}.pdf`,
+          documentType: 'receipt'
+        });
+        await appliance.query(
+          `update documents set parse_status = 'failed', parse_attempts = 4, parse_completed_at = now(), parse_error = $3::jsonb
+            where firm_id = $1 and id = $2`,
+          [appliance.firmId, other.documentId, JSON.stringify(parseError)]
+        );
+        await appliance.query("update local_jobs set status = 'cancelled' where function_id = $1 and dedupe_key = $2", [PARSE_FN, other.registered.parse_run_id]);
+        return other;
+      };
+      const quotaRow = await legacyRow('legacy-429', {
+        code: 'DOCUMENT_EXTRACTION_FAILED', reason: 'openai_429', provider: 'openai', retryable: false, retry_owner: 'manual',
+        retry_exhausted: { attempts: 4, max_attempts: 4 }
+      });
+      const rejectedRow = await legacyRow('legacy-rejected', {
+        code: 'DOCUMENT_EXTRACTION_REJECTED', reason: 'openai_400', provider: 'openai', retryable: false
+      });
+
       await appliance.runtime.hostReadiness.renewNow();
       const blocked = await appliance.read.host();
       assert.equal(blocked.status, 'FAIL', 'the dead parse job gates the host (the old release)');
@@ -303,7 +339,8 @@ test(
       assert.equal(readmitted.parse_attempts, 0, 'with its own fresh budget');
       assert.equal(readmitted.parse_error, null);
       assert.equal(readmitted.parse_event_sent_at, null, 'the outbox gives the run its job');
-      const retryAudits = await appliance.read.audit({ clientId, action: 'document.parse.retry' });
+      const retryAudits = (await appliance.read.audit({ clientId, action: 'document.parse.retry' }))
+        .filter((row) => row.resource_id === upload.documentId);
       assert.equal(retryAudits.length, 1);
       assert.equal(retryAudits[0].metadata.source, 'provider_wait_readmission');
       assert.equal(retryAudits[0].metadata.previous_run_id, oldRunId);
@@ -311,6 +348,12 @@ test(
       assert.equal(oldJob.status, 'cancelled', 'the superseded run\'s dead job is settled, visibly');
       assert.match(String(oldJob.last_error), /openai_not_configured/, 'its last error is kept');
       assert.deepEqual(retryAudits[0].metadata.cancelled_dead_job_ids, [Number(oldJob.id)]);
+      const quotaReadmitted = await appliance.read.document(quotaRow.documentId);
+      assert.equal(quotaReadmitted.parse_status, 'pending', 'four 429s: re-admitted once');
+      assert.notEqual(quotaReadmitted.parse_run_id, quotaRow.registered.parse_run_id);
+      const rejectedKept = await appliance.read.document(rejectedRow.documentId);
+      assert.equal(rejectedKept.parse_status, 'failed', 'a content rejection is the document\'s own: left alone');
+      assert.equal(rejectedKept.parse_run_id, rejectedRow.registered.parse_run_id);
       // Running it again changes nothing.
       await appliance.query(migration);
       assert.equal((await appliance.read.document(upload.documentId)).parse_run_id, readmitted.parse_run_id);
@@ -331,8 +374,11 @@ test(
       // The key is there; the outbox (past its 30s settle window) queues the
       // new run and the queue reads it.
       lightProviders();
-      scriptReceiptLanes(appliance);
-      await appliance.query("update documents set parse_enqueued_at = now() - interval '1 minute' where firm_id = $1 and id = $2", [appliance.firmId, upload.documentId]);
+      // Two re-admitted documents, each read once.
+      appliance.providers.script('document_routing', [{ recording: 'document_routing/screwfix-receipt', times: 2 }]);
+      appliance.providers.script('unified_extraction', [{ recording: 'unified_extraction/screwfix-receipt', times: 2 }]);
+      appliance.providers.script('document_disposition', [{ recording: 'document_disposition/screwfix-receipt-immaterial-auto-explain', times: 2 }]);
+      await appliance.query("update documents set parse_enqueued_at = now() - interval '1 minute' where firm_id = $1 and id = any($2::text[])", [appliance.firmId, [upload.documentId, quotaRow.documentId]]);
       await appliance.tick();
       const read = await appliance.read.document(upload.documentId);
       assert.equal(read.parse_status, 'completed', JSON.stringify(read.parse_error));
@@ -340,11 +386,182 @@ test(
       const newJobs = await jobsForRun(appliance, readmitted.parse_run_id);
       assert.equal(newJobs.length, 1);
       assert.equal(newJobs[0].status, 'succeeded', newJobs[0].last_error);
-      assert.equal(appliance.providers.callsFor('unified_extraction').length, 1);
+      const quotaRead = await appliance.read.document(quotaRow.documentId);
+      assert.equal(quotaRead.parse_status, 'completed', JSON.stringify(quotaRead.parse_error));
+      assert.equal(appliance.providers.callsFor('unified_extraction').length, 2, 'one read per re-admitted document');
+      assert.equal((await appliance.read.document(rejectedRow.documentId)).parse_status, 'failed');
 
       await appliance.tick();
-      assert.equal(appliance.providers.callsFor('unified_extraction').length, 1, 'read once');
+      assert.equal(appliance.providers.callsFor('unified_extraction').length, 2, 'each read once');
       assert.equal((await appliance.read.document(upload.documentId)).parse_run_id, readmitted.parse_run_id);
+    } finally {
+      await appliance.stop();
+    }
+  }
+);
+
+const ANTHROPIC_NO_CREDIT = {
+  status: 400,
+  body: { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.' } }
+};
+const OPENAI_NO_CREDIT = {
+  status: 429,
+  body: { error: { message: 'You exceeded your current quota, please check your plan and billing details.', type: 'insufficient_quota', code: 'insufficient_quota' } }
+};
+const UNAUTHORIZED = (provider) => ({
+  status: 401,
+  body: provider === 'anthropic'
+    ? { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }
+    : { error: { message: 'Incorrect API key provided.', type: 'invalid_request_error', code: 'invalid_api_key' } }
+});
+
+const holdOf = async (appliance, documentId) => (await appliance.read.document(documentId)).payload?.parse_hold || null;
+
+test(
+  'real PG (g): an account with no credit is a provider wait with its own reason, for either provider; a plain rate limit stays a document attempt',
+  { skip: applianceHarnessSkipReason() },
+  async () => {
+    // Anthropic (both keys: the unified extractor rides Anthropic).
+    const appliance = await bootApplianceForTest({ now: BOOT_NOW });
+    try {
+      const { clientId } = await appliance.createClient();
+      appliance.providers.script('document_routing', [{ recording: 'document_routing/screwfix-receipt', times: Infinity }]);
+      appliance.providers.script('unified_extraction', [{ ...ANTHROPIC_NO_CREDIT, times: 2 }, 'unified_extraction/screwfix-receipt']);
+      appliance.providers.script('document_disposition', ['document_disposition/screwfix-receipt-immaterial-auto-explain']);
+      const upload = await appliance.uploadDocument({ clientId, fixture: 'receipt_screwfix' });
+      const runId = upload.registered.parse_run_id;
+      await appliance.tick({ functions: [PARSE_FN], collapseWaits: false, maxRounds: 1 });
+      let document = await appliance.read.document(upload.documentId);
+      assert.equal(document.parse_status, 'pending', JSON.stringify(document.parse_error));
+      let hold = document.payload?.parse_hold;
+      assert.equal(hold?.reason_code, 'provider_no_credit', JSON.stringify(hold));
+      assert.equal(hold?.provider, 'anthropic', 'the provider is read from the failure record');
+      assert.equal(hold?.reason, 'anthropic_no_credit');
+      assert.equal(hold?.key_name, null, 'the key is fine; the account is empty');
+      assert.equal(document.parse_attempts, 0);
+      const [job] = await jobsForRun(appliance, runId);
+      assert.equal(job.attempt_count, 0);
+      assert.match(String(job.last_error), /provider_wait:provider_no_credit:anthropic/);
+      await recheck(appliance);
+      assert.equal((await holdOf(appliance, upload.documentId))?.waits, 2);
+      // Credit is added: the next recheck reads it, once, under the same run.
+      await recheck(appliance);
+      document = await appliance.read.document(upload.documentId);
+      assert.equal(document.parse_status, 'completed', JSON.stringify(document.parse_error));
+      assert.equal(document.parse_run_id, runId);
+      assert.equal(document.parse_attempts, 1);
+      assert.equal(appliance.providers.callsFor('unified_extraction').length, 3, 'two empty-account answers, one read');
+      assert.equal(appliance.providers.callsFor('receipt_extraction').length, 0, 'no fall-through to a second extractor');
+    } finally {
+      await appliance.stop();
+    }
+
+    // OpenAI's form of the same fault (an OpenAI-only host), next to a plain
+    // rate limit on the same lane.
+    const openai = await bootApplianceForTest({ keys: { openai: true, anthropic: false, typesafe: false }, now: BOOT_NOW });
+    try {
+      const { clientId } = await openai.createClient();
+      openai.providers.script('document_routing', [{ recording: 'document_routing/screwfix-receipt', times: Infinity }]);
+      openai.providers.script('unified_extraction', [OPENAI_NO_CREDIT]);
+      const quota = await openai.uploadDocument({ clientId, fixture: 'receipt_screwfix' });
+      await openai.tick({ functions: [PARSE_FN], collapseWaits: false, maxRounds: 1 });
+      const hold = await holdOf(openai, quota.documentId);
+      assert.equal(hold?.reason_code, 'provider_no_credit', JSON.stringify(hold));
+      assert.equal(hold?.provider, 'openai');
+      assert.equal((await jobsForRun(openai, quota.registered.parse_run_id))[0].attempt_count, 0);
+
+      openai.providers.script('unified_extraction', [{
+        status: 429,
+        body: { error: { message: 'Rate limit reached for requests', type: 'requests', code: 'rate_limit_exceeded' } }
+      }]);
+      const limited = await openai.uploadDocument({ clientId, bytes: Buffer.from(upload_bytes_marker(quota)), filename: 'rate-limited-receipt.pdf', documentType: 'receipt' });
+      await openai.tick({ functions: [PARSE_FN], collapseWaits: false, maxRounds: 1 });
+      const limitedDocument = await openai.read.document(limited.documentId);
+      assert.equal(limitedDocument.payload?.parse_hold ?? null, null, 'a rate limit is not a provider wait');
+      const [limitedJob] = await jobsForRun(openai, limited.registered.parse_run_id);
+      assert.equal(limitedJob.status, 'pending');
+      assert.equal(limitedJob.attempt_count, 1, 'a rate limit spends a document attempt, as before');
+      assert.doesNotMatch(String(limitedJob.last_error), /provider_wait/);
+    } finally {
+      await openai.stop();
+    }
+  }
+);
+
+// A second, distinct PDF for the rate-limit row (the same bytes would be a
+// duplicate of the first upload).
+const upload_bytes_marker = (upload) => Buffer.concat([readFileSync(path.join(REPO_ROOT, 'server', 'donna', 'fixtures', 'appliance', 'screwfix-receipt-2026-08-22.pdf')), Buffer.from(`\n% ${upload.documentId}\n`)]);
+
+test(
+  'real PG (h): a key the provider refuses (401) is a provider wait naming the key; fixed, the document is read once',
+  { skip: applianceHarnessSkipReason() },
+  async () => {
+    const appliance = await bootApplianceForTest({ now: BOOT_NOW });
+    try {
+      const { clientId } = await appliance.createClient();
+      appliance.providers.script('document_routing', [{ recording: 'document_routing/screwfix-receipt', times: Infinity }]);
+      // Both lanes refuse their keys: the unified read (Anthropic) is final
+      // and falls through to the receipt extractor (OpenAI), which is refused
+      // too. The stored reason names the last lane that refused.
+      appliance.providers.script('unified_extraction', [UNAUTHORIZED('anthropic'), 'unified_extraction/screwfix-receipt']);
+      appliance.providers.script('receipt_extraction', [UNAUTHORIZED('openai')]);
+      appliance.providers.script('document_disposition', ['document_disposition/screwfix-receipt-immaterial-auto-explain']);
+      const upload = await appliance.uploadDocument({ clientId, fixture: 'receipt_screwfix' });
+      const runId = upload.registered.parse_run_id;
+      await appliance.tick({ functions: [PARSE_FN], collapseWaits: false, maxRounds: 1 });
+      const document = await appliance.read.document(upload.documentId);
+      assert.equal(document.parse_status, 'pending', `a refused key no longer rests terminal: ${JSON.stringify(document.parse_error)}`);
+      const hold = document.payload?.parse_hold;
+      assert.equal(hold?.reason_code, 'provider_unauthorized', JSON.stringify(hold));
+      assert.equal(hold?.code, 'DOCUMENT_EXTRACTION_UNAUTHORIZED');
+      assert.equal(hold?.provider, 'openai');
+      assert.equal(hold?.key_name, 'OPENAI_API_KEY');
+      assert.equal(document.parse_attempts, 0);
+      const [job] = await jobsForRun(appliance, runId);
+      assert.equal(job.status, 'pending');
+      assert.equal(job.attempt_count, 0);
+      const shown = await snapshotDocument(appliance, upload.documentId);
+      assert.equal(shown?.convergence_reason, 'parse_hold:provider_unauthorized');
+
+      // The key is fixed: read once under the same run.
+      await recheck(appliance);
+      const read = await appliance.read.document(upload.documentId);
+      assert.equal(read.parse_status, 'completed', JSON.stringify(read.parse_error));
+      assert.equal(read.parse_run_id, runId);
+      await appliance.tick();
+      assert.equal(appliance.providers.callsFor('unified_extraction').length, 2);
+      assert.equal(appliance.providers.callsFor('receipt_extraction').length, 1);
+      assert.equal((await appliance.read.jobs({ functionId: PARSE_FN })).length, 1);
+    } finally {
+      await appliance.stop();
+    }
+  }
+);
+
+test(
+  'real PG (i): a scanned statement whose OCR account has no credit waits on its provider — never skipped as "no transactions"',
+  { skip: applianceHarnessSkipReason({ dark: ['anthropic', 'typesafe'] }) },
+  async () => {
+    const appliance = await bootApplianceForTest({ keys: { openai: true, anthropic: false, typesafe: false }, now: BOOT_NOW });
+    try {
+      const { clientId } = await appliance.createClient();
+      appliance.providers.script('document_routing', [{ ...OPENAI_NO_CREDIT, times: Infinity }]);
+      appliance.providers.script('bank_statement_extraction', [{ ...OPENAI_NO_CREDIT, times: Infinity }]);
+      const upload = await appliance.uploadDocument({
+        clientId,
+        bytes: readFileSync(SCANNED_STATEMENT),
+        filename: 'scanned-statement-2025-02.pdf',
+        documentType: 'bank_statement'
+      });
+      await appliance.tick({ functions: [PARSE_FN], collapseWaits: false, maxRounds: 1 });
+      const document = await appliance.read.document(upload.documentId);
+      assert.equal(document.parse_status, 'pending', JSON.stringify({ summary: document.parse_summary, error: document.parse_error }));
+      const hold = document.payload?.parse_hold;
+      assert.equal(hold?.reason_code, 'provider_no_credit', JSON.stringify(hold));
+      assert.equal(hold?.provider, 'openai');
+      assert.equal(document.parse_attempts, 0);
+      assert.equal(appliance.providers.callsFor('bank_statement_extraction').length, 1, 'the plain-OCR fallback is not tried against the same empty account');
+      assert.deepEqual(await appliance.read.transactions(clientId), []);
     } finally {
       await appliance.stop();
     }

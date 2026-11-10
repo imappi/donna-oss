@@ -2974,11 +2974,15 @@ function DocFeedRow({ row, active = false, deleting = false, onOpen, onContextMe
   // The persisted provider wait (payload.parse_hold): the stored reason is the
   // status, named on the row itself — never a bare Stalled.
   const providerWait = providerWaitOf(row.document || row);
-  const providerWaitLabel = providerWait
-    ? (providerWait.reason_code === 'provider_not_configured' && providerWait.key_name
+  const providerName = providerWait ? (PROVIDER_DISPLAY_NAMES[providerWait.provider] || providerWait.provider || 'the model provider') : null;
+  const providerWaitLabel = !providerWait ? null
+    : providerWait.reason_code === 'provider_not_configured' && providerWait.key_name
       ? intl.formatMessage({ id: 'mounted.financial.waitingProviderKey' }, { code: providerWait.key_name })
-      : intl.formatMessage({ id: 'mounted.financial.waitingProvider' }, { provider: PROVIDER_DISPLAY_NAMES[providerWait.provider] || providerWait.provider || 'the model provider' }))
-    : null;
+      : providerWait.reason_code === 'provider_unauthorized' && providerWait.key_name
+        ? intl.formatMessage({ id: 'mounted.financial.waitingProviderKeyRefused' }, { provider: providerName, code: providerWait.key_name })
+        : providerWait.reason_code === 'provider_no_credit'
+          ? intl.formatMessage({ id: 'mounted.financial.waitingProviderCredit' }, { provider: providerName })
+          : intl.formatMessage({ id: 'mounted.financial.waitingProvider' }, { provider: providerName });
   const statusLabel = providerWaitLabel || intl.formatMessage({
     id: scopedNoSettlement ? 'lifecycle.noSettlementInScope' : row.materialSourceState === 'processing'
       ? 'mounted.financial.readingStatement'

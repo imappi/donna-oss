@@ -198,7 +198,9 @@ export const llmCall = async ({
       if (response.ok) { lastError = null; break; }
       lastError = Object.assign(
         new Error(payload?.error?.message || `${provider || 'provider'} returned ${response.status}`),
-        { code: 'LLM_CALL_PROVIDER_ERROR', status: response.status }
+        // `providerError`: the provider's own error object, so a caller can tell
+        // an empty account from a rate limit or a rejected request.
+        { code: 'LLM_CALL_PROVIDER_ERROR', status: response.status, providerError: payload?.error && typeof payload.error === 'object' ? payload.error : null }
       );
     } catch (error) {
       lastError = error;
