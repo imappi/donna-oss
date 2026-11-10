@@ -65,6 +65,7 @@ test('every contract operation is either routed or answers NOT_IMPLEMENTED — n
     'POST /entities/{entityId}/documents/{documentId}/retry',
     'POST /entities/{entityId}/queue/cards/{cardId}/decision',
     'POST /entities/{entityId}/settings',
+    'POST /me/deletion-request',
     'POST /notifications/registrations',
     'PUT /entities/{entityId}/onboarding/profile'
   ]);

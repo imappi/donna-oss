@@ -124,11 +124,27 @@ changes are proposals for this one. Nothing here is worked around in code.
   the first firm, so an owner with books in two firms sees the edit there only
   when it was made in the first.
 
+- **Account deletion is recorded, not carried out, and the firm is not told.**
+  The contract says the backend "carries it out without any further human
+  gatekeeping". `POST /me/deletion-request` records one request per owner
+  identity (`owner_deletion_requests`, migration 171, status `recorded`) with
+  an audit row per firm, and deletes nothing: what is deleted, when, by whom
+  and under which retention period per market is an undecided policy, and the
+  books are also the accounting firm's records (the only deletion writer,
+  `deleteClientInDb`, is firm-side and removes a whole client). No existing
+  primitive puts the request in front of the firm's owner without bending it
+  (a seat ask needs an artifact or standing-subject anchor and would read as
+  an open bookkeeping question in convergence, the firm feed and close;
+  `mention_notifications` accepts only transaction/document artifacts), so
+  the server's message says the firm was NOT told and asks the owner to
+  contact them. Proposal (Donna): decide the policy, then a firm-side
+  hand-off and the writer that carries it out. Proposal (contract): describe
+  the request as recorded-and-handled-by-the-firm until then.
+
 ## Endpoints answering `501 NOT_IMPLEMENTED`
 
 Chat (list, send, apply), artifact conversations, mileage, activity, onboarding
-voice/text drafts, business register lookup, reviews, account deletion request.
-Each has no
+voice/text drafts, business register lookup, reviews. Each has no
 existing Donna reader or writer to route to, or (chat) one whose action
 vocabulary does not match the contract's (`answer_evidence_request` /
 `record_mileage` vs `answer_card` / `approve_card` / `record_mileage`, with

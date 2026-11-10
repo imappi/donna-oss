@@ -36,6 +36,7 @@ import {
 } from './mobileAuth.js';
 import { getBusinessSetup, updateBusinessSetup } from './mobileBusinessSetup.js';
 import { confirmBusinessProfile } from './mobileBusinessProfile.js';
+import { requestOwnerDeletion } from './mobileDeletionRequest.js';
 import { createFirmRouteDispatcher } from './mobileDispatch.js';
 import { PUSH_REGISTRATION_ROUTES } from './mobilePushRegistrations.js';
 import {
@@ -525,7 +526,6 @@ const resolveDuplicate = async (ctx, documentId, body) => {
 // Everything in the contract that has no existing Donna reader or writer to
 // route to answers 501 NOT_IMPLEMENTED with the reason (never a fake success).
 export const NOT_IMPLEMENTED = Object.freeze([
-  ['POST', /^\/me\/deletion-request$/, 'Donna has no account-deletion request writer yet.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/voice-draft$/, 'Voice onboarding is not available on this server.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/text-draft$/, 'Onboarding drafts are not available on this server.'],
   ['POST', /^\/entities\/[^/]+\/business-setup\/lookup$/, 'Business register lookup is not available on this server yet. You can enter your business details yourself.'],
@@ -564,12 +564,14 @@ const ENTITY_ROUTES = [
 ];
 
 const AUTH_ROUTES = [['POST', /^\/auth\/sessions$/], ['POST', /^\/auth\/sessions\/refresh$/], ['DELETE', /^\/auth\/sessions\/current$/], ['GET', /^\/me$/]];
+const DELETION_REQUEST_ROUTE = ['POST', /^\/me\/deletion-request$/];
 
 // 'implemented' | 'not_implemented' | null for a concrete contract path (no
 // prefix). Used by the coverage test that pins every contract operation.
 export const mobileRouteState = (method, path) => {
   if (AUTH_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'implemented';
   if (PUSH_REGISTRATION_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'implemented';
+  if (DELETION_REQUEST_ROUTE[0] === method && DELETION_REQUEST_ROUTE[1].test(path)) return 'implemented';
   if (NOT_IMPLEMENTED.some(([verb, pattern]) => verb === method && pattern.test(path))) return 'not_implemented';
   const entity = path.match(/^\/entities\/[^/]+(\/.*)$/);
   if (entity && ENTITY_ROUTES.some(([verb, pattern]) => verb === method && pattern.test(entity[1]))) return 'implemented';
@@ -620,6 +622,7 @@ const route = async (req, res, requestUrl, deps) => {
       return send(res, status, body);
     }
   }
+  if (path === '/me/deletion-request' && method === 'POST') return send(res, 200, await requestOwnerDeletion({ owner }));
 
   for (const [verb, pattern, reason] of NOT_IMPLEMENTED) {
     if (verb === method && pattern.test(path)) {
