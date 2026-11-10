@@ -31,12 +31,27 @@ changes are proposals for this one. Nothing here is worked around in code.
   `403 RETRY_NOT_AVAILABLE_TO_OWNER`; the contract lists only 200/409. Either
   Donna decides owners may retry (a policy change in the route, not here), or
   the contract adds the 403 and the app offers "upload again".
-- **Reject with a note.** `decideOwnerAction` takes no note; `Decision.note` on
-  a reject is accepted and not persisted. Same for `veto_flag` context.
-- **`idempotency_key`.** Not persisted. Decisions are idempotent by state (a
-  repeat answers `applied:false, already:<state>`), which is what the contract
-  promises, but two different decisions racing are settled by the writers, not
-  by the key.
+- **The owner's note.** Stored on a `reject` (the decline's reason) and on a
+  `veto_flag` ("this was wrong"), trimmed, as `metadata.note` on the decision's
+  own audit row (`outbound_action.cancelled` / `outbound_action.marked_wrong`),
+  written by the writer in the decision's transaction and attributed to the
+  owner; that row is the receipt. The web portal's owner can send the same
+  `note` to the same firm routes. A note on `approve` or `answer` is not
+  stored: the contract describes the note as a reject reason or veto context,
+  an approval writer takes none (`decideOwnerAction` refuses one, `400
+  OWNER_NOTE_NOT_ACCEPTED`), and an answer's words are `answer.text`. The
+  receipt does not echo the note (the contract's `ApplyReceipt` has no field
+  for it). A repeat decision writes nothing, so a note sent with a repeat is
+  not stored.
+- **`idempotency_key`.** Accepted and ignored, by design: no key store. The
+  writers are idempotent by state — a repeat of an applied decision matches
+  zero rows and answers `applied:false, already:<state>` (the contract's
+  promise for an offline replay) with no second audit row. What the key would
+  add, and this server does not do: telling a replay of decision A from a
+  different decision B sent with a fresh key after A landed (both answer
+  `already`), and returning the first receipt on a replay (a replay gets
+  none). Two different decisions racing are settled by the writers' state
+  guards, not by the key.
 - **Receivable-case escalations and blocked invoices/recurrences.** Their owner
   verbs are pause / dispute / "don't send", not approve / reject, so they are
   not served as approval cards. The four-verb decision enum cannot express
@@ -45,14 +60,31 @@ changes are proposals for this one. Nothing here is worked around in code.
   keeps a file out of the parse/posting pipeline; registering one would parse
   and possibly post it. The adapter answers `501 NOT_IMPLEMENTED`.
 - **Finnish cloud-pilot intake.** That intake verifies the registered file's
-  `mime_type` and `size` against its signed intent. The contract's register
-  body carries neither, so a mobile register on a pilot book is refused by the
-  existing writer. Contract proposal: add `mime_type` and `size` to the
-  register item (the app already has both from the intent).
-- **Terminal attribution.** Receipts say `actor.terminal: mobile` because the
-  request came through this surface, but the writers' audit rows record the
-  principal, not the terminal. Donna proposal: an optional channel/terminal
-  field on the owner writers' audit metadata.
+  `mime_type` and `size` against the upload intent it signed. The contract's
+  register item carries neither; the adapter reads both back from that signed
+  intent (`readCloudUploadIntentFileFacts`, cloudEvidenceIntake.js: the newest
+  intent for exactly this quarantine key, written by the server from the
+  values it checked at signing, and only when it is this owner's) and passes
+  them to the existing register route. The writer's check against the same
+  row and its size + SHA-256 verification of the stored bytes are unchanged; a
+  phone value is never used (the contract sends none). A book outside the
+  pilot has no intent row and registers as before. Not proven end to end on
+  PostgreSQL 16: signing on a pilot book needs pilot processing enabled, which
+  needs the PostgreSQL 17 host certificate (`mobilePilotUploadPgLifecycle.test.js`
+  follows a register past the intent check to that gate).
+- **Channel attribution.** The owner writers behind the phone's decisions
+  record `metadata.channel: 'mobile'` on their audit rows:
+  `outbound_action.approved`, `outbound_action.cancelled` (decline),
+  `outbound_action.marked_wrong` and `evidence_request.reply` /
+  `evidence_request.resolve`. The adapter sets it on its in-process request
+  (`req.donnaChannel`); an HTTP request cannot, so web rows carry none.
+  Attribution only. Not carried: a topic-turn answer writes no audit row; the
+  Settings VAT period and business-register changes go through
+  `updateClientProfileInDb`, whose `client.profile.update` row is not changed
+  here; document registration and the parse audit rows. The adapter's own
+  writers (owner name and business profile, notification switches, device
+  registrations, deletion requests) already record `terminal`/`channel`
+  `mobile`.
 - **The ask answer receipt.** `answer_evidence_request` is registered
   `emitsApplyReceipt: 'none'` (DESIGN-NOTES smell 2). The reply writer does
   write its `evidence_request.reply` audit row in the same transaction; the
@@ -120,9 +152,15 @@ changes are proposals for this one. Nothing here is worked around in code.
   attempts is `409 PROFILE_SAVE_CONTENDED`. The operation lists only
   400/401/404.
 - **Owner name across firms.** `owner_name` is written to the acting owner's
-  collaborator row in the entity's firm. `/me` takes the principal name from
-  the first firm, so an owner with books in two firms sees the edit there only
-  when it was made in the first.
+  collaborator row in the entity's firm; each firm keeps its own row and its
+  own name (the adapter never copies a name into another firm's records). The
+  contract has one principal name, so `/me` (and sign-in) shows the name on
+  the row the owner most recently declared a name on (`owner.name.declared`),
+  in whichever firm; with no declaration yet, the first firm's (by firm id).
+  An owner with two different names sees the one they saved last in the app;
+  each firm still addresses them by the name on its own row. `principal.id`
+  stays the first firm's principal. Proposal (contract): a name per entity, if
+  the app should show the one each firm holds.
 
 - **Account deletion is recorded, not carried out, and the firm is not told.**
   The contract says the backend "carries it out without any further human

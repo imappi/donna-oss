@@ -665,6 +665,14 @@ const loadShadowCaseSnapshotWithRiskContext = async ({ firmId, clientId, transac
   };
 };
 
+// The surface that carried an owner decision, for the owner writers' audit
+// metadata. Read ONLY from req.donnaChannel, which the mobile adapter sets on
+// its in-process request (mobileDispatch.js) beside req.donnaAuth; nothing an
+// HTTP client sends can set it, so a web request records none. Attribution
+// only: no behaviour depends on it.
+const OWNER_WRITER_CHANNELS = new Set(['mobile']);
+const ownerWriterChannel = (req) => (OWNER_WRITER_CHANNELS.has(req?.donnaChannel) ? req.donnaChannel : null);
+
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const DOCUMENT_EXTRACTION_REQUEST_BYTES = 15 * 1024 * 1024;
 
@@ -3141,7 +3149,9 @@ const donnaFirmsApiHandler = async (req, res) => {
         firmId, clientId,
         actionId: String(body?.action_id || ''),
         decision: String(body?.decision || ''),
-        actorType: 'owner', actorId
+        note: body?.note ?? null,
+        actorType: 'owner', actorId,
+        channel: ownerWriterChannel(req)
       }));
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
@@ -3219,7 +3229,9 @@ const donnaFirmsApiHandler = async (req, res) => {
       const result = await withFirmDbClient((dbClient) => markOwnerAutoSentWrong(dbClient, {
         firmId, clientId,
         actionId: String(body?.action_id || ''),
-        actorType: 'owner', actorId
+        note: body?.note ?? null,
+        actorType: 'owner', actorId,
+        channel: ownerWriterChannel(req)
       }));
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
@@ -13085,7 +13097,8 @@ const donnaFirmsApiHandler = async (req, res) => {
         resolutionNote: body?.resolution_note || body?.resolutionNote || '',
         actorId,
         actorType: answerSource ? 'firm' : 'client',
-        ...(answerSource ? { answerSource } : {})
+        ...(answerSource ? { answerSource } : {}),
+        channel: ownerWriterChannel(req)
       });
 
       // Bridge the reply back into the transaction chat. When the
