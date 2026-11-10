@@ -191,6 +191,10 @@ test('real PG (FI): a filed ALV return, a person adjusts the line dated today an
   assert.equal(blocked.recovery.code, 'CODING_CORRECTION_TAX_PERIOD_CLOSED');
   assert.equal(blocked.next_action, 'person_corrects_closed_period');
 
+  // The filed period's return review names the open case (postedCorrectionGap.js).
+  const q2Before = (await getFinlandAlvReturnFromDb({ firmId, clientId, period: '2026-Q2' })).review;
+  assert.ok(q2Before.blockers.includes('open_coding_corrections'), JSON.stringify(q2Before.blockers));
+  assert.equal(q2Before.openCodingCorrections.count, 1);
   const draftBefore = (await getFinlandAlvReturnFromDb({ firmId, clientId, period: today() })).alvReturn;
   const body = { client_id: clientId, transaction_id: id, reason: 'Registered from 2026-01-01: claim the input ALV', lines: withInputAlv(original) };
   const refused = await adjust(body);
@@ -246,6 +250,9 @@ test('real PG (FI): a filed ALV return, a person adjusts the line dated today an
   assert.deepEqual(closed.payload.coding_correction_required.correction_journal_ids, audit.metadata.correction_journal_ids);
   assert.equal((await pool.query("select status from transaction_review_queue where item_id=$1 and reason='posted_evidence_changed'", [id])).rows[0]?.status ?? 'resolved', 'resolved');
   assert.doesNotMatch(String(closed.convergence_reason || ''), /TAX_PERIOD_CLOSED/);
+  // The return's open-correction blocker clears on the next computation.
+  const q2After = (await getFinlandAlvReturnFromDb({ firmId, clientId, period: '2026-Q2' })).review;
+  assert.ok(!q2After.blockers.includes('open_coding_corrections'), JSON.stringify(q2After.blockers));
   await recoverChangedCodingEvidenceInDb({ firmId });
   assert.equal((await row(pool, id)).payload.coding_correction_required.status, 'corrected');
 });
