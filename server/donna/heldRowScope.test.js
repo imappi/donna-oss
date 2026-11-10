@@ -13,6 +13,11 @@ import { runPayoutReconciliationLlmForDocument } from './payoutReconciliationLlm
 import { __createHeldMatchPortalAsksWithClient, resolveClientEvidenceRequestInDb } from './db/asks.js';
 import { __setFirmDbPoolForTests, __resetFirmDbPoolForTests } from './firmDb.js';
 
+// The first-line lane decides only on a host with its provider configured
+// (firstLineLane.js, 2026-11-10); these cases are about the lane deciding.
+process.env.TYPESAFE_API_KEY ||= 'fixture-first-line-key';
+process.env.TYPESAFE_MODEL ||= 'fixture-first-line';
+
 const SCOPE_TOOL = 'interpret_owner_reply';
 const scopeResponse = input => new Response(JSON.stringify({ model: 'fixture-strong-scope-model', stop_reason: 'tool_use',
   content: [{ type: 'tool_use', name: SCOPE_TOOL, input }], usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200 });

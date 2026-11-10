@@ -141,25 +141,21 @@ Reading and booking need keys, set in `.env`:
 |---|---|---|
 | OpenAI | `OPENAI_API_KEY` | Routes and reads documents, including the bank statement; coding; drafts asks |
 | Anthropic | `ANTHROPIC_API_KEY` | Reads receipts and invoices (preferred over OpenAI when both are set); reconciliation triage; bank-line disposition; chat |
-| Typesafe | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | First-line decisions on matching, disposition and coding. Without it, bank lines stay "Stalled" |
+| Typesafe (optional) | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | With both set, makes the first-line decisions on matching, disposition and coding, and the lanes above take over only when it hands a case on. Without them, the lanes above make those decisions |
 
-A local book creates every company with the Typesafe lane switched on
-(`JEV_RECONCILIATION`). If you have OpenAI and Anthropic keys but no
-Typesafe key, add this line to `.env`:
-
-```bash
-CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION
-```
-
-It is the existing kill switch (`forceDisabled` in
-`server/donna/clientConfig.js`). It can only switch a capability off. With
-it, the bank lines are coded by the OpenAI coder and the Anthropic
-disposition step instead of staying "Stalled".
+Typesafe is optional. A company created on a local book has the first-line
+lane switched on (`JEV_RECONCILIATION`), but the lane decides only on a host
+where both Typesafe values are set; anywhere else it is dark, and the bank
+lines are coded by the OpenAI coder and the Anthropic disposition step. The
+first time a company's lines are decided without it, the audit trail records
+one `model_lane.first_line_dark` row for that company naming the missing
+values.
 
 When a key is set, the contents of the documents you upload and of the
 books are sent to that provider. At start the runtime prints a
-`model lanes:` line marking OpenAI and Anthropic `LIT` or `DARK`; the
-Typesafe lane is not on it.
+`model lanes:` line marking OpenAI and Anthropic `LIT` or `DARK`; it ends
+with `typesafe LIT` or `typesafe DARK — no TYPESAFE_API_KEY, no
+TYPESAFE_MODEL`, naming each value that is missing.
 
 ### Steps on the host
 
@@ -324,11 +320,12 @@ rm -rf ~/.donna-desktop
   a book an earlier release stopped over such a document (new uploads
   refused, "The work queue needs recovery") accepts work again on the
   first start of this release.
-- **Every bank line is "Stalled" although OpenAI and Anthropic are lit**:
-  the runtime log shows `Configure the first-line provider model for this
-  host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`, or switch that lane
-  off with `CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION` in `.env`
-  (see "What needs a model provider key"), then restart the runtime.
+- **Bank lines stay uncoded with Typesafe set**: a Typesafe key and model
+  are set, so the first-line lane decides, and its calls fail. Each line
+  names the failure (`coding_provider_failure`, provider `typesafe`) and is
+  tried again on the coding clock; no other model decides in its place. Fix
+  the key or model, or remove both values to leave the lane dark, then
+  restart the runtime.
 - **Provider calls fail with 401 behind an HTTPS proxy**: Node's `fetch`
   ignores `HTTPS_PROXY` unless `NODE_USE_ENV_PROXY=1` is set (Node 22.21
   or later).

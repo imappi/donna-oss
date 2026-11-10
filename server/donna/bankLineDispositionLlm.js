@@ -1071,7 +1071,7 @@ export const runBankLineDispositionForClient = async ({
 
   if (!enabledOverride && !isBankLineDispositionEnabled()) return DISABLED_DISPOSITION_STATS('mode_off');
   if (!client || !firmId || !clientId) return DISABLED_DISPOSITION_STATS('missing_ids');
-  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride);
+  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride, { decidedBy: 'bank_line_disposition' });
   // Q6c — resolve the deciding transport once per sweep. Claude-family
   // rungs ride the existing anthropic transport (model override); anything
   // else rides the compatible endpoint.
@@ -1402,7 +1402,7 @@ export const runBankLineDispositionForTransaction = async ({
   if (!client || !firmId || !clientId || !transactionId) {
     return { ran: false, reason: 'missing_ids' };
   }
-  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride);
+  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride, { decidedBy: 'bank_line_disposition' });
   const apiKey = apiKeyOverride ?? getApiKey();
   if (!apiKey && !jevEnabled) return { ran: false, reason: 'no_anthropic_api_key' };
 
