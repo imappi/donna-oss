@@ -8,13 +8,74 @@ import { SALES_INVOICE_RECEIVABLE_ACCOUNT, SUPPLIER_BILL_PAYABLES_ACCOUNT, ledge
 import { documentSourceComponents } from '../documentAllocationComponents.js';
 import { planArSettlement } from './issuedInvoiceSettlement.js';
 import { assertTaxSourceEvidence } from '../taxSourceEvidence.js';
+import { ALV_REGISTRATION_STATUSES, resolveAlvRegistrationAsOf } from './alvRegistration.js';
+import { isRegistrationRecord } from '../sellerRegistration.js';
+import { toIsoDay } from '../dates.js';
 
 const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-const refuse = (code, message) => { throw Object.assign(new Error(message), { code, statusCode: 409 }); };
+const refuse = (code, message, details) => { throw Object.assign(new Error(message), { code, statusCode: 409, ...(details ? { details } : {}) }); };
+
+// ALV registration on a date, tri-state as the invoice seller reads it
+// (finland/sellerRegistration.js): only a recorded, effective registration is
+// `true`; a recorded not-registered, not-yet-effective or ended record is
+// `false`; no record, or one whose status is outside the closed vocabulary,
+// is `null` (unknown). alvRegistration.js reads a garbage record as not
+// registered because its invoice path is fail-safe; here unknown and
+// not-registered both refuse, so the distinction only names the reason.
+export const resolveFiAlvRegistrationOnDate = ({ registration = null, onDate = null } = {}) => {
+  const at = toIsoDay(onDate);
+  if (!at) return { registered: null, reason: 'no_as_of_date' };
+  if (!isRegistrationRecord(registration)) return { registered: null, reason: 'no_record' };
+  if (!ALV_REGISTRATION_STATUSES.includes(registration.status)) return { registered: null, reason: 'invalid_record' };
+  const resolved = resolveAlvRegistrationAsOf({ registration, asOf: at });
+  if (resolved.registered === true) return { registered: true, reason: 'registered' };
+  if (resolved.status === 'not_registered') return { registered: false, reason: 'not_registered' };
+  if (resolved.registered_from && at < resolved.registered_from) return { registered: false, reason: 'not_yet_effective' };
+  return { registered: false, reason: resolved.status === 'deregistered' ? 'deregistered' : 'not_registered' };
+};
+
+// The twin of gb/postingPolicy.js assertGbVatRegistered (#45). ALV
+// registration, not FINLAND_ALV_CODING, decides whether an ALV code may post:
+// the switch only turns the Finnish coding lane on. A business that is not
+// registered charges no ALV and deducts none, so an ALV code on its books
+// misstates the expense and a return it does not file. The record is the one
+// Finland already keeps and reads (clients.profile.alv_registration, read by
+// the invoice seller and the ALV return), on the line's own date. Only
+// `registered === true` posts. The line is never posted with its code
+// dropped: it stays unposted with this named refusal until the record is
+// corrected or the coding changes.
+const assertFiAlvRegistered = ({ profile = null, onDate, code, refusalCode, subject }) => {
+  const at = toIsoDay(onDate);
+  const resolution = resolveFiAlvRegistrationOnDate({ registration: profile?.alv_registration ?? null, onDate: at });
+  if (resolution.registered === true) return;
+  refuse(refusalCode, `${subject} would post the ALV code ${code}, but the business is ${resolution.registered === false ? 'not ALV-registered' : 'not recorded as ALV-registered'} on ${at || 'an unknown date'} (${resolution.reason}). A business that is not registered charges and deducts no ALV, so nothing was posted; record the ALV registration (or correct the coding) and post again.`,
+    { vat_code: code, as_of: at || null, registered: resolution.registered, registration_reason: resolution.reason });
+};
 // Input codes with a tax return box assess tax on the buyer's net base;
 // their statutory rate is not VAT charged by the supplier.
 const supplierTaxRate = entry => entry?.direction === 'in' && entry.return_boxes?.tax ? 0 : entry?.rate;
 const taxPosting = Object.freeze({ outputCodeForRate: alvOutputCodeForRate, control: ALV_SPLIT_CONTROL.out });
+// The registration declaration the shared coder contract reads
+// (postingPolicy.js taxRegistration; transactionLlm.js): a bank line refused
+// with TRANSACTION_ALV_REGISTRATION_REQUIRED becomes a question to the owner
+// for the fact only they know — whether, and from when, the business is in
+// the Finnish VAT register (arvonlisäverorekisteri). It asks no tax judgement.
+const FI_TAX_REGISTRATION = Object.freeze({
+  refusalCodes: Object.freeze(['TRANSACTION_ALV_REGISTRATION_REQUIRED']),
+  onDate: ({ profile = null, onDate = null } = {}) =>
+    resolveFiAlvRegistrationOnDate({ registration: profile?.alv_registration ?? null, onDate }),
+  ownerQuestion: ({ language = 'fi', lineLabel = '', onDate = null, registered = null } = {}) => {
+    const at = toIsoDay(onDate) || '';
+    const line = lineLabel ? `${lineLabel}: ` : '';
+    if (language === 'fi') return registered === false
+      ? `${line}tietojemme mukaan yritys ei ollut arvonlisäverorekisterissä ${at}. Onko yritys merkitty arvonlisäverorekisteriin sen jälkeen? Jos on, mistä päivästä alkaen?`
+      : `${line}meillä ei ole tietoa siitä, onko yritys arvonlisäverorekisterissä. Onko yritys merkitty arvonlisäverorekisteriin? Jos on, mistä päivästä alkaen?`;
+    return registered === false
+      ? `${line}our records say the business was not in the Finnish VAT register (arvonlisäverorekisteri) on ${at}. Has the business been entered in the register since then? If so, from what date?`
+      : `${line}we have no record of whether the business is in the Finnish VAT register (arvonlisäverorekisteri). Is the business entered in the register? If so, from what date?`;
+  }
+});
+
 // Finnish evidence rule: every rated purchase code needs its settled source,
 // whoever decided it; a machine's rated sale on money in needs a sales source.
 const FI_TAX_EVIDENCE = Object.freeze({
@@ -31,6 +92,7 @@ export const FI_POSTING_POLICY = Object.freeze({
   nativeTaxCodePrefixes: Object.freeze(['ALV_']), nativeTaxCodes: Object.freeze([...KNOWN_ALV_CODES]),
   salesInvoiceChannels: Object.freeze(['finland']), salesTaxControlRole: null,
   taxEvidence: FI_TAX_EVIDENCE,
+  taxRegistration: FI_TAX_REGISTRATION,
   capabilities: Object.freeze({ prepareLedgerAccounts: true, enrichCoding: true, transactionSplit: true,
     salesInvoiceTaxPosting: true, supplierBillTaxPosting: true,
     planArSettlement: true, arSettlementReceivableCoding: true, assertPostableTaxCoding: true, sourceTaxPosting: true }),
@@ -59,14 +121,28 @@ export const FI_POSTING_POLICY = Object.freeze({
   // unknown prose treatment or a missing one refuses by name. Balance-sheet
   // codings (a loan repayment, TyEL payable, owner funds) are not VAT legs
   // and post as before; an ALV control account already carries 'NONE'.
-  assertPostableTaxCoding: ({ coding = {}, transaction = {}, taxCodingEnabled = false, matchedDocument: document = null, autonomousCoding = false } = {}) => {
-    if (!taxCodingEnabled) return coding;
+  assertPostableTaxCoding: ({ coding = {}, transaction = {}, taxCodingEnabled = false, profile = null, matchedDocument: document = null, autonomousCoding = false } = {}) => {
+    const stamped = String(coding.xero_tax_type || coding.tax_type || '').trim().toUpperCase();
+    const entry = resolveAlvEntry(stamped);
+    const registration = (code) => assertFiAlvRegistered({ profile, onDate: transaction.date || transaction.transaction_date, code,
+      refusalCode: 'TRANSACTION_ALV_REGISTRATION_REQUIRED', subject: 'This bank line' });
+    // With the switch off nothing renders a treatment to a code, but an
+    // explicit ALV code already on the coding still posts: registration binds it too.
+    if (!taxCodingEnabled) {
+      if (entry) registration(entry.code);
+      return coding;
+    }
     const suggestion = transaction.ai_suggestion || {};
     // The component writer validates every selected code against the locked source.
     // Its complete plan, rather than the summary account's tax, owns this journal.
-    if (suggestion.posting_requirement === 'document_allocation') return coding;
-    const stamped = String(coding.xero_tax_type || coding.tax_type || '').trim().toUpperCase();
-    const entry = resolveAlvEntry(stamped);
+    // Every component carries an explicit ALV treatment (documentAllocation.js
+    // refuses one without), so the plan posts ALV codes: registration binds it.
+    if (suggestion.posting_requirement === 'document_allocation') {
+      const treatments = (Array.isArray(suggestion.document_allocations) ? suggestion.document_allocations : [])
+        .map(item => item?.tax_treatment || suggestion.tax_treatment).filter(Boolean);
+      if (treatments.length) registration(entry?.code || 'document_allocation');
+      return coding;
+    }
     if (['revenue', 'expense'].includes(ledgerAccountTypeFor(coding)) && entry && entry.direction !== 'both' && entry.direction !== alvDirectionForTransaction(transaction, coding)) {
       refuse('TRANSACTION_ALV_ACCOUNT_INCOMPATIBLE',
         'The explicit ALV code conflicts with the resolved expense or revenue account. Correct the coding before posting.');
@@ -77,6 +153,12 @@ export const FI_POSTING_POLICY = Object.freeze({
     const selectedCode = stamped === 'NONE' ? 'NONE' : resolveAlvCode({ taxType: coding.xero_tax_type || coding.tax_type || '',
       taxTreatment: transaction.tax_treatment || suggestion.tax_treatment || '', direction: alvDirectionForTransaction(transaction, coding) });
     const selectedEntry = resolveAlvEntry(selectedCode);
+    // The code the journal would carry: the stamped one, or the one the
+    // coding's or the line's treatment renders to (enrichCoding stamps it
+    // before this runs; a caller that skipped enrichment is bound the same way).
+    const carried = entry || (stamped === 'NONE' ? null : resolveAlvEntry(resolveAlvCode({ taxType: '',
+      taxTreatment: coding.tax_treatment || '', direction: alvDirectionForTransaction(transaction, coding) }))) || selectedEntry;
+    if (carried) registration(carried.code);
     assertTaxSourceEvidence({ rule: FI_TAX_EVIDENCE, entry: selectedEntry, transaction, document, autonomousCoding });
     if (document && !document.matched_line_id && suggestion.posting_requirement !== 'document_allocation'
       && Math.round(Number(document.total_amount) * 100) === Math.round(gross * 100)) {
@@ -120,11 +202,18 @@ export const FI_POSTING_POLICY = Object.freeze({
   },
   transactionSplit: resolveAlvSplitForPosting,
   salesInvoiceTaxPosting: ({ channel = 'finland' } = {}) => channel === 'finland' ? taxPosting : null,
-  supplierBillTaxPosting: ({ verdict = {}, document = {}, taxCodingEnabled = false } = {}) => {
+  supplierBillTaxPosting: ({ verdict = {}, document = {}, taxCodingEnabled = false, profile = null } = {}) => {
     let expenseTaxType = verdict.tax_type || verdict.xero_tax_type;
-    if (!taxCodingEnabled) return { expenseTaxType, alvSplit: null, payablesAccount: SUPPLIER_BILL_PAYABLES_ACCOUNT };
+    const registration = (code) => assertFiAlvRegistered({ profile, onDate: document.document_date, code,
+      refusalCode: 'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED', subject: 'This supplier bill' });
+    if (!taxCodingEnabled) {
+      const explicit = resolveAlvEntry(expenseTaxType);
+      if (explicit) registration(explicit.code);
+      return { expenseTaxType, alvSplit: null, payablesAccount: SUPPLIER_BILL_PAYABLES_ACCOUNT };
+    }
     const code = resolveAlvCode({ taxType: expenseTaxType || '', taxTreatment: verdict.tax_treatment || '', direction: 'in' });
     if (!code) refuse('SUPPLIER_BILL_ALV_SPLIT_UNSUPPORTED', "An ALV-coding client's AP post requires a resolvable ALV treatment on the coding verdict — posting gross would forfeit the input-VAT deduction.");
+    registration(code);
     expenseTaxType = code;
     let alvSplit = splitAlvGross({ gross: document.total_amount, code });
     const statedVat = round2(document.tax_amount);
