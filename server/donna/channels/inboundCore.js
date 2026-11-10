@@ -291,6 +291,18 @@ export const storeInboundMediaAsEvidence = async ({
 const cleanReplyExcerpt = (text = '', max = 240) => String(text || '').replace(/\s+/g, ' ').trim().slice(0, max);
 const askCurrentNeed = (ask = {}) => String(ask.question || ask.request_payload?.question || ask.request_payload?.current_need || ask.evidence_type || 'requested evidence').trim();
 
+// Owner-reply keyword lists match whole words and phrases only. A letter is any
+// Unicode letter or digit (\p{L}\p{N}), so Finnish ä, ö and å count as letters:
+// JavaScript's \b does not, and a plain substring match reads "kohta" inside
+// "henkilökohtainen" or "later" inside "collateral". Entries are regex sources.
+const ownerReplyKeywords = (...entries) =>
+  new RegExp(`(?<![\\p{L}\\p{N}])(?:${entries.join('|')})(?![\\p{L}\\p{N}])`, 'iu');
+const CLARIFICATION_KEYWORDS = ownerReplyKeywords('which', 'what', 'who', 'where', 'when', 'why', 'how', 'mikä', 'mitä', 'kumpi', 'which receipt', 'tarkoitat');
+const DEFER_KEYWORDS = ownerReplyKeywords('tomorrow', 'later', 'tonight', 'next week', 'send it', 'send this', "i'll send", 'i will send', 'palaan', 'huomenna', 'myöhemmin', 'kohta');
+// 'not sure' / 'en ole varma' are the keywords the ask templates invite.
+const PARTIAL_KEYWORDS = ownerReplyKeywords('partial', 'some of', 'not sure', 'maybe', 'i think', 'only have', 'missing', "don'?t have all", 'osittain', 'ehkä', 'en ole varma');
+const CANNOT_ANSWER_KEYWORDS = ownerReplyKeywords("can'?t", 'cannot', 'unable', 'no idea', "don'?t know", 'en tiedä', 'ei onnistu');
+
 export const assessEvidenceTopicTurn = ({ ask = {}, text = '', descriptor = null } = {}) => {
   if (descriptor && !descriptor.deferred) {
     return { outcome: 'answered_with_media', terminal: true, can_resolve: true, still_missing: [], reason: 'owner_sent_media_evidence' };
@@ -298,17 +310,16 @@ export const assessEvidenceTopicTurn = ({ ask = {}, text = '', descriptor = null
   const reply = String(text || '').trim();
   if (!reply) return { outcome: 'unsupported', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'empty_or_unsupported_owner_turn' };
   const lower = reply.toLowerCase();
-  if (/\?\s*$/.test(reply) || /\b(which|what|who|where|when|why|how|mikä|mitä|kumpi|which receipt|tarkoitat)\b/i.test(reply)) {
+  if (/\?\s*$/.test(reply) || CLARIFICATION_KEYWORDS.test(reply)) {
     return { outcome: 'clarification_requested', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_asked_clarifying_question' };
   }
-  if (/(tomorrow|later|tonight|next week|send it|send this|i'll send|i will send|palaan|huomenna|myöhemmin|kohta)/i.test(lower)) {
+  if (DEFER_KEYWORDS.test(lower)) {
     return { outcome: 'defer_later', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_deferred_evidence' };
   }
-  // 'not sure' / 'en ole varma' are the keywords the ask templates invite.
-  if (/\b(partial|some of|not sure|maybe|i think|only have|missing|don\'?t have all|osittain|ehkä|en ole varma)\b/i.test(lower)) {
+  if (PARTIAL_KEYWORDS.test(lower)) {
     return { outcome: 'partial_answer', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_supplied_partial_or_uncertain_answer' };
   }
-  if (/\b(can\'?t|cannot|unable|no idea|don\'?t know|en tiedä|ei onnistu)\b/i.test(lower)) {
+  if (CANNOT_ANSWER_KEYWORDS.test(lower)) {
     return { outcome: 'needs_review', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_cannot_answer_without_help' };
   }
   return { outcome: 'answered', terminal: true, can_resolve: true, still_missing: [], reason: 'owner_supplied_text_answer' };

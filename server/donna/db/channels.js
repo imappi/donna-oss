@@ -676,8 +676,8 @@ const askPeriodFor = (request, language) => request.request_payload?.period || r
 // One profile read per batch for the code-side channels (SMS/Telegram): the
 // assistant display name ('Donna' fallback) and the owner's language ('en' on
 // any read failure).
-const readOwnerVoice = (client, { firmId, clientId }) => client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
-  .then((res) => ({ assistantName: resolveAssistantName(res.rows[0]?.profile), language: preferredOwnerTemplateLanguage(res.rows[0]?.profile) }))
+const readOwnerVoice = (client, { firmId, clientId }) => client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
+  .then((res) => ({ assistantName: resolveAssistantName(res.rows[0]?.profile), language: preferredOwnerTemplateLanguage(res.rows[0]?.profile, res.rows[0]) }))
   .catch(() => ({ assistantName: resolveAssistantName(null), language: OWNER_TEMPLATE_FALLBACK_LANGUAGE }));
 
 // Meta Cloud API returns error code 132001 when the template exists but has no
@@ -812,8 +812,8 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
   // One profile read per batch → the owner-ask template language (FI → 'fi',
   // with graceful 'en' fallback at send time if the Finnish template isn't
   // approved yet). 'en' on any read failure.
-  const preferredLanguage = await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
-    .then((res) => preferredOwnerTemplateLanguage(res.rows[0]?.profile))
+  const preferredLanguage = await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
+    .then((res) => preferredOwnerTemplateLanguage(res.rows[0]?.profile, res.rows[0]))
     .catch(() => OWNER_TEMPLATE_FALLBACK_LANGUAGE);
   const ids = evidenceRequestIds.filter(Boolean);
   const notAwaiting = [];
@@ -1141,7 +1141,7 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   const ids = evidenceRequestIds.filter(Boolean);
   const notAwaiting = [];
   if (!ids.length) return { sent: 0 };
-  const clientRow = await client.query('select company_name, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
+  const clientRow = await client.query('select company_name, jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
     .then((res) => res.rows[0] || null).catch(() => null);
   const profile = clientRow?.profile && typeof clientRow.profile === 'object' ? clientRow.profile : {};
   const ownerEmail = String(profile.email || profile.contact_email || profile.owner_email || '').trim();
@@ -1161,7 +1161,7 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   // the firm is named as the one asking whenever firms.name is on file. The
   // wrapper copy follows the owner's language; the questions pass through as
   // the ask pipeline wrote them.
-  const language = preferredOwnerTemplateLanguage(profile);
+  const language = preferredOwnerTemplateLanguage(profile, clientRow);
   const assistantName = resolveAssistantName(profile);
   const firmName = await client.query('select name from firms where id = $1 limit 1', [firmId])
     .then((res) => String(res.rows[0]?.name || '').trim() || null).catch(() => null);

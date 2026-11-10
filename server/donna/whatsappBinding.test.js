@@ -60,8 +60,8 @@ const makeFakeClient = ({ tokens = [], bindings = [], asks = [], profile = null,
         const wantsWhatsapp = text.includes("'whatsapp'") && !wantsSms;
         return { rows: state.bindings.filter((row) => row.phone_hash === params[0] && !row.revoked_at && (!wantsSms || row.channel === 'sms') && (!wantsWhatsapp || (row.channel || 'whatsapp') === 'whatsapp')) };
       }
-      if (text.includes('select profile from clients')) {
-        return { rows: [{ profile: state.profile }] };
+      if (text.includes('select profile from clients') || text.includes('select jurisdiction, profile from clients')) {
+        return { rows: [{ profile: state.profile, jurisdiction: null }] };
       }
       // Config control plane (migration 042/043) — the sensitive-ask portal
       // notice reads OWNER_PORTAL_LINK through readClientConfigSnapshot.
@@ -352,6 +352,23 @@ test('preferredOwnerTemplateLanguage: an explicit owner language beats the juris
   assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI', preferredLanguage: 'sv' }), 'en');
   assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'US', locale: 'fi-FI' }), 'fi');
   assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI', locale: '  ' }), 'fi', 'a blank locale is unset');
+});
+
+test('preferredOwnerTemplateLanguage: the country is the clients.jurisdiction column, the profile only when the column is empty', () => {
+  assert.equal(preferredOwnerTemplateLanguage({}, { jurisdiction: 'FI' }), 'fi', 'column only');
+  assert.equal(preferredOwnerTemplateLanguage({}, { jurisdiction: ' fi ' }), 'fi');
+  assert.equal(preferredOwnerTemplateLanguage({ locale: 'en-GB' }, { jurisdiction: 'FI' }), 'en', 'the owner chose English');
+  assert.equal(preferredOwnerTemplateLanguage({ locale: 'fi' }, { jurisdiction: 'GB' }), 'fi', 'the owner chose Finnish');
+  assert.equal(preferredOwnerTemplateLanguage({}, { jurisdiction: 'GB' }), 'en');
+  assert.equal(preferredOwnerTemplateLanguage({}, { jurisdiction: 'uk' }), 'en');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI' }, { jurisdiction: null }), 'fi', 'profile only (legacy)');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI' }, { jurisdiction: '' }), 'fi');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'fi' }, { jurisdiction: 'FI' }), 'fi', 'agreeing homes');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'GB' }, { jurisdiction: 'FI' }), 'en', 'a conflict gives no country default');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'FI' }, { jurisdiction: 'GB' }), 'en');
+  assert.equal(preferredOwnerTemplateLanguage({ jurisdiction: 'uk' }, { jurisdiction: 'GB' }), 'en');
+  assert.equal(preferredOwnerTemplateLanguage(null, { jurisdiction: 'FI' }), 'fi', 'no profile');
+  assert.equal(preferredOwnerTemplateLanguage({}, null), 'en');
 });
 
 test('deliverWhatsAppEvidenceAsksAfterSend sends en to an English-speaking owner of a Finnish company', async () => {

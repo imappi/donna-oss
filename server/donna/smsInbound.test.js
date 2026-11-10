@@ -158,6 +158,22 @@ test("the invited 'not sure' keyword keeps the question open in both languages",
   }
 });
 
+test('a Finnish word that contains "kohta" is an answer; "kohta" on its own still defers', async () => {
+  for (const [body, expectedStatus, deferred] of [
+    ['henkilökohtainen Ref: 23DEF456', 'reply_saved', false],
+    ['yksityiskohta Ref: 23DEF456', 'reply_saved', false],
+    ['lähetän kohta Ref: 23DEF456', 'topic_open', true],
+    ['palaan asiaan huomenna Ref: 23DEF456', 'topic_open', true]
+  ]) {
+    const topics = [];
+    const { deps, calls } = makeDeps({ openByRef: openAsk, deps: { ...fiOwner, recordEvidenceTopicTurn: async (args) => { topics.push(args); return { ok: true }; } } });
+    const result = await processSmsInboundMessage({ from: '+15551234567', firmId: 'firm', env: envOn, deps, message: { MessageSid: `SM.kohta.${body}`, Body: body } });
+    assert.equal(result.status, expectedStatus, body);
+    assert.equal(calls.resolved.length, deferred ? 0 : 1, body);
+    if (deferred) assert.equal(topics[0].topicState.last_assessment.outcome, 'defer_later', body);
+  }
+});
+
 test('SMS HELP/STOP: the Finnish copy invites LOPETA, and LOPETA / APUA are accepted', async () => {
   assert.equal(isSmsStop('lopeta'), true);
   assert.equal(isSmsHelp(' apua '), true);
