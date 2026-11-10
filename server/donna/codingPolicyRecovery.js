@@ -26,13 +26,20 @@
 // does not say not registered on the date is the same fact from the other
 // side: the coder is re-run with the refusal while the record says registered,
 // and an unknown record becomes the same owner question.
+// A sale whose own sales document shows VAT on a date the record says not
+// registered (taxSourceEvidence.js assertSalesSourceTaxRegistration) is the
+// same fact asked with what was seen: the clock re-runs it once with the
+// refusal, and the coder's contract makes it the owner's registration
+// question (and, after a "no", the request for the corrected invoice).
 export const TAX_REGISTRATION_REFUSALS = Object.freeze([
   'TRANSACTION_ALV_REGISTRATION_REQUIRED',
   'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED',
   'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED',
   'SUPPLIER_BILL_GB_VAT_REGISTRATION_REQUIRED',
   'TRANSACTION_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED',
-  'SUPPLIER_BILL_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED'
+  'SUPPLIER_BILL_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED',
+  'TRANSACTION_ALV_SALE_SOURCE_SHOWS_VAT_UNREGISTERED',
+  'TRANSACTION_GB_VAT_SALE_SOURCE_SHOWS_VAT_UNREGISTERED'
 ]);
 // A line refused for registration on a date the record says the business is
 // NOT registered: the coder was told that fact and still chose a treatment

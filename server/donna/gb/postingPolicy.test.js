@@ -156,3 +156,22 @@ test('GB: a supplier bill coded with the not-registered treatment posts gross AP
       refusedWith('SUPPLIER_BILL_GB_VAT_NOT_REGISTERED_TREATMENT_REFUSED'));
   }
 });
+
+// The FI twin: a sale whose own sales document shows VAT, for a business the
+// record says is not VAT-registered on the line's date.
+test('GB: a sale settling its own sales invoice that shows VAT is refused by name for a business recorded as not registered, whatever the coding', () => {
+  const invoice = (extra = {}) => ({ document_id: 'gb-invoice', document_type: 'sales_invoice', match_status: 'confirmed', filename: 'Synthetic invoice.pdf',
+    document_date: '2026-06-02', total_amount: 120, tax_amount: 20, currency: 'GBP', lines: [], ...extra });
+  const { salesSourceShowsTax, refusalCodes, withoutTax } = policy.taxRegistration;
+  assert.equal(salesSourceShowsTax.refusalCode, 'TRANSACTION_GB_VAT_SALE_SOURCE_SHOWS_VAT_UNREGISTERED');
+  assert.ok(refusalCodes.includes(salesSourceShowsTax.refusalCode));
+  assert.equal(refusalCodes[0], 'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED');
+  const refused = refusedWith('TRANSACTION_GB_VAT_SALE_SOURCE_SHOWS_VAT_UNREGISTERED');
+  for (const [label, coding] of [['the not-registered treatment', revenue({ tax_treatment: withoutTax.treatments.sale })], ['a rated treatment', revenue({ tax_treatment: 'VAT 20%' })]]) {
+    assert.throws(() => assertPostable({ coding, transaction: sale, profile: notRegistered, matchedDocument: invoice() }), (error) => refused(error)
+      && error.details.registered === false && error.details.sales_source.tax_amount === 20, label);
+  }
+  const plain = revenue({ tax_treatment: withoutTax.treatments.sale });
+  assert.deepEqual(assertPostable({ coding: plain, transaction: sale, profile: notRegistered, matchedDocument: invoice({ tax_amount: 0 }) }), plain, 'an invoice that shows no VAT');
+  assert.doesNotThrow(() => assertPostable({ coding: revenue({ tax_treatment: 'VAT 20%' }), transaction: sale, profile: registered, matchedDocument: invoice() }));
+});
