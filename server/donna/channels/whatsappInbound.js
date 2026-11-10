@@ -9,6 +9,7 @@ import {
   recordMessageDeliveryLedgerInDb,
   revokeWhatsAppBindingInDb,
   resolveClientEvidenceRequestInDb,
+  readEvidenceCorrectionReaderInDb,
   recordEvidenceTopicTurnInDb,
   createOpeningBalanceEvidenceRequestInDb,
   getClientEvidenceRequestByIdInDb,
@@ -231,7 +232,9 @@ const whatsappConfig = {
   source: 'whatsapp',
   documentIdPrefix: 'wa_doc',
   actorFallback: 'whatsapp:webhook',
-  capabilities: { generalOwnerChat: true, ownerInitiatedMedia: true, persistOwnerThread: true },
+  // quoteReplyAnchor: a reply quoting one of Donna's messages carries its id,
+  // so Donna's in-band line is kept in the delivery ledger (inboundCore.js).
+  capabilities: { generalOwnerChat: true, ownerInitiatedMedia: true, persistOwnerThread: true, quoteReplyAnchor: true },
   copy: WHATSAPP_INBOUND_COPY,
   copyFor: whatsappInboundCopyFor,
   allowsClient: (clientId, gateContext, env) => ownerChannelAllowsClient({ channel: 'whatsapp', clientId, gateContext, envFallback: whatsappEnvAllowsClient, env }),
@@ -247,6 +250,8 @@ const defaultDeps = (deps = {}) => ({
   getOpenAskByRef: deps.getOpenAskByRef || getOpenWhatsAppEvidenceRequestByRefInDb,
   claimInboundMessage: deps.claimInboundMessage || claimInboundWhatsAppMessageInDb,
   resolveEvidenceRequest: deps.resolveEvidenceRequest || resolveClientEvidenceRequestInDb,
+  // A reply to a closed question: whether a reader can take it as a correction (ownerReplyCorrection.js).
+  readCorrectionReader: deps.readCorrectionReader || readEvidenceCorrectionReaderInDb,
   recordEvidenceTopicTurn: deps.recordEvidenceTopicTurn || recordEvidenceTopicTurnInDb,
   appendClientPortalChatMessage: deps.appendClientPortalChatMessage,
   assembleClientPortalTurn: deps.assembleClientPortalTurn,

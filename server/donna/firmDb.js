@@ -187,6 +187,7 @@ export {
   markCodingAutoPostFyiPendingInDb,
   MAX_EVIDENCE_REQUEST_AMENDMENTS,
   recordDocumentSignedUrlCreatedInDb,
+  readEvidenceCorrectionReaderInDb,
   recordEvidenceTopicTurnInDb,
   rejectClientEvidenceRequestInDb,
   RESEND_MIN_INTERVAL_MS,
