@@ -55,4 +55,10 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
   expired-token / admin-token refusals; every response validated against the
   contract.
 
+- `mobileBusinessProfile.test.js` / `mobileBusinessProfilePgLifecycle.test.js`
+  — the Business page's facts (`PUT …/onboarding/profile`): server-side request
+  rules, the receipt with previous values, `business_profile` on `/me` and
+  refresh, the business-name refusal, and the owner-only / foreign-entity /
+  no-token refusals.
+
 `GAPS.md` lists what the contract asks for that Donna cannot say yet.

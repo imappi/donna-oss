@@ -34,6 +34,7 @@ import {
   resolveMobileOwner,
   revokeSession
 } from './mobileAuth.js';
+import { confirmBusinessProfile } from './mobileBusinessProfile.js';
 import { createFirmRouteDispatcher } from './mobileDispatch.js';
 import {
   buildBooksStatus,
@@ -524,7 +525,6 @@ export const NOT_IMPLEMENTED = Object.freeze([
   ['POST', /^\/me\/deletion-request$/, 'Donna has no account-deletion request writer yet.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/voice-draft$/, 'Voice onboarding is not available on this server.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/text-draft$/, 'Onboarding drafts are not available on this server.'],
-  ['PUT', /^\/entities\/[^/]+\/onboarding\/profile$/, 'Donna has no business-profile writer yet.'],
   ['GET', /^\/entities\/[^/]+\/settings$/, 'Mobile settings are not stored by this server yet.'],
   ['POST', /^\/entities\/[^/]+\/settings$/, 'Mobile settings are not stored by this server yet.'],
   ['GET', /^\/entities\/[^/]+\/business-setup$/, 'Business setup is not available on this server yet.'],
@@ -558,7 +558,8 @@ const ENTITY_ROUTES = [
   ['GET', /^\/documents$/, (ctx) => listDocuments(ctx, ctx.query)],
   ['POST', /^\/documents\/([^/]+)\/retry$/, (ctx, [id]) => retryDocument(ctx, id)],
   ['POST', /^\/documents\/([^/]+)\/resolve-duplicate$/, async (ctx, [id]) => resolveDuplicate(ctx, id, await readJson(ctx.req))],
-  ['GET', /^\/documents\/([^/]+)$/, async (ctx, [id]) => (await documentsWithState(ctx, [await oneDocument(ctx, id)]))[0]]
+  ['GET', /^\/documents\/([^/]+)$/, async (ctx, [id]) => (await documentsWithState(ctx, [await oneDocument(ctx, id)]))[0]],
+  ['PUT', /^\/onboarding\/profile$/, async (ctx) => confirmBusinessProfile(ctx, await readJson(ctx.req))]
 ];
 
 const AUTH_ROUTES = [['POST', /^\/auth\/sessions$/], ['POST', /^\/auth\/sessions\/refresh$/], ['DELETE', /^\/auth\/sessions\/current$/], ['GET', /^\/me$/]];
@@ -628,6 +629,8 @@ const route = async (req, res, requestUrl, deps) => {
       if (!match) continue;
       const ctx = {
         ...scope,
+        auth,
+        identity: owner.identity,
         req,
         query: requestUrl.searchParams,
         locale: localeOf(req),
