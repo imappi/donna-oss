@@ -6,6 +6,7 @@
 // (null, an omitted optional key, `unchecked`) and the gap is listed in
 // GAPS.md — it never infers. No model call, no classifier, no I/O here.
 import { toIsoDay, toUtcIsoDay } from '../dates.js';
+import { projectBusinessProfile } from './mobileBusinessProfileFacts.js';
 
 const iso = (value) => {
   if (!value) return null;
@@ -53,8 +54,8 @@ export const projectEntity = (row) => ({
   currency: str(row.profile_currency) || str(row.firm_currency) || 'EUR',
   country: (str(row.jurisdiction) || str(row.firm_jurisdiction) || 'ZZ').toUpperCase(),
   entity_type: str(row.entity_type),
-  // Donna has no canonical business-profile aggregate (DESIGN-NOTES smell 9).
-  business_profile: null
+  // The owner's declared facts (client_business_profiles); null until declared.
+  business_profile: projectBusinessProfile(row.business_profile_facts)
 });
 
 export const projectPrincipal = ({ principal, identity }) => ({

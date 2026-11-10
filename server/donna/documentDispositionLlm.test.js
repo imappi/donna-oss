@@ -16,6 +16,8 @@ import {
   parseDocumentDispositionResponse,
   buildDocumentDispositionUserPrompt,
   proposeDocumentDisposition,
+  buildDocumentDispositionSystemPrompt,
+  __SYSTEM_PROMPT,
   runDocumentDispositionForClient,
   DOCUMENT_NO_LINE_DISPOSITION_FAMILY,
   DOCUMENT_NO_LINE_DISPOSITION_TARGET_TYPE,
@@ -1194,6 +1196,50 @@ test('owner language — both mint paths read the owner language from the client
     ...REPLY_ARGS, client: replyClient, apiKeyOverride: 'sk-test', fetchImpl: makeFetchOk(NEEDS_HUMAN), laneDeps: replyStubs.laneDeps
   });
   assert.match(replyStubs.mints[0].question, /Kiitos vastauksestasi! Emme pystyneet päättelemään vastauksestasi/);
+});
+
+// The model drafts owner_question; the prompt is told the owner's language for
+// that one owner-facing field (askPipeline's drafter rule). Recorded provider:
+// the request bodies are captured, the reply is synthetic bytes.
+const recordedProvider = (reply, bodies) => async (_url, init) => {
+  bodies.push(JSON.parse(init.body));
+  return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(reply) }] }) };
+};
+const systemOf = (body) => (typeof body.system === 'string' ? body.system : (body.system || []).map((b) => b.text).join(''));
+const FI_DRAFT = { ...NEEDS_HUMAN, owner_question: 'Mihin tämä ostos liittyi?', owner_question_evidence_type: 'business_purpose' };
+
+test('owner language — the sweep prompt carries the owner language for owner_question only', async () => {
+  const sweep = async (profile, reply) => {
+    const bodies = [];
+    const stubs = makeLaneStubs();
+    await runDocumentDispositionForClient({
+      client: makeMockClient([...sweepResponses({ candidates: [EXXON_DOC] }), { match: 'select jurisdiction, profile from clients', rows: [{ profile }] }]),
+      firmId: 'firm-1', clientId: 'client-1', mode: 'shadow', apiKeyOverride: 'sk-test',
+      fetchImpl: recordedProvider(reply, bodies), laneDeps: stubs.laneDeps
+    });
+    assert.equal(bodies.length, 1, 'one recorded provider call');
+    return { system: systemOf(bodies[0]), user: JSON.stringify(bodies[0].messages), mints: stubs.mints };
+  };
+  const fi = await sweep({ jurisdiction: 'FI' }, FI_DRAFT);
+  assert.ok(fi.system.startsWith(__SYSTEM_PROMPT), 'the decision prompt itself is unchanged');
+  assert.equal(fi.system, buildDocumentDispositionSystemPrompt({ ownerLanguage: 'fi' }));
+  assert.match(fi.system, /Owner language: "fi"/);
+  assert.match(fi.system, /write that question entirely in this language/);
+  assert.match(fi.system, /Every other field, including "reasoning", stays in English/);
+  assert.equal(fi.mints[0].question, 'Kuitti (Exxon, 41,20 USD, päivätty 14.5.2026, exxon-receipt.pdf): Mihin tämä ostos liittyi?',
+    'the Finnish draft sits in the Finnish wrapper');
+  const en = await sweep({ jurisdiction: 'GB' }, { ...NEEDS_HUMAN, owner_question: 'What was this purchase for?', owner_question_evidence_type: 'business_purpose' });
+  assert.equal(en.system, buildDocumentDispositionSystemPrompt({ ownerLanguage: 'en' }));
+  assert.match(en.system, /Owner language: "en"/);
+  assert.equal(en.mints[0].question, 'About the receipt from Exxon for USD 41.20 dated 2026-05-14 (exxon-receipt.pdf): What was this purchase for?');
+  assert.equal(fi.user, en.user, 'the observation is the same for both languages');
+});
+
+test('owner language — a direct call without an owner language keeps the historical prompt byte for byte', async () => {
+  const bodies = [];
+  await proposeDocumentDisposition({ document: EXXON_DOC, firmContext: null, apiKey: 'sk-test', fetchImpl: recordedProvider(NEEDS_HUMAN, bodies) });
+  assert.equal(systemOf(bodies[0]), __SYSTEM_PROMPT);
+  assert.equal(buildDocumentDispositionSystemPrompt(), __SYSTEM_PROMPT);
 });
 
 test('RT-10 answer leg — a second unclear reply rests owner_ask_exhausted (never a third nag), request still consumed', async () => {
