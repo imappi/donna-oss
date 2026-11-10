@@ -50,16 +50,28 @@ test(
       const lineB = await seedBankLine(appliance.query, { firmId, clientId, id: `${clientId}-tx-screwfix-b`, date: '2026-08-23', description: 'SCREWFIX DIRECT LTD', moneyOut: 42.99 });
 
       appliance.providers.script('document_routing', ['document_routing/screwfix-receipt', 'document_routing/screwfix-receipt']);
-      appliance.providers.script('unified_extraction', ['unified_extraction/screwfix-receipt', shiftedExtraction()]);
       appliance.providers.script('reconciliation_reasoning', ['reconciliation_reasoning/no-plausible-match', 'reconciliation_reasoning/no-plausible-match']);
       appliance.providers.script('document_disposition', [{ status: 418, body: { error: { type: 'fixture_lane_dark', message: 'document disposition is not what this fixture proves' } }, times: Infinity }]);
       appliance.providers.script('transaction_coding', [{ status: 418, body: { error: { type: 'fixture_lane_dark', message: 'coding is not what this fixture proves' } }, times: Infinity }]);
       appliance.providers.script('ask_drafting', [{ status: 503, times: Infinity }]);
       const source = loadApplianceFixture('receipt_screwfix');
       const twinBytes = Buffer.concat([source.bytes, Buffer.from('\n%dmem-w0-twin-2026-08-23\n')]);
+      // Each extraction is bound to the document it reads, not to call order:
+      // one tick parses both twins and either can reach the provider first.
+      // The request carries the document's bytes, so the twin's bytes get the
+      // day-later reply and the original's bytes the recorded one.
+      const twinExtraction = shiftedExtraction();
+      const twinBase64 = twinBytes.toString('base64');
+      const extractedFor = [];
+      appliance.providers.script('unified_extraction', [{ times: 2, respond: (request) => {
+        const isTwin = JSON.stringify(request).includes(twinBase64);
+        extractedFor.push(isTwin ? 'twin' : 'original');
+        return isTwin ? twinExtraction : 'unified_extraction/screwfix-receipt';
+      } }]);
       const docA = await appliance.uploadDocument({ clientId, fixture: 'receipt_screwfix' });
       const docB = await appliance.uploadDocument({ clientId, bytes: twinBytes, filename: 'screwfix-receipt-2026-08-23.pdf', mimeType: 'application/pdf', documentType: 'receipt' });
       const tick = await appliance.tick();
+      assert.deepEqual([...extractedFor].sort(), ['original', 'twin'], `each twin is extracted exactly once: ${JSON.stringify(extractedFor)}`);
       const rowA = await appliance.read.document(docA.documentId);
       const rowB = await appliance.read.document(docB.documentId);
       assert.equal(rowA.parse_status, 'completed', JSON.stringify({ parse: rowA.parse_error, jobs: tick.jobs.map((j) => [j.function_id, j.status, j.last_error]), calls: appliance.providers.calls.map((c) => [c.lane, c.status]) }));
