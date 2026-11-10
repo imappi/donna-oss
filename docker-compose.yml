@@ -1,0 +1,115 @@
+# Run Donna locally with Docker (README.md, "Run Donna locally"):
+#
+#   docker compose up
+#
+# Three services: PostgreSQL 16 (db), the runtime (scripts/desktop-boot.mjs)
+# and the web app (scripts/local_web.mjs). Nothing is installed on the host
+# but Docker. The web app is published on the host's loopback only:
+# http://127.0.0.1:5173/firms (DONNA_LOCAL_WEB_PORT in .env changes the port).
+#
+# Keys and the sign-in key come from your own .env, read at run time, as for
+# the host-installed start; without one Donna still starts, prints a sign-in
+# key for this boot, and says which model lanes are dark.
+#
+# The books live in two named volumes, kept across `docker compose down` and
+# rebuilds: donna-db (the database) and donna-data (uploaded documents and
+# backup packages). Only `docker compose down --volumes` deletes them.
+
+name: donna
+
+services:
+  db:
+    image: postgres:16.15-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825
+    # Unix socket only, no TCP listener: the same posture as the supervised
+    # PostgreSQL of the host-installed start (server/donna/desktop/pgSupervisor.js).
+    # The socket directory is a volume shared with the runtime and nothing else,
+    # so trust authentication reaches only the runtime, as on the host.
+    command: ["postgres", "-c", "listen_addresses="]
+    environment:
+      POSTGRES_USER: donna
+      POSTGRES_DB: donna_local
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --encoding=UTF8
+    volumes:
+      - donna-db:/var/lib/postgresql/data
+      - donna-pg-socket:/var/run/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "/var/run/postgresql", "-U", "donna", "-d", "donna_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    stop_grace_period: 60s
+
+  runtime:
+    build: .
+    image: donna-local:compose
+    # Rebuild on every `up`, so a `git pull` takes effect without a separate
+    # build step; unchanged layers come from the build cache.
+    pull_policy: build
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    # Set here, after .env, so a host path or port in .env cannot point the
+    # container somewhere that does not exist in it. The runtime listens on
+    # 127.0.0.1 inside its container only (scripts/desktop-boot.mjs).
+    environment:
+      DONNA_DESKTOP_DATABASE_URL: postgresql://donna@localhost/donna_local?host=/run/donna-pg&port=5432
+      PG_BIN: /opt/pg16/bin
+      DONNA_DESKTOP_DATA_DIR: /data
+      DONNA_DESKTOP_BLOB_DIR: /data/documents
+      DONNA_DESKTOP_BACKUP_DIR: /data/backups
+      DONNA_DESKTOP_PORT: "8787"
+    volumes:
+      - donna-data:/data
+      - donna-pg-socket:/run/donna-pg
+    # The web service shares this network namespace; its port is published
+    # here, on the host's loopback only. The runtime's own port is neither
+    # published nor listening outside this namespace's loopback.
+    ports:
+      - "127.0.0.1:${DONNA_LOCAL_WEB_PORT:-5173}:${DONNA_LOCAL_WEB_PORT:-5173}"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Healthy once the runtime's router answers its public receipt route with
+    # the database configured: migrations applied and the router listening.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/api/donna/firms/health').then((r) => r.json()).then((b) => process.exit(b.database_configured === true ? 0 : 1)).catch(() => process.exit(1))"
+      # Polled every 2s while starting (first start: under a minute), then
+      # every 30s, so the runtime's request log stays readable.
+      start_period: 300s
+      start_interval: 2s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 30s
+
+  web:
+    image: donna-local:compose
+    pull_policy: never
+    init: true
+    command: ["node", "scripts/local_web.mjs"]
+    # Same network namespace as the runtime: /api/ is forwarded to
+    # 127.0.0.1:8787 exactly as in the host-installed start.
+    network_mode: service:runtime
+    # No env_file: the web app needs no key.
+    environment:
+      DONNA_LOCAL_WEB_PORT: ${DONNA_LOCAL_WEB_PORT:-5173}
+      DONNA_DESKTOP_PORT: "8787"
+      DONNA_LOCAL_WEB_HOST: 0.0.0.0
+    depends_on:
+      runtime:
+        condition: service_healthy
+
+volumes:
+  donna-db:
+  donna-data:
+  # The database's Unix socket, in memory, shared by db and runtime.
+  donna-pg-socket:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs

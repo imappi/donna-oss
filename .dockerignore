@@ -1,0 +1,25 @@
+# The image is built from the checkout as git sees it. .git stays in the
+# build context because the build stage derives desktop/build-identity.json
+# from it; it is removed before the final stage copies the application.
+# Everything listed here is untracked, so excluding it never makes the
+# checkout look changed to that step.
+
+# Keys and local configuration never enter an image.
+**/.env
+**/.env.*
+**/*.env
+!.env.example
+
+# Installed, built or machine-local output.
+node_modules
+dist
+dist-desktop
+desktop/vendor
+desktop/build-identity.json
+backups
+.donna
+data/private
+data/firms/private
+src/private
+.vercel
+.DS_Store

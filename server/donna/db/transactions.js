@@ -9,7 +9,8 @@ import { toIsoDay } from '../dates.js';
 // Q9 (the sole-model lab, 2026-08-16): the coding lane's model-policy
 // resolution — same pattern as the disposition sweep owner (Q6c).
 import { readLaneDecidingPolicy } from '../modelLanePolicy.js';
-import { readClientConfigSnapshot, clientFlagActs } from '../clientConfig.js';
+import { readClientConfigSnapshot } from '../clientConfig.js';
+import { firstLineLaneDecides } from '../firstLineLane.js';
 // RT-16 — the ONE coding state (transactions.coding_state, migration 138):
 // the machine, the legacy-input mapping, the DTO projection, the writer.
 import { applyCodingTransition, codingStateClosesReviewCase, isAppliedSuggestionReceipt, legacyReviewStateFor, nextCodingStateForPatch } from '../codingState.js';
@@ -295,7 +296,7 @@ export const refreshTransactionIntelForClient = async ({ client, firmId, clientI
   const configSnapshot = await readClientConfigSnapshot(client, { firmId, clientId, strict: true });
 
   const stepAsideSeats = await readIntelStepAsideSeats(client, { firmId, clientId });
-  const jevFirst = clientFlagActs({ flagKey: 'JEV_RECONCILIATION', snapshot: configSnapshot, envFallback: () => false });
+  const jevFirst = firstLineLaneDecides({ snapshot: configSnapshot });
   const stepAside = jevFirst || stepAsideSeats.length > 0;
 
   const analysis = analyzeTransactionIntel({

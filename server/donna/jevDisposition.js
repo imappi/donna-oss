@@ -1,7 +1,8 @@
 // Jev chooses an existing terminal disposition or explicitly requests reasoning.
 // Provider failures never turn into an owner question or a reasoning handoff.
 import { callJevTyped } from './jevProvider.js';
-import { readClientConfigSnapshot, clientFlagActs } from './clientConfig.js';
+import { readClientConfigSnapshot } from './clientConfig.js';
+import { firstLineLaneDecidesWithClient } from './firstLineLane.js';
 import { exceedsMaterialityCeiling } from './dispositionMateriality.js';
 import { readJevCase, jevCasePrompt } from './jevPreview.js';
 
@@ -11,10 +12,12 @@ import { readJevCase, jevCasePrompt } from './jevPreview.js';
 // where the ask is built (documentDispositionLlm.buildNeedsHumanOwnerQuestion).
 export const CASH_FUNDING_OWNER_QUESTION = 'The receipt shows a cash payment. Was it paid from company cash or from your personal funds?';
 
-export async function jevDispositionEnabled(client, firmId, clientId, override) {
+// The one rule (firstLineLane.js): the flag acts AND the host has the lane's
+// provider. `decidedBy` names the lane that decides when it is dark.
+export async function jevDispositionEnabled(client, firmId, clientId, override, { decidedBy = null } = {}) {
   if (typeof override === 'boolean') return override;
   const snapshot = await readClientConfigSnapshot(client, { firmId, clientId, strict: true });
-  return clientFlagActs({ flagKey: 'JEV_RECONCILIATION', snapshot, envFallback: () => false });
+  return firstLineLaneDecidesWithClient(client, { firmId, clientId, snapshot, decidedBy });
 }
 
 export async function loadJevDispositionEvidence(client, firmId, clientId, focal = {}) {
