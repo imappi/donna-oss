@@ -261,20 +261,37 @@ test(
         assert.equal((await receipts('document.parse.retry', [failed.documentId])).length, 1);
       });
 
-      await t.test(`${RETRY_TRIALS} trials of a retry racing a fresh upload of the same bytes: one canonical, one harmless receipt, no raw error`, async () => {
+      await t.test(`${RETRY_TRIALS} trials of a retry racing a fresh upload of the same bytes, plus each order forced once: one canonical, one harmless receipt, no raw error`, async () => {
+        // The racing trials prove a real overlap always settles into one of the
+        // two valid outcomes. Which one wins a race is up to the scheduler (under
+        // load every race can go the same way), so each order is also forced once
+        // and must produce its own outcome: both branches are checked every run.
+        const FORCED = [{ tag: 'retry-first', order: 'retry_first', expect: 'retry_won' },
+          { tag: 'upload-first', order: 'upload_first', expect: 'upload_won' }];
+        const plan = [...Array.from({ length: RETRY_TRIALS }, (_, trial) => ({ trial, tag: `retry-race-${trial}`, order: 'race' })),
+          ...FORCED.map((forced, i) => ({ ...forced, trial: RETRY_TRIALS + i }))];
         const failed = [];
-        for (let trial = 0; trial < RETRY_TRIALS; trial += 1) failed.push(await upload(bytesFor(`retry-race-${trial}`)));
+        for (const { tag } of plan) failed.push(await upload(bytesFor(tag)));
         await failParses();
         const outcomes = [];
-        for (let trial = 0; trial < RETRY_TRIALS; trial += 1) {
+        for (const { trial, tag, order, expect } of plan) {
           const { documentId: failedId, checksum } = failed[trial];
           assert.equal((await appliance.read.document(failedId)).parse_status, 'failed');
-          // Stagger the retry across the upload's whole register window so the
-          // trials cover retry-first, upload-first and the overlap between.
-          const [retried, fresh] = await Promise.all([
-            sleep(Math.round(trial * RETRY_STAGGER_MS)).then(() => retry(failedId)),
-            upload(bytesFor(`retry-race-${trial}`))
-          ]);
+          let retried, fresh;
+          if (order === 'retry_first') {
+            retried = await retry(failedId);
+            fresh = await upload(bytesFor(tag));
+          } else if (order === 'upload_first') {
+            fresh = await upload(bytesFor(tag));
+            retried = await retry(failedId);
+          } else {
+            // Stagger the retry across the upload's whole register window so the
+            // trials cover retry-first, upload-first and the overlap between.
+            [retried, fresh] = await Promise.all([
+              sleep(Math.round(trial * RETRY_STAGGER_MS)).then(() => retry(failedId)),
+              upload(bytesFor(tag))
+            ]);
+          }
           assert.equal(retried.status, 200, `trial ${trial}: ${retried.text}`);
           const rows = await rowsFor(checksum);
           assert.equal(rows.length, 2, JSON.stringify(rows));
@@ -307,6 +324,7 @@ test(
               [[failedId, 'superseded_by_canonical', fresh.documentId]]);
           }
           assert.equal((await receipts('document.parse.retry', [failedId])).length, outcomes.at(-1) === 'retry_won' ? 1 : 0);
+          if (expect) assert.equal(outcomes.at(-1), expect, `forced ${order}: ${JSON.stringify(rows)}`);
         }
         t.diagnostic(`outcomes: ${JSON.stringify(outcomes)}`);
         assert.ok(outcomes.includes('retry_won') && outcomes.includes('upload_won'), `both orders were exercised: ${JSON.stringify(outcomes)}`);

@@ -429,7 +429,15 @@ test(
           await seed.query('select pg_advisory_lock(hashtextextended($1,0))', [leaseKey]);
           await seed.query('select pg_advisory_unlock(hashtextextended($1,0))', [leaseKey]);
         } finally { await seed.query('set lock_timeout=0'); }
-        assert.equal((await seed.query('select 1 from pg_stat_activity where pid=$1', [stalledPid])).rowCount, 0);
+        // The lock above is the proof the stalled session let go. Its backend
+        // drops locks before it leaves pg_stat_activity, so under load the row
+        // can outlive the lock briefly: wait, bounded, for the backend to exit.
+        let stalledGone = false;
+        for (let attempt = 0; attempt < 100 && !stalledGone; attempt += 1) {
+          stalledGone = !(await seed.query('select 1 from pg_stat_activity where pid=$1', [stalledPid])).rowCount;
+          if (!stalledGone) await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        assert.equal(stalledGone, true, 'the stalled backend exited within 2s of its cleanup deadline');
       } finally { await stalled.end(); }
 
       // Credit application admission belongs to the caller's transaction.
