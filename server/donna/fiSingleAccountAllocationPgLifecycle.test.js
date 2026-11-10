@@ -22,7 +22,7 @@ for (const jurisdiction of ['fi', 'FI']) test(`real PG: ordinary one-line ${juri
  for(const file of(await readdir(migrations)).filter(n=>n.endsWith('.sql')).sort())await pool.query(await readFile(new URL(file,migrations),'utf8'));
  const firmId='single-allocation-proof',clientId='fi-accrual';
  await pool.query("insert into firms(id,name,slug) values($1,'Synthetic allocation proof',$1)",[firmId]);
- await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic FI Oy',$4,'fi-oy',$3)",[clientId,firmId,{jurisdiction,accounting_system:'none',accounting_basis:'accrual'},jurisdiction]);
+ await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic FI Oy',$4,'fi-oy',$3)",[clientId,firmId,{jurisdiction,accounting_system:'none',accounting_basis:'accrual',alv_registration:{status:'registered',registered_from:'2020-01-01'}},jurisdiction]);
  for(const flag of ['FINLAND_ALV_CODING','JURISDICTION_ACCOUNT_PALETTE','RECONCILIATION_CODE_MATCHED_NO_REVIEW','CODING_AUTO_POST','LEDGER_AUTO_POST'])await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$1,'auto','manual')",[flag,firmId,clientId]);
  const fixtures=[{id:'sales',account:'Sales',net:3000,tax:765,incoming:true},{id:'rent',account:'Rent',net:600,tax:0},{id:'office',account:'Office expenses',net:150,tax:38.25},{id:'accounting',account:'Accounting fees',net:300,tax:76.5}];
  const seed=async(f,id=f.id)=>{

@@ -60,7 +60,7 @@ test('real PG: a NETS credit settled by a koontilasku row posts bank net · fee 
   const clientId = 'kultalanka';
   await pool.query("insert into firms (id, name, slug) values ($1, 'RT-21f', 'rt21f')", [firmId]);
   await pool.query(`insert into clients (id, firm_id, company_name, jurisdiction, profile) values ($1, $2, 'Kampaamo Kultalanka Oy', 'fi', $3)`,
-    [clientId, firmId, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'cash' }]);
+    [clientId, firmId, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'cash', alv_registration: { status: 'registered', registered_from: '2020-01-01' } }]);
   // The seed PR #2065 posture: FINLAND_ALV_CODING acts, so the sales leg carries the code.
   await pool.query(`insert into client_capability_config (id, firm_id, client_id, flag_key, stage, source) values ($1, $2, $3, 'FINLAND_ALV_CODING', 'auto', 'manual')`,
     [`${firmId}:${clientId}:FINLAND_ALV_CODING`, firmId, clientId]);

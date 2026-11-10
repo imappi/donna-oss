@@ -102,7 +102,7 @@ test('real PG: named writer refusal constrains next Jev menu, retains the failur
  await pool.query(`create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid default gen_random_uuid() primary key,bucket_id text references storage.buckets(id),name text,metadata jsonb);`);
  const root=new URL('../../db/migrations/',import.meta.url);for(const f of(await readdir(root)).filter(f=>f.endsWith('.sql')).sort())await pool.query(await readFile(new URL(f,root),'utf8'));
  await pool.query(`insert into firms(id,name,slug) values('f','Synthetic firm','jev-executability');
- insert into clients(id,firm_id,company_name,jurisdiction,profile) values('c','f','Current company','fi','{"jurisdiction":"fi","accounting_system":"none","accounting_basis":"cash"}');
+ insert into clients(id,firm_id,company_name,jurisdiction,profile) values('c','f','Current company','fi','{"jurisdiction":"fi","accounting_system":"none","accounting_basis":"cash","alv_registration":{"status":"registered","registered_from":"2020-01-01"}}');
  insert into firm_members(id,firm_id,email,name,role,status) values('member','f','fixture@example.invalid','Fixture','admin','active');`);
  for(const flag of ['JURISDICTION_ACCOUNT_PALETTE','JEV_RECONCILIATION','CODING_AUTO_POST','FINLAND_ALV_CODING'])await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,'f','c',$1,'auto','manual')",[flag]);
  const seed=async id=>{
@@ -290,7 +290,7 @@ test('real PG: FIK-0a receipts request digests, delivered facts, read status and
  await pool.query(`create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid default gen_random_uuid() primary key,bucket_id text references storage.buckets(id),name text,metadata jsonb);`);
  const root=new URL('../../db/migrations/',import.meta.url);for(const f of(await readdir(root)).filter(f=>f.endsWith('.sql')).sort())await pool.query(await readFile(new URL(f,root),'utf8'));
  await pool.query(`insert into firms(id,name,slug) values('f','Synthetic firm','jev-fik0a');
- insert into clients(id,firm_id,company_name,jurisdiction,profile) values('c','f','Current company','fi','{"jurisdiction":"fi","accounting_system":"none","accounting_basis":"cash"}');
+ insert into clients(id,firm_id,company_name,jurisdiction,profile) values('c','f','Current company','fi','{"jurisdiction":"fi","accounting_system":"none","accounting_basis":"cash","alv_registration":{"status":"registered","registered_from":"2020-01-01"}}');
  insert into firm_members(id,firm_id,email,name,role,status) values('member','f','fixture@example.invalid','Fixture','admin','active');`);
  for(const flag of ['JURISDICTION_ACCOUNT_PALETTE','JEV_RECONCILIATION','CODING_AUTO_POST','FINLAND_ALV_CODING'])await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,'f','c',$1,'auto','manual')",[flag]);
  const enrollment=await pool.connect();try{await enrollJevExperiment({client:enrollment,firmId:'f',clientId:'c',actorId:'member',authorityBasis:'Synthetic FIK-0a proof',trialId:'fik0a',expiresAt:'2100-01-01',model:'fixture-provider'});}finally{enrollment.release();}

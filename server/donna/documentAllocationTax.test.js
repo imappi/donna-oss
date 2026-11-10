@@ -7,6 +7,9 @@ import { splitAlvGross } from './finland/alvCodes.js';
 import { buildLedgerJournalForTransaction } from './ledger.js';
 
 // Minimized extracted facts; no source files or customer identities.
+// The business these source checks describe is ALV-registered (finland/postingPolicy.js
+// refuses an ALV code without a registration on the line's date).
+const registered = { alv_registration: { status: 'registered', registered_from: '2020-01-01' } };
 const source = (amounts, rates, tax, total = amounts.reduce((a, b) => a + b, 0)) => ({
   document_id: 'synthetic-source', document_type: 'supplier_bill', currency: 'EUR', total_amount: total, tax_amount: tax,
   match_status: 'auto_matched', parse_summary: { line_amounts_include_tax: true, totals_validation: { matches: true } },
@@ -60,11 +63,11 @@ test('Jev can select and compose a complete mixed action from source handles wit
 
 test('valid receipt plus wrong tax is a coding conflict; source absence cannot mint input VAT', () => {
   for (const document of [mixed, food, source([12.90], [.14], 1.58)]) {
-    const transaction = { money_out: document.total_amount, tax_treatment: 'ALV 10 %', ai_suggestion: { posting_requirement: 'single_account' } };
-    assert.throws(() => FI_POSTING_POLICY.assertPostableTaxCoding({ coding: { account_type: 'expense', tax_type: 'ALV_10_INPUT' }, transaction, taxCodingEnabled: true, matchedDocument: document }),
+    const transaction = { date: '2025-02-01', money_out: document.total_amount, tax_treatment: 'ALV 10 %', ai_suggestion: { posting_requirement: 'single_account' } };
+    assert.throws(() => FI_POSTING_POLICY.assertPostableTaxCoding({ coding: { account_type: 'expense', tax_type: 'ALV_10_INPUT' }, transaction, taxCodingEnabled: true, profile: registered, matchedDocument: document }),
       error => error.code === 'TRANSACTION_ALV_CODING_SOURCE_CONFLICT');
   }
-  assert.throws(() => FI_POSTING_POLICY.assertPostableTaxCoding({ coding: { account_type: 'expense', tax_type: 'ALV_25_5_INPUT' }, transaction: { money_out: 40 }, taxCodingEnabled: true }), error => error.code === 'TRANSACTION_ALV_EVIDENCE_REQUIRED');
+  assert.throws(() => FI_POSTING_POLICY.assertPostableTaxCoding({ coding: { account_type: 'expense', tax_type: 'ALV_25_5_INPUT' }, transaction: { date: '2025-02-01', money_out: 40 }, taxCodingEnabled: true, profile: registered }), error => error.code === 'TRANSACTION_ALV_EVIDENCE_REQUIRED');
 });
 
 test('the existing journal builder posts each selected component tax and balances both directions', () => {
@@ -117,13 +120,13 @@ test('complete Jev allocation receipt resolves coding without a probability gate
 test('self-assessed acquisition rates do not masquerade as supplier-charged VAT',()=>{
   for(const [treatment,code] of [['EU-tavaraosto','ALV_EU_ACQUISITION'],['EU-palveluosto','ALV_EU_SERVICE_ACQUISITION']]){
     const document=source([150],[0],0);
-    const options={coding:{account_type:'expense',tax_type:code},transaction:{money_out:150,tax_treatment:treatment},taxCodingEnabled:true,matchedDocument:document};
+    const options={coding:{account_type:'expense',tax_type:code},transaction:{date:'2025-02-01',money_out:150,tax_treatment:treatment},taxCodingEnabled:true,profile:registered,matchedDocument:document};
     assert.doesNotThrow(()=>FI_POSTING_POLICY.assertPostableTaxCoding(options));
     const action=FI_POSTING_POLICY.sourceTaxPosting({taxTreatment:treatment,direction:'in',gross:150});
     assert.equal(action.rate,25.5);assert.equal(action.sourceRate,0);assert.equal(action.splitRequired,false);assert.equal(action.split,null);
     assert.throws(()=>FI_POSTING_POLICY.assertPostableTaxCoding({...options,matchedDocument:source([150],[.14],18.42)}),{code:'TRANSACTION_ALV_CODING_SOURCE_CONFLICT'});
   }
-  assert.throws(()=>FI_POSTING_POLICY.assertPostableTaxCoding({coding:{account_type:'expense',tax_type:'ALV_25_5_INPUT'},transaction:{money_out:150},taxCodingEnabled:true,matchedDocument:source([150],[0],0)}),{code:'TRANSACTION_ALV_CODING_SOURCE_CONFLICT'});
+  assert.throws(()=>FI_POSTING_POLICY.assertPostableTaxCoding({coding:{account_type:'expense',tax_type:'ALV_25_5_INPUT'},transaction:{date:'2025-02-01',money_out:150},taxCodingEnabled:true,profile:registered,matchedDocument:source([150],[0],0)}),{code:'TRANSACTION_ALV_CODING_SOURCE_CONFLICT'});
 });
 
 

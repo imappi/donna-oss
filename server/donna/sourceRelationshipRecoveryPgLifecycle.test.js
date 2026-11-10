@@ -32,7 +32,7 @@ test('real PG: one persisted source relationship governs matching, coding, posti
   for (const file of (await readdir(migrations)).filter(f => f.endsWith('.sql')).sort()) await pool.query(await readFile(new URL(file, migrations), 'utf8'));
   const firmId = 'rel-firm', clientId = 'rel-client';
   await pool.query("insert into firms(id,name,slug) values($1,'Synthetic relationship proof',$1)", [firmId]);
-  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,profile) values($1,$2,'Synthetic salon','fi',$3)", [clientId, firmId, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'cash' }]);
+  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,profile) values($1,$2,'Synthetic salon','fi',$3)", [clientId, firmId, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'cash', alv_registration: { status: 'registered', registered_from: '2020-01-01' } }]);
   for (const flag of ['FINLAND_ALV_CODING', 'JURISDICTION_ACCOUNT_PALETTE']) await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$1,'auto','manual')", [flag, firmId, clientId]);
   const tx = (id, date, out, payload = {}, extra = {}) => pool.query(`insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,coding_state,reconciliation_status,payload)
     values($1,$2,$3,$4,$1,0,$5,'EUR',$6,$7,$8,$9)`, [id, firmId, clientId, date, out, extra.status || 'ready', extra.coding_state ?? 'applied', extra.reconciliation_status || 'explained', payload]);
