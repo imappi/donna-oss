@@ -163,8 +163,20 @@ export function fiMatchingResponder(request) {
     reasoning: `The EUR ${total} movement quotes the same counterparty and amount as the document.`, hops: ['amount_exact', 'within_window'] }], unmatchable_reason: null });
 }
 
+// The text lanes' input on either provider (2026-11-10, Claude first): the
+// OpenAI Responses `input`, or the Anthropic Messages user turn. The answer
+// stays OpenAI-shaped; the recorded-providers stub serves it in the Messages
+// shape to an Anthropic request.
+const textLaneInput = (request) => {
+  if (typeof request?.input === 'string') return JSON.parse(request.input);
+  const turn = (request?.messages || []).filter((message) => message?.role === 'user').at(-1);
+  const content = typeof turn?.content === 'string' ? turn.content
+    : (turn?.content || []).filter((block) => block?.type === 'text').map((block) => block.text).join('');
+  return JSON.parse(content);
+};
+
 export function fiCodingResponder(request, overrides = {}) {
-  const input = JSON.parse(request.input);
+  const input = textLaneInput(request);
   const base = JSON.parse(loadRecording('transaction_coding/kestrel-two-lines-coded').body.output[0].content[0].text).suggestions[1];
   const rows = input.transactions || [input.transaction];
   const suggestions = rows.map((row) => {
@@ -195,7 +207,7 @@ export function fiBankDispositionResponder(request) {
 // Ask drafting: one grounded question per admitted item, handles copied
 // verbatim from the prompt (call-local by contract, never database ids).
 export function fiAskDraftResponder(request) {
-  const input = JSON.parse(request.input);
+  const input = textLaneInput(request);
   const items = (input.coding_items || []).map((item) => ({ transaction_ref: item.transaction_ref, disposition: 'ask',
     question: `What was the payment "${item.description}" on ${item.date} for, and is it a business expense?`,
     evidence_type: 'business_purpose', fyi_note: '', skip_reason: '', local_document_refs: [] }));

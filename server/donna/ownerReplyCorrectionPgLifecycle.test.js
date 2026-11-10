@@ -26,6 +26,7 @@ import { processWhatsAppInboundMessage } from './channels/whatsappInbound.js';
 import { hashPhoneE164 } from './channels/whatsappWebhookCore.js';
 import { GB_DEFAULT_CHART } from './gb/defaultChart.js';
 import { ledgerRecordId } from './db/shared.js';
+import { claudeMessageResponse, claudeRequestInput, claudeRequestSystem } from './testSupport/claudeMessage.js';
 
 const pgUrl = process.env.DONNA_PG_TEST_URL;
 const firmId = 'owner-reply-correction-proof';
@@ -78,23 +79,26 @@ const mockModels = (t, state) => {
   state.reads = 0; state.codes = 0;
   t.mock.method(globalThis, 'fetch', async (endpoint, init) => {
     const url = String(endpoint);
-    if (url === 'https://api.anthropic.com/v1/messages') {
+    assert.equal(url, 'https://api.anthropic.com/v1/messages');
+    const request = JSON.parse(init.body);
+    // 2026-11-10: the coder runs on Claude too (its default since the owner's
+    // decision); the reader is the request that names its forced tool.
+    if (request.tool_choice?.name === 'interpret_owner_reply') {
       state.reads += 1;
-      const body = JSON.parse(init.body);
-      assert.equal(body.tool_choice?.name, 'interpret_owner_reply');
+      const body = request;
       state.context = JSON.parse(body.messages[0].content);
       const input = state.reading(state.context);
       return new Response(JSON.stringify({ model: READER_MODEL, stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'interpret_owner_reply', input }] }), { status: 200 });
     }
-    assert.equal(url, 'https://api.openai.com/v1/responses');
+    assert.match(claudeRequestSystem(request), /^You code bank transactions/, 'the only other call is the coder');
     state.codes += 1;
-    const input = JSON.parse(JSON.parse(init.body).input);
+    const input = JSON.parse(claudeRequestInput(request));
     const code = row => ({ transaction_id: row.id, confidence: 'high', evidence_required: false, auto_explain_limit: 5000,
       reasoning: 'The settled receipt supports the account.', posting_requirement: 'single_account', document_allocations: [], ask_client_question: '',
       ...(state.coder ? state.coder(row) : state.verdict) });
     // The reply coder codes one line; the batch coder a list.
     const output = input.transaction ? code(input.transaction) : { suggestions: input.transactions.map(code), group_summary: [] };
-    return { ok: true, status: 200, json: async () => ({ output_text: JSON.stringify(output) }) };
+    return claudeMessageResponse(output, { request });
   });
   return state;
 };

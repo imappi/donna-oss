@@ -344,7 +344,15 @@ await test('registry views: thresholds resolve per lane; the governed-lane view 
     // Q9 (2026-08-16, the sole-model lab): the coding lane joined the feed —
     // experiment-seatable 27B, no challenger wiring (eligible stays false);
     // product-wide promotion still needs the signed verdict.
-    { id: 'transaction_coding', qualified: ['gpt-5.4', 'qwen/qwen3.8-27b'], eligible: false },
+    // 2026-11-10 (owner's decision: Claude only): claude-opus-5-5 joins as the
+    // strong default, gpt-5.4 the alternative; rides the Claude-only verdict.
+    { id: 'transaction_coding', qualified: ['claude-opus-5-5', 'gpt-5.4', 'qwen/qwen3.8-27b'], eligible: false },
+    // 2026-11-10: the other text lanes join the feed with both strong defaults.
+    { id: 'document_chat', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'ask_drafting', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'memory_extraction', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'owner_invoice_command_read', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
+    { id: 'marketing_drafting', qualified: ['claude-opus-5-5', 'gpt-5.4'], eligible: false },
     // Q6c (2026-08-16): the §9.5 staged candidate joined the disposition
     // lane's qualified set under the model-lab call — experiment-basis
     // policy-selectable; product-wide promotion still needs the signed verdict.

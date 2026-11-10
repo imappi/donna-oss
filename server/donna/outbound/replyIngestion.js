@@ -48,6 +48,11 @@
 
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
+
+import { llmCall } from '../llmCall.js';
+import { getLane } from '../modelLanes.js';
+import { missingKeyNameFor, resolveTextLaneProvider } from '../providerEndpoints.js';
+import { anthropicStructuredRequest, openAiStructuredRequest, typedLlmCallFailure } from '../structuredRequest.js';
 import { resolve as resolvePath } from 'node:path';
 
 import { queryFirmDb } from '../firmDb.js';
@@ -77,8 +82,15 @@ const SWEEP_LIMIT = 20;
 const missingTables = (error) => error?.code === '42P01' || error?.code === '42703';
 
 // ── Model config (strong by default; OPENAI_MODEL the override knob) ─────────
+// 2026-11-10 (owner's decision: Claude only): provider-agnostic — Anthropic
+// (claude-opus-5-5) when its key is present, OpenAI (this default) only when
+// no Anthropic key is configured; OPENAI_MODEL may pin either family's id.
+// Effort `medium`: one reply against a short candidate list, and the Keep
+// layer (constrainVerdictToCandidates) bounds what any verdict can do.
 
 const DEFAULT_MODEL = 'gpt-5.4';
+const LANE_PROVIDERS = getLane('marketing_drafting').providers;
+const ANTHROPIC_EFFORT = 'medium';
 
 let dotEnvCache = null;
 const readDotEnv = () => {
@@ -99,62 +111,50 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL || dotEnv.OPENAI_MODEL || DEFAULT_MODEL
-  };
-};
+const resolveClassifier = ({ openAiConfig = null } = {}) => resolveTextLaneProvider({
+  providers: LANE_PROVIDERS, openAiDefaultModel: DEFAULT_MODEL, dotEnv: readDotEnv(), openAiConfig
+});
 
-export const isReplyClassifierConfigured = () => Boolean(getOpenAiConfig().apiKey);
-
-const outputTextFromResponse = (payload) => {
-  if (typeof payload?.output_text === 'string' && payload.output_text) return payload.output_text;
-  const chunks = [];
-  for (const item of payload?.output || []) {
-    for (const part of item?.content || []) {
-      if (typeof part?.text === 'string') chunks.push(part.text);
-    }
-  }
-  return chunks.join('');
-};
+export const isReplyClassifierConfigured = () => resolveClassifier().ok;
 
 // One reply → one strict-schema verdict. Returns { verdict, model } with the
 // RAW model verdict — the caller applies constrainVerdictToCandidates (the
 // Keep layer stays visible at the call site). Throws on transport/parse
-// failure; the sweep counts attempts and fails toward the owner.
+// failure; the sweep counts attempts and fails toward the owner. Both
+// providers ride the shared envelope (llmCall); `model` is the id the
+// RESPONSE named.
 export const classifyOwnerReply = async ({
   reply, candidates = [], fetchImpl = fetch, openAiConfig = null
 } = {}) => {
-  const config = openAiConfig || getOpenAiConfig();
-  if (!config.apiKey) throw new Error('OPENAI_API_KEY is not configured');
-  const response = await fetchImpl('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: config.model,
-      instructions: buildReplyClassifierInstructions(),
-      input: buildReplyClassifierInput({ reply, candidates }),
-      text: {
-        format: {
-          type: 'json_schema',
-          name: REPLY_CLASSIFIER_SCHEMA_NAME,
-          strict: true,
-          schema: buildReplyClassifierSchema()
-        }
-      }
-    })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || `OpenAI returned ${response.status}`);
+  const resolved = resolveClassifier({ openAiConfig });
+  if (!resolved.ok) {
+    const { keyName } = missingKeyNameFor(resolved, LANE_PROVIDERS);
+    throw new Error(`${keyName || 'ANTHROPIC_API_KEY'} is not configured`);
   }
-  const verdict = JSON.parse(outputTextFromResponse(payload));
-  return { verdict, model: payload.model || config.model };
+  const instructions = buildReplyClassifierInstructions();
+  const input = buildReplyClassifierInput({ reply, candidates });
+  const schema = buildReplyClassifierSchema();
+  const execution = { root: { type: 'outbound_owner_reply', id: String(reply?.id || reply?.message_id || 'unattributed') } };
+  const request = resolved.provider === 'anthropic'
+    ? anthropicStructuredRequest({
+      apiKey: resolved.apiKey, model: resolved.model, system: instructions, user: input, schema,
+      effort: ANTHROPIC_EFFORT, maxTokens: 16000, execution, fetchImpl
+    })
+    : openAiStructuredRequest({
+      apiKey: resolved.apiKey, model: resolved.model, instructions, input,
+      schemaName: REPLY_CLASSIFIER_SCHEMA_NAME, schema, execution, fetchImpl
+    });
+  let call;
+  try {
+    call = await llmCall(request);
+  } catch (error) {
+    // The same throw the sweep always counted — now with the typed cause
+    // (no credit, bad key, rate limit, refusal, output limit) in the message.
+    const typed = typedLlmCallFailure(resolved.provider, error);
+    if (!typed) throw error;
+    throw Object.assign(new Error(typed.message), { provider_failure: typed.receipt() });
+  }
+  return { verdict: call.result.parsed, model: call.result.model || resolved.model, provider: resolved.provider };
 };
 
 // ── Webhook half (deterministic; no LLM) ─────────────────────────────────────

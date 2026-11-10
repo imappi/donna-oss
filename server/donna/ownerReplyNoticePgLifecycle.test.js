@@ -28,6 +28,7 @@ import { processWhatsAppInboundMessage } from './channels/whatsappInbound.js';
 import { hashPhoneE164 } from './channels/whatsappWebhookCore.js';
 import { GB_DEFAULT_CHART } from './gb/defaultChart.js';
 import { ledgerRecordId } from './db/shared.js';
+import { claudeMessageResponse, claudeRequestInput, claudeRequestSystem } from './testSupport/claudeMessage.js';
 
 const pgUrl = process.env.DONNA_PG_TEST_URL;
 const firmId = 'owner-notice-proof';
@@ -88,19 +89,22 @@ const mockProviders = (t, state) => {
   t.mock.method(globalThis, 'fetch', async (endpoint, init) => {
     const url = String(endpoint);
     if (url === `${AUTH_HOST}/auth/v1/user`) return new Response(JSON.stringify({ id: 'owner-user', email: OWNER }), { status: 200 });
-    if (url === 'https://api.anthropic.com/v1/messages') {
+    assert.equal(url, 'https://api.anthropic.com/v1/messages');
+    const request = JSON.parse(init.body);
+    // 2026-11-10: the coder runs on Claude too (its default since the owner's
+    // decision); the reader is the request that names its forced tool.
+    if (request.tool_choice?.name === 'interpret_owner_reply') {
       state.reads += 1;
       if (state.readerDown) return new Response(JSON.stringify({ error: { message: 'recorded temporary outage' } }), { status: 503 });
-      const body = JSON.parse(init.body);
-      assert.equal(body.tool_choice?.name, 'interpret_owner_reply');
+      const body = request;
       const input = state.reading(JSON.parse(body.messages[0].content));
       return new Response(JSON.stringify({ model: READER_MODEL, stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'interpret_owner_reply', input }] }), { status: 200 });
     }
-    assert.equal(url, 'https://api.openai.com/v1/responses');
-    const input = JSON.parse(JSON.parse(init.body).input);
+    assert.match(claudeRequestSystem(request), /^You code bank transactions/, 'the only other call is the coder');
+    const input = JSON.parse(claudeRequestInput(request));
     const suggestions = input.transactions.map(row => ({ transaction_id: row.id, ...state.verdict, confidence: 'high', evidence_required: false, auto_explain_limit: 5000,
       reasoning: 'The settled receipt supports the account and its printed VAT.', posting_requirement: 'single_account', document_allocations: [], ask_client_question: '' }));
-    return { ok: true, status: 200, json: async () => ({ output_text: JSON.stringify({ suggestions, group_summary: [] }) }) };
+    return claudeMessageResponse({ suggestions, group_summary: [] }, { request });
   });
 };
 const answerWith = (registered, from = null, until = null) => () =>

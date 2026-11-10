@@ -10,6 +10,14 @@ const CAUSE_KEYS = new Set([
   'PROVIDER_UNAVAILABLE', 'PROVIDER_REJECTED_REQUEST', 'PROVIDER_TIMEOUT',
   'PROVIDER_NETWORK', 'PROVIDER_INVALID_OUTPUT'
 ]);
+// A cause the code alone would misstate: PROVIDER_TIMEOUT for a step the
+// job's remaining budget could not hold was never sent to the provider.
+const CAUSE_REASON_KEYS = new Set(['PROVIDER_TIMEOUT.execution_budget_insufficient']);
+const causeKeyOf = (failure) => {
+  const byReason = `${failure.code}.${failure.reason}`;
+  if (CAUSE_REASON_KEYS.has(byReason)) return byReason;
+  return CAUSE_KEYS.has(failure.code) ? failure.code : 'unknown';
+};
 const RECOVERY_KEYS = new Set(['awaiting_retry', 'retry_in_progress', 'retry_pending', 'recovery_wait', 'recovery_failed']);
 
 // Renders only when a provider failure receipt actually exists (Kari,
@@ -69,7 +77,7 @@ export default function ProviderFailurePanel({ failures, refreshing, stale, onRe
             <span style={{ color: failure.owner === 'operator' ? T.alert : T.amber }}>{message(failure.owner === 'operator' ? 'operator' : 'queue')}</span>
           </div>
           <p style={{ margin: '6px 0', fontSize: 13 }}>
-            {message(`cause.${CAUSE_KEYS.has(failure.code) ? failure.code : 'unknown'}`)}
+            {message(`cause.${causeKeyOf(failure)}`)}
           </p>
           <p style={{ margin: '6px 0', fontSize: 13, color: T.muted }}>
             {failure.owner === 'operator' && failure.recovery_status !== 'recovery_failed' && <>{message(

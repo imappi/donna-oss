@@ -161,3 +161,148 @@ export const CLOUD_VERIFIABLE_PROVIDER_ENDPOINTS = Object.freeze({
   'https://api.openai.com/v1/chat/completions': 'openai',
   'https://api.anthropic.com/v1/messages': 'anthropic'
 });
+
+// ── The provider endpoints a provider-agnostic lane calls ─────────────────
+// Strings, not calls: the lane module hands them to llmCall. They live here
+// (the host registry, exempt from the provider-URL ratchet because it makes
+// no call) so the shared request shaping in structuredRequest.js names no
+// host of its own. `ANTHROPIC_API_VERSION` is the Messages API version the
+// moved text lanes send (2026-10-21: no sampling parameters, which none of
+// these requests carry).
+export const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
+export const ANTHROPIC_API_VERSION = '2026-10-21';
+
+export const LANE_PROVIDER_KEY_ENV = Object.freeze({
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY'
+});
+
+// The strong defaults of the text lanes moved onto both providers by the
+// owner's decision of 2026-11-10 (Donna runs on Claude only; OpenAI stays a
+// qualified alternative that runs only when no Anthropic key is present).
+// Each lane's model-id env knob may still pin another id.
+export const TEXT_LANE_DEFAULT_MODELS = Object.freeze({
+  anthropic: 'claude-opus-5-5',
+  openai: 'gpt-5.4'
+});
+
+// Which provider a model id belongs to, from its family prefix. null when
+// the id says nothing (a Qwen id, a typo) — the caller then falls through
+// to key presence.
+export const inferProviderFromModel = (model) => {
+  const id = String(model || '').trim().toLowerCase();
+  if (!id) return null;
+  if (id.startsWith('claude')) return 'anthropic';
+  if (/^(gpt|o\d|chatgpt)/.test(id)) return 'openai';
+  return null;
+};
+
+// A process env with a parsed .env file under it: a value set (non-blank) in
+// the process wins, the file fills the rest — the same `process.env.X ||
+// dotEnv.X` rule every lane module applied key by key.
+export const envWithDotEnvFallback = (env = process.env, dotEnv = {}) => {
+  const merged = { ...(dotEnv || {}) };
+  for (const [name, value] of Object.entries(env || {})) {
+    if (value != null && String(value) !== '') merged[name] = value;
+  }
+  return merged;
+};
+
+// ── THE lane provider resolver (one owner, RT-12's rule generalised) ──────
+// Which provider answers a lane's call, and with which model. Order of
+// authority: an explicit `provider` argument, then the lane's provider env
+// pin (when it has one), then the provider a pinned model id belongs to,
+// then KEY PRESENCE in the registry's preference order (`providers`). The
+// model is the explicit argument, else the first set model env knob (only
+// when it belongs to the resolved provider — a claude id never goes to
+// OpenAI), else the provider's strong default. Every choice is receipted
+// (`source`) so a silent downgrade is readable from the data. The model id
+// a RECEIPT carries is still the response's; this is only what is asked for.
+export const resolveLaneProvider = ({
+  providers,
+  defaultModels,
+  providerEnvKey = null,
+  modelEnvKeys = [],
+  env = process.env,
+  provider = null,
+  model = null,
+  keys = null
+} = {}) => {
+  const order = Array.isArray(providers) ? providers : [];
+  const keyFor = (name) => String((keys && name in keys ? keys[name] : env?.[LANE_PROVIDER_KEY_ENV[name]]) || '').trim();
+  const envProvider = providerEnvKey ? String(env?.[providerEnvKey] || '').trim().toLowerCase() : '';
+  const envModel = (modelEnvKeys || []).map((name) => String(env?.[name] || '').trim()).find(Boolean) || '';
+  const requestedModel = String(model || '').trim() || null;
+
+  let chosen = null;
+  let providerSource = null;
+  if (provider) { chosen = String(provider).trim().toLowerCase(); providerSource = 'param'; }
+  else if (envProvider) { chosen = envProvider; providerSource = 'env'; }
+  else if (inferProviderFromModel(requestedModel || envModel)) {
+    chosen = inferProviderFromModel(requestedModel || envModel);
+    providerSource = 'model_id';
+  } else {
+    chosen = order.find((name) => keyFor(name)) || null;
+    providerSource = 'key_presence';
+  }
+  if (!chosen) return { ok: false, provider: null, model: null, apiKey: '', reason: 'no_provider_key', source: { provider: providerSource, model: null } };
+  if (!order.includes(chosen)) {
+    return { ok: false, provider: chosen, model: null, apiKey: '', reason: `unknown_provider:${chosen}`, source: { provider: providerSource, model: null } };
+  }
+  const apiKey = keyFor(chosen);
+  if (!apiKey) {
+    return { ok: false, provider: chosen, model: null, apiKey: '', reason: `no_provider_key:${chosen}`, source: { provider: providerSource, model: null } };
+  }
+  let resolvedModel = defaultModels?.[chosen] || null;
+  let modelSource = 'default';
+  if (requestedModel) { resolvedModel = requestedModel; modelSource = 'param'; }
+  else if (envModel) {
+    const belongsTo = inferProviderFromModel(envModel);
+    if (!belongsTo || belongsTo === chosen) { resolvedModel = envModel; modelSource = 'env'; }
+    else modelSource = 'default_env_model_other_provider';
+  }
+  return { ok: true, provider: chosen, model: resolvedModel, apiKey, reason: null, source: { provider: providerSource, model: modelSource } };
+};
+
+// The text lanes' resolver (2026-11-10): resolveLaneProvider with the text
+// lanes' strong defaults, the lane's own model knob(s) (OPENAI_MODEL is the
+// existing knob on most of them — it may pin a claude-* id too) and the
+// module's .env fallback. An explicit `openAiConfig` — the seam those lanes'
+// callers and tests already pass — is an explicit provider argument: it
+// pins OpenAI with exactly that key and model.
+export const resolveTextLaneProvider = ({
+  providers,
+  openAiDefaultModel = TEXT_LANE_DEFAULT_MODELS.openai,
+  anthropicDefaultModel = TEXT_LANE_DEFAULT_MODELS.anthropic,
+  modelEnvKeys = ['OPENAI_MODEL'],
+  env = process.env,
+  dotEnv = {},
+  openAiConfig = null,
+  provider = null,
+  model = null
+} = {}) => {
+  if (openAiConfig) {
+    const apiKey = String(openAiConfig.apiKey || '').trim();
+    const pinned = String(openAiConfig.model || '').trim();
+    const source = { provider: 'param', model: pinned ? 'param' : 'default' };
+    return apiKey
+      ? { ok: true, provider: 'openai', model: pinned || openAiDefaultModel, apiKey, reason: null, source }
+      : { ok: false, provider: 'openai', model: null, apiKey: '', reason: 'no_provider_key:openai', source };
+  }
+  return resolveLaneProvider({
+    providers,
+    defaultModels: { anthropic: anthropicDefaultModel, openai: openAiDefaultModel },
+    modelEnvKeys,
+    env: envWithDotEnvFallback(env, dotEnv),
+    provider,
+    model
+  });
+};
+
+// The env key a resolution that found no key should name: the resolved
+// provider's, or — when no provider was chosen at all — the lane's first.
+export const missingKeyNameFor = (resolved, providers = []) => {
+  const name = resolved?.provider || providers[0] || null;
+  return { provider: name, keyName: LANE_PROVIDER_KEY_ENV[name] || null };
+};

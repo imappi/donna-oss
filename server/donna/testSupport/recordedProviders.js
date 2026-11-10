@@ -85,7 +85,16 @@ export const OPENAI_SCHEMA_LANES = Object.freeze({
   receipt_semantic_classifier: 'receipt_classification',
   parser_repair: 'parser_repair',
   firm_fact_distillation: 'memory_extraction',
-  document_chat_response: 'document_chat'
+  document_chat_response: 'document_chat',
+  // 2026-11-10: the remaining text lanes, so one lane id scripts a lane on
+  // either provider (the Anthropic prefixes below use the same ids).
+  owner_invoice_command_reading: 'owner_invoice_command_read',
+  outbound_owner_reply_verdict: 'owner_reply_classification',
+  marketing_nurture_draft: 'marketing_nurture_draft',
+  marketing_reply_triage: 'marketing_reply_triage',
+  marketing_reply_draft: 'marketing_reply_draft',
+  prospect_dossier: 'prospect_dossier',
+  marketing_social_posts: 'marketing_social_posts'
 });
 
 // Anthropic lanes open their system prompt with a fixed sentence; the
@@ -99,7 +108,21 @@ export const ANTHROPIC_SYSTEM_LANES = Object.freeze([
   Object.freeze({ lane: 'bank_line_disposition', prefix: 'You triage a single unmatched bank ' }),
   Object.freeze({ lane: 'document_disposition', prefix: 'You triage a single parsed evidence DOCUMENT' }),
   Object.freeze({ lane: 'reconciliation_triage', prefix: 'You evaluate low-confidence ' }),
-  Object.freeze({ lane: 'unified_extraction', prefix: 'You are extracting fields from one financial document' })
+  Object.freeze({ lane: 'unified_extraction', prefix: 'You are extracting fields from one financial document' }),
+  // 2026-11-10 (Claude only): the text lanes on their Anthropic transport.
+  // Same lane ids as their OpenAI schema names map to above; the system
+  // prompt is each lane's own instructions, unchanged.
+  Object.freeze({ lane: 'transaction_coding', prefix: 'You code bank transactions for a bookkeeping firm\'s client.' }),
+  Object.freeze({ lane: 'ask_drafting', prefix: 'You draft the bookkeeping firm\'s periodic message to its client.' }),
+  Object.freeze({ lane: 'memory_extraction', prefix: 'You distill durable LOCAL knowledge for a bookkeeping firm' }),
+  Object.freeze({ lane: 'owner_invoice_command_read', prefix: 'You read a message a business OWNER sent to Donna' }),
+  Object.freeze({ lane: 'owner_reply_classification', prefix: 'You classify an email reply from a business OWNER to Donna' }),
+  Object.freeze({ lane: 'document_chat', prefix: 'You are Donna, an accounting assistant embedded in a document' }),
+  Object.freeze({ lane: 'marketing_nurture_draft', prefix: 'You write short nurture emails for Donna' }),
+  Object.freeze({ lane: 'marketing_reply_triage', prefix: 'You triage inbound email for Donna' }),
+  Object.freeze({ lane: 'marketing_reply_draft', prefix: 'You draft Donna\'s reply to an email she received.' }),
+  Object.freeze({ lane: 'prospect_dossier', prefix: 'You are the investigator for Donna' }),
+  Object.freeze({ lane: 'marketing_social_posts', prefix: 'You write public posts for ' })
 ]);
 
 export const UNSCRIPTED_STATUS = 418;
@@ -152,7 +175,10 @@ export const classifyProviderRequest = ({ url, init = {} } = {}) => {
   if (schemaName && OPENAI_SCHEMA_LANES[schemaName]) {
     lane = OPENAI_SCHEMA_LANES[schemaName];
   } else if (systemText) {
-    lane = ANTHROPIC_SYSTEM_LANES.find(({ prefix }) => systemText.startsWith(prefix))?.lane || null;
+    // Leading whitespace is not part of a signature (document chat's prompt
+    // opens with a newline).
+    const opening = systemText.trimStart();
+    lane = ANTHROPIC_SYSTEM_LANES.find(({ prefix }) => opening.startsWith(prefix))?.lane || null;
   }
   if (!lane) {
     // Unknown lane: still refused, still journaled — but named by what the
@@ -226,6 +252,46 @@ const normalizeStep = (lane, step) => {
   };
 };
 
+// ── a text-lane recording served to the other provider (2026-11-10) ──────
+// The text lanes run on Anthropic whenever its key is present; most
+// committed recordings for them were captured as OpenAI Responses bodies.
+// When such a body answers an Anthropic Messages request, the stub serves
+// the SAME answer in the Messages shape the request expects: a text block
+// (structured output) or the one `structured_answer` tool call (tool
+// delivery, structuredRequest.js). The served model is the one the request
+// named — a recording of another provider's model never appears on a Claude
+// receipt — and the journal marks the call `adapted`. Error steps pass as
+// scripted.
+const isResponsesBody = (body) => Boolean(body && typeof body === 'object'
+  && (typeof body.output_text === 'string' || Array.isArray(body.output)) && !Array.isArray(body.content));
+
+const responsesText = (body) => {
+  if (typeof body.output_text === 'string' && body.output_text) return body.output_text;
+  return (body.output || []).flatMap((item) => item?.content || [])
+    .map((part) => (typeof part?.text === 'string' ? part.text : '')).join('');
+};
+
+export const responsesBodyAsMessage = (body, request = {}) => {
+  const text = responsesText(body);
+  const toolDelivery = Array.isArray(request?.tools) && request.tools.some((tool) => tool?.name === 'structured_answer');
+  let input = null;
+  if (toolDelivery) {
+    try { input = JSON.parse(text); } catch { input = null; }
+  }
+  return {
+    id: typeof body.id === 'string' ? body.id : 'msg_recorded',
+    type: 'message',
+    role: 'assistant',
+    model: typeof request?.model === 'string' && request.model ? request.model : body.model,
+    content: input && typeof input === 'object'
+      ? [{ type: 'tool_use', id: 'toolu_recorded', name: 'structured_answer', input }]
+      : [{ type: 'text', text }],
+    stop_reason: input && typeof input === 'object' ? 'tool_use' : 'end_turn',
+    stop_details: null,
+    usage: { input_tokens: body.usage?.input_tokens ?? 0, output_tokens: body.usage?.output_tokens ?? 0 }
+  };
+};
+
 // Install the stub on globalThis.fetch (or on the `target` object given).
 // Returns the controller; call `restore()` in the test's finally.
 export const installRecordedProviders = ({
@@ -273,16 +339,19 @@ export const installRecordedProviders = ({
         }
       });
     }
+    const adapt = classified.endpoint_class === 'anthropic' && step.status >= 200 && step.status < 300 && isResponsesBody(step.body);
+    const served = adapt ? responsesBodyAsMessage(step.body, parseBody(init) || {}) : step.body;
     calls.push({
       seq,
       at,
       ...classified,
       status: step.status,
-      model_served: modelServedOf(step.body),
+      model_served: modelServedOf(served),
       recording: step.recording,
+      ...(adapt ? { adapted: 'openai_responses_to_anthropic_messages' } : {}),
       refused: false
     });
-    return jsonResponse(step.status, step.body, step.headers);
+    return jsonResponse(step.status, served, step.headers);
   };
 
   target.fetch = stub;

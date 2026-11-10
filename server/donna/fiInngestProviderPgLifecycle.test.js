@@ -36,6 +36,9 @@ test('real PG + registered Inngest HTTP: hung providers and expired row-lock wai
   const env = {
     NODE_ENV: 'test', INNGEST_DEV: '1', INNGEST_EVENT_KEY: '', INNGEST_SIGNING_KEY: '',
     OPENAI_API_KEY: 'fixture-only', ANTHROPIC_API_KEY: 'fixture-only',
+    // 2026-11-10: both keys now put the text lanes on Claude; this file's stub
+    // answers the OpenAI coder, so it pins the text lanes to OpenAI.
+    OPENAI_MODEL: 'gpt-5.4',
     LOOPS_TIER: 'canary', LOOPS_SHADOW: 'true', BILL_MATCHER_ENABLED: '1',
     RECONCILIATION_AUTO_MATCH_POLICY: '1', RECONCILIATION_AUTO_MATCH_MATERIALITY_CEILING: '1000000',
     PROVIDER_REQUEST_TIMEOUT_MS: '30000', PROVIDER_BUDGET_RESERVE_MS: '100', AUTO_AI_CODING_ENABLED: '1'

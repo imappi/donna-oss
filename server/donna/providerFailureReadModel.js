@@ -36,6 +36,10 @@ export const PROVIDER_FAILURE_SURFACE_SQL = `
     from transactions
    where firm_id = $1 and client_id = $2
      and jsonb_typeof(payload->'coding_provider_failure') = 'object'
+     -- Only a line still waiting for a coding: one that has a coding state or
+     -- a suggestion is not waiting on the provider (a receipt left on it by an
+     -- earlier tree is not a current failure).
+     and coding_state is null and (payload->'ai_suggestion') is null
   union all
   select f.id, 'ask_draft', null, f.receipt,
          case when r.id <> f.id and r.status in ('failed', 'cancelled') then 'recovery_failed'
@@ -73,7 +77,8 @@ export const readProviderFailuresWithClient = async ({ client, firmId, clientId 
       owner: receipt.owner === 'operator' ? 'operator' : 'queue',
       retryable: receipt.retryable !== false,
       attempts: Number(receipt.attempts) || null,
-      request_attempts: Number(receipt.request_attempts) || Number(receipt.attempts) || null,
+      // 0 is a real count (no request was made), never "no failure".
+      request_attempts: receipt.request_attempts === 0 ? 0 : Number(receipt.request_attempts) || Number(receipt.attempts) || null,
       last_failed_at: timestamp(receipt.last_failed_at || row.failure_at),
       recovery_status: row.recovery_status, recovery_request_id: row.recovery_request_id,
       recovery_error_code: machineValue(row.recovery_error_code),
