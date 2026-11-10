@@ -313,5 +313,15 @@ test('item-level counters with their own receipts never fail the run (loops, dra
   }), []);
 });
 
+test('evidence_topic_reminders: an error (a send or stamp that threw) fails the run; skips and provider refusals do not', () => {
+  const clean = { evidence_topic_reminders: { skipped: false, considered: 4, sent: 1, held: 0, deferred: 0, refused: 0, not_awaiting: 0,
+    unbound: 1, channel_off: 1, withheld_sensitive: 1, failed: 1, errors: 0, error_details: [] } };
+  assert.deepEqual(parseCronSummaryFailures(clean), []);
+  const broken = { evidence_topic_reminders: { ...clean.evidence_topic_reminders, errors: 1,
+    error_details: [{ evidence_request_id: 'ask-1', client_id: 'client-1', error: 'stamp refused' }] } };
+  assert.deepEqual(parseCronSummaryFailures(broken), [{ task: 'evidence_topic_reminders', evidence_request_id: 'ask-1', error: 'stamp refused' }]);
+  assert.deepEqual(parseCronSummaryFailures({ evidence_topic_reminders: { errors: 2 } }), [{ task: 'evidence_topic_reminders', error: '2 reminder(s) threw' }]);
+});
+
 console.log(`\nparseCronStabilization: ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);

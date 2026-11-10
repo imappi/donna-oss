@@ -162,6 +162,25 @@ const KNOWN_KEYS = {
       throw error;
     }
   },
+  // The camelCase legal form the Finnish pilot preparation writes
+  // (hostedPilot.js: 'fi-oy'). Read beside entity_type by every legal-form
+  // reader (clientLegalForm.js, countryLifecycleContext.js, …), so it takes the
+  // same validation: canonicalised for the jurisdiction, an unknown form
+  // refused, null clears. It is not mirrored into the entity_type column: the
+  // pilot requires that column to be set already.
+  entityType: (value, warnings, context) => {
+    if (value !== null && typeof value !== 'string') throwBadRequest('entityType must be a string.');
+    return KNOWN_KEYS.entity_type(value, warnings, context);
+  },
+  // The book's accounting currency, as the Finnish pilot preparation writes it
+  // ('EUR'). An ISO 4217 code: three letters, stored upper-case; null clears.
+  accountingCurrency: (value) => {
+    if (value === null) return null;
+    if (typeof value !== 'string') throwBadRequest('accountingCurrency must be a string.');
+    const code = value.trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(code)) throwBadRequest(`accountingCurrency must be a three-letter ISO 4217 code, got ${JSON.stringify(value)}.`);
+    return code;
+  },
   incorporation_date: (value) => {
     if (value === null || value === '') return null;
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throwBadRequest('incorporation_date must be YYYY-MM-DD.');

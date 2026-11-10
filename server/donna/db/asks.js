@@ -1833,6 +1833,9 @@ export const recordEvidenceTopicTurnInDb = async ({
   actorId = 'client',
   actorType = 'client',
   replyAuthority = null,
+  // 'mobile' when the phone adapter carried the turn (the route reads
+  // req.donnaChannel only); attribution on the audit row, absent otherwise.
+  channel = null,
   withFirmDbClientFn = withFirmDbClient
 } = {}) => {
   const cleanRequestId = String(evidenceRequestId || '').trim();
@@ -1882,6 +1885,26 @@ export const recordEvidenceTopicTurnInDb = async ({
         error.code = 'OPEN_EVIDENCE_REQUEST_NOT_FOUND';
         throw error;
       }
+      // The turn's receipt, in the same transaction: who replied, what Donna
+      // made of it, and the topic as it stood before (null when there was
+      // none), so the row alone can undo the turn. The question stays open, so
+      // this is neither evidence_request.reply nor .resolve.
+      const lastTurn = Array.isArray(guardedTopic.turns) ? guardedTopic.turns.at(-1) || null : null;
+      await client.query(
+        `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+         values ($1, $2, $3, $4, 'evidence_request.topic_turn', 'client_evidence_request', $5, $6::jsonb)`,
+        [firmId, row.client_id, actorType || 'system', actorId, row.id, JSON.stringify({
+          transaction_id: row.transaction_id,
+          ...(authority ? { authority_basis: authority } : {}),
+          topic_status: guardedTopic.status || null,
+          outcome: guardedTopic.last_assessment?.outcome || null,
+          inbound_message_id: lastTurn?.inbound_message_id || null,
+          document_ids: Array.isArray(lastTurn?.document_ids) ? lastTurn.document_ids : [],
+          reply_excerpt: lastTurn?.reply_excerpt || null,
+          previous_evidence_topic: target.request_payload?.evidence_topic ?? null,
+          ...(channel === 'mobile' ? { channel } : {})
+        })]
+      );
       await client.query('commit');
       return { evidence_request: row, evidence_topic: row.request_payload?.evidence_topic || guardedTopic };
     } catch (error) { await client.query('rollback'); throw error; }

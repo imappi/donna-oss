@@ -350,7 +350,10 @@ export const registerDocumentInDb = async ({
   rateLimitPerHour = PARSE_RATE_LIMIT_PER_HOUR,
   uploadPrincipal = null,
   evidenceOnly = false,
-  authorize = null
+  authorize = null,
+  // 'mobile' when the phone adapter registered it (the route reads
+  // req.donnaChannel only): attribution on the registration's audit row.
+  channel = null
 } = {}) => {
   // Match the default-fallback pattern used by every other helper in
   // firmDb.js (syncDocumentsAndTransactionsInDb, updateDocumentInDb,
@@ -766,7 +769,8 @@ export const registerDocumentInDb = async ({
           source_kind: evidenceOnly ? 'browser_photo_upload' : null,
           document_type: documentType,
           filename,
-          batch_id: batchId
+          batch_id: batchId,
+          ...(channel === 'mobile' ? { channel } : {})
         }
       });
 

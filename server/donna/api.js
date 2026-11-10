@@ -5752,7 +5752,8 @@ const donnaFirmsApiHandler = async (req, res) => {
         clientId,
         profilePatch: body?.profile_patch,
         actorId,
-        principal: profilePrincipal || access.principal
+        principal: profilePrincipal || access.principal,
+        channel: ownerWriterChannel(req)
       });
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
@@ -6036,7 +6037,8 @@ const donnaFirmsApiHandler = async (req, res) => {
           const registration = await registerDocumentInDb({
             firmId,
             document: doc,
-            uploadPrincipal: access.principal
+            uploadPrincipal: access.principal,
+            channel: ownerWriterChannel(req)
           });
           if (registration.created && registration.parse_run_id) {
             try {
@@ -13064,7 +13066,9 @@ const donnaFirmsApiHandler = async (req, res) => {
           ask: evidenceRequest,
           turn: { ...portalTurn, text: replyText },
           now: new Date().toISOString(),
-          channel: 'portal',
+          // The phone adapter's in-process request says 'mobile'; any other
+          // caller of this route is the portal.
+          channel: ownerWriterChannel(req) || 'portal',
           actorId,
           inboundMessageId: body?.message_id || body?.messageId || null,
           documentIds
@@ -13075,7 +13079,8 @@ const donnaFirmsApiHandler = async (req, res) => {
           evidenceRequestId,
           topicState,
           actorId,
-          actorType: 'client'
+          actorType: 'client',
+          channel: ownerWriterChannel(req)
         });
         const updatedSnapshot = await getFirmSnapshotFromDb({ firmId });
         res.statusCode = 200;

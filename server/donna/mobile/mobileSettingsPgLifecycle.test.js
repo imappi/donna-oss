@@ -208,6 +208,7 @@ test('real PG: an owner reads and saves Settings through the mobile adapter, and
   assert.equal(vatAudit.actor_id, ownerPrincipalId);
   assert.equal(vatAudit.resource_id, clientId);
   assert.ok(vatAudit.metadata.keys.includes('verokausi'));
+  assert.equal(vatAudit.metadata.channel, 'mobile', 'the profile writer’s row says the phone made the change');
   const profile = await profileOf(clientId);
   assert.equal(profile.verokausi, 'quarter');
   assert.equal(verokausiCadenceForProfile(profile), 'quarter', 'the ALV engine now reads the declared cadence');

@@ -36,10 +36,12 @@ changes are proposals for this one. Nothing here is worked around in code.
   own audit row (`outbound_action.cancelled` / `outbound_action.marked_wrong`),
   written by the writer in the decision's transaction and attributed to the
   owner; that row is the receipt. The web portal's owner can send the same
-  `note` to the same firm routes. A note on `approve` or `answer` is not
-  stored: the contract describes the note as a reject reason or veto context,
-  an approval writer takes none (`decideOwnerAction` refuses one, `400
-  OWNER_NOTE_NOT_ACCEPTED`), and an answer's words are `answer.text`. The
+  `note` to the same firm routes. A note on `approve` or `answer` is refused
+  with `400 OWNER_NOTE_NOT_ACCEPTED`, not dropped: the contract describes the
+  note as a reject reason or veto context, an approval writer records none (an
+  approval goes ahead as held, so a note could not change it;
+  `decideOwnerAction` refuses one the same way), and an answer's words are
+  `answer.text`, which is what Donna reads. A blank note is no note. The
   receipt does not echo the note (the contract's `ApplyReceipt` has no field
   for it). A repeat decision writes nothing, so a note sent with a repeat is
   not stored.
@@ -75,8 +77,12 @@ changes are proposals for this one. Nothing here is worked around in code.
 - **Channel attribution.** The owner writers behind the phone's decisions
   record `metadata.channel: 'mobile'` on their audit rows:
   `outbound_action.approved`, `outbound_action.cancelled` (decline),
-  `outbound_action.marked_wrong` and `evidence_request.reply` /
-  `evidence_request.resolve`. The adapter sets it on its in-process request
+  `outbound_action.marked_wrong`, `evidence_request.reply` /
+  `evidence_request.resolve`, `evidence_request.topic_turn` (a reply that
+  leaves the question open; its topic's own `channel` is `mobile` too, not
+  `portal`), `client.profile.update` (settings and business setup) and
+  `document.parse.queued` / `document.physical_evidence.received` (a
+  registration). The adapter sets it on its in-process request
   (`req.donnaChannel`); an HTTP request cannot, so web rows carry none.
   Attribution only. Not carried: a topic-turn answer writes no audit row; the
   Settings VAT period and business-register changes go through
