@@ -1,17 +1,18 @@
 // Delegated authority — the §14 metrics that GATE the Slice-6 canary rollout.
 // docs/proposal-2026-06-23-delegated-authority-material-matches.md §14.
 //
-// Pure OBSERVABILITY: this reads only persisted state (the grant store 040, the
-// authorization-request store 041, and the delegated-accept receipt on
-// reconciliation_matches 002). It adds NO matching, scoring, or inference
+// Pure OBSERVABILITY: this reads only persisted state (the grant store 040 and
+// the authorization receipts on reconciliation_matches 002 — the held matches
+// and the delegated accepts). It adds NO matching, scoring, or inference
 // (trust-the-strong-LLM) — it counts what the pipeline already decided so the
-// rollout can be reasoned about honestly. In V1 (canary off) every counter is
-// expected to read ZERO and MEAN it: no grants minted, no asks opened, no
-// delegated accepts. A non-zero high-risk-archetype counter is a leak to chase.
+// rollout can be reasoned about honestly. In V1 (canary off) every grant and
+// delegated-accept counter is expected to read ZERO and MEAN it; the held
+// counters are live (a material match the ceiling holds exists with or
+// without the canary). A non-zero high-risk-archetype counter is a leak to chase.
 //
 // THE MODEL ID IS THE RECEIPT (CLAUDE.md): every model id is read FROM THE DATA
-// (`reconciliation_authority_grants.model`, `..._requests.model`, and the
-// delegated-accept receipt's `payload.authorization->>'model'`), never from a
+// (`reconciliation_authority_grants.model` and the match receipt's
+// `payload.authorization->>'model'`), never from a
 // code default — so a silently-downgraded model is visible when scoring quality.
 //
 // Fail-closed/soft: each aggregate is independent and a missing table
@@ -36,15 +37,11 @@ const isMissingTable = (error) => error?.code === '42P01' || error?.code === '42
 const ZERO_GRANTS = {
   total: 0, active: 0, revoked: 0, suspended: 0, used: 0, corrected: 0, high_risk: 0, models: []
 };
-const ZERO_REQUESTS = {
-  total: 0, open: 0, open_sla_breached: 0, confirmed: 0, granted: 0, declined: 0,
-  declined_recurred: 0, one_time_confirm_recurred: 0, reopened_total: 0, high_risk: 0,
-  above_ceiling: 0, expired_recurrence: 0, models: []
-};
+const ZERO_HELD = { total: 0, open: 0, confirmed: 0, one_time_confirmed: 0, rejected: 0, models: [] };
 const ZERO_ACCEPTS = { count: 0, avg_amount: 0, models: [] };
 
 const scopeClause = (clientId, baseParams) => {
-  // Optional client narrowing. The grants/requests/matches tables are all
+  // Optional client narrowing. The grants and matches tables are both
   // (firm_id, client_id)-keyed, so the same $-shape works for each.
   if (clientId == null || clientId === '') return { where: '', params: baseParams };
   return { where: ' and client_id = $2', params: [...baseParams, clientId] };
@@ -79,68 +76,44 @@ const queryGrants = async (client, firmId, clientId) => {
   }
 };
 
-const queryRequests = async (client, firmId, clientId) => {
+// The materiality-held matches — the LIVE source of "a held line no grant
+// covered". (This slice used to count reconciliation_authorization_requests,
+// migration 041: the firm authorization ask was RETIRED in E2 (2026-06-24) and
+// nothing writes that table any more, so every counter read from it was a
+// permanent zero that meant nothing.) A held match is the persisted receipt
+// itself: payload.authorization with band 'suggested' and reasons EXACTLY
+// ['above_materiality_ceiling'] (reconciliationLlmCore.isMatchedPendingAuthority).
+// A one-time confirm or a rejection keeps that receipt (the confirm adds an
+// authority_receipt beside it), so the receipt also says how each held line
+// was decided; a grant-backed accept rewrites it to ['delegated_authority'] and
+// is counted by queryDelegatedAccepts instead.
+const queryHeldMatches = async (client, firmId, clientId) => {
   const { where, params } = scopeClause(clientId, [firmId]);
-  const aIdx = params.length + 1; // the V1-archetype array param position
   try {
     const res = await client.query(
       `select
           count(*)::int as total,
-          count(*) filter (where status = 'open')::int as open,
-          count(*) filter (where status = 'open' and sla_due_at is not null and sla_due_at <= now())::int as open_sla_breached,
+          count(*) filter (where status = 'suggested')::int as open,
           count(*) filter (where status = 'confirmed')::int as confirmed,
-          count(*) filter (where status = 'granted')::int as granted,
-          count(*) filter (where status = 'declined')::int as declined,
-          -- §14 queue health: a deliberate "no" / one-time confirm that the same
-          -- pattern blew past anyway (the request re-opened after its cooldown).
-          count(*) filter (where status = 'declined' and reopened_count > 0)::int as declined_recurred,
-          count(*) filter (where status = 'confirmed' and reopened_count > 0)::int as one_time_confirm_recurred,
-          -- duplicate asks the producer coalesced onto an existing row instead of
-          -- spawning a new one (the §13 idempotency key doing its job).
-          coalesce(sum(reopened_count), 0)::int as reopened_total,
-          count(*) filter (where archetype is not null and archetype <> all($${aIdx}::text[]))::int as high_risk,
-          -- an OPEN ask whose amount sits above the ceiling of an otherwise
-          -- covering active grant (amount drift, §4 path 2).
-          count(*) filter (
-            where status = 'open' and exists (
-              select 1 from reconciliation_authority_grants g
-               where g.firm_id = reconciliation_authorization_requests.firm_id
-                 and g.client_id = reconciliation_authorization_requests.client_id
-                 and g.archetype = reconciliation_authorization_requests.archetype
-                 and g.scope_key = reconciliation_authorization_requests.scope_key
-                 and g.status = 'active'
-                 and reconciliation_authorization_requests.match_amount > g.amount_ceiling)
-          )::int as above_ceiling,
-          -- an OPEN ask whose pattern HAD a grant that has since expired / been
-          -- suspended / passed review (the §4 path-3 recurrence).
-          count(*) filter (
-            where status = 'open' and exists (
-              select 1 from reconciliation_authority_grants g
-               where g.firm_id = reconciliation_authorization_requests.firm_id
-                 and g.client_id = reconciliation_authorization_requests.client_id
-                 and g.archetype = reconciliation_authorization_requests.archetype
-                 and g.scope_key = reconciliation_authorization_requests.scope_key
-                 and (g.status in ('suspended', 'revoked')
-                      or (g.expires_at is not null and g.expires_at <= now())
-                      or (g.review_after is not null and g.review_after <= now())))
-          )::int as expired_recurrence,
-          coalesce(array_agg(distinct model) filter (where model is not null), '{}') as models
-         from reconciliation_authorization_requests
-        where firm_id = $1${where}`,
-      [...params, V1_ARCHETYPES]
+          count(*) filter (where status = 'confirmed'
+            and payload->'authorization'->'authority_receipt'->>'kind' = 'one_time_confirm')::int as one_time_confirmed,
+          count(*) filter (where status = 'rejected')::int as rejected,
+          coalesce(array_agg(distinct payload->'authorization'->>'model')
+                   filter (where payload->'authorization'->>'model' is not null), '{}') as models
+         from reconciliation_matches
+        where firm_id = $1${where}
+          and payload->'authorization'->>'band' = 'suggested'
+          and payload->'authorization'->'reasons' = '["above_materiality_ceiling"]'::jsonb`,
+      params
     );
     const row = res.rows[0] || {};
     return {
-      total: num(row.total), open: num(row.open), open_sla_breached: num(row.open_sla_breached),
-      confirmed: num(row.confirmed), granted: num(row.granted), declined: num(row.declined),
-      declined_recurred: num(row.declined_recurred),
-      one_time_confirm_recurred: num(row.one_time_confirm_recurred),
-      reopened_total: num(row.reopened_total), high_risk: num(row.high_risk),
-      above_ceiling: num(row.above_ceiling), expired_recurrence: num(row.expired_recurrence),
+      total: num(row.total), open: num(row.open), confirmed: num(row.confirmed),
+      one_time_confirmed: num(row.one_time_confirmed), rejected: num(row.rejected),
       models: toModels(row.models)
     };
   } catch (error) {
-    if (isMissingTable(error)) return { ...ZERO_REQUESTS };
+    if (isMissingTable(error)) return { ...ZERO_HELD };
     throw error;
   }
 };
@@ -177,14 +150,11 @@ const queryDelegatedAccepts = async (client, firmId, clientId) => {
 // callers borrow it via withFirmDbClient. Never throws on a missing table.
 export const computeDelegatedAuthorityMetrics = async ({ client, firmId, clientId = null } = {}) => {
   if (!client || !firmId) return null;
-  const [grants, requests, accepts] = await Promise.all([
+  const [grants, held, accepts] = await Promise.all([
     queryGrants(client, firmId, clientId),
-    queryRequests(client, firmId, clientId),
+    queryHeldMatches(client, firmId, clientId),
     queryDelegatedAccepts(client, firmId, clientId)
   ]);
-
-  // Resolved asks = those an authority acted on (confirm / grant / decline).
-  const resolvedRequests = requests.confirmed + requests.granted + requests.declined;
 
   return {
     firm_id: firmId,
@@ -194,10 +164,10 @@ export const computeDelegatedAuthorityMetrics = async ({ client, firmId, clientI
     grant_active_count: grants.active,
     grant_creation_count: grants.total, // every grant row is a mint (§8)
     grant_revocation_rate: rate(grants.revoked, grants.total),
-    grant_rejection_rate: rate(requests.declined, resolvedRequests),
-    // hit rate = auto-accepted by a standing grant ÷ (auto-accepted + every held
-    // line that still had to open an ask because no grant covered it).
-    grant_hit_rate: rate(accepts.count, accepts.count + requests.total),
+    // hit rate = auto-accepted by a standing grant ÷ (auto-accepted + every
+    // material match the ceiling held because no grant covered it — still
+    // held, confirmed once by a person, or rejected).
+    grant_hit_rate: rate(accepts.count, accepts.count + held.total),
     // a corrected grant auto-suspends (Slice-5 producer); the rate is over grants
     // that were actually used, so an untouched grant never dilutes it.
     post_grant_correction_rate: rate(grants.corrected, grants.used),
@@ -205,23 +175,23 @@ export const computeDelegatedAuthorityMetrics = async ({ client, firmId, clientI
     delegated_accept_count: accepts.count,
     // ── High-risk archetype guards (expected ZERO in V1) ───────────────────
     high_risk_archetype_grant_count: grants.high_risk,
-    high_risk_archetype_request_count: requests.high_risk,
     // No persisted column for "new account involved" — it is guarded fail-closed
     // upstream (findActiveAuthorityGrant `firstUseAccountInvolved`), so a grant
     // can never carry it; surfaced as a constant 0 for the §14 completeness.
     new_account_grant_count: 0,
-    // ── Queue health (does the bounded transition self-extinguish?) ─────────
-    awaiting_authorization_open_count: requests.open,
-    awaiting_authorization_sla_breach_count: requests.open_sla_breached,
-    grant_declined_but_pattern_recurred_count: requests.declined_recurred,
-    one_time_confirm_recurrence_count: requests.one_time_confirm_recurred,
-    expired_grant_recurrence_count: requests.expired_recurrence,
-    amount_above_grant_ceiling_count: requests.above_ceiling,
-    duplicate_authorization_asks_suppressed: requests.reopened_total,
+    // ── Held for authority (the live queue: matches, not asks) ──────────────
+    // A held match rests hanging on its bank line
+    // (matched_pending_authority_no_grant) until a grant covers it or a person
+    // decides; these count what the receipts say happened to each one.
+    held_for_authority_open_count: held.open,
+    held_for_authority_total: held.total,
+    held_one_time_confirm_count: held.one_time_confirmed,
+    held_confirmed_count: held.confirmed,
+    held_rejected_count: held.rejected,
     // ── Provenance: the model id is the receipt ────────────────────────────
     models: {
       grants: grants.models,
-      requests: requests.models,
+      held_matches: held.models,
       delegated_accepts: accepts.models
     }
   };
