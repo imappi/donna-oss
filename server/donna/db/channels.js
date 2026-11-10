@@ -685,8 +685,8 @@ const askPeriodFor = (request, language) => request.request_payload?.period || r
 // One profile read per batch for the code-side channels (SMS/Telegram): the
 // assistant display name ('Donna' fallback) and the owner's language ('en' on
 // any read failure).
-const readOwnerVoice = (client, { firmId, clientId }) => client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
-  .then((res) => ({ assistantName: resolveAssistantName(res.rows[0]?.profile), language: preferredOwnerTemplateLanguage(res.rows[0]?.profile) }))
+const readOwnerVoice = (client, { firmId, clientId }) => client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
+  .then((res) => ({ assistantName: resolveAssistantName(res.rows[0]?.profile), language: preferredOwnerTemplateLanguage(res.rows[0]?.profile, res.rows[0]) }))
   .catch(() => ({ assistantName: resolveAssistantName(null), language: OWNER_TEMPLATE_FALLBACK_LANGUAGE }));
 
 // Meta Cloud API returns error code 132001 when the template exists but has no
@@ -704,9 +704,17 @@ const isOwnerTemplateLanguageUnavailable = (result) => {
 // Send an owner template in the preferred language; on a language-unavailable
 // error only, retry in English. Returns the result plus the language actually
 // sent. A 132001 rejection means the message was NOT delivered, so the retry
-// cannot double-send.
+// cannot double-send. A template whose parameters depend on the language (the
+// period fallback) passes `bodyParametersFor(languageCode)` instead of
+// `bodyParameters`, so each attempt carries parameters in the language of the
+// template actually sent.
 const deliverOwnerTemplateWithLanguageFallback = async ({ deliverOwnerMessage, channel, recipient, template, preferredLanguage }) => {
-  const attempt = (languageCode) => deliverOwnerMessage({ channel, recipient, template: { ...template, languageCode } });
+  const { bodyParametersFor, ...fixed } = template;
+  const attempt = (languageCode) => deliverOwnerMessage({ channel, recipient, template: {
+    ...fixed,
+    ...(typeof bodyParametersFor === 'function' ? { bodyParameters: bodyParametersFor(languageCode) } : {}),
+    languageCode
+  } });
   const primary = await attempt(preferredLanguage);
   if (primary?.ok || preferredLanguage === OWNER_TEMPLATE_FALLBACK_LANGUAGE || !isOwnerTemplateLanguageUnavailable(primary)) {
     return { result: primary, languageCode: preferredLanguage, fellBack: false };
@@ -813,8 +821,8 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
   // One profile read per batch → the owner-ask template language (FI → 'fi',
   // with graceful 'en' fallback at send time if the Finnish template isn't
   // approved yet). 'en' on any read failure.
-  const preferredLanguage = await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
-    .then((res) => preferredOwnerTemplateLanguage(res.rows[0]?.profile))
+  const preferredLanguage = await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
+    .then((res) => preferredOwnerTemplateLanguage(res.rows[0]?.profile, res.rows[0]))
     .catch(() => OWNER_TEMPLATE_FALLBACK_LANGUAGE);
   const ids = evidenceRequestIds.filter(Boolean);
   const notAwaiting = [];
@@ -824,7 +832,6 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
     const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
     if (!request) { notAwaiting.push(askId); continue; }
-    const period = askPeriodFor(request, preferredLanguage);
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
       // Sensitive-identifier ask: never send over WhatsApp — record a visible
@@ -848,7 +855,8 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
       recipient: { phone_e164: binding.phone_e164 },
       template: {
         name: 'donna_evidence_ask_v1',
-        bodyParameters: [period, safeQuestion.text, shortAskRef(request.id)],
+        // The period fallback follows the template language actually sent.
+        bodyParametersFor: (languageCode) => [askPeriodFor(request, languageCode), safeQuestion.text, shortAskRef(request.id)],
         metadata: { ask_id: request.id, client_id: clientId }
       },
       preferredLanguage
@@ -1152,7 +1160,7 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   const ids = evidenceRequestIds.filter(Boolean);
   const notAwaiting = [];
   if (!ids.length) return { sent: 0, delivered: [] };
-  const clientRow = await client.query('select company_name, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
+  const clientRow = await client.query('select company_name, jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
     .then((res) => res.rows[0] || null).catch(() => null);
   const profile = clientRow?.profile && typeof clientRow.profile === 'object' ? clientRow.profile : {};
   const ownerEmail = String(profile.email || profile.contact_email || profile.owner_email || '').trim();
@@ -1172,7 +1180,7 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   // the firm is named as the one asking whenever firms.name is on file. The
   // wrapper copy follows the owner's language; the questions pass through as
   // the ask pipeline wrote them.
-  const language = preferredOwnerTemplateLanguage(profile);
+  const language = preferredOwnerTemplateLanguage(profile, clientRow);
   const assistantName = resolveAssistantName(profile);
   const firmName = await client.query('select name from firms where id = $1 limit 1', [firmId])
     .then((res) => String(res.rows[0]?.name || '').trim() || null).catch(() => null);

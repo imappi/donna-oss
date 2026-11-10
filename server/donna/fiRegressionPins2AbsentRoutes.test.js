@@ -62,6 +62,8 @@ await test('absent jurisdiction: FI ALV return route preserves its complete curr
       }
     },
     verokausi: 'quarter',
+    // Additive: where the cadence came from (recorded here, nothing to disagree with).
+    verokausi_basis: { cadence: 'quarter', defaulted: false, recorded: { verokausi: 'quarter', alv_registration_tax_period: null }, disagreement: false },
     provenance: {
       source: 'ledger_read_model', readAt: '2026-08-01T12:00:00.000Z', deterministic: true,
       boxMap: {

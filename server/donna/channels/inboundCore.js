@@ -59,6 +59,19 @@ export const resolveInboundOwnerLanguage = async ({ firmId, bindings = [], deps 
   return languages.size === 1 ? [...languages][0] : 'en';
 };
 
+// Before a client is known there is no owner language to resolve, and the
+// language is never guessed from the message: such a text is bilingual,
+// Finnish first, the way WhatsApp help/stopped already are. Once a binding names
+// a client, ownerLanguageForBindings gives the one resolver's answer over those
+// clients; with no named client it gives null, which means "send bilingual".
+export const bilingualOwnerText = (fi, en) => `${fi} / ${en}`;
+
+export const ownerLanguageForBindings = async ({ firmId, bindings = [], deps = {} } = {}) => {
+  const named = (Array.isArray(bindings) ? bindings : []).filter((binding) => binding?.client_id);
+  if (!named.length || typeof deps.getOwnerLanguage !== 'function') return null;
+  return resolveInboundOwnerLanguage({ firmId, bindings: named, deps });
+};
+
 // The core's own owner-facing lines, per language. English is the historical
 // copy, unchanged. Channel copy (config.copy) still wins where a channel
 // defines the same line.
@@ -278,6 +291,18 @@ export const storeInboundMediaAsEvidence = async ({
 const cleanReplyExcerpt = (text = '', max = 240) => String(text || '').replace(/\s+/g, ' ').trim().slice(0, max);
 const askCurrentNeed = (ask = {}) => String(ask.question || ask.request_payload?.question || ask.request_payload?.current_need || ask.evidence_type || 'requested evidence').trim();
 
+// Owner-reply keyword lists match whole words and phrases only. A letter is any
+// Unicode letter or digit (\p{L}\p{N}), so Finnish ä, ö and å count as letters:
+// JavaScript's \b does not, and a plain substring match reads "kohta" inside
+// "henkilökohtainen" or "later" inside "collateral". Entries are regex sources.
+const ownerReplyKeywords = (...entries) =>
+  new RegExp(`(?<![\\p{L}\\p{N}])(?:${entries.join('|')})(?![\\p{L}\\p{N}])`, 'iu');
+const CLARIFICATION_KEYWORDS = ownerReplyKeywords('which', 'what', 'who', 'where', 'when', 'why', 'how', 'mikä', 'mitä', 'kumpi', 'which receipt', 'tarkoitat');
+const DEFER_KEYWORDS = ownerReplyKeywords('tomorrow', 'later', 'tonight', 'next week', 'send it', 'send this', "i'll send", 'i will send', 'palaan', 'huomenna', 'myöhemmin', 'kohta');
+// 'not sure' / 'en ole varma' are the keywords the ask templates invite.
+const PARTIAL_KEYWORDS = ownerReplyKeywords('partial', 'some of', 'not sure', 'maybe', 'i think', 'only have', 'missing', "don'?t have all", 'osittain', 'ehkä', 'en ole varma');
+const CANNOT_ANSWER_KEYWORDS = ownerReplyKeywords("can'?t", 'cannot', 'unable', 'no idea', "don'?t know", 'en tiedä', 'ei onnistu');
+
 export const assessEvidenceTopicTurn = ({ ask = {}, text = '', descriptor = null } = {}) => {
   if (descriptor && !descriptor.deferred) {
     return { outcome: 'answered_with_media', terminal: true, can_resolve: true, still_missing: [], reason: 'owner_sent_media_evidence' };
@@ -285,17 +310,16 @@ export const assessEvidenceTopicTurn = ({ ask = {}, text = '', descriptor = null
   const reply = String(text || '').trim();
   if (!reply) return { outcome: 'unsupported', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'empty_or_unsupported_owner_turn' };
   const lower = reply.toLowerCase();
-  if (/\?\s*$/.test(reply) || /\b(which|what|who|where|when|why|how|mikä|mitä|kumpi|which receipt|tarkoitat)\b/i.test(reply)) {
+  if (/\?\s*$/.test(reply) || CLARIFICATION_KEYWORDS.test(reply)) {
     return { outcome: 'clarification_requested', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_asked_clarifying_question' };
   }
-  if (/(tomorrow|later|tonight|next week|send it|send this|i'll send|i will send|palaan|huomenna|myöhemmin|kohta)/i.test(lower)) {
+  if (DEFER_KEYWORDS.test(lower)) {
     return { outcome: 'defer_later', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_deferred_evidence' };
   }
-  // 'not sure' / 'en ole varma' are the keywords the ask templates invite.
-  if (/\b(partial|some of|not sure|maybe|i think|only have|missing|don\'?t have all|osittain|ehkä|en ole varma)\b/i.test(lower)) {
+  if (PARTIAL_KEYWORDS.test(lower)) {
     return { outcome: 'partial_answer', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_supplied_partial_or_uncertain_answer' };
   }
-  if (/\b(can\'?t|cannot|unable|no idea|don\'?t know|en tiedä|ei onnistu)\b/i.test(lower)) {
+  if (CANNOT_ANSWER_KEYWORDS.test(lower)) {
     return { outcome: 'needs_review', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_cannot_answer_without_help' };
   }
   return { outcome: 'answered', terminal: true, can_resolve: true, still_missing: [], reason: 'owner_supplied_text_answer' };
@@ -913,7 +937,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
     resolved = await deps.resolveEvidenceRequest({ firmId, evidenceRequestId: action.evidence_request_id, reply: action.reply_text, actorId, actorType: 'client' });
   } else if (action?.type === 'record_mileage') {
     const recordMileage = deps.recordOwnerMileageExpense || recordOwnerMileageExpenseInDb;
-    mileage = await recordMileage({ firmId, clientId, action, actorId, sourceMessageId: message.id, model: reply.model });
+    mileage = await recordMileage({ firmId, clientId, action, actorId, sourceMessageId: message.id, model: reply.model, language: config.language || 'en' });
   } else if (action?.type === 'share_portal_link') {
     // The deep link is resolved DETERMINISTICALLY (never model-typed); an unset
     // base URL degrades to a named instruction (the ownerDigest posture). The
@@ -944,7 +968,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
     : mileage?.status === 'booked'
       ? mileage.consequence
       : portalLink
-        ? composePortalLinkReply({ text: finalReply.text, link: portalLink })
+        ? composePortalLinkReply({ text: finalReply.text, link: portalLink, language: config.language })
         : finalReply.text;
   const assistantMessage = await (deps.appendClientPortalChatMessage || persistClientPortalTurnMessage)({
     firmId,
@@ -1122,7 +1146,8 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
         confirmOpeningBalanceIntakeImpl: deps.confirmOpeningBalanceIntake,
         runTrialBalanceIntakeImpl: deps.runTrialBalanceIntake,
         classifyOpeningIntakeImpl: deps.classifyOpeningIntake,
-        postImpl: deps[openingBinding.postKey]
+        postImpl: deps[openingBinding.postKey],
+        language: config.language || 'en'
       });
       await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: anchor.askId, provider_payload: { inbound: { type: 'text', anchor: anchor.source, opening_balance: result.action } } } });
       return { status: 'opening_balance', askId: anchor.askId, result };
@@ -1170,7 +1195,8 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
       confirmOpeningBalanceIntakeImpl: deps.confirmOpeningBalanceIntake,
       runTrialBalanceIntakeImpl: deps.runTrialBalanceIntake,
       classifyOpeningIntakeImpl: deps.classifyOpeningIntake,
-      postImpl: deps[openingBinding.postKey]
+      postImpl: deps[openingBinding.postKey],
+      language: config.language || 'en'
     });
     await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: anchor.askId, provider_payload: { inbound: { type: descriptor.kind, media_id: descriptor.id, document_id: documentId, anchor: anchor.source, opening_balance: result.action } } } });
     return { status: 'opening_balance', askId: anchor.askId, documentId, result };

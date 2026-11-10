@@ -150,7 +150,7 @@ const realFanoutHarness = ({ emailOn = true, contained = false, portal = false }
       : [] },
     cannedConfig(configRows),
     ...(portal ? [portalRecipient] : []),
-    { match: 'select company_name, profile from clients', rows: [{ company_name: 'Example Oy', profile: { email: 'owner@example.test' } }] },
+    { match: 'select company_name, jurisdiction, profile from clients', rows: [{ company_name: 'Example Oy', profile: { email: 'owner@example.test' } }] },
     { match: 'set send_count = send_count + 1', rows: () => { sendCount += 1; return [{ id: 'evr-1' }]; } },
     { match: 'select send_count from client_evidence_requests', rows: () => [{ send_count: sendCount }] },
     { match: 'select id from client_evidence_requests', rows: [{ id: 'evr-1' }] },

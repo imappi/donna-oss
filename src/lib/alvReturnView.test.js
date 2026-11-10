@@ -237,3 +237,18 @@ test('FI-09: excluded uploaded supplier documents have their own blocker, listed
   assert.match(purchases.hint, /Ostohyvityslasku HL-12, Tukku Oy \(9\.2\.2025\): kulu −50,00 € \+ ALV −12,00 € — maksu on ehdotettu, ei vahvistettu\./);
   assert.doesNotMatch(purchases.hint, /Lumikki/);
 });
+
+test('cadence notice: a disagreement between the two recorded VAT periods, or a default, is shown — never resolved', () => {
+  const base = { period: { key: '2026-09', type: 'month', starts_on: '2026-09-01', ends_on: '2026-09-30' }, alvReturn: { boxes: {}, payable: 0 }, review: { status: 'ready', blockers: [] } };
+  const vm = (verokausi_basis) => buildAlvReturnViewModel({ ...base, verokausi: verokausi_basis?.cadence, verokausi_basis });
+  assert.equal(vm(undefined).cadenceNotice, null, 'an envelope without the basis renders as before');
+  assert.equal(vm({ cadence: 'quarter', defaulted: false, recorded: { verokausi: 'quarter', alv_registration_tax_period: 'quarter' }, disagreement: false }).cadenceNotice, null);
+  const split = vm({ cadence: 'month', defaulted: false, recorded: { verokausi: 'month', alv_registration_tax_period: 'quarter' }, disagreement: true }).cadenceNotice;
+  assert.equal(split.kind, 'disagreement');
+  assert.match(split.text, /yrityksen tiedoissa: kuukausi, ALV-rekisteröinnissä: neljännesvuosi/);
+  const onlyRegistration = vm({ cadence: 'month', defaulted: true, recorded: { verokausi: null, alv_registration_tax_period: 'year' }, disagreement: true }).cadenceNotice;
+  assert.equal(onlyRegistration.kind, 'disagreement');
+  assert.match(onlyRegistration.text, /oletuksella \(kuukausi\).*kalenterivuosi/);
+  const nothing = vm({ cadence: 'month', defaulted: true, recorded: { verokausi: null, alv_registration_tax_period: null }, disagreement: false }).cadenceNotice;
+  assert.deepEqual(nothing, { kind: 'defaulted', text: 'Yritykselle ei ole kirjattu verokautta, joten luvut lasketaan oletuksella (kuukausi).' });
+});

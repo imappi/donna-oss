@@ -31,7 +31,7 @@ const makeMockClient = ({ stage = 'canary', profile = { email: 'kari@books.examp
         return { rows: stage ? [{ flag_key: OWNER_EMAIL_ASKS_FLAG_KEY, stage, source: 'test', client_id: CLIENT }] : [] };
       }
       if (text.includes('from cohort_capability_config')) return { rows: [] };
-      if (text.includes('select company_name, profile from clients')) {
+      if (text.includes('select company_name, jurisdiction, profile from clients')) {
         return { rows: [{ company_name: 'Roofline Co', profile }] };
       }
       if (text.includes('select name from firms')) {

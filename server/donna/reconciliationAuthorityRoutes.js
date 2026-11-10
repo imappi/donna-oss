@@ -59,11 +59,13 @@ import { classifyReconciliationArchetype } from './reconciliationArchetype.js';
 import {
   RUNTIME_MINT_ACTOR_TYPES,
   buildAuthorityGrantId,
+  grantRowAllowsAutoAccept,
   listAuthorityGrantsForClient,
   mintAuthorityGrant,
   transitionAuthorityGrant
 } from './reconciliationAuthorityGrants.js';
 import { authorizeActionType, resolveCapabilityClass } from './operatorCapability.js';
+import { evaluateEntityReadinessAdmissionWithClient } from './runtimeReadinessAdmission.js';
 
 export const RECONCILIATION_AUTHORITY_ROUTES = Object.freeze({
   list: '/reconciliation-authority-grants',
@@ -255,6 +257,48 @@ export const deriveGrantPreview = async (client, { firmId, clientId, matchId }) 
       description: bankLine?.description || null
     }
   };
+};
+
+// Is each held match covered RIGHT NOW by a standing grant that would act on
+// it? The convergence gather's covering-grant input (reconcileConvergenceState
+// readCoveredHeldMatchIds): a held match with a covering grant keeps the
+// line's other axes; without one the line hangs. READ-ONLY by construction —
+// it derives the scope exactly as the preview above does (the accept path's
+// classifier over the same bank line, document and few-shot roster), then
+// applies the accept path's own gates: the delegated-authority flag, the
+// readiness admission (evaluated without its blocked receipt and without a row
+// lock, since a projection must never write or wait), and the per-row grant
+// guard grantRowAllowsAutoAccept at the match amount and currency. Every doubt
+// (a vanished match, no archetype, a pre-040 database) reads NOT covered, which
+// fails toward hanging. Returns the Set of covered match ids.
+export const readHeldMatchGrantCoverage = async (client, { firmId, held = [], asOf = new Date(), env = process.env } = {}) => {
+  const covered = new Set();
+  for (const { clientId, matchId } of Array.isArray(held) ? held : []) {
+    if (!clientId || !matchId) continue;
+    let preview;
+    try {
+      preview = await deriveGrantPreview(client, { firmId, clientId, matchId });
+    } catch (error) {
+      if (error?.code === 'MATCH_NOT_FOUND' || error?.code === '42P01' || error?.code === '42703') continue;
+      throw error;
+    }
+    if (!preview.held_for_authority || !preview.delegated_authority_acts) continue;
+    if (!preview.archetype || !preview.scope_key) continue;
+    const readiness = await evaluateEntityReadinessAdmissionWithClient({
+      client, firmId, clientId, boundary: 'reconciliation_authority', lock: false, env
+    });
+    if (!readiness.allowed) continue;
+    // The same candidate rows findActiveAuthorityGrant scans, the same guard.
+    const grants = (await client.query(
+      `select * from reconciliation_authority_grants
+        where firm_id = $1 and client_id = $2 and archetype = $3 and scope_key = $4`,
+      [firmId, clientId, preview.archetype, preview.scope_key]
+    )).rows || [];
+    if (grants.some((grant) => grantRowAllowsAutoAccept(grant, { matchAmount: preview.amount, currency: preview.currency, asOf }))) {
+      covered.add(matchId);
+    }
+  }
+  return covered;
 };
 
 const parseFutureDate = (value, label, { asOf }) => {

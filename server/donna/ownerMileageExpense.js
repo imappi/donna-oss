@@ -37,7 +37,31 @@ export const pickMileageAccounts = (accounts = []) => {
   return { expense, offset };
 };
 
-export const buildOwnerMileageJournal = ({ action = {}, clientProfile = {}, accounts = [], actorId, sourceMessageId, model, now = new Date() } = {}) => {
+// The owner-facing "booked" line, per owner language (preferredOwnerTemplateLanguage,
+// passed in by the caller). English is the historical copy, unchanged, and is
+// also what the apply receipt records as operator_words. Finnish uses a decimal
+// comma and the amount before the currency code, as the parse summaries do.
+const MILEAGE_BOOKED_COPY = Object.freeze({
+  en: ({ distance, unit, purpose, currency, amount }) =>
+    `Booked: ${distance} ${unit}${distance === 1 ? '' : 's'} for ${purpose}, ${currency} ${amount.toFixed(2)} computed at the current mileage rate.`,
+  fi: ({ distance, unit, purpose, currency, amount }) => {
+    const shown = String(distance).replace('.', ',');
+    const measured = unit === 'km' ? `${shown} km` : `${shown} ${distance === 1 ? 'maili' : 'mailia'}`;
+    const rate = unit === 'km' ? 'kilometrikorvauksella' : 'mailikorvauksella';
+    return `Kirjasin ${measured} (${purpose}): ${amount.toFixed(2).replace('.', ',')} ${currency} nykyisellä ${rate}.`;
+  }
+});
+
+export const ownerMileageBookedText = ({ computation = {}, purpose = '', currency, amount, language = 'en' } = {}) =>
+  (MILEAGE_BOOKED_COPY[language] || MILEAGE_BOOKED_COPY.en)({
+    distance: computation.miles || computation.km,
+    unit: computation.unit,
+    purpose,
+    currency: currency || computation.currency,
+    amount: Number(amount)
+  });
+
+export const buildOwnerMileageJournal = ({ action = {}, clientProfile = {}, accounts = [], actorId, sourceMessageId, model, now = new Date(), language = 'en' } = {}) => {
   const miles = Number(action.miles);
   const purpose = clean(action.purpose || action.reason, 280);
   const date = clean(action.date, 20) || toLocalIsoDay(now); // host-local day (audit F-11)
@@ -69,7 +93,10 @@ export const buildOwnerMileageJournal = ({ action = {}, clientProfile = {}, acco
   return {
     status: 'ready',
     computation,
-    consequence: `Booked: ${computation.miles || computation.km} ${computation.unit}${(computation.miles || computation.km) === 1 ? '' : 's'} for ${purpose}, ${currency} ${amount.toFixed(2)} computed at the current mileage rate.`,
+    // English: the apply receipt's operator_words. ownerConsequence: the same
+    // line in the owner's language, which is what the owner is sent.
+    consequence: ownerMileageBookedText({ computation, purpose, currency, amount }),
+    ownerConsequence: ownerMileageBookedText({ computation, purpose, currency, amount, language }),
     journal: {
       source_type: 'owner_stated_mileage',
       source_id: sourceId,
@@ -94,7 +121,10 @@ export const buildOwnerMileageJournal = ({ action = {}, clientProfile = {}, acco
   };
 };
 
-export const recordOwnerMileageExpenseInDb = async ({ firmId, clientId, action, actorId, sourceMessageId, model, now = new Date(), deps = {} } = {}) => {
+// `language` is the owner's (preferredOwnerTemplateLanguage); it only picks the
+// wording of the returned `consequence` (the text the owner is sent). The
+// receipt's operator_words stay English.
+export const recordOwnerMileageExpenseInDb = async ({ firmId, clientId, action, actorId, sourceMessageId, model, now = new Date(), language = 'en', deps = {} } = {}) => {
   const { withFirmDbClient, writeValidatedJournal } = deps;
   const db = withFirmDbClient || (await import('./firmDb.js')).withFirmDbClient;
   const writeJournal = writeValidatedJournal || (await import('./ledgerPostingGateway.js')).writeValidatedJournalWithinTransaction;
@@ -152,7 +182,7 @@ export const recordOwnerMileageExpenseInDb = async ({ firmId, clientId, action, 
           computation: existing.payload?.computation || null };
       }
       const accountsRes = await client.query('select id, code, name, account_type, canonical_role, currency, status from ledger_accounts where firm_id = $1 and client_id = $2 and coalesce(status, $3) = $3', [firmId, clientId, 'active']);
-      const built = buildOwnerMileageJournal({ action, clientProfile: profile, accounts: accountsRes.rows, actorId, sourceMessageId, model, now });
+      const built = buildOwnerMileageJournal({ action, clientProfile: profile, accounts: accountsRes.rows, actorId, sourceMessageId, model, now, language });
       if (built.status !== 'ready') {
         await client.query('commit');
         return built;
@@ -196,7 +226,7 @@ export const recordOwnerMileageExpenseInDb = async ({ firmId, clientId, action, 
         }
       });
       await client.query('commit');
-      return { status: 'booked', ...posted, consequence: built.consequence, computation: built.computation, audit_event_id: audit.rows[0]?.id || null };
+      return { status: 'booked', ...posted, consequence: built.ownerConsequence, computation: built.computation, audit_event_id: audit.rows[0]?.id || null };
     } catch (error) {
       await client.query('rollback');
       throw error;

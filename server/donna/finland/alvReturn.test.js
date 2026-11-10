@@ -7,6 +7,7 @@ import {
   buildAlvReturnFromLedgerLines,
   resolveAlvPeriod,
   verokausiCadenceForProfile,
+  verokausiBasisForProfile,
   DEFAULT_VEROKAUSI_CADENCE,
   VEROKAUSI_CADENCES
 } from './alvReturn.js';
@@ -443,4 +444,29 @@ test('box-map provenance travels with the verdict and is honest about the primar
   const provenance = alvReturnBoxMapProvenance();
   assert.equal(provenance.confirmedAgainstPrimary, false);
   assert.ok(provenance.source.includes('VSRALVKV'));
+});
+
+test('verokausiBasisForProfile reports where the cadence came from without changing it', () => {
+  // Nothing recorded: the monthly default, shown as a default.
+  assert.deepEqual(verokausiBasisForProfile({}), {
+    cadence: 'month', defaulted: true, recorded: { verokausi: null, alv_registration_tax_period: null }, disagreement: false
+  });
+  // Recorded and agreeing.
+  assert.deepEqual(verokausiBasisForProfile({ verokausi: 'quarter', alv_registration: { status: 'registered', tax_period: 'quarter' } }), {
+    cadence: 'quarter', defaulted: false, recorded: { verokausi: 'quarter', alv_registration_tax_period: 'quarter' }, disagreement: false
+  });
+  // The two places disagree: verokausi is still the one in use, the disagreement is reported.
+  const split = verokausiBasisForProfile({ verokausi: 'month', alv_registration: { status: 'registered', tax_period: 'quarter' } });
+  assert.equal(split.cadence, verokausiCadenceForProfile({ verokausi: 'month' }));
+  assert.equal(split.disagreement, true);
+  assert.equal(split.defaulted, false);
+  // Only the registration records a period: the default applies AND disagrees.
+  assert.deepEqual(verokausiBasisForProfile({ alv_registration: { status: 'registered', tax_period: 'year' } }), {
+    cadence: 'month', defaulted: true, recorded: { verokausi: null, alv_registration_tax_period: 'year' }, disagreement: true
+  });
+  // An unrecognised verokausi falls back exactly as before, and says so.
+  const junk = verokausiBasisForProfile({ verokausi: 'fortnightly' });
+  assert.equal(junk.cadence, 'month');
+  assert.equal(junk.defaulted, true);
+  assert.equal(verokausiBasisForProfile({ verokausi: 'Neljännes' }).recorded.verokausi, 'quarter', 'aliases still resolve');
 });
