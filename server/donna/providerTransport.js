@@ -42,6 +42,7 @@
 // back for the worker's own receipts; default 15s).
 
 import { currentExecutionBudget, remainingExecutionBudgetMs } from './executionBudget.js';
+import { assembleAnthropicStream, streamErrorStatus } from './anthropicStream.js';
 
 export const PROVIDER_FAILURE_CODES = Object.freeze({
   KEY_MISSING: 'PROVIDER_KEY_MISSING',
@@ -400,8 +401,26 @@ export const raceAbort = (promise, signal) => new Promise((resolve, reject) => {
   );
 });
 
+const isEventStream = (response) => /text\/event-stream/i.test(String(response?.headers?.get?.('content-type') || ''));
+
 const readJsonBody = async (response) => {
   if (!response) return null;
+  // A streamed Anthropic reply (2026-11-10: the document lanes stream their
+  // long requests) is reassembled into the one Message a non-streamed reply
+  // is, so a caller that owns its socket (the month eval runner) reads the
+  // same payload either way.
+  if (isEventStream(response) && typeof response.text === 'function') {
+    let raw;
+    try {
+      raw = await response.text();
+    } catch (error) {
+      if (isAbortLike(error) || isProviderFailure(error) || (response.ok && isNetworkLike(error))) throw error;
+      return null;
+    }
+    const { payload, streamError } = assembleAnthropicStream(raw);
+    if (streamError) payload.stream_error_status = streamErrorStatus(streamError);
+    return payload;
+  }
   if (typeof response.json === 'function') {
     try {
       return await response.json();
@@ -477,11 +496,13 @@ export const fetchProviderJson = async ({
     const payload = await raceAbort(readJsonBody(response), controller.signal);
     assertProviderDeadline({ deadlineAt, budget: deadline.budget, controller, now,
       budgetLimited: deadline.timeoutMs < Number(timeoutMs) });
+    // An error event inside a 200 stream is a failed call with that status.
+    const streamStatus = Number(payload?.stream_error_status) || 0;
     return {
       response,
       payload,
-      ok: Boolean(response?.ok),
-      status: Number(response?.status) || 0,
+      ok: Boolean(response?.ok) && !streamStatus,
+      status: streamStatus || Number(response?.status) || 0,
       timeoutMs: deadline.timeoutMs
     };
   } catch (error) {

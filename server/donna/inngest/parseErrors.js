@@ -151,10 +151,15 @@ const inferCode = (err) => {
   return 'INTERNAL';
 };
 
+// A model-class failure whose thrower named no provider is attributed to the
+// model provider without guessing WHICH one. Until 2026-11-10 every such
+// failure was called 'openai'; since the owner's decision that Donna runs on
+// Claude the document lanes resolve Anthropic first, and a missing key names
+// no provider at all — an envelope must not blame one it never called.
 const inferProvider = (err, code) => {
   if (err?.provider) return err.provider;
-  if (code.startsWith('OCR_') || code === 'EXTRACTION_NO_TRANSACTIONS') return 'openai';
-  if (code.startsWith('DOCUMENT_EXTRACTION_')) return 'openai';
+  if (code.startsWith('OCR_') || code === 'EXTRACTION_NO_TRANSACTIONS') return 'model_provider';
+  if (code.startsWith('DOCUMENT_EXTRACTION_')) return 'model_provider';
   if (code === 'STORAGE_FETCH_FAILED' || code === 'CHECKSUM_MISMATCH') return 'supabase';
   return 'internal';
 };

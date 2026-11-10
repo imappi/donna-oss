@@ -254,6 +254,15 @@ const matchesType = (value, expected) => {
 
 export const validateStrictSchema = (schema, value, path = '$', out = []) => {
   if (!schema || typeof schema !== 'object') return out;
+  // anyOf (2026-11-10: the document lanes' schemas are validated here when a
+  // reply arrives through a non-strict tool): valid when ANY branch is.
+  if (Array.isArray(schema.anyOf)) {
+    const branches = schema.anyOf.map((branch) => validateStrictSchema(branch, value, path, []));
+    if (!branches.some((violations) => violations.length === 0)) {
+      out.push(...(branches.find((violations) => violations.length) || [`${path}: matches no anyOf branch`]));
+    }
+    return out;
+  }
   const allowed = Array.isArray(schema.type) ? schema.type : (schema.type ? [schema.type] : null);
   if (allowed && !allowed.some((type) => matchesType(value, type))) {
     out.push(`${path}: expected ${allowed.join('|')}, got ${typeOf(value)}`);

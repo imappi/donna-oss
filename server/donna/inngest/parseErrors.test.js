@@ -123,30 +123,30 @@ test('isRetryableCode / isTerminalCode are consistent', () => {
   });
 });
 
-test('DOCUMENT_EXTRACTION_FAILED is retryable and attributes to openai', () => {
+test('DOCUMENT_EXTRACTION_FAILED is retryable and attributes to the model provider (no provider named: none is guessed, 2026-11-10)', () => {
   const err = new ParseError('DOCUMENT_EXTRACTION_FAILED', { message: 'gateway timeout from llm' });
   const categorized = categorizeError(err);
   assertEqual(categorized.code, 'DOCUMENT_EXTRACTION_FAILED', 'code');
   assertEqual(categorized.retryable, true, 'retryable');
-  assertEqual(categorized.provider, 'openai', 'provider');
+  assertEqual(categorized.provider, 'model_provider', 'provider');
   assertTrue(isRetryableCode('DOCUMENT_EXTRACTION_FAILED'), 'in retryable set');
 });
 
-test('DOCUMENT_EXTRACTION_UNREADABLE is terminal and attributes to openai', () => {
+test('DOCUMENT_EXTRACTION_UNREADABLE is terminal and attributes to the model provider (no provider named: none is guessed, 2026-11-10)', () => {
   const err = new ParseError('DOCUMENT_EXTRACTION_UNREADABLE', { message: 'no fields readable' });
   const categorized = categorizeError(err);
   assertEqual(categorized.code, 'DOCUMENT_EXTRACTION_UNREADABLE', 'code');
   assertEqual(categorized.retryable, false, 'retryable');
-  assertEqual(categorized.provider, 'openai', 'provider');
+  assertEqual(categorized.provider, 'model_provider', 'provider');
   assertTrue(isTerminalCode('DOCUMENT_EXTRACTION_UNREADABLE'), 'in terminal set');
 });
 
-test('DOCUMENT_EXTRACTION_REJECTED is terminal and attributes to openai', () => {
+test('DOCUMENT_EXTRACTION_REJECTED is terminal and attributes to the model provider (no provider named: none is guessed, 2026-11-10)', () => {
   const err = new ParseError('DOCUMENT_EXTRACTION_REJECTED', { message: 'openai 400: schema refused' });
   const categorized = categorizeError(err);
   assertEqual(categorized.code, 'DOCUMENT_EXTRACTION_REJECTED', 'code');
   assertEqual(categorized.retryable, false, 'retryable');
-  assertEqual(categorized.provider, 'openai', 'provider');
+  assertEqual(categorized.provider, 'model_provider', 'provider');
   assertTrue(isTerminalCode('DOCUMENT_EXTRACTION_REJECTED'), 'in terminal set');
 });
 

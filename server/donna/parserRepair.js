@@ -14,6 +14,9 @@ import { resolve as resolvePath } from 'node:path';
 
 import { clientFlagActs } from './clientConfig.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
+import { asProviderResponse, llmCall } from './llmCall.js';
+import { callAnthropicFromResponsesBody, readProviderReply } from './anthropicMessages.js';
+import { envWithDotEnv, resolveLaneProvider } from './laneProviderResolver.js';
 
 // When this fires it writes vendor/date/total — the most load-bearing
 // fields on the document — so it gets the strong tier (Failure-A
@@ -24,6 +27,13 @@ import { buildResponsesDocumentPart } from './responsesInputPart.js';
 // override knob.
 const DEFAULT_MODEL = 'gpt-5.4';
 const REQUEST_TIMEOUT_MS = 30_000;
+// 2026-11-10 (the owner's decision that Donna runs on Claude): Anthropic
+// first. Looking again for at most three named fields is a narrow read:
+// `medium` effort.
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
+const ANTHROPIC_EFFORT = 'medium';
+const ANTHROPIC_MAX_TOKENS = 16_000;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 120_000;
 
 const SUPPORTED_DOCUMENT_TYPES = new Set(['receipt', 'supplier_bill']);
 
@@ -51,13 +61,13 @@ const readDotEnv = () => {
   return vars;
 };
 
-const getOpenAiConfig = () => {
-  const dotEnv = readDotEnv();
-  return {
-    apiKey: process.env.OPENAI_API_KEY || dotEnv.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL || dotEnv.OPENAI_MODEL || DEFAULT_MODEL
-  };
-};
+// No lane-specific model knob: OPENAI_MODEL tunes the OpenAI model only.
+const getOpenAiConfig = () => resolveLaneProvider({
+  laneId: 'parser_repair',
+  env: envWithDotEnv(readDotEnv()),
+  providerModelEnvKeys: { openai: ['OPENAI_MODEL'] },
+  defaultModels: { anthropic: DEFAULT_ANTHROPIC_MODEL, openai: DEFAULT_MODEL }
+});
 
 const outputTextFromResponse = (response = {}) => {
   if (typeof response.output_text === 'string') return response.output_text;
@@ -117,17 +127,16 @@ Filename: ${filename || 'unknown'}
 Return only the requested fields. If you still cannot find a field, return null for it.`;
 };
 
-// Single-shot OpenAI call for repair. Indirection via __callOpenAi
-// lets tests inject canned responses without touching the network.
-const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, missingFields, signal }) =>
-  fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
-    },
+// Single-shot repair call. Indirection via __callOpenAi / __callAnthropic
+// lets tests inject canned responses without touching the network. The body
+// is built ONCE (Responses shape): OpenAI sends it as is, Anthropic carries
+// it over unchanged (anthropicMessages.js callAnthropicFromResponsesBody).
+const buildDefaultCall = (send) => async ({ apiKey, model, dataUrl, filename, missingFields, signal }) =>
+  send({
+    apiKey,
     signal,
-    body: JSON.stringify({
+    filename,
+    body: ({
       model,
       store: false,
       instructions: buildRepairPrompt(missingFields, filename),
@@ -150,6 +159,27 @@ const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, missingFiel
       }
     })
   });
+
+const executionFor = (filename) => ({ root: { type: 'parser_repair', id: filenameCorrelationId(filename) } });
+
+const defaultCallOpenAi = buildDefaultCall(({ apiKey, signal, filename, body }) => asProviderResponse(llmCall({
+  provider: 'openai',
+  url: 'https://api.openai.com/v1/responses',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+  body,
+  sections: { system: body.instructions, tools: body.text.format.schema },
+  execution: executionFor(filename),
+  fetchImpl: (url, init) => fetch(url, { ...init, signal: init?.signal && signal ? AbortSignal.any([init.signal, signal]) : init?.signal || signal })
+})));
+
+const defaultCallAnthropic = buildDefaultCall(({ apiKey, signal, filename, body }) => callAnthropicFromResponsesBody({
+  apiKey,
+  body,
+  effort: ANTHROPIC_EFFORT,
+  maxTokens: ANTHROPIC_MAX_TOKENS,
+  execution: executionFor(filename),
+  signal
+}));
 
 const numberOrNull = (value) => {
   if (value === null || value === undefined || value === '') return null;
@@ -187,7 +217,8 @@ export const repairMissingFields = async ({
   summary,
   documentType,
   configSnapshot = null,
-  __callOpenAi = defaultCallOpenAi
+  __callOpenAi = defaultCallOpenAi,
+  __callAnthropic = defaultCallAnthropic
 } = {}) => {
   const correlationId = filenameCorrelationId(filename);
 
@@ -229,56 +260,53 @@ export const repairMissingFields = async ({
 
   // ── LLM call ──
   const config = getOpenAiConfig();
-  if (!config.apiKey) {
-    console.warn('[parserRepair] OPENAI_API_KEY not configured', { correlation_id: correlationId });
+  if (!config.ok) {
+    console.warn('[parserRepair] no model provider key configured', { correlation_id: correlationId, reason: config.reason });
     return { ...EMPTY_RESULT };
   }
 
   const dataUrl = `data:${mimeType || 'application/pdf'};base64,${clean}`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), config.provider === 'anthropic' ? ANTHROPIC_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  const callArgs = {
+    apiKey: config.apiKey,
+    model: config.model,
+    dataUrl,
+    filename,
+    missingFields,
+    signal: controller.signal
+  };
 
-  let response;
+  let reply;
   try {
-    response = await __callOpenAi({
-      apiKey: config.apiKey,
-      model: config.model,
-      dataUrl,
-      filename,
-      missingFields,
-      signal: controller.signal
+    reply = await readProviderReply({
+      provider: config.provider,
+      callOpenAi: () => __callOpenAi(callArgs),
+      callAnthropic: () => __callAnthropic(callArgs),
+      outputText: outputTextFromResponse
     });
-  } catch (err) {
-    console.warn('[parserRepair] LLM request failed', {
-      correlation_id: correlationId,
-      error_name: err?.name || null,
-      missing_fields: missingFields
-    });
-    return { ...EMPTY_RESULT };
   } finally {
     clearTimeout(timeout);
   }
 
-  if (!response?.ok) {
-    console.warn('[parserRepair] LLM returned non-OK', {
+  if (!reply.ok) {
+    // Repair is best-effort: any failure (transport, status, refusal,
+    // max_tokens, unreadable body) leaves the header as extracted.
+    console.warn('[parserRepair] LLM request failed', {
       correlation_id: correlationId,
-      status: response?.status || 0,
+      provider: config.provider,
+      failure: reply.kind,
+      status: reply.status || null,
+      stop_reason: reply.error?.stopReason || null,
+      error_name: reply.error?.name || null,
       missing_fields: missingFields
     });
     return { ...EMPTY_RESULT };
   }
 
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    return { ...EMPTY_RESULT };
-  }
-
-  const text = outputTextFromResponse(payload);
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(reply.text);
   } catch {
     console.warn('[parserRepair] response was not valid JSON', {
       correlation_id: correlationId,

@@ -49,7 +49,7 @@
 // production schemas, never a captured customer document) or, when captured
 // from a real call, redacted. `provenance` on each file says which.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -84,6 +84,7 @@ export const OPENAI_SCHEMA_LANES = Object.freeze({
   client_ask_message_draft: 'ask_drafting',
   receipt_semantic_classifier: 'receipt_classification',
   parser_repair: 'parser_repair',
+  client_intake_draft: 'client_intake_draft',
   firm_fact_distillation: 'memory_extraction',
   document_chat_response: 'document_chat'
 });
@@ -99,7 +100,31 @@ export const ANTHROPIC_SYSTEM_LANES = Object.freeze([
   Object.freeze({ lane: 'bank_line_disposition', prefix: 'You triage a single unmatched bank ' }),
   Object.freeze({ lane: 'document_disposition', prefix: 'You triage a single parsed evidence DOCUMENT' }),
   Object.freeze({ lane: 'reconciliation_triage', prefix: 'You evaluate low-confidence ' }),
-  Object.freeze({ lane: 'unified_extraction', prefix: 'You are extracting fields from one financial document' })
+  Object.freeze({ lane: 'unified_extraction', prefix: 'You are extracting fields from one financial document' }),
+  // 2026-11-10: the document lanes on their Anthropic transport. Each lane id
+  // is the one its OpenAI strict schema names above, so a test scripts one
+  // lane whichever provider answers.
+  Object.freeze({ lane: 'document_routing', prefix: 'You are classifying a document for a bookkeeping system' }),
+  Object.freeze({ lane: 'receipt_extraction', prefix: 'You are extracting fields from a single receipt' }),
+  Object.freeze({ lane: 'sales_invoice_extraction', prefix: 'You are extracting fields from one INCOMING sales-evidence document' }),
+  Object.freeze({ lane: 'supplier_bill_extraction', prefix: 'You are extracting fields from a single outgoing payable' }),
+  Object.freeze({ lane: 'contract_extraction', prefix: 'You are extracting fields from a single business contract' }),
+  Object.freeze({ lane: 'payout_statement_extraction', prefix: 'You are extracting fields from a single settlement document' }),
+  Object.freeze({ lane: 'generic_document_extraction', prefix: 'You are extracting structured data from a document that doesn' }),
+  Object.freeze({ lane: 'receipt_classification', prefix: 'You classify a single business receipt' }),
+  Object.freeze({ lane: 'client_intake_draft', prefix: 'You are drafting a bookkeeping client profile' }),
+  Object.freeze({ lane: 'parser_repair', prefix: 'The following fields could not be extracted on the first pass' })
+]);
+
+// Anthropic lanes whose instructions ride in the USER text rather than the
+// system prompt (the statement reader carries its OpenAI-era prompt layout
+// over unchanged, 2026-11-10). The signature is a fixed sentence the
+// production prompt always contains; checked only when no system prefix
+// matched. Lane ids are the OpenAI schema lanes', so a test scripts one lane
+// whichever provider answers.
+export const ANTHROPIC_PROMPT_LANES = Object.freeze([
+  Object.freeze({ lane: 'bank_statement_extraction', includes: 'You are extracting transactions from a bank or payment-provider' }),
+  Object.freeze({ lane: 'bank_statement_ocr', includes: 'Transcribe ALL visible text exactly as it appears' })
 ]);
 
 export const UNSCRIPTED_STATUS = 418;
@@ -117,6 +142,12 @@ const systemTextOf = (body) => {
   }
   return '';
 };
+
+const userTextOf = (body) => (Array.isArray(body?.messages) ? body.messages : [])
+  .filter((message) => message?.role === 'user')
+  .flatMap((message) => (typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content || []))
+  .map((block) => (block?.type === 'text' && typeof block.text === 'string' ? block.text : ''))
+  .join('\n');
 
 const schemaNameOf = (body) =>
   body?.text?.format?.name
@@ -153,6 +184,10 @@ export const classifyProviderRequest = ({ url, init = {} } = {}) => {
     lane = OPENAI_SCHEMA_LANES[schemaName];
   } else if (systemText) {
     lane = ANTHROPIC_SYSTEM_LANES.find(({ prefix }) => systemText.startsWith(prefix))?.lane || null;
+  }
+  if (!lane && endpointClass === 'anthropic') {
+    const userText = userTextOf(body);
+    lane = ANTHROPIC_PROMPT_LANES.find(({ includes }) => userText.includes(includes))?.lane || null;
   }
   if (!lane) {
     // Unknown lane: still refused, still journaled — but named by what the
@@ -192,6 +227,88 @@ export const loadRecording = (name) => {
 
 const modelServedOf = (body) => (typeof body?.model === 'string' && body.model ? body.model : null);
 
+// A lane can be served by more than one provider (2026-11-10: the document
+// lanes resolve Anthropic first, OpenAI when no Anthropic key is set). A
+// scripted recording names the CONTENT; its wire shape is per provider. When
+// the request goes to a provider other than the recording's, the twin
+// `<name>-<endpoint_class>` is served — the same authored content in that
+// provider's shape (the unified lane's `-openai` recordings are the
+// precedent). No twin ⇒ refused: a body in the wrong provider's shape is
+// never served.
+export const twinRecordingFor = (step, endpointClass) => {
+  if (!step?.recording || !step.endpoint_class || !endpointClass || step.endpoint_class === endpointClass) return { step };
+  const twinName = `${step.recording}-${endpointClass}`;
+  if (!existsSync(recordingPath(twinName))) {
+    return { refusal: `recording ${step.recording} is an ${step.endpoint_class} body and the request went to ${endpointClass}; commit ${twinName}.json` };
+  }
+  const twin = loadRecording(twinName);
+  return { step: { ...step, status: twin.status, body: twin.body, headers: twin.headers || {}, recording: twin.name, endpoint_class: twin.endpoint_class } };
+};
+
+// An INLINE step body (authored in test code, not a committed recording) in
+// the OpenAI Responses shape, served to a request that went to Anthropic, is
+// carried into the Messages shape: the same structured output text, with the
+// model the request asked for as the served id (the journal marks the call
+// `converted_from: 'openai'`). Only a successful structured body converts;
+// an error body is read the same way by both providers' transports.
+const responsesText = (body) => {
+  if (typeof body?.output_text === 'string') return body.output_text;
+  const texts = (Array.isArray(body?.output) ? body.output : []).flatMap((item) => item?.content || [])
+    .map((part) => (typeof part?.text === 'string' ? part.text : null)).filter((text) => text !== null);
+  return texts.length ? texts.join('') : null;
+};
+
+// When the request carries the structured-result tool (a lane whose schema is
+// past the structured-output limits, anthropicMessages.js schemaDeliveryFor),
+// the same output arrives as that tool's call, as it does on the wire.
+const STRUCTURED_REPLY_TOOL = 'record_structured_result';
+
+export const convertInlineBody = (step, classified, requestBody = null) => {
+  if (step?.recording || classified?.endpoint_class !== 'anthropic' || step?.status !== 200) return step;
+  const text = responsesText(step.body);
+  if (text === null || step.body?.type === 'message') return step;
+  const viaTool = Array.isArray(requestBody?.tools) && requestBody.tools.some((tool) => tool?.name === STRUCTURED_REPLY_TOOL);
+  let input = null;
+  if (viaTool) { try { input = JSON.parse(text); } catch { input = null; } }
+  return {
+    ...step,
+    converted_from: 'openai',
+    body: {
+      id: String(step.body?.id || 'fixture').replace(/^resp_/, 'msg_'),
+      type: 'message',
+      role: 'assistant',
+      model: classified.model_requested,
+      content: input && typeof input === 'object'
+        ? [{ type: 'tool_use', id: 'toolu_fixture_converted', name: STRUCTURED_REPLY_TOOL, input }]
+        : [{ type: 'text', text }],
+      stop_reason: input && typeof input === 'object' ? 'tool_use' : 'end_turn',
+      stop_sequence: null,
+      usage: { input_tokens: step.body?.usage?.input_tokens ?? 0, output_tokens: step.body?.usage?.output_tokens ?? 0 }
+    }
+  };
+};
+
+// A recording (or inline body) authors the lane's structured result as JSON
+// text. When the request carries the structured-result tool — the lane's
+// schema is past the structured-output limits — the provider returns that
+// result as the tool's call, so the stub delivers the same JSON that way
+// (`delivered_as: 'structured_result_tool'` on the journal). A text reply that
+// is not JSON stays text: the lane must refuse it by name.
+export const deliverAsStructuredTool = (step, requestBody = null) => {
+  const body = step?.body;
+  const wantsTool = Array.isArray(requestBody?.tools) && requestBody.tools.some((tool) => tool?.name === STRUCTURED_REPLY_TOOL);
+  if (!wantsTool || step?.status !== 200 || body?.type !== 'message' || !Array.isArray(body.content)) return step;
+  if (body.content.some((block) => block?.type === 'tool_use')) return step;
+  const index = body.content.findIndex((block) => block?.type === 'text');
+  if (index < 0) return step;
+  let input;
+  try { input = JSON.parse(body.content[index].text); } catch { return step; }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return step;
+  const content = [...body.content];
+  content[index] = { type: 'tool_use', id: `toolu_${String(body.id || 'fixture').replace(/^msg_/, '')}`, name: STRUCTURED_REPLY_TOOL, input };
+  return { ...step, delivered_as: 'structured_result_tool', body: { ...body, content, stop_reason: body.stop_reason === 'end_turn' ? 'tool_use' : body.stop_reason } };
+};
+
 const jsonResponse = (status, body, headers = {}) =>
   new Response(JSON.stringify(body), {
     status,
@@ -213,7 +330,10 @@ const normalizeStep = (lane, step) => {
       body: step.body ?? recording.body,
       headers: step.headers ?? recording.headers ?? {},
       times: step.times ?? 1,
-      recording: recording.name
+      recording: recording.name,
+      // Which wire shape the body is (a step that overrides the body owns
+      // its shape).
+      endpoint_class: step.body ? null : (recording.endpoint_class || null)
     };
   }
   if (!Number.isInteger(step.status)) throw new Error(`recorded-providers: script step for lane ${lane} needs a status`);
@@ -261,6 +381,16 @@ export const installRecordedProviders = ({
       step = normalizeStep(classified.lane, response);
     }
     const at = now().toISOString();
+    if (step) {
+      const twin = twinRecordingFor(step, classified.endpoint_class);
+      if (twin.refusal) {
+        const entry = { seq, at, ...classified, status: UNSCRIPTED_STATUS, model_served: null, recording: step.recording, refused: true };
+        calls.push(entry);
+        unscripted.push(entry);
+        return jsonResponse(UNSCRIPTED_STATUS, { error: { type: 'recorded_providers_wrong_provider', message: `recorded-providers: ${twin.refusal}` } });
+      }
+      step = deliverAsStructuredTool(convertInlineBody(twin.step, classified, parseBody(init)), parseBody(init));
+    }
     if (!step) {
       const entry = { seq, at, ...classified, status: UNSCRIPTED_STATUS, model_served: null, recording: null, refused: true };
       calls.push(entry);
@@ -280,6 +410,8 @@ export const installRecordedProviders = ({
       status: step.status,
       model_served: modelServedOf(step.body),
       recording: step.recording,
+      ...(step.converted_from ? { converted_from: step.converted_from } : {}),
+      ...(step.delivered_as ? { delivered_as: step.delivered_as } : {}),
       refused: false
     });
     return jsonResponse(step.status, step.body, step.headers);

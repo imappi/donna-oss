@@ -446,9 +446,11 @@ await test('extractContractFromBase64: provider 400 -> DOCUMENT_EXTRACTION_REJEC
   });
 });
 
-await test('extractContractFromBase64: missing API key → openai_not_configured', async () => {
+await test('extractContractFromBase64: no provider key at all → no_provider_key (2026-11-10: names the missing key, not one provider)', async () => {
   const original = process.env.OPENAI_API_KEY;
+  const originalAnthropic = process.env.ANTHROPIC_API_KEY;
   delete process.env.OPENAI_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
   try {
     const result = await extractContractFromBase64({
       base64: 'dGVzdA==',
@@ -457,9 +459,10 @@ await test('extractContractFromBase64: missing API key → openai_not_configured
     });
     assert.equal(result.kind, 'failed');
     assert.equal(result.code, 'DOCUMENT_EXTRACTION_FAILED');
-    assert.equal(result.reason, 'openai_not_configured');
+    assert.equal(result.reason, 'no_provider_key');
   } finally {
     if (original) process.env.OPENAI_API_KEY = original;
+    if (originalAnthropic) process.env.ANTHROPIC_API_KEY = originalAnthropic;
   }
 });
 

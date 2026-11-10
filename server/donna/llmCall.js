@@ -40,6 +40,7 @@ import { captureCloudProviderProvenance } from './cloudProviderProvenance.js';
 import { persistCloudDependencyEvidence } from './cloudDependencyEvidence.js';
 import { currentExecutionBudget } from './executionBudget.js';
 import { providerFetchWithDeadline } from './providerTransport.js';
+import { assembleAnthropicStream, streamErrorStatus } from './anthropicStream.js';
 
 const nowMs = (now) => (typeof now === 'function' ? now() : Date.now());
 
@@ -137,6 +138,11 @@ const providerAttemptId = (response, payload) =>
   || response?.headers?.get?.('request-id')
   || null;
 
+// ── Anthropic event streams ─────────────────────────────────────────────────
+// Reassembled by anthropicStream.js (shared with providerTransport.js, which
+// reads provider bodies for callers that own their socket).
+export { assembleAnthropicStream } from './anthropicStream.js';
+
 // ── The envelope ────────────────────────────────────────────────────────────
 // Returns { result, telemetry }. `result` is whatever `parseResponse` made of
 // the provider payload — the caller owns meaning, this owns measurement.
@@ -158,6 +164,9 @@ export const llmCall = async ({
   promptVersion = null,
   configSnapshotId = null,
   parseResponse = (payload) => payload,
+  // 'anthropic_sse': the body was sent with `stream: true` and the reply is
+  // an Anthropic event stream, reassembled into one Message payload.
+  stream = null,
   maxAttempts = 1,
   fetchImpl = fetch,
   now = Date.now,
@@ -191,11 +200,29 @@ export const llmCall = async ({
       // budget) is a typed failure and must surface as one — never "no
       // payload, status OK". Any other body-read error stays what it was:
       // an empty payload the status decides.
-      payload = await response.json().catch((error) => {
-        if (error?.providerFailure === true) throw error;
-        return {};
-      });
-      if (response.ok) { lastError = null; break; }
+      let streamError = null;
+      if (stream === 'anthropic_sse') {
+        const raw = await response.text().catch((error) => {
+          if (error?.providerFailure === true) throw error;
+          return '';
+        });
+        ({ payload, streamError } = assembleAnthropicStream(raw));
+      } else {
+        payload = await response.json().catch((error) => {
+          if (error?.providerFailure === true) throw error;
+          return {};
+        });
+      }
+      if (response.ok && !streamError) { lastError = null; break; }
+      if (streamError) {
+        lastError = Object.assign(
+          new Error(streamError.message || `${provider || 'provider'} stream error ${streamError.type || ''}`.trim()),
+          { code: 'LLM_CALL_PROVIDER_ERROR', status: streamErrorStatus(streamError), stream_error_type: streamError.type || null }
+        );
+        if (attemptCount >= attempts) break;
+        if (currentExecutionBudget()?.signal.aborted) break;
+        continue;
+      }
       lastError = Object.assign(
         new Error(payload?.error?.message || `${provider || 'provider'} returned ${response.status}`),
         { code: 'LLM_CALL_PROVIDER_ERROR', status: response.status }
@@ -348,4 +375,23 @@ export const telemetryForDecision = (telemetry) => {
     providerAttemptId: telemetry.provider_attempt_id || null,
     promptSections: telemetry.prompt_sections || null
   };
+};
+
+// ── For lanes whose seam is response-shaped ─────────────────────────────────
+// Several document lanes expose a test seam (`__callOpenAi`) whose contract
+// is a fetch Response: `{ ok, status, json() }`. Their DEFAULT transport now
+// rides the envelope; this adapter turns an envelope call back into that
+// shape so the seam, and every test that injects it, is unchanged. A non-OK
+// provider status becomes `{ ok: false, status }` (what the seam returned
+// before); transport throws propagate exactly as a bare fetch's did.
+export const asProviderResponse = async (envelopeCall) => {
+  try {
+    const { result, telemetry } = await envelopeCall;
+    return { ok: true, status: 200, json: async () => result, telemetry };
+  } catch (error) {
+    if (error?.code === 'LLM_CALL_PROVIDER_ERROR') {
+      return { ok: false, status: Number(error.status || 0), json: async () => ({}), telemetry: error.telemetry || null };
+    }
+    throw error;
+  }
 };

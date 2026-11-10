@@ -1,0 +1,30 @@
+{
+  "lane": "document_routing",
+  "endpoint_class": "anthropic",
+  "provenance": "synthetic — the Anthropic Messages twin of document_routing/northgate-marketplace-payout.json (2026-11-10, the document lanes' Anthropic transport): the same authored structured output, carried into the Messages wire shape; never a captured provider response",
+  "fixture": "payout_statement_nonfooting",
+  "status": 200,
+  "body": {
+    "id": "msg_fixture_route_northgate_payout",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-opus-5-5",
+    "content": [
+      {
+        "type": "thinking",
+        "thinking": "",
+        "signature": "fixture"
+      },
+      {
+        "type": "text",
+        "text": "{\"document_family\":\"payout_statement\",\"confidence\":0.94,\"direction_hint\":\"ar\",\"candidate_families\":[{\"family\":\"payout_statement\",\"confidence\":0.94},{\"family\":\"payment_account_statement\",\"confidence\":0.03}],\"language_hint\":\"en\",\"reason\":\"A Northgate Marketplace seller payout statement: gross sales for a settlement period, commission and VAT on commission deducted, one net payout to the client's bank account \\u2014 the client is the seller, so money flows in.\"}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+}

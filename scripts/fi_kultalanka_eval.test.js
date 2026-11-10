@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
 import { hash } from '../server/donna/jevEvidenceContract.js';
-import { loadRecording } from '../server/donna/testSupport/recordedProviders.js';
+import { classifyProviderRequest, loadRecording } from '../server/donna/testSupport/recordedProviders.js';
 import { OPERATOR_REVIEWER, KULTALANKA_DIR, loadKultalankaLabels, validateLabels, computeSectionC, goldOfLine, goldRole, scoreMonth, mapToKeySpace, netLines, identify } from './fi_kultalanka_eval.js';
 import { decisionOf, readMonthSnapshot, scoreBookReadOnly, buildMonthPlan, makeMonthLane, mainScore, sourceFiles } from './fi_kultalanka_eval_run.js';
 import { createTemplate } from './jev_decision_plane_fi_run.js';
@@ -392,7 +392,11 @@ function fixtureProvider() {
     return { date: b.date, counterparty: b.counterparty, payment_method: 'bank_transfer', message: b.message, reference: null, description: `${b.kind} ${b.counterparty} ${b.message}`, direction: b.direction, amount: b.amount, currency: 'EUR', balance: balance / 100 }; });
   const fetchImpl = async (url, init) => {
     const body = JSON.parse(init.body), text = JSON.stringify(body);
-    const schema = body?.text?.format?.name || null;
+    // The lane by what the request carries on either provider (an OpenAI
+    // strict-schema name, or an Anthropic system prompt / user prompt
+    // signature — the document lanes resolve Anthropic first since
+    // 2026-11-10).
+    const schema = body?.text?.format?.name || classifyProviderRequest({ url, init })?.lane || null;
     calls.push({ lane: schema || 'anthropic', provider: String(url).includes('openai') ? 'openai' : String(url).includes('anthropic') ? 'anthropic' : 'typesafe', max_output_tokens: body.max_output_tokens ?? null, max_tokens: body.max_tokens ?? null });
     let payload = {};
     if (schema === 'document_routing') {

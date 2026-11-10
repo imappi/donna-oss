@@ -1169,6 +1169,7 @@ const tryLlmTextExtraction = async (text, filename, { bypassCache = false } = {}
         transactions: structured.transactions,
         statement_summary_hint: structured.statement_summary || null,
         extraction_model: structured.model || null,
+        extraction_provider: structured.provider || null,
         llm_elapsed_ms: Date.now() - startedAt,
         llm_cache_hit: Boolean(structured.cache_hit)
       };
@@ -1298,6 +1299,8 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
           lineCount: structured.transactions.length,
           transactions: structured.transactions,
           statement_summary_hint: structured.statement_summary || null,
+          extraction_model: structured.model || null,
+          extraction_provider: structured.provider || null,
           vision_cache_hit: Boolean(structured.cache_hit),
           vision_elapsed_ms: Date.now() - visionStart
         };
@@ -1330,7 +1333,9 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
       // burn ANOTHER 240s; the function dies at 300s with no result.
       // Skip the fallback and surface the timeout so the caller can
       // render guidance and the worker can persist a useful reason.
-      const isAbort = error?.name === 'AbortError' || error?.code === 'ABORT_ERR';
+      // (PROVIDER_TIMEOUT: the same timeout, typed by the envelope's
+      // deadline transport when the call runs inside a worker budget.)
+      const isAbort = error?.name === 'AbortError' || error?.code === 'ABORT_ERR' || error?.code === 'PROVIDER_TIMEOUT';
       if (isAbort) {
         visionTimedOut = {
           message: error?.message || 'Structured vision OCR timed out before returning a result.',
@@ -1774,6 +1779,7 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
         return { text: '', source: 'openai_vision_structured',
           lineCount: structured.transactions.length, transactions: structured.transactions,
           statement_summary_hint: structured.statement_summary, extraction_model: structured.model,
+          extraction_provider: structured.provider || null,
           vision_cache_hit: structured.cache_hit };
       })()
     : isPdf
@@ -1890,6 +1896,8 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
     extraction_source: extraction.source,
     // The model id is part of the receipt — null on regex-only paths.
     extraction_model: extraction.extraction_model ?? null,
+    // Which provider answered (null on regex-only paths).
+    extraction_provider: extraction.extraction_provider ?? null,
     date_line_count: dateLikeLineCount,
     amount_line_count: amountLikeLineCount,
     statement_summary: statementSummary,

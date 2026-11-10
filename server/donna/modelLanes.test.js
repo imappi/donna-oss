@@ -32,6 +32,9 @@ const walkJsFiles = (dir, acc = []) => {
 // names the call helper; neither IS a lane.
 const CENSUS_EXEMPT = new Set([
   'server/donna/llmCall.js',
+  // The shared Anthropic Messages request (2026-11-10): it shapes the request
+  // for the lanes that call it and owns no lane of its own.
+  'server/donna/anthropicMessages.js',
   'server/donna/providerEndpoints.js',
   'server/donna/modelLanes.js'
 ]);
@@ -130,7 +133,19 @@ const FEED_GOVERNED_LANES = {
   // RT-12 (decision D1, 2026-09-02): THE load-bearing extraction call is
   // provider-agnostic — the qualified set is the two providers' strong
   // defaults (value-synced with UNIFIED_EXTRACTOR_DEFAULT_MODELS below).
-  unified_extraction: ['claude-opus-4-8', 'gpt-5.4'],
+  // 2026-11-10 (the owner's decision that Donna runs on Claude): the
+  // Anthropic default moved to claude-opus-5-5.
+  unified_extraction: ['claude-opus-5-5', 'gpt-5.4'],
+  // 2026-11-10 (the owner's decision that Donna runs on Claude): every
+  // document lane joins the feed with claude-opus-5-5 first and its OpenAI
+  // strong default as the qualified alternative. This extension rides the
+  // Claude-only Finnish company-month promotion run.
+  type_extractors_legacy: ['claude-opus-5-5', 'gpt-5.4'],
+  bank_statement_vision: ['claude-opus-5-5', 'gpt-5.4'],
+  client_intake_draft: ['claude-opus-5-5', 'gpt-5.4'],
+  parser_repair: ['claude-opus-5-5', 'gpt-5.4'],
+  document_routing: ['claude-opus-5-5', 'gpt-5.4'],
+  receipt_classification: ['claude-opus-5-5', 'gpt-5.4-nano'],
   // Q6a — the core's deciding default (value-synced below). Q6c (Kari's
   // dated model-lab call, 2026-08-16): the §9.5 staged candidate joins for
   // the EXPERIMENT basis — policy-selectable on a lab book, receipted;
@@ -198,13 +213,55 @@ await test('every lane names its providers; the unified lane is the one provider
       `${entry.id}: promptVersion is null or a non-empty string`);
   }
   const agnostic = MODEL_LANES.filter((entry) => entry.providers.length > 1).map((entry) => entry.id);
-  assert.deepEqual(agnostic, ['host_provider_probe', 'unified_extraction'], 'a lane goes provider-agnostic in its own dated commit');
+  assert.deepEqual(agnostic, [
+    'host_provider_probe',
+    'unified_extraction',
+    // 2026-11-10: the document lanes, Anthropic first.
+    'type_extractors_legacy',
+    'bank_statement_vision',
+    'client_intake_draft',
+    'parser_repair',
+    'document_routing',
+    'receipt_classification'
+  ], 'a lane goes provider-agnostic in its own dated commit');
   const unified = getLane('unified_extraction');
   assert.deepEqual([...unified.providers], UNIFIED_EXTRACTOR_PROVIDERS);
   assert.deepEqual([...unified.qualified].sort(), Object.values(UNIFIED_EXTRACTOR_DEFAULT_MODELS).sort(),
     'the unified lane qualifies exactly its providers\' strong defaults');
   assert.equal(unified.promptVersion, UNIFIED_EXTRACTOR_PROMPT_VERSION,
     'the registry records the prompt version the module stamps on every receipt');
+});
+
+// 2026-11-10: the document lanes. Each module's Anthropic default is
+// claude-opus-5-5 and sits in its lane's qualified set, Anthropic is the
+// preferred provider, and each module's OpenAI default is the set's other
+// member (source-level sync, the same pattern as the disposition lane).
+await test('document lanes: Anthropic first, each module\'s defaults inside its lane\'s qualified set', () => {
+  const DOCUMENT_LANE_MODULES = {
+    type_extractors_legacy: ['receipt.js', 'salesInvoice.js', 'supplierBill.js', 'contract.js', 'genericDocument.js', 'payoutStatement.js'],
+    document_routing: ['documentRouter.js'],
+    receipt_classification: ['receiptClassifier.js'],
+    client_intake_draft: ['clientIntakeDraft.js'],
+    parser_repair: ['parserRepair.js']
+  };
+  for (const [laneId, files] of Object.entries(DOCUMENT_LANE_MODULES)) {
+    const entry = getLane(laneId);
+    assert.deepEqual([...entry.providers], ['anthropic', 'openai'], `${laneId}: Anthropic first`);
+    assert.equal(entry.endpointClass, 'anthropic', `${laneId}: the primary endpoint class`);
+    for (const file of files) {
+      const source = readFileSync(resolvePath(repoRoot, 'server/donna', file), 'utf8');
+      const anthropicDefault = source.match(/const DEFAULT_ANTHROPIC_MODEL = '([^']+)'/)?.[1];
+      const openaiDefault = source.match(/const DEFAULT_MODEL = '([^']+)'/)?.[1];
+      assert.equal(anthropicDefault, 'claude-opus-5-5', `${file}: the Anthropic default`);
+      assert.ok(entry.qualified.includes(anthropicDefault), `${file}: Anthropic default qualified on ${laneId}`);
+      assert.ok(entry.qualified.includes(openaiDefault), `${file}: OpenAI default ${openaiDefault} qualified on ${laneId}`);
+      assert.ok(source.includes(`laneId: '${laneId}'`), `${file}: resolves its provider through the lane resolver as ${laneId}`);
+    }
+  }
+  const statement = getLane('bank_statement_vision');
+  assert.deepEqual([...statement.providers], ['anthropic', 'openai']);
+  const statementSource = readFileSync(resolvePath(repoRoot, 'server/donna/bankStatementVision.js'), 'utf8');
+  assert.match(statementSource, /anthropic: 'claude-opus-5-5',\s*openai: 'gpt-5.4'/);
 });
 
 await test('a lane flip has exactly one config-plane spelling', () => {

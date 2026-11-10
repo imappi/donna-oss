@@ -123,7 +123,15 @@ test('real PG: shared cloud parse worker uses per-type payable extraction and pr
       // Inspect the actual request delivered to the provider, not an exported
       // prompt constant. This fails on v1; the wire response fixtures above
       // independently pin signed-line persistence and totals validation.
-      for (const request of requests) {
+      // Both keys are lit, so the lane resolves Anthropic first (2026-11-10):
+      // the instructions ride as `system`, the schema as the structured-result
+      // tool's input schema (past the structured-output limits). On OpenAI the
+      // same instructions and schema ride `instructions` / `text.format`.
+      for (const sent of requests) {
+        const request = { ...sent, instructions: sent.instructions ?? sent.system };
+        const schema = sent.text?.format?.schema ?? sent.tools?.find((tool) => tool.name === 'record_structured_result')?.input_schema;
+        if (sent.text?.format) assert.equal(sent.text.format.strict, true);
+        else assert.deepEqual([sent.model, sent.tool_choice], ['claude-opus-5-5', { type: 'auto' }]);
         assert.match(request.instructions, /PAYSLIP \/ PAYROLL RECORD/);
         assert.match(request.instructions, /counterparty_name is the EMPLOYEE/);
         assert.match(request.instructions, /NET pay transferred/);
@@ -132,8 +140,7 @@ test('real PG: shared cloud parse worker uses per-type payable extraction and pr
         assert.match(request.instructions, /LOAN \/ FINANCING NOTICE/);
         assert.match(request.instructions, /Never substitute outstanding principal/);
         assert.match(request.instructions, /INSURANCE PREMIUM INVOICE/);
-        assert.equal(request.text.format.strict, true);
-        assert.equal(request.text.format.schema.properties.lines.items.properties.amount.minimum, undefined, 'signed amounts remain representable');
+        assert.equal(schema.properties.lines.items.properties.amount.minimum, undefined, 'signed amounts remain representable');
       }
     } finally { await app.stop(); }
   });

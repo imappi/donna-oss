@@ -322,7 +322,9 @@ const runTests = async () => {
           extract: async () => ({
             kind: 'failed',
             code: 'DOCUMENT_EXTRACTION_FAILED',
-            reason: 'openai_500'
+            reason: 'openai_500',
+            // Extractors stamp the provider their lane resolved (2026-11-10).
+            provider: 'openai'
           })
         })
       });
@@ -347,7 +349,8 @@ const runTests = async () => {
           extract: async () => ({
             kind: 'failed',
             code: 'DOCUMENT_EXTRACTION_UNREADABLE',
-            reason: 'low_confidence'
+            reason: 'low_confidence',
+            provider: 'openai'
           })
         })
       });
@@ -711,7 +714,9 @@ const runTests = async () => {
           extract: async () => ({
             kind: 'failed',
             code: 'DOCUMENT_EXTRACTION_FAILED',
-            reason: 'openai_500'
+            reason: 'openai_500',
+            // Extractors stamp the provider their lane resolved (2026-11-10).
+            provider: 'openai'
           })
         })
       });
@@ -905,7 +910,9 @@ const runTests = async () => {
           extract: async () => ({
             kind: 'failed',
             code: 'DOCUMENT_EXTRACTION_FAILED',
-            reason: 'openai_500'
+            reason: 'openai_500',
+            // Extractors stamp the provider their lane resolved (2026-11-10).
+            provider: 'openai'
           })
         })
       });
@@ -1392,6 +1399,9 @@ const runTests = async () => {
       result: {
         summary: { prompt_version: 'receipt-extraction-v1' },
         extractor_model: 'gpt-5.4',
+        // The per-type extractors stamp the provider their lane resolved
+        // (2026-11-10: Anthropic first); this result was served by OpenAI.
+        extractor_provider: 'openai',
         unified_attempt: unifiedAttempt({ failure: { code: 'DOCUMENT_EXTRACTION_UNREADABLE', reason: 'low_confidence' } })
       }
     });
@@ -1399,7 +1409,7 @@ const runTests = async () => {
     assert.equal(receipt.fallback_used, true, 'default + attempted + did not run = fallback');
     assert.equal(receipt.fallback_reason, 'DOCUMENT_EXTRACTION_UNREADABLE');
     assert.equal(receipt.fallback_detail, 'low_confidence');
-    assert.equal(receipt.provider, 'openai', 'the per-type family is OpenAI');
+    assert.equal(receipt.provider, 'openai', 'the receipt names the provider the per-type extractor reported');
   });
 
   await test('buildExtractorReceipt: a result without an attempt record (bank statement, e-invoice) is type_specific and never a fallback', () => {

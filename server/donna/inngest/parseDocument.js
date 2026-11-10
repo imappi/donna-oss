@@ -580,7 +580,7 @@ export const buildExtractorReceipt = ({ documentType, result } = {}) => {
   const fellBack = unifiedDefault && attempt?.attempted && !ranUnified;
   return {
     path: ranUnified ? 'unified' : 'type_specific',
-    provider: ranUnified ? (attempt?.provider || null) : (result?.extractor_provider || 'openai'),
+    provider: ranUnified ? (attempt?.provider || null) : (result?.extractor_provider || null),
     model: ranUnified ? (attempt?.model || result?.extractor_model || null) : (result?.extractor_model || null),
     model_source: ranUnified ? (attempt?.model_source || null) : (result?.extractor_model_source || (result?.extractor_model ? 'configured_fallback' : null)),
     prompt_version: ranUnified ? UNIFIED_EXTRACTOR_PROMPT_VERSION : (result?.summary?.prompt_version || null),
@@ -761,6 +761,7 @@ const buildStatementSummary = (extraction, fingerprint) => {
     // which model, when a structured LLM tier did (null on regex paths).
     extraction_source: extraction?.extraction_source || null,
     extraction_model: extraction?.extraction_model || null,
+    extraction_provider: extraction?.extraction_provider || null,
     warnings: Array.isArray(extraction?.warnings) ? extraction.warnings.slice(0, 6) : [],
     account_fingerprint: fingerprint || null
   };
@@ -1115,7 +1116,9 @@ const extractDocumentInner = async ({
       // for retryability; no string-message inference involved.
       throw new ParseError(extraction.code, {
         message: `Receipt extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai',
+        // The provider the lane resolved (Anthropic first since 2026-11-10);
+        // null only when no provider key was configured at all.
+        provider: extraction.provider || null,
         reason: extraction.reason || null,
         model: extraction.model || null
       });
@@ -1183,7 +1186,10 @@ const extractDocumentInner = async ({
       summary,
       header: extraction.header,
       lines,
-      extractor_model: extraction.model || null
+      extractor_model: extraction.model || null,
+      // response_proven / configured_fallback, as the extractor classified it.
+      extractor_model_source: extraction.model_source || null,
+      extractor_provider: extraction.provider || null
     };
   }
 
@@ -1204,7 +1210,9 @@ const extractDocumentInner = async ({
     if (extraction.kind === 'failed') {
       throw new ParseError(extraction.code, {
         message: `Supplier bill extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai',
+        // The provider the lane resolved (Anthropic first since 2026-11-10);
+        // null only when no provider key was configured at all.
+        provider: extraction.provider || null,
         reason: extraction.reason || null,
         model: extraction.model || null
       });
@@ -1234,7 +1242,10 @@ const extractDocumentInner = async ({
       summary,
       header: extraction.header,
       lines,
-      extractor_model: extraction.model || null
+      extractor_model: extraction.model || null,
+      // response_proven / configured_fallback, as the extractor classified it.
+      extractor_model_source: extraction.model_source || null,
+      extractor_provider: extraction.provider || null
     };
   }
 
@@ -1263,7 +1274,9 @@ const extractDocumentInner = async ({
     if (extraction.kind === 'failed') {
       throw new ParseError(extraction.code, {
         message: `${documentType === 'deposit_slip' ? 'Deposit slip' : 'Payout statement'} extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai',
+        // The provider the lane resolved (Anthropic first since 2026-11-10);
+        // null only when no provider key was configured at all.
+        provider: extraction.provider || null,
         reason: extraction.reason || null,
         model: extraction.model || null
       });
@@ -1284,7 +1297,10 @@ const extractDocumentInner = async ({
       summary,
       header: extraction.header,
       lines,
-      extractor_model: extraction.model || null
+      extractor_model: extraction.model || null,
+      // response_proven / configured_fallback, as the extractor classified it.
+      extractor_model_source: extraction.model_source || null,
+      extractor_provider: extraction.provider || null
     };
   }
 
@@ -1308,7 +1324,9 @@ const extractDocumentInner = async ({
     if (extraction.kind === 'failed') {
       throw new ParseError(extraction.code, {
         message: `${extractor.type === 'issued_receipt' ? 'Issued receipt' : 'Sales invoice'} extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai',
+        // The provider the lane resolved (Anthropic first since 2026-11-10);
+        // null only when no provider key was configured at all.
+        provider: extraction.provider || null,
         reason: extraction.reason || null,
         model: extraction.model || null
       });
@@ -1347,7 +1365,8 @@ const extractDocumentInner = async ({
       header: extraction.header,
       lines,
       extractor_model: extraction.model || null,
-      extractor_model_source: extraction.model_source || null
+      extractor_model_source: extraction.model_source || null,
+      extractor_provider: extraction.provider || null
     };
   }
 
@@ -1360,7 +1379,9 @@ const extractDocumentInner = async ({
     if (extraction.kind === 'failed') {
       throw new ParseError(extraction.code, {
         message: `Generic document extraction failed: ${extraction.reason || extraction.code}`,
-        provider: 'openai'
+        provider: extraction.provider || null,
+        reason: extraction.reason || null,
+        model: extraction.model || null
       });
     }
 
@@ -1406,7 +1427,7 @@ const extractDocumentInner = async ({
   if (extraction?.extraction_status === 'needs_review' ||
       (recoveringValidation && extraction?.extraction_status !== 'validated')) {
     throw new ParseError('STATEMENT_VALIDATION_FAILED', {
-      provider: 'openai', reason: 'statement_totals_mismatch', model: extraction.extraction_model,
+      provider: extraction.extraction_provider || null, reason: 'statement_totals_mismatch', model: extraction.extraction_model,
       message: 'Statement extraction failed balance validation; no transactions were imported.'
     });
   }

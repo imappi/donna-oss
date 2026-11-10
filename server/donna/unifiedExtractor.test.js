@@ -105,7 +105,7 @@ const PDF_B64 = 'JVBERi0xLjQKJcfs';
 
 // A fetch stub that records the request and answers with the provider's
 // wire shape around `text`.
-const stubFetch = ({ provider, text, model = null, status = 200, error = null }) => {
+const stubFetch = ({ provider, text, model = null, status = 200, error = null, stopReason = 'end_turn', sse = false }) => {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url, init, body: JSON.parse(init.body) });
@@ -113,7 +113,39 @@ const stubFetch = ({ provider, text, model = null, status = 200, error = null })
     if (status !== 200) return new Response(JSON.stringify({ error: { message: `scripted ${status}` } }), { status, headers: { 'content-type': 'application/json' } });
     const body = provider === 'openai'
       ? { id: 'resp_1', model, output: [{ type: 'message', content: [{ type: 'output_text', text }] }], usage: { input_tokens: 1, output_tokens: 1 } }
-      : { id: 'msg_1', model, content: [{ type: 'text', text }], usage: { input_tokens: 1, output_tokens: 1 } };
+      : (() => {
+        // The unified schema is past the structured-output limits, so the
+        // request carries the structured-result tool and the reply is its
+        // call (anthropicMessages.js schemaDeliveryFor); a reply that is not
+        // JSON arrives as prose, which the lane must refuse.
+        const sent = JSON.parse(init.body);
+        const viaTool = Array.isArray(sent.tools) && sent.tools.some((tool) => tool.name === 'record_structured_result');
+        let input = null;
+        try { input = JSON.parse(String(text || '').replace(/^```json\s*|\s*```$/g, '')); } catch { input = null; }
+        const block = viaTool && input && typeof input === 'object'
+          ? { type: 'tool_use', id: 'toolu_1', name: 'record_structured_result', input }
+          : { type: 'text', text };
+        return { id: 'msg_1', model, content: stopReason === 'refusal' ? [] : [block], stop_reason: stopReason === 'end_turn' && block.type === 'tool_use' ? 'tool_use' : stopReason, usage: { input_tokens: 1, output_tokens: 1 } };
+      })();
+    if (sse && provider === 'anthropic') {
+      // The wire shape of a streamed Messages reply (event stream), which the
+      // envelope reassembles into the same Message.
+      // A streamed tool call: the input arrives as input_json_delta pieces.
+      const frames = [
+        { type: 'message_start', message: { id: 'msg_1', type: 'message', role: 'assistant', model, content: [], stop_reason: null, usage: { input_tokens: 1, output_tokens: 0 } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig' } },
+        { type: 'content_block_stop', index: 0 },
+        ...(stopReason === 'refusal' ? [] : [
+          { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'toolu_1', name: 'record_structured_result', input: {} } },
+          ...[text.slice(0, 7), text.slice(7)].map((piece) => ({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: piece } })),
+          { type: 'content_block_stop', index: 1 }
+        ]),
+        { type: 'message_delta', delta: { stop_reason: stopReason === 'end_turn' ? 'tool_use' : stopReason, stop_sequence: null }, usage: { output_tokens: 9 } },
+        { type: 'message_stop' }
+      ];
+      return new Response(frames.map((f) => `event: ${f.type}\ndata: ${JSON.stringify(f)}\n\n`).join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   return { calls, fetchImpl };
@@ -552,7 +584,7 @@ test('extractUnified on OpenAI: Responses API, json_schema strict named for the 
   assert.match(body.input[0].content[1].text, /routed as "supplier_bill"/);
 });
 
-test('extractUnified on Anthropic: Messages API, the document block, extractJson tolerates fences, the same schema is validated after parse', async () => {
+test('extractUnified on Anthropic: Messages API, the document block, the reply as the structured-result tool call, the same schema validated after parse', async () => {
   const { calls, fetchImpl } = stubFetch({ provider: 'anthropic', text: '```json\n' + JSON.stringify(payout()) + '\n```', model: 'claude-opus-4-8-served' });
   const result = await extractUnified({
     base64: PDF_B64, filename: 'paylink.pdf', mimeType: '', documentType: 'unknown', documentId: 'doc-2',
@@ -564,7 +596,26 @@ test('extractUnified on Anthropic: Messages API, the document block, extractJson
   assert.equal(calls[0].url, 'https://api.anthropic.com/v1/messages');
   assert.equal(calls[0].init.headers['x-api-key'], 'sk-a');
   const body = calls[0].body;
-  assert.equal(body.model, 'claude-opus-4-8');
+  // 2026-11-10: the lane's Anthropic default is claude-opus-5-5.
+  assert.equal(body.model, 'claude-opus-5-5');
+  // The current Messages request shape (anthropicMessages.js): structured
+  // output through output_config.format, adaptive thinking, explicit effort,
+  // streamed, and no forced tool choice and no server-side fallback.
+  assert.equal(calls[0].init.headers['anthropic-version'], '2026-10-21');
+  assert.equal(body.stream, true);
+  assert.deepEqual(body.thinking, { type: 'adaptive' });
+  assert.equal(body.output_config.effort, 'high');
+  // The unified schema carries 63 nullable fields — past the structured-
+  // output limit of 16 union parameters — so it rides, whole, as the input
+  // schema of one non-strict tool with tool_choice auto (forced tool choice
+  // is rejected on claude-opus-5-5); the reply is held to the same schema.
+  assert.equal(body.output_config.format, undefined);
+  assert.deepEqual(body.tools.map((tool) => tool.name), ['record_structured_result']);
+  assert.equal(body.tools[0].input_schema.properties.document_type.enum.length, UNIFIED_DOCUMENT_TYPES.length);
+  assert.equal(body.tools[0].strict, undefined, 'non-strict: a strict tool is grammar-compiled under the same limits');
+  assert.deepEqual(body.tool_choice, { type: 'auto' });
+  assert.equal(body.max_tokens, 64000);
+  assert.equal(body.fallbacks, undefined);
   assert.ok(body.system.startsWith('You are extracting fields from one financial document'));
   assert.equal(body.messages[0].content[0].type, 'document');
   assert.equal(body.messages[0].content[0].source.media_type, 'application/pdf');
@@ -577,6 +628,19 @@ test('extractUnified on Anthropic: Messages API, the document block, extractJson
   assert.ok(invalid.schema_violations.some((v) => v.includes('$.header.total_amount')));
   assert.ok(invalid.schema_violations.includes('$.extra: not in schema'));
   assert.equal(invalid.partial_header.header.counterparty_name, 'Ochre Lighting', 'even a schema-breaking reply keeps the header it carried');
+});
+
+test('extractUnified on Anthropic: a streamed reply is reassembled; refusal and max_tokens are named, final, receipted failures', async () => {
+  const streamed = stubFetch({ provider: 'anthropic', text: JSON.stringify(bill()), model: 'claude-opus-5-5', sse: true });
+  const ok = await extractUnified({ base64: PDF_B64, filename: 'x.pdf', env: { ANTHROPIC_API_KEY: 'sk-a' }, fetchImpl: streamed.fetchImpl });
+  assert.deepEqual([ok.kind, ok.provider, ok.model, ok.model_source], ['completed_header', 'anthropic', 'claude-opus-5-5', 'response_proven']);
+  const refused = await extractUnified({ base64: PDF_B64, filename: 'x.pdf', env: { ANTHROPIC_API_KEY: 'sk-a' },
+    fetchImpl: stubFetch({ provider: 'anthropic', text: '', model: 'claude-opus-5-5', stopReason: 'refusal', sse: true }).fetchImpl });
+  assert.deepEqual([refused.kind, refused.code, refused.reason, refused.retryable, refused.model, refused.model_source, refused.stop_reason],
+    ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'provider_refusal', false, 'claude-opus-5-5', 'response_proven', 'refusal']);
+  const cut = await extractUnified({ base64: PDF_B64, filename: 'x.pdf', env: { ANTHROPIC_API_KEY: 'sk-a' },
+    fetchImpl: stubFetch({ provider: 'anthropic', text: '{"document_type":', model: 'claude-opus-5-5', stopReason: 'max_tokens' }).fetchImpl });
+  assert.deepEqual([cut.code, cut.reason, cut.retryable, cut.model], ['DOCUMENT_EXTRACTION_FAILED', 'provider_max_tokens', false, 'claude-opus-5-5']);
 });
 
 test('extractUnified: the model id falls back to the configured string, receipted as configured_fallback, when the response omits it', async () => {
