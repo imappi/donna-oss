@@ -64,12 +64,30 @@ const smsInboundCopyFor = (language) => (language === 'fi' ? SMS_INBOUND_COPY_FI
 
 // The webhook's confirmation after a binding token is redeemed. The redeemed
 // binding names the client, so the owner language picks one line; with no
-// client (the redeem failed) there is no owner language and the line is
-// bilingual. English is the historical line, unchanged.
+// language the line is bilingual. A redeem that failed is never confirmed: it
+// gets smsNotConnectedText below. English is the historical line, unchanged.
 const SMS_CONNECTED = Object.freeze({ en: 'Got it. SMS is connected.', fi: 'Selvä, tekstiviestit on nyt yhdistetty.' });
 export const smsConnectedText = (language = null) => (language
   ? (language === 'fi' ? SMS_CONNECTED.fi : SMS_CONNECTED.en)
   : bilingualOwnerText(SMS_CONNECTED.fi, SMS_CONNECTED.en));
+
+// A connection code that did not connect anything: `invalid` (expired, used,
+// unknown) or any other redeem failure. Nothing was connected and no client is
+// known, so the line is bilingual, Finnish first.
+const SMS_NOT_CONNECTED = Object.freeze({
+  invalid: Object.freeze({
+    en: 'SMS is not connected: that connection code has expired or was already used. Get a new code from your Donna portal.',
+    fi: 'Tekstiviestejä ei yhdistetty: yhdistämiskoodi on vanhentunut tai jo käytetty. Hae uusi koodi Donna-portaalistasi.'
+  }),
+  failed: Object.freeze({
+    en: 'SMS is not connected: something went wrong on my side. Please try again in a moment.',
+    fi: 'Tekstiviestejä ei yhdistetty, koska yhdistäminen epäonnistui minun päässäni. Yritä hetken päästä uudelleen.'
+  })
+});
+export const smsNotConnectedText = (reason) => {
+  const line = reason === 'invalid_code' ? SMS_NOT_CONNECTED.invalid : SMS_NOT_CONNECTED.failed;
+  return bilingualOwnerText(line.fi, line.en);
+};
 
 const sha256Hex = (bytes) => createHash('sha256').update(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || '')).digest('hex');
 
