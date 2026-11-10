@@ -75,6 +75,28 @@ export function documentSourceComponents(document) {
     components: components.map(line => ({ ...line, amount: money(line.amount), gross: money(line.gross), net: money(line.net), source_tax: money(line.source_tax) })) };
 }
 
+// What the business's OWN sales document prints as tax, when it prints any:
+// a settled sales invoice or issued receipt (codingRevenueEvidence.js
+// settledSalesEvidence, without the processor's payout statement, which is
+// not the business's own document) whose header tax is above zero or one of
+// whose lines carries a rate or a tax amount above zero (read as
+// sourceRate and documentSourceComponents read them). Arithmetic over what is
+// printed: it never says whether that tax is right, owed or reportable.
+// null when the document is not such a source or prints no tax.
+export function salesSourcePrintedTax(document) {
+  if (!document || !['confirmed', 'auto_matched'].includes(document.match_status)
+    || !['sales_invoice', 'issued_receipt'].includes(document.document_type)) return null;
+  const header = finite(document.tax_amount) && Number(document.tax_amount) > 0 ? Number(document.tax_amount) : null;
+  const lines = Array.isArray(document.lines) ? document.lines : [];
+  const lineTax = line => line.tax_amount ?? line.raw_extraction?.tax_amount ?? line.payload?.raw_extraction?.tax_amount;
+  const rated = lines.filter(line => (sourceRate(line) ?? 0) > 0 || (finite(lineTax(line)) && Number(lineTax(line)) > 0));
+  if (header == null && !rated.length) return null;
+  return { document_id: document.document_id || document.id || null, document_type: document.document_type,
+    filename: document.filename || '', document_date: document.document_date || null,
+    total_amount: finite(document.total_amount) ? Number(document.total_amount) : null, currency: document.currency || '',
+    tax_amount: header, rates: [...new Set(rated.map(sourceRate).filter(rate => rate > 0))] };
+}
+
 // A P&L account follows its matched source's side whatever the cash
 // direction: a refund against a purchase source reverses that purchase and is
 // never revenue; a refund against an issued sales invoice reverses that sale

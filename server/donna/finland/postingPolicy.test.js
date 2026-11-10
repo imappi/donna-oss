@@ -156,3 +156,40 @@ test('FI: a supplier bill coded with the no-VAT purchase treatment posts its gro
   assert.throws(() => policy.adapter.supplierBillTaxPosting({ verdict: { ...verdict, tax_treatment: 'ALV 25,5 %' }, document, taxCodingEnabled: true, profile: notRegistered }),
     refusedWith('SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED'));
 });
+
+// A sale whose own sales document shows ALV, for a business the record says
+// is not in the register on the line's date (taxSourceEvidence.js
+// assertSalesSourceTaxRegistration through this policy's declaration).
+test('FI: a sale settling its own sales invoice that shows ALV is refused by name for a business recorded as not registered, whatever the coding', () => {
+  const invoice = (extra = {}) => ({ document_id: 'fi-invoice', document_type: 'sales_invoice', match_status: 'auto_matched', filename: 'Synthetic invoice.pdf',
+    document_date: '2026-06-02', total_amount: 125.5, tax_amount: 25.5, currency: 'EUR', lines: [], ...extra });
+  const { salesSourceShowsTax, refusalCodes } = policy.taxRegistration;
+  assert.equal(salesSourceShowsTax.refusalCode, 'TRANSACTION_ALV_SALE_SOURCE_SHOWS_VAT_UNREGISTERED');
+  assert.ok(refusalCodes.includes(salesSourceShowsTax.refusalCode));
+  assert.equal(refusalCodes[0], 'TRANSACTION_ALV_REGISTRATION_REQUIRED', 'the bank-line registration code stays first (db/ledger.js)');
+  const refused = refusedWith('TRANSACTION_ALV_SALE_SOURCE_SHOWS_VAT_UNREGISTERED');
+  for (const [label, coding, document] of [
+    ['the no-ALV treatment', revenue({ tax_treatment: 'Ei ALV-käsittelyä' }), invoice()],
+    ['a rated treatment', revenue({ tax_treatment: 'ALV 25,5 %' }), invoice()],
+    ['an issued receipt', revenue({ tax_treatment: 'Ei ALV-käsittelyä' }), invoice({ document_type: 'issued_receipt' })],
+    ['header without tax, a rated printed line', revenue({ tax_treatment: 'Ei ALV-käsittelyä' }), invoice({ tax_amount: null, lines: [{ amount: 125.5, tax_rate: 25.5 }] })]
+  ]) {
+    assert.throws(() => assertPostable({ coding, transaction: sale, profile: notRegistered, matchedDocument: document }), (error) => refused(error)
+      && error.details.registered === false && error.details.as_of === '2026-06-02' && error.details.sales_source.document_id === 'fi-invoice', label);
+  }
+  // Neighbours that do not change.
+  const plain = revenue({ tax_treatment: 'Ei ALV-käsittelyä' });
+  for (const [label, input] of [
+    ['an invoice that shows no ALV', { coding: plain, profile: notRegistered, matchedDocument: invoice({ tax_amount: 0, lines: [{ amount: 125.5, tax_rate: 0 }] }) }],
+    ['a suggested (unsettled) match', { coding: plain, profile: notRegistered, matchedDocument: invoice({ match_status: 'suggested' }) }],
+    ['a balance-sheet coding (the receivable)', { coding: { account_code: '1700', account_name: 'Myyntisaamiset', account_type: 'asset' }, profile: notRegistered, matchedDocument: invoice() }],
+    ['an invoice dated while registered, paid after the registration ended', { coding: plain, matchedDocument: invoice({ document_date: '2026-05-15' }),
+      profile: { alv_registration: { status: 'deregistered', registered_from: '2020-01-01', registered_until: '2026-05-31' } } }],
+    ['the tax-coding switch off', { coding: plain, profile: notRegistered, matchedDocument: invoice(), taxCodingEnabled: false }]
+  ]) assert.doesNotThrow(() => assertPostable({ transaction: sale, ...input }), label);
+  // A registered business: the sale meets the ordinary rules (the rated code posts).
+  assert.doesNotThrow(() => assertPostable({ coding: revenue({ tax_treatment: 'ALV 25,5 %' }), transaction: sale, profile: registered, matchedDocument: invoice() }));
+  // A purchase whose receipt prints ALV is not this rule.
+  assert.doesNotThrow(() => assertPostable({ coding: expense({ tax_treatment: 'Vähennyskelvoton ALV (osto)' }), transaction: purchase, profile: notRegistered,
+    matchedDocument: { ...settled, document_type: 'receipt', tax_amount: 25.5, total_amount: 125.5 } }));
+});
