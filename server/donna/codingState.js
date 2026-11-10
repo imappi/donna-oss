@@ -377,6 +377,12 @@ export const codingStateFromLegacy = ({
   return null;
 };
 
+// A line that reaches a coding state is no longer waiting on the provider:
+// the coder's provider-failure receipt (db/coding.js
+// CODING_PROVIDER_FAILURE_PAYLOAD_KEY; named here, not imported, to keep this
+// module free of the coder) is removed in the same write.
+const CODING_PROVIDER_FAILURE_KEY = 'coding_provider_failure';
+
 // ── The ONE writer of the column ────────────────────────────────────────────
 //
 // Locks the line, reads its current state, refuses an undeclared move (the
@@ -402,7 +408,8 @@ export const applyCodingTransition = async (client, { firmId, transactionId, to,
   if (from === target) return { found: true, from, to: target, changed: false };
   await client.query(
     `update transactions
-        set coding_state = $3, coding_state_as_of = now(), updated_at = now()
+        set coding_state = $3, coding_state_as_of = now(), updated_at = now(),
+            payload = payload - '${CODING_PROVIDER_FAILURE_KEY}'
       where firm_id = $1 and id = $2`,
     [firmId, transactionId, target]
   );
@@ -432,7 +439,8 @@ export const applyCodingTransitionIfAllowed = async (client, { firmId, transacti
   if (from === target) return { found: true, from, to: target, changed: false, skipped: false };
   await client.query(
     `update transactions
-        set coding_state = $3, coding_state_as_of = now(), updated_at = now()
+        set coding_state = $3, coding_state_as_of = now(), updated_at = now(),
+            payload = payload - '${CODING_PROVIDER_FAILURE_KEY}'
       where firm_id = $1 and id = $2`,
     [firmId, transactionId, target]
   );
