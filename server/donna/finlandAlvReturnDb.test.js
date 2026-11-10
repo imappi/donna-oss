@@ -23,6 +23,8 @@ const fakeClient = ({ flags = enabledSnapshot, lineRows = [], profile = {} } = {
       if (sql.includes('from ledger_lines')) return { rows: lineRows };
       // FI-09: the sales-recognition census (no uploaded sales documents here).
       if (sql.includes('from documents')) return { rows: [] };
+      // Open correction cases on the period's postings (none here).
+      if (sql.includes('from transactions t')) return { rows: [] };
       throw new Error(`Unexpected query: ${sql}`);
     }
   };
