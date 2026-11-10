@@ -62,7 +62,7 @@ import { createIlmoitinSubmitAlvReturn } from '../inboundCountryRegistry.js';
 import { createIrasSubmitGstF5 } from '../inboundCountryRegistry.js';
 import { whatsappEnvAllowsClient } from './whatsappWebhookCore.js';
 import { sendWhatsAppText } from './whatsapp.js';
-import { processAnchoredInboundMessage, resolveInboundAnchor, storeInboundMediaAsEvidence } from './inboundCore.js';
+import { bilingualOwnerText, processAnchoredInboundMessage, resolveInboundAnchor, storeInboundMediaAsEvidence } from './inboundCore.js';
 import { resolveAssistantName } from '../assistantIdentity.js';
 import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
 
@@ -79,6 +79,8 @@ export const buildWhatsAppInboundCopy = ({ assistantName, language = 'en' } = {}
   const name = resolveAssistantName({ assistant_name: assistantName });
   const help = `Tämä on ${name} — kuittikuvat ja kirjanpitokysymykset tähän numeroon. Vastaa LOPETA, niin katkaisen yhteyden. / It's ${name}. This number is for receipts and quick bookkeeping questions. Reply LOPETA or STOP to disconnect.`;
   const stopped = "Yhteys katkaistu. En lähetä enää viestejä tähän numeroon, ellet yhdistä uudelleen Donna-portaalista. Avoimet kysymykset odottavat portaalissa. / You're disconnected. I won't message this number again unless you reconnect from your Donna portal. Open questions remain in the portal.";
+  // Sent before any client is known for the number: bilingual, like help/stopped.
+  const unbound = bilingualOwnerText('Yhdistä WhatsApp ensin Donna-portaalistasi, niin hoidan tämän.', "Connect WhatsApp from your Donna portal first, then I'll pick this up.");
   if (language === 'fi') {
     return Object.freeze({
       textResolved: 'Selvä, hoidettu.',
@@ -86,7 +88,7 @@ export const buildWhatsAppInboundCopy = ({ assistantName, language = 'en' } = {}
       topicOpen: 'Selvä, pidän tämän kysymyksen avoimena.',
       unanchored: 'Vastaa suoraan siihen kysymykseen, johon vastaat, tai lisää viestiin sen Ref, niin yhdistän sen oikein.',
       voiceDeferred: 'En osaa vielä kuunnella ääniviestejä. Kirjoita vastaus tai lähetä kuva, niin hoidan sen.',
-      unbound: 'Yhdistä WhatsApp ensin Donna-portaalistasi, niin hoidan tämän.',
+      unbound,
       einvoiceReceived: 'Sain verkkolaskun. Luen sen ja kirjaan sen ostolaskuksi.',
       ownerInvoiceCommandDrafted: 'Tein laskusta luonnoksen. Se odottaa hyväksyntääsi, ennen kuin se lähtee.',
       help,
@@ -101,7 +103,7 @@ export const buildWhatsAppInboundCopy = ({ assistantName, language = 'en' } = {}
     topicOpen: "Got it — I’ll keep this question open.",
     unanchored: "Reply right on the question you're answering, or add its Ref and I'll match it.",
     voiceDeferred: "I can't do voice notes yet. Type your answer or send a photo and I'll take it.",
-    unbound: "Connect WhatsApp from your Donna portal first, then I'll pick this up.",
+    unbound,
     einvoiceReceived: "Got the e-invoice — I'm reading it and will book it as a supplier bill.",
     // Kernel-audit M2 — the owner-invoice command drafted. Deliberately says
     // DRAFTED and not SENT: every third-party send holds for the owner's
@@ -119,6 +121,20 @@ export const buildWhatsAppInboundCopy = ({ assistantName, language = 'en' } = {}
 export const WHATSAPP_INBOUND_COPY = buildWhatsAppInboundCopy();
 const WHATSAPP_INBOUND_COPY_FI = buildWhatsAppInboundCopy({ language: 'fi' });
 const whatsappInboundCopyFor = (language) => (language === 'fi' ? WHATSAPP_INBOUND_COPY_FI : WHATSAPP_INBOUND_COPY);
+
+// Texts the webhook sends outside the anchored path (api.js). `language` is the
+// owner language once a binding names a client (ownerLanguageForBindings); null
+// means no client is known, and the text is bilingual, Finnish first. English
+// is the historical copy, unchanged.
+//   connected:    after a binding token is redeemed
+//   connectFirst: a number with no binding (the webhook's own nudge)
+const WHATSAPP_WEBHOOK_COPY = Object.freeze({
+  en: Object.freeze({ connected: 'Got it. WhatsApp is connected.', connectFirst: 'Please connect WhatsApp from your Donna portal first.' }),
+  fi: Object.freeze({ connected: 'Selvä, WhatsApp on nyt yhdistetty.', connectFirst: 'Yhdistä WhatsApp ensin Donna-portaalistasi.' })
+});
+export const whatsappWebhookText = (key, language = null) => (language
+  ? WHATSAPP_WEBHOOK_COPY[language === 'fi' ? 'fi' : 'en'][key]
+  : bilingualOwnerText(WHATSAPP_WEBHOOK_COPY.fi[key], WHATSAPP_WEBHOOK_COPY.en[key]));
 
 // G-9 (D-G9-6) — the opt-out keyword set. Exact whole-message match only
 // ("lopeta laskutus" is an instruction, not an opt-out). Deliberately NARROWER

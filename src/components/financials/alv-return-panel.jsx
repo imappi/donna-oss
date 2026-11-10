@@ -63,6 +63,12 @@ export default function AlvReturnPanel({ envelope, period, onPeriodChange, manda
         {vm.periodTypeLabel ? ` · ${vm.periodTypeLabel}` : ''}
       </div>
 
+      {vm.cadenceNotice && (
+        <div role="status" style={{ fontSize: 12, color: vm.cadenceNotice.kind === 'disagreement' ? T.amber : T.muted, lineHeight: 1.45 }}>
+          {vm.cadenceNotice.text}
+        </div>
+      )}
+
       {vm.lifecycle && (
         <div style={{ border: `1px solid ${T.rule}`, borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: lifecycleColor }}>{vm.lifecycle.label}</div>

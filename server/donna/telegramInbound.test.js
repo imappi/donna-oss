@@ -359,6 +359,42 @@ test('a Finnish owner is answered in Finnish: booked-to consequence and the name
   assert.equal(photo.calls.texts.at(-1).text, 'Selvä. Tallensin sen yrityksen Esimerkki Oy tietoihin. Luen sitä nyt.');
 });
 
+test('owner chat: the portal-link and mileage lines follow the owner language (English unchanged)', async () => {
+  const portalLinkTurn = (language) => makeDeps({ deps: {
+    ...(language ? { getOwnerLanguage: async () => language } : {}),
+    appendClientPortalChatMessage: async (row) => row,
+    assembleClientPortalTurn: async () => ({ context: { client: { name: 'Esimerkki Oy' } }, history: [], validAskIds: [], assistantName: null, ownerMemory: null, selfKnowledge: { portal_link_enabled: true, receipt: {} } }),
+    generateClientPortalChatReply: async () => ({ kind: 'ok', text: '', actions: [{ type: 'share_portal_link' }], model: 'test-model' }),
+    resolveOwnerPortalLink: () => ({ status: 'no_base_url', url: null, path: null }),
+    recordOwnerPortalLinkShare: async () => null
+  } });
+  const fiLink = portalLinkTurn('fi');
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: fiLink.deps, message: { message_id: 50, chat: { id: Number(CHAT_ID) }, text: 'Lähetä portaalilinkki' } });
+  assert.match(fiLink.calls.texts.at(-1).text, /^En pysty lähettämään toimivaa linkkiä juuri nyt/);
+  const enLink = portalLinkTurn(null);
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: enLink.deps, message: { message_id: 51, chat: { id: Number(CHAT_ID) }, text: 'Send me the portal link' } });
+  assert.equal(enLink.calls.texts.at(-1).text, "I can't send a working link right now: the portal web address isn't configured on my side yet. Open your Donna portal and go to the section called What I still need from you. Your open questions and missing documents are all listed there.");
+
+  const mileageTurn = (language) => {
+    const asked = [];
+    const world = makeDeps({ deps: {
+      ...(language ? { getOwnerLanguage: async () => language } : {}),
+      appendClientPortalChatMessage: async (row) => row,
+      assembleClientPortalTurn: async () => ({ context: { client: { name: 'Esimerkki Oy' } }, history: [], validAskIds: [], assistantName: null, ownerMemory: null }),
+      generateClientPortalChatReply: async () => ({ kind: 'ok', text: 'ok', actions: [{ type: 'record_mileage', miles: 50, purpose: 'asiakaskäynti', confidence: 'high' }], model: 'test-model' }),
+      recordOwnerMileageExpense: async (args) => { asked.push(args.language); return { status: 'booked', consequence: `line:${args.language}` }; }
+    } });
+    return { ...world, asked };
+  };
+  const fiMileage = mileageTurn('fi');
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: fiMileage.deps, message: { message_id: 52, chat: { id: Number(CHAT_ID) }, text: 'Ajoin 50 mailia' } });
+  assert.deepEqual(fiMileage.asked, ['fi'], 'the mileage writer is asked for the owner language');
+  assert.equal(fiMileage.calls.texts.at(-1).text, 'line:fi');
+  const enMileage = mileageTurn(null);
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: enMileage.deps, message: { message_id: 53, chat: { id: Number(CHAT_ID) }, text: 'Drove 50 miles' } });
+  assert.deepEqual(enMileage.asked, ['en']);
+});
+
 test('Telegram HELP/STOP in Finnish: the help text invites LOPETA and LOPETA disconnects', async () => {
   const texts = [];
   const revoked = [];
@@ -371,4 +407,36 @@ test('Telegram HELP/STOP in Finnish: the help text invites LOPETA and LOPETA dis
   assert.equal(stop.action, 'stop');
   assert.equal(revoked.length, 1);
   assert.equal(texts.at(-1).text, 'Yhteys katkaistu. En lähetä enää viestejä tähän keskusteluun, ellet yhdistä uudelleen Donna-portaalistasi. Avoimet kysymykset odottavat portaalissa.');
+});
+
+test('texts sent before a client is known are bilingual; once a binding names a client, the owner language picks one', async () => {
+  const { telegramWebhookText } = await import('./channels/telegramInbound.js');
+  const { ownerLanguageForBindings, bilingualOwnerText } = await import('./channels/inboundCore.js');
+  // Unbound chat: no client, no owner language, so both languages, Finnish first.
+  assert.equal(TELEGRAM_INBOUND_COPY.unbound, "Yhdistä Telegram ensin Donna-portaalistasi, niin hoidan tämän. / Connect Telegram from your Donna portal first, then I'll pick this up.");
+  assert.equal(buildTelegramInboundCopy({ language: 'fi' }).unbound, TELEGRAM_INBOUND_COPY.unbound, 'identical in both copies, like WhatsApp help/stopped');
+  // Bare /start: sent before any binding lookup.
+  assert.equal(telegramWebhookText('started'), "Täällä Donna. Tämä keskustelu on kuitteja ja nopeita kirjanpitokysymyksiä varten. Kirjoitan sinulle tänne, kun tarvitsen jotain. / It's Donna. This chat is for receipts and quick bookkeeping questions. I'll message you here when I need one thing.");
+  // Connected: the redeemed binding names the client, so one language.
+  assert.equal(telegramWebhookText('connected', 'en'), 'Got it. Telegram is connected.');
+  assert.equal(telegramWebhookText('connected', 'fi'), 'Selvä, Telegram on nyt yhdistetty.');
+  assert.equal(telegramWebhookText('connected'), 'Selvä, Telegram on nyt yhdistetty. / Got it. Telegram is connected.', 'redeem failed: no client, bilingual');
+  // The webhook catch: the owner language when the bindings were read, bilingual when not.
+  assert.equal(telegramWebhookText('mediaFailed', 'en'), 'I could not save that photo. Please send it again.');
+  assert.equal(telegramWebhookText('mediaFailed', 'fi'), 'En saanut tallennettua sitä kuvaa. Lähetä se uudelleen.');
+  assert.equal(telegramWebhookText('mediaFailed'), bilingualOwnerText('En saanut tallennettua sitä kuvaa. Lähetä se uudelleen.', 'I could not save that photo. Please send it again.'));
+  for (const key of ['connected', 'started', 'mediaFailed']) {
+    const text = telegramWebhookText(key);
+    assert.ok(!text.includes('—') && !text.includes('–'), `voice rule holds for ${key}`);
+  }
+
+  // The language comes from the one resolver over the named clients, never from the message.
+  const asked = [];
+  const getOwnerLanguage = async ({ firmId, clientId }) => { asked.push([firmId, clientId]); return clientId === 'client-fi' ? 'fi' : 'en'; };
+  assert.equal(await ownerLanguageForBindings({ firmId: 'firm', bindings: [], deps: { getOwnerLanguage } }), null);
+  assert.equal(await ownerLanguageForBindings({ firmId: 'firm', bindings: [{ id: 'x' }], deps: { getOwnerLanguage } }), null, 'a row naming no client is no client');
+  assert.equal(await ownerLanguageForBindings({ firmId: 'firm', bindings: [{ firm_id: 'firm-b', client_id: 'client-fi' }], deps: { getOwnerLanguage } }), 'fi');
+  assert.deepEqual(asked.at(-1), ['firm-b', 'client-fi'], "the binding's own firm is read");
+  assert.equal(await ownerLanguageForBindings({ firmId: 'firm', bindings: [{ client_id: 'client-fi' }, { client_id: 'client-en' }], deps: { getOwnerLanguage } }), 'en', 'clients that disagree get English, the existing rule');
+  assert.equal(await ownerLanguageForBindings({ firmId: 'firm', bindings: [{ client_id: 'client-fi' }] }), null, 'no reader: no language');
 });
