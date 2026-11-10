@@ -42,6 +42,7 @@ import { toIsoDay } from './dates.js';
 // Distinct-date twin pairing graduated to foundational behaviour in 2026-08 and
 // intentionally no longer consults this plane.
 import { clientFlagActs } from './clientConfig.js';
+import { firstLineLaneDecides } from './firstLineLane.js';
 // Decision ledger (Phase 0B — family-matcher coverage). Records the auto-match
 // authority decision (the band authorizeMatch produced) into llm_decisions, so the
 // 0A.10 auto-match flips are visible to the ledger and carry the config snapshot they
@@ -795,7 +796,7 @@ export const authorizeJevMatch = ({ proposal, bankLine, document, clientId, conf
     ? bankLine?.money_out || 0 : bankLine?.money_in || 0);
   const selected = proposal?.decision_source === 'jev_full_settlement'
     && Number.isFinite(proposal.confidence) && proposal.confidence >= 0 && proposal.confidence <= 1;
-  const enabled = clientFlagActs({ flagKey: 'JEV_RECONCILIATION', clientId, snapshot: configSnapshot, envFallback: () => false, env });
+  const enabled = firstLineLaneDecides({ snapshot: configSnapshot, env });
   const allowed = enabled && policy?.enabled && clientAllowedToAutoMatch(clientId, policy, { configSnapshot, env });
   const exact = amount > 0 && Number.isFinite(amount) && bankAmount > 0 && oppositeAmount === 0
     && Math.round(amount * 100) === Math.round(bankAmount * 100) && document.currency === bankLine?.currency

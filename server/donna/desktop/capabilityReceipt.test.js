@@ -10,11 +10,15 @@ const FULL_COMPATIBLE = Object.freeze({
   MODEL_CHALLENGER_CAP_TOKENS: '1000000'
 });
 
-test('everything provisioned → all three lanes LIT, no DARK anywhere', () => {
-  const r = buildModelLaneReceipt({ OPENAI_API_KEY: 'sk-x', ANTHROPIC_API_KEY: 'sk-ant-x', ...FULL_COMPATIBLE });
+test('everything provisioned → all four lanes LIT, no DARK anywhere', () => {
+  const r = buildModelLaneReceipt({ OPENAI_API_KEY: 'sk-x', ANTHROPIC_API_KEY: 'sk-ant-x', ...FULL_COMPATIBLE,
+    TYPESAFE_API_KEY: 'ts-secret-key', TYPESAFE_MODEL: 'jev-1.13.0' });
   assert.equal(r.openai, true);
   assert.equal(r.anthropic, true);
   assert.equal(r.openai_compatible, true);
+  assert.equal(r.typesafe, true);
+  assert.match(r.line, /typesafe LIT — TYPESAFE_MODEL: jev-1\.13\.0/);
+  assert.ok(!r.line.includes('ts-secret-key'), 'the first-line key never prints');
   assert.match(r.line, /openai LIT/);
   assert.match(r.line, /anthropic LIT/);
   assert.match(r.line, /openai_compatible LIT — host api\.together\.xyz, candidate Qwen\/Qwen3\.5-397B-A17B, cap 1000000 tokens\/client\/mo/);
@@ -78,4 +82,17 @@ test('a blank override knob counts as unset; a DARK lane never names an override
   const dark = buildModelLaneReceipt({ OPENAI_MODEL: 'gpt-5.4-nano' });
   assert.match(dark.line, /openai DARK — no OPENAI_API_KEY/);
   assert.ok(!dark.line.includes('override'));
+});
+
+// 2026-11-10: the first-line provider is on the receipt. Optional — dark, the
+// other lit lanes decide (firstLineLane.js) — and it needs BOTH rows.
+test('the first-line provider is DARK with each missing row named, and says the other lanes decide', () => {
+  const none = buildModelLaneReceipt({ OPENAI_API_KEY: 'sk-x', ANTHROPIC_API_KEY: 'sk-ant-x' });
+  assert.equal(none.typesafe, false);
+  assert.match(none.line, /typesafe DARK — no TYPESAFE_API_KEY, no TYPESAFE_MODEL \(first-line decisions/);
+  assert.match(none.line, /the other lit lanes decide\)$/);
+  const keyOnly = buildModelLaneReceipt({ TYPESAFE_API_KEY: 'ts-x', TYPESAFE_MODEL: '  ' });
+  assert.equal(keyOnly.typesafe, false);
+  assert.match(keyOnly.line, /typesafe DARK — no TYPESAFE_MODEL \(/);
+  assert.ok(!keyOnly.line.includes('no TYPESAFE_API_KEY'));
 });

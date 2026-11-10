@@ -58,6 +58,7 @@ import { classifyLane } from './lanePolicy.js';
 import { recordLlmDecision, recordLouisVerdict } from './llmDecisions.js';
 import { evaluatePipelineDecision } from './louisPipeline.js';
 import { readClientConfigSnapshot, clientFlagActs, persistConfigSnapshot } from './clientConfig.js';
+import { firstLineLaneDecides } from './firstLineLane.js';
 import {
   checkEntityReadinessAdmissionWithClient,
   evaluateEntityReadinessAdmissionWithClient,
@@ -3636,7 +3637,7 @@ export const autoCategorizeMatchedTransactionsInDb = async ({
     // pre-0A.7. readClientConfigSnapshot soft-fails to {} so a missing table degrades to
     // env, never throws inside a reconcile run.
     const configSnapshot = await readClientConfigSnapshot(client, { firmId, clientId, strict: true });
-    if (clientFlagActs({ flagKey: 'JEV_RECONCILIATION', snapshot: configSnapshot, envFallback: () => false })) {
+    if (firstLineLaneDecides({ snapshot: configSnapshot })) {
       return { categorized: 0, errors: 0, decision_engine: 'jev', reason: 'jev_coding_owns_decision' };
     }
     const mintVerdictAccountActs = clientFlagActs({
@@ -3971,7 +3972,7 @@ export const autoCategorizeUnmatchedTransactionsInDb = async ({
 
   return withFirmDbClient(async (client) => {
     const snapshot = await readClientConfigSnapshot(client, { firmId, clientId, strict: true });
-    if (clientFlagActs({ flagKey: 'JEV_RECONCILIATION', snapshot, envFallback: () => false })) {
+    if (firstLineLaneDecides({ snapshot })) {
       return { categorized: 0, errors: 0, decision_engine: 'jev', reason: 'jev_coding_owns_decision' };
     }
     const accountsResult = await client.query(
