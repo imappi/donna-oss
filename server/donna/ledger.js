@@ -77,34 +77,46 @@ const normalBalanceForType = (type = '') =>
 // VAT-registered client must carry a resolved code before it may post).
 export const ledgerAccountTypeFor = (coding = {}) => accountTypeFor({ account: coding });
 
+// A market-declared posting account (the country's provisioning policy —
+// FI: tilikartta 1910 / 1900, provisioningPolicyRegistry
+// .resolveMarketPostingAccounts) rides the coding or bank summary as
+// `declared_account`. Its own type, role and statutory group are what the
+// account mint writes; every account without one is shaped exactly as before.
+const declaredAccountFields = (declared) => (declared
+  ? { canonical_role: declared.canonical_role || null, statutory_group: declared.statutory_group || null } : {});
+
 const ledgerAccountFromCoding = (coding = {}) => {
   const code = trim(coding.xero_account_code || coding.account_code || coding.code);
   const name = trim(coding.xero_account_name || coding.account_name || coding.proposed_account || coding.name || code);
-  const type = accountTypeFor({ account: coding });
+  const declared = coding.declared_account || null;
+  const type = declared?.account_type || accountTypeFor({ account: coding });
   return {
     role: 'counterparty',
     code,
     name,
     type,
-    normal_balance: normalBalanceForType(type),
+    normal_balance: declared?.normal_balance || normalBalanceForType(type),
     tax_type: trim(coding.xero_tax_type || coding.tax_type),
     xero_account_id: trim(coding.xero_account_id || coding.account_id),
-    label: coding.account_label || accountLabel({ code, name })
+    label: coding.account_label || accountLabel({ code, name }),
+    ...declaredAccountFields(declared)
   };
 };
 
 const ledgerAccountFromBank = (bankAccount = {}) => {
   const code = trim(bankAccount.code || bankAccount.xero_account_code || bankAccount.Code);
   const name = trim(bankAccount.name || bankAccount.xero_account_name || bankAccount.Name || code);
+  const declared = bankAccount.declared_account || null;
   return {
     role: 'bank',
     code,
     name,
-    type: 'bank',
+    type: declared?.account_type || 'bank',
     normal_balance: 'debit',
     tax_type: trim(bankAccount.tax_type || bankAccount.xero_tax_type || 'NONE'),
     xero_account_id: trim(bankAccount.xero_account_id || bankAccount.account_id || bankAccount.AccountID),
-    label: bankAccount.account_label || accountLabel({ code, name })
+    label: bankAccount.account_label || accountLabel({ code, name }),
+    ...declaredAccountFields(declared)
   };
 };
 

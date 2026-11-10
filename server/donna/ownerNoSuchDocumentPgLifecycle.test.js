@@ -171,7 +171,7 @@ test('FI rate discrepancy: "there is no corrected receipt" is booked without the
       assert.deepEqual(line.payload.owner_document_unavailable, fact);
       assert.equal(line.payload.ai_suggestion.document_unavailable_basis.basis, 'owner_stated_no_such_document');
       assert.equal(line.payload.ai_suggestion.document_unavailable_basis.evidence_request_id, question.id);
-      assert.deepEqual(await s.journal('vr'), { count: 1, lines: [['Matkakulut', 28.60, 0, 'ALV_NONDEDUCTIBLE_INPUT'], ['Business Checking · EUR', 0, 28.60, 'NONE']] });
+      assert.deepEqual(await s.journal('vr'), { count: 1, lines: [['Matkakulut', 28.60, 0, 'ALV_NONDEDUCTIBLE_INPUT'], ['Pankkitili', 0, 28.60, 'NONE']] });
       const recode = (await s.audits('transaction.reply_recode')).find((a) => a.resource_id === 'vr');
       assert.equal(recode.metadata.document_unavailable.action, 'owner_has_no_such_document_posted');
       assert.equal(recode.metadata.document_unavailable.basis.basis, 'owner_stated_no_such_document');

@@ -41,7 +41,7 @@
       "journal": [
         {
           "role": "bank",
-          "account": "Business Checking · EUR",
+          "account": "1910",
           "direction": "debit",
           "amount": 251,
           "tax_code": "NONE"

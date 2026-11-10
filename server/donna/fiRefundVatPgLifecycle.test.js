@@ -57,7 +57,7 @@ test('real PG: FI purchase and customer refunds reverse their coded VAT side, wi
     const rows = await journal(f.id); assert.equal(rows.length, 3, JSON.stringify({ id: f.id, rows }));
     const net = Math.round(f.gross / 1.255 * 100) / 100, vat = Math.round((f.gross - net) * 100) / 100;
     const purchase = f.account === 'Office expenses';
-    const expected = [[f.account, f.incoming ? 0 : net, f.incoming ? net : 0, purchase ? 'ALV_25_5_INPUT' : 'ALV_25_5_OUTPUT'], [purchase ? 'Vähennettävä arvonlisävero' : 'Suoritettava arvonlisävero', f.incoming ? 0 : vat, f.incoming ? vat : 0, 'NONE'], ['Business Checking · EUR', f.incoming ? f.gross : 0, f.incoming ? 0 : f.gross, 'NONE']];
+    const expected = [[f.account, f.incoming ? 0 : net, f.incoming ? net : 0, purchase ? 'ALV_25_5_INPUT' : 'ALV_25_5_OUTPUT'], [purchase ? 'Vähennettävä arvonlisävero' : 'Suoritettava arvonlisävero', f.incoming ? 0 : vat, f.incoming ? vat : 0, 'NONE'], ['Pankkitili', f.incoming ? f.gross : 0, f.incoming ? 0 : f.gross, 'NONE']];
     assert.deepEqual(rows.map(r => [r.account_name, Number(r.debit), Number(r.credit), r.tax_type || null]).sort(), expected.sort(), f.id);
     assert.equal(rows.find(r => r.payload.role?.startsWith('alv_')).payload.role, purchase ? 'alv_input_deductible' : 'alv_output');
     const before = JSON.stringify(rows);
@@ -124,7 +124,7 @@ test('real PG: a refund matched to its purchase receipt reverses expense and inp
   const lines = async id => (await journal(id)).map(r => [r.account_name, Number(r.debit), Number(r.credit), r.tax_type || null, r.payload.role?.startsWith('alv_') ? r.payload.role : null]).sort();
   await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
   assert.deepEqual(await lines('tokmanni-purchase'), [
-    ['Business Checking · EUR', 0, 19.9, 'NONE', null], ['Office expenses', 15.86, 0, 'ALV_25_5_INPUT', null], ['Vähennettävä arvonlisävero', 4.04, 0, 'NONE', 'alv_input_deductible']].sort());
+    ['Pankkitili', 0, 19.9, 'NONE', null], ['Office expenses', 15.86, 0, 'ALV_25_5_INPUT', null], ['Vähennettävä arvonlisävero', 4.04, 0, 'NONE', 'alv_input_deductible']].sort());
   // Revenue against a purchase source, and expense against a sales source,
   // contradict the matched source's side whatever the cash direction: refused.
   for (const id of ['tokmanni-refund', 'sale-refund']) {
@@ -137,9 +137,9 @@ test('real PG: a refund matched to its purchase receipt reverses expense and inp
   await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
   assert.ok(seen.some(([id, code]) => id === 'tokmanni-refund' && code === 'TRANSACTION_SOURCE_ACCOUNT_CLASS_CONFLICT'), 'the recode carries the refusal');
   assert.deepEqual(await lines('tokmanni-refund'), [
-    ['Business Checking · EUR', 19.9, 0, 'NONE', null], ['Office expenses', 0, 15.86, 'ALV_25_5_INPUT', null], ['Vähennettävä arvonlisävero', 0, 4.04, 'NONE', 'alv_input_deductible']].sort());
+    ['Pankkitili', 19.9, 0, 'NONE', null], ['Office expenses', 0, 15.86, 'ALV_25_5_INPUT', null], ['Vähennettävä arvonlisävero', 0, 4.04, 'NONE', 'alv_input_deductible']].sort());
   assert.deepEqual(await lines('sale-refund'), [
-    ['Business Checking · EUR', 0, 125.5, 'NONE', null], ['Sales', 100, 0, 'ALV_25_5_OUTPUT', null], ['Suoritettava arvonlisävero', 25.5, 0, 'NONE', 'alv_output']].sort());
+    ['Pankkitili', 0, 125.5, 'NONE', null], ['Sales', 100, 0, 'ALV_25_5_OUTPUT', null], ['Suoritettava arvonlisävero', 25.5, 0, 'NONE', 'alv_output']].sort());
   const report = await getFinlandAlvReturnFromDb({ firmId, clientId, period: '2025-02', readAt: '2025-03-01T12:00:00Z' });
   assert.deepEqual(report.review.blockers, []);
   assert.deepEqual(report.review.incompatibleLines, []);
