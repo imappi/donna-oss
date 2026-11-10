@@ -164,7 +164,12 @@ async function readInputs({client,firmId,clientId,transactionId}) {
     // projection. Exclude this consumer's own housekeeping and observer clocks.
     transaction:{...transaction,coding_correction_required:undefined,updated_at:undefined,
       convergence_state:undefined,convergence_reason:undefined},
-    version:5,original:journal,adjustments,originalLines,policy,profile,transport,accounts,clientRules,facts,authority:authority.receipt});
+    version:5,original:journal,adjustments,originalLines,policy,profile,transport,
+    // The chart reader orders by code and name only; same-name rows tie, and
+    // PostgreSQL may return ties in either order between two reads. The
+    // revision binds the menu's content, not that order.
+    accounts:[...accounts].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    clientRules,facts,authority:authority.receipt});
   return {row,transaction,requirement,current,journal,originalLines,policy,profile,accounts,clientRules,facts,authority,transport,asks,revision};
 }
 
