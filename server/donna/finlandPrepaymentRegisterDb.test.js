@@ -39,7 +39,7 @@ const fakeClient = ({ billCount = 0 } = {}) => {
           rows: [{
             id: params[0], firm_id: params[1], client_id: params[2], status: 'open',
             evidence_type: params[3], question: params[4], request_payload: JSON.parse(params[5]),
-            send_count: 1, created_by: params[6]
+            send_count: 0, created_by: params[6]
           }]
         };
       }
@@ -97,6 +97,7 @@ test('a not-registered supplier WITH recent bills escalates: deterministic ask, 
   assert.deepEqual(deliveries.map((d) => d.evidenceRequestIds), [[ask.id]], 'delivered over the ask substrate');
   const askInsert = client.queries.find((q) => q.sql.includes('insert into client_evidence_requests'));
   assert.ok(askInsert.sql.includes('on conflict (id) do update'), 're-checks reopen the same ask, never a sibling');
+  assert.doesNotMatch(askInsert.sql, /first_sent_at|last_sent_at|send_count \+ 1/, 'the mint and a re-check write no sent stamp: only a deliverer stamps');
   const commitIdx = client.queries.findIndex((q) => q.sql === 'commit');
   const askIdx = client.queries.indexOf(askInsert);
   assert.ok(askIdx < commitIdx, 'the ask mints inside the same transaction');

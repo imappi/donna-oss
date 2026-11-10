@@ -21,6 +21,15 @@ export const EVIDENCE_TOPIC_REMINDERS_FLAG_KEY = 'EVIDENCE_TOPIC_REMINDERS';
 
 const DEFAULT_LIMIT = 25;
 const NOT_AWAITING_REASON = 'not_awaiting';
+// A reminder that was not sent because there was nowhere, or nothing safe, to
+// send it is a skip, not a failure: each is counted by name so `failed` holds
+// only sends the provider refused, and `errors` only work that threw.
+const SKIP_COUNTERS = Object.freeze({
+  unbound: 'unbound',
+  telegram_env_dark: 'channel_off',
+  sensitive_ask_portal_only: 'withheld_sensitive'
+});
+const MAX_ERROR_DETAILS = 10;
 const DEFAULT_OWNER_QUIET_HOURS = 24;
 const DEFAULT_REMINDER_QUIET_HOURS = 48;
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -180,7 +189,11 @@ export const runEvidenceTopicReminderSweep = async ({
 
   const requests = await listOpenEvidenceTopics({ firmId, clientId, limit });
   const candidates = selectDueEvidenceTopicReminders({ requests, now, limit });
-  const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, deferred: 0, refused: 0, not_awaiting: 0, failed: 0 };
+  // failed: the provider refused the send (its failed ledger row is the
+  // receipt). errors: the work threw, so this summary is its only record; the
+  // scheduler's partial-failure summary reads these (parseCronSummaryFailures).
+  const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, deferred: 0, refused: 0, not_awaiting: 0,
+    unbound: 0, channel_off: 0, withheld_sensitive: 0, failed: 0, errors: 0, error_details: [] };
   const snapshots = new Map();
   const sendGates = new Map();
   // The owner's language, read once per client (wording only).
@@ -253,7 +266,16 @@ export const runEvidenceTopicReminderSweep = async ({
         stats.not_awaiting += 1;
         continue;
       }
-      if (delivery?.ok === false) throw new Error(delivery.reason || delivery.error || 'SEND_FAILED');
+      if (delivery?.skipped && Object.prototype.hasOwnProperty.call(SKIP_COUNTERS, delivery.reason)) {
+        // Nothing sent, nothing stamped: no bound channel, Telegram switched
+        // off for this client, or a text withheld as sensitive.
+        stats[SKIP_COUNTERS[delivery.reason]] += 1;
+        continue;
+      }
+      if (delivery?.ok === false) {
+        stats.failed += 1;
+        continue;
+      }
       const nextTopic = buildEvidenceTopicReminderState({
         topic: candidate.topic,
         now,
@@ -266,8 +288,11 @@ export const runEvidenceTopicReminderSweep = async ({
         actorId: 'evidence_topic_reminder_sweep'
       });
       stats.sent += 1;
-    } catch {
-      stats.failed += 1;
+    } catch (error) {
+      stats.errors += 1;
+      if (stats.error_details.length < MAX_ERROR_DETAILS) {
+        stats.error_details.push({ evidence_request_id: request.id, client_id: request.client_id || null, error: String(error?.message || error) });
+      }
     }
   }
   return stats;

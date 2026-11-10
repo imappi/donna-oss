@@ -334,6 +334,29 @@ export const deriveClientIdentityColumns = (profile = {}) => {
   return { legalNames: names, jurisdiction };
 };
 
+// Pure: the profile's alias list after a legalName correction. The rule: the
+// list is what the profile says, and a corrected name replaces the one it
+// corrects. An alias equal (case-insensitively) to the legal name being
+// replaced is that same claim, so it takes the new name (or goes, when the
+// legal name is cleared); every other alias stays, in order. Returns null when
+// the list does not change, so a caller writes nothing it did not need to.
+// deriveClientIdentityColumns then reads the corrected profile as it reads any
+// other: there is still one derivation of clients.legal_names.
+export const correctLegalNameAliases = ({ aliases, previous, next } = {}) => {
+  if (!Array.isArray(aliases)) return null;
+  const replaced = previous == null ? '' : String(previous).trim().toLowerCase();
+  if (!replaced) return null;
+  const nextName = next == null ? '' : String(next).trim();
+  if (nextName.toLowerCase() === replaced) return null;
+  if (!aliases.some((alias) => String(alias ?? '').trim().toLowerCase() === replaced)) return null;
+  const out = [];
+  for (const alias of aliases) {
+    const value = String(alias ?? '').trim().toLowerCase() === replaced ? nextName : alias;
+    if (value && !out.some((kept) => String(kept).trim().toLowerCase() === String(value).trim().toLowerCase())) out.push(value);
+  }
+  return out;
+};
+
 // The accounting_system a client is born with (or keeps) across the
 // createClientInDb upsert. Pure, exported for unit tests. Returns a patch
 // to merge into the profile about to be written, or null when the incoming
@@ -1761,6 +1784,10 @@ export const updateClientProfileInDb = async ({
   profilePatch,
   actorId = null,
   principal = null,
+  // The surface that carried the write ('mobile' for the phone adapter; read
+  // by the route from req.donnaChannel only). Attribution on the audit row,
+  // absent for the web; nothing depends on it.
+  channel = null,
   dbClient = null,
   manageTransaction = true
 } = {}) => {
@@ -1793,12 +1820,12 @@ export const updateClientProfileInDb = async ({
   // with the same bounded options. Read before validation so an alias such as
   // "Limited company" is never interpreted without its country.
   let legalFormJurisdiction = profilePatch.jurisdiction || null;
+  // Either legal-form home (entity_type, or the camelCase entityType the
+  // Finnish pilot writes) is validated against the client's country.
+  const hasLegalFormPatch = ['entity_type', 'entityType']
+    .some((key) => typeof profilePatch[key] === 'string' && profilePatch[key].trim());
   if (
-    hasCountryFacts || hasRegistrationPatch || (
-      typeof profilePatch.entity_type === 'string'
-      && profilePatch.entity_type.trim()
-      && !legalFormJurisdiction
-    )
+    hasCountryFacts || hasRegistrationPatch || (hasLegalFormPatch && !legalFormJurisdiction)
   ) {
     const jurisdictionRow = dbClient
       ? await dbClient.query(
@@ -1849,7 +1876,7 @@ export const updateClientProfileInDb = async ({
       let nativeRegistrationReceipt = null;
       let countryFactsInvalidated = null;
       let jurisdictionChanged = false;
-      if (hasAccountingPatch || hasCountryFacts || hasRegistrationPatch || hasJurisdictionPatch || hasAccountingSystemPatch || (typeof profilePatch.entity_type === 'string' && profilePatch.entity_type.trim())) {
+      if (hasAccountingPatch || hasCountryFacts || hasRegistrationPatch || hasJurisdictionPatch || hasAccountingSystemPatch || hasLegalFormPatch) {
         // Re-resolve the actual persisted homes under the write lock. A country
         // correction between initial validation and commit must not mint facts
         // normalized under the earlier country's rules.
@@ -1982,6 +2009,18 @@ export const updateClientProfileInDb = async ({
         [firmId, clientId]
       )).rows[0] || null;
       const priorProfile = priorRow?.profile || {};
+      // A corrected legalName replaces the alias it corrects in
+      // profile.legalNames (correctLegalNameAliases), unless this patch states
+      // the list itself. Written as part of this patch so previous_values holds
+      // the old list and clients.legal_names below is derived from the same
+      // corrected profile.
+      if (Object.prototype.hasOwnProperty.call(stampedPatch, 'legalName')
+        && !Object.prototype.hasOwnProperty.call(stampedPatch, 'legalNames')) {
+        const correctedAliases = correctLegalNameAliases({
+          aliases: priorProfile.legalNames, previous: priorProfile.legalName, next: stampedPatch.legalName
+        });
+        if (correctedAliases) stampedPatch.legalNames = correctedAliases;
+      }
       const previousValues = Object.fromEntries(Object.keys(stampedPatch)
         .filter((key) => Object.prototype.hasOwnProperty.call(priorProfile, key))
         .map((key) => [key, priorProfile[key]]));
@@ -2096,7 +2135,7 @@ export const updateClientProfileInDb = async ({
         `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
          values ($1, $2, $5, $3, 'client.profile.update', 'client', $2, $4::jsonb)`,
         [firmId, clientId, actorId, JSON.stringify({ keys: Object.keys(stampedPatch), previous_values: previousValues,
-          ...(legalNamesChange ? { legal_names: legalNamesChange } : {}), ...(nativeRegistrationReceipt ? { native_registration: nativeRegistrationReceipt } : {}), ...(countryFactsInvalidated ? { country_facts_invalidated: countryFactsInvalidated } : {}), ...(accountingProfileReceipt ? { accounting_profile: accountingProfileReceipt } : {}), ...(fiIntakeFirstFill ? { fi_intake_first_fill: fiIntakeFirstFill } : {}) }), profileAuditActorType({ actorId, principal, nativeRegistrationReceipt })]
+          ...(legalNamesChange ? { legal_names: legalNamesChange } : {}), ...(nativeRegistrationReceipt ? { native_registration: nativeRegistrationReceipt } : {}), ...(countryFactsInvalidated ? { country_facts_invalidated: countryFactsInvalidated } : {}), ...(accountingProfileReceipt ? { accounting_profile: accountingProfileReceipt } : {}), ...(fiIntakeFirstFill ? { fi_intake_first_fill: fiIntakeFirstFill } : {}), ...(channel === 'mobile' ? { channel } : {}) }), profileAuditActorType({ actorId, principal, nativeRegistrationReceipt })]
       );
 
       await client.query(manageTransaction ? 'commit' : 'release savepoint client_profile_update');

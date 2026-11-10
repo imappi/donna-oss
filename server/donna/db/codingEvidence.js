@@ -401,6 +401,16 @@ const codingAccountClass = async ({client,firmId,clientId,account}) => {
   return row ? ledgerAccountTypeFor({account_type:row.account_type}) : null;
 };
 
+// Every refusal code assertCurrentCodingEvidence throws; the posting paths
+// receipt these on the line (receiptPostingFailure) as they do policy refusals.
+export const CODING_EVIDENCE_REFUSAL_CODES = Object.freeze([
+  'TRANSACTION_SOURCE_IDENTITY_UNRESOLVED', 'TRANSACTION_REVENUE_SOURCE_REQUIRED',
+  'TRANSACTION_SOURCE_ACCOUNT_CLASS_CONFLICT', 'TRANSACTION_STATUTORY_SOURCE_REQUIRED',
+  'TRANSACTION_SOURCE_BUSINESS_USE_CONFLICT', 'TRANSACTION_CODING_REQUIREMENT_UNRESOLVED',
+  'TRANSACTION_CODING_EVIDENCE_STALE', 'TRANSACTION_CHAT_CODING_ALLOCATION_UNSUPPORTED',
+  'TRANSACTION_CODING_EVIDENCE_PENDING'
+]);
+
 export const assertCurrentCodingEvidence = async ({ client, firmId, clientId, transaction, lock = false }) => {
   // Human accepts keep their authority; a machine proposal is bound to its evidence.
   const accepted = transaction.accepted_coding_evidence;
@@ -444,7 +454,11 @@ export const assertCurrentCodingEvidence = async ({ client, firmId, clientId, tr
       { code: 'TRANSACTION_CHAT_CODING_ALLOCATION_UNSUPPORTED', statusCode: 409 });
   }
   const evidenceDecision = accepted || suggestion;
-  if (!evidenceDecision?.evidence_digest) return;
+  // No digest (a coding made before evidence was bound, or by a writer that
+  // binds none): there is nothing to compare for staleness, but the matched
+  // document still exists and is what the posting policy judges by. A line
+  // with no matched document returns null and gains none.
+  if (!evidenceDecision?.evidence_digest) return document;
 
 
   if (!document && (await client.query(`select 1 from documents where firm_id=$1 and client_id=$2 and parse_status in ('pending','processing') limit 1`,[firmId,clientId])).rows.length) {

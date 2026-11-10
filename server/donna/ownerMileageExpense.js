@@ -61,6 +61,22 @@ export const ownerMileageBookedText = ({ computation = {}, purpose = '', currenc
     amount: Number(amount)
   });
 
+// The owner-facing line for a replay: the same owner message reached the writer
+// again and its journal is already on the books, so nothing new was booked.
+// Built only from values the retained journal holds; a missing amount or
+// currency drops the amount, never prints a placeholder.
+const MILEAGE_ALREADY_RECORDED_COPY = Object.freeze({
+  en: (shown) => `That trip is already recorded${shown ? ` (${shown.currency} ${shown.amount.toFixed(2)})` : ''}. I haven't booked it again.`,
+  fi: (shown) => `Tämä matka on jo kirjattu${shown ? ` (${shown.amount.toFixed(2).replace('.', ',')} ${shown.currency})` : ''}. En kirjannut sitä uudelleen.`
+});
+
+export const ownerMileageAlreadyRecordedText = ({ amount, currency, language = 'en' } = {}) => {
+  const value = Number(amount);
+  const code = typeof currency === 'string' ? currency.trim() : '';
+  const shown = amount != null && Number.isFinite(value) && value > 0 && code ? { amount: value, currency: code } : null;
+  return (MILEAGE_ALREADY_RECORDED_COPY[language] || MILEAGE_ALREADY_RECORDED_COPY.en)(shown);
+};
+
 export const buildOwnerMileageJournal = ({ action = {}, clientProfile = {}, accounts = [], actorId, sourceMessageId, model, now = new Date(), language = 'en' } = {}) => {
   const miles = Number(action.miles);
   const purpose = clean(action.purpose || action.reason, 280);
@@ -122,8 +138,8 @@ export const buildOwnerMileageJournal = ({ action = {}, clientProfile = {}, acco
 };
 
 // `language` is the owner's (preferredOwnerTemplateLanguage); it only picks the
-// wording of the returned `consequence` (the text the owner is sent). The
-// receipt's operator_words stay English.
+// wording of the returned `consequence` (the text the owner is sent), for a new
+// booking and for a replay alike. The receipt's operator_words stay English.
 export const recordOwnerMileageExpenseInDb = async ({ firmId, clientId, action, actorId, sourceMessageId, model, now = new Date(), language = 'en', deps = {} } = {}) => {
   const { withFirmDbClient, writeValidatedJournal } = deps;
   const db = withFirmDbClient || (await import('./firmDb.js')).withFirmDbClient;
@@ -179,7 +195,8 @@ export const recordOwnerMileageExpenseInDb = async ({ firmId, clientId, action, 
         if (!['posted', 'closed'].includes(existing.status) || existing.reversed_at) return { status: 'preserved', reason: 'historical_mileage_corrected', ledger_journal_id: existing.id };
         return { status: 'booked', replay: true, ledger_status: existing.status, ledger_journal_id: existing.id,
           ledger_amount: Number(existing.amount), ledger_currency: existing.currency,
-          computation: existing.payload?.computation || null };
+          computation: existing.payload?.computation || null,
+          consequence: ownerMileageAlreadyRecordedText({ amount: existing.amount, currency: existing.currency, language }) };
       }
       const accountsRes = await client.query('select id, code, name, account_type, canonical_role, currency, status from ledger_accounts where firm_id = $1 and client_id = $2 and coalesce(status, $3) = $3', [firmId, clientId, 'active']);
       const built = buildOwnerMileageJournal({ action, clientProfile: profile, accounts: accountsRes.rows, actorId, sourceMessageId, model, now, language });

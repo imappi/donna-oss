@@ -6,7 +6,7 @@
 
 import { planRefundGroup } from '../jevRefundGroup.js';
 import { resolveDocumentAllocation } from './documentAllocation.js';
-import { assertCurrentCodingEvidence, autonomousCoding } from './codingEvidence.js';
+import { assertCurrentCodingEvidence, autonomousCoding, CODING_EVIDENCE_REFUSAL_CODES } from './codingEvidence.js';
 
 import { loadTaxPostingContext, readTaxPostingEvidence, taxFactsDigest } from './taxPostingFacts.js';
 import { readPostingAdmissionWithClient, requirePostingAdmission } from '../postingAdmissionRegistry.js';
@@ -75,15 +75,18 @@ export const receiptPostingFailure = async ({ client, firmId, clientId, transact
   const aeVatFailure = /^(TRANSACTION_AE_VAT_|AE_VAT_|TAX_POSTING_FACTS_)/.test(String(error?.code || ''));
   const componentFailure = /^(TRANSACTION_ALV_|TRANSACTION_DOCUMENT_ALLOCATION_|SETTLEMENT_SPLIT_|REFUND_GROUP_)/.test(String(error?.code || ''));
   const policyFailure = isCodingPolicyError(error) || error instanceof PostingPolicyError;
-  if (!policyFailure && !aeVatFailure && !componentFailure && !processingScopeFailure) return;
+  // The coding-evidence gate's refusals (assertCurrentCodingEvidence) are
+  // row receipts like the component ones; they are not policy incidents.
+  const evidenceFailure = CODING_EVIDENCE_REFUSAL_CODES.includes(error?.code);
+  if (!policyFailure && !aeVatFailure && !componentFailure && !processingScopeFailure && !evidenceFailure) return;
   if (policyFailure || aeVatFailure || processingScopeFailure) await recordCodingPolicyFailure({ client, firmId, clientId, transactionIds, error, operation: 'posting' });
-  if (aeVatFailure || componentFailure || processingScopeFailure) {
+  if (aeVatFailure || componentFailure || processingScopeFailure || evidenceFailure) {
     // The existing RT-23 projection must see refusal from direct/manual and
     // preview entrypoints too, not only after the auto-post sweep visits it.
     await client.query(`update transactions set payload = payload || jsonb_build_object('ledger_post_refusal', $4::jsonb)
       where firm_id = $1 and client_id = $2 and id = any($3::text[])
         and coalesce(coding_state, '') not in ('posted', 'synced', 'closed')`,
-    [firmId, clientId, transactionIds, JSON.stringify({ code: error.code, error: error.message, details: error.details || null, source: 'posting_policy' })]);
+    [firmId, clientId, transactionIds, JSON.stringify({ code: error.code, error: error.message, details: error.details || null, source: evidenceFailure ? 'coding_evidence' : 'posting_policy' })]);
   }
 };
 

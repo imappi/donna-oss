@@ -73,3 +73,44 @@ test('the other English keyword lists keep their existing reads', () => {
   assert.equal(outcomeOf('Missing'), 'partial_answer');
   assert.equal(outcomeOf('Cannot'), 'needs_review');
 });
+
+// Phones type a curly apostrophe (’, U+2019) and insert non-breaking spaces;
+// the keyword lists are written with a straight apostrophe and plain spaces.
+// One normalisation runs before the keyword tests, so both forms read the same.
+test('curly apostrophes and phone spacing read like their plain forms, in Finnish and English', () => {
+  const pairs = [
+    ["I can't", 'needs_review'],
+    ['I can’t', 'needs_review'],
+    ['can’t find it', 'needs_review'],
+    ["I don't know", 'needs_review'],
+    ['I don’t know', 'needs_review'],
+    ['I donʼt know', 'needs_review'],
+    ["I'll send it later", 'defer_later'],
+    ['I’ll send it later', 'defer_later'],
+    ['I’ll send the receipt', 'defer_later'],
+    ['I don’t have all of them', 'partial_answer'],
+    ['not sure', 'partial_answer'],
+    ['next week', 'defer_later'],
+    ['en tiedä', 'needs_review'],
+    ['en ole varma', 'partial_answer'],
+    ['ei onnistu', 'needs_review'],
+    ['palaan asiaan huomenna', 'defer_later'],
+    // A decomposed ä (a + U+0308), as some keyboards send it.
+    ['en tiedä', 'needs_review'],
+    ['ehkä se oli työkulu', 'partial_answer']
+  ];
+  for (const [reply, outcome] of pairs) {
+    assert.equal(outcomeOf(reply), outcome, `${JSON.stringify(reply)} should read as ${outcome}`);
+  }
+});
+
+test('normalising does not make an ordinary word contain a keyword', () => {
+  for (const reply of [
+    'henkilökohtainen kulu',
+    'yksityiskohta’s',
+    'Collateral for the van loan',
+    'ehkäisyvälineet, henkilökohtainen'
+  ]) {
+    assert.equal(outcomeOf(reply), 'answered', `${JSON.stringify(reply)} should be an answer`);
+  }
+});

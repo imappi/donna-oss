@@ -285,6 +285,7 @@ test('a channel REJECTION surfaces its reason verbatim in the owner text; the ro
     flagActs: true,
     getAlvReturnImpl: async () => ({ ...row }),
     getMandateImpl: async () => MANDATE,
+    assertFileableImpl: async () => ({}),
     markFiledImpl: async () => { throw new Error('must not mark filed on a rejection'); },
     cancelImpl: async () => { throw new Error('must not cancel'); },
     submitReturn: (payload) => adapter({ ...payload, firmId: 'firm-1', clientId: 'client-1' }),
