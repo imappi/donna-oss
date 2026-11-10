@@ -36,11 +36,22 @@ import { ALV_THRESHOLD_EVIDENCE_TYPE, buildAlvRegistrationWatch, buildAlvThresho
 import { withFirmDbClient } from '../db/pool.js';
 import { shortHash } from '../db/shared.js';
 import { clientAccountingBasisFromProfile, DEFAULT_FIRM_ID, requireClientInFirm } from '../db/clients.js';
-import { rowToClientEvidenceRequestPayload } from '../db/asks.js';
+import { deliverEvidenceAsksOnAllChannels, rowToClientEvidenceRequestPayload } from '../db/asks.js';
 import { rowToLedgerLinePayload } from '../db/ledger.js';
 import { getLedgerPeriodPreviewFromDb } from '../db/close.js';
-import { deliverWhatsAppEvidenceAsksAfterSend } from '../db/channels.js';
 import { readRecognitionGapWithClient, recognitionStatement } from '../salesRecognitionGap.js';
+
+// Every owner question these Finnish flows raise is delivered through the ONE
+// gated fan-out (db/asks.js deliverEvidenceAsksOnAllChannels, gated by
+// ownerAskDelivery.js): a send-contained client is held and the refusal is
+// receipted ('evidence_request.send_refused', naming the surface), and only a
+// deliverer that really delivered moves send_count / first_sent_at /
+// last_sent_at. A mint here writes no sent stamp. WhatsApp only: the one
+// channel these questions have always gone out on.
+const STATUTORY_ASK_CHANNELS = Object.freeze(['whatsapp']);
+const deliverStatutoryAsks = ({ client, surface, ...args }) =>
+  deliverEvidenceAsksOnAllChannels({ client, ...args, surface, channels: STATUTORY_ASK_CHANNELS });
+const deliveredAsk = (result, askId) => Array.isArray(result?.delivered) && result.delivered.includes(askId);
 
 
 const dayBeforeIso = (iso) => {
@@ -581,7 +592,7 @@ export const drainFinlandAlvThresholdEscalations = async ({
   deliverAsksImpl = null
 } = {}) => {
   const watchYear = Number(year) || new Date().getUTCFullYear();
-  const summary = { scanned: 0, exceeded: 0, minted: 0, delivered: 0, skipped: 0, errors: 0 };
+  const summary = { scanned: 0, exceeded: 0, minted: 0, delivered: 0, held: 0, skipped: 0, errors: 0 };
 
   // Candidates: acting per-client rows UNION every client of a firm whose
   // firm-default row acts. The per-client snapshot below is authoritative
@@ -639,9 +650,9 @@ export const drainFinlandAlvThresholdEscalations = async ({
         const insertResult = await client.query(
           `insert into client_evidence_requests (
              id, firm_id, client_id, status, evidence_type, question, request_payload,
-             first_sent_at, last_sent_at, send_count, created_by
+             send_count, created_by
            )
-           values ($1, $2, $3, 'open', $4, $5, $6::jsonb, now(), now(), 1, 'system')
+           values ($1, $2, $3, 'open', $4, $5, $6::jsonb, 0, 'system')
            on conflict (id) do nothing
            returning id`,
           [
@@ -682,9 +693,11 @@ export const drainFinlandAlvThresholdEscalations = async ({
       }
       summary.minted += 1;
       const deliver = deliverAsksImpl
-        || ((args) => deliverWhatsAppEvidenceAsksAfterSend({ client, ...args }));
-      await deliver({ firmId: candidate.firm_id, clientId: candidate.client_id, evidenceRequestIds: [askId] });
-      summary.delivered += 1;
+        || ((args) => deliverStatutoryAsks({ client, surface: 'finland_alv_threshold', ...args }));
+      const delivery = await deliver({ firmId: candidate.firm_id, clientId: candidate.client_id, evidenceRequestIds: [askId] });
+      // Counted as delivered only when a deliverer delivered it.
+      if (deliveredAsk(delivery, askId)) summary.delivered += 1;
+      else if (delivery?.refused) summary.held += 1;
     } catch (error) {
       summary.errors += 1;
     }
@@ -702,7 +715,7 @@ export const drainFinlandAlvThresholdEscalations = async ({
 // (the ask stays portal-visible either way); a recorded send or fallback row
 // counts as attempted and is never re-sent.
 export const deliverPendingFinlandScopeDriftAsks = async ({ client, deliverAsksImpl = null } = {}) => {
-  const summary = { pending: 0, attempted: 0, skipped: 0, errors: 0 };
+  const summary = { pending: 0, attempted: 0, held: 0, skipped: 0, errors: 0 };
   const pendingResult = await client.query(
     `select r.id, r.firm_id, r.client_id
        from client_evidence_requests r
@@ -715,24 +728,23 @@ export const deliverPendingFinlandScopeDriftAsks = async ({ client, deliverAsksI
     [SCOPE_DRIFT_EVIDENCE_TYPE]
   );
   const deliver = deliverAsksImpl
-    || ((args) => deliverWhatsAppEvidenceAsksAfterSend({ client, ...args }));
+    || ((args) => deliverStatutoryAsks({ client, surface: 'finland_scope_drift', ...args }));
   for (const row of pendingResult.rows) {
     summary.pending += 1;
     try {
       const result = await deliver({ firmId: row.firm_id, clientId: row.client_id, evidenceRequestIds: [row.id] });
-      if (result?.skipped) {
+      // Held by the send gate: nothing went out, no ledger row, so the ask
+      // stays pending and the next daily run asks the gate again.
+      if (result?.refused) {
+        summary.held += 1;
+        continue;
+      }
+      if (result?.whatsapp?.skipped) {
         summary.skipped += 1;
         continue;
       }
-      await client.query(
-        `update client_evidence_requests
-            set first_sent_at = coalesce(first_sent_at, now()),
-                last_sent_at = now(),
-                send_count = send_count + 1,
-                updated_at = now()
-          where id = $1`,
-        [row.id]
-      );
+      // The deliverer stamped the ask if, and only if, it delivered it; a
+      // failed send left its ledger row and no stamp.
       summary.attempted += 1;
     } catch {
       summary.errors += 1;
@@ -1527,15 +1539,13 @@ export const recordPrepaymentRegisterCheckInDb = async ({
           const askResult = await client.query(
             `insert into client_evidence_requests (
                id, firm_id, client_id, status, evidence_type, question, request_payload,
-               first_sent_at, last_sent_at, send_count, created_by
+               send_count, created_by
              )
-             values ($1, $2, $3, 'open', $4, $5, $6::jsonb, now(), now(), 1, $7)
+             values ($1, $2, $3, 'open', $4, $5, $6::jsonb, 0, $7)
              on conflict (id) do update set
                status = 'open',
                question = excluded.question,
                request_payload = client_evidence_requests.request_payload || excluded.request_payload,
-               last_sent_at = now(),
-               send_count = client_evidence_requests.send_count + 1,
                updated_at = now()
              returning *`,
             [
@@ -1564,7 +1574,7 @@ export const recordPrepaymentRegisterCheckInDb = async ({
   });
   if (ask) {
     const deliver = deliverAsksImpl
-      || ((args) => withFirmDbClientFn((client) => deliverWhatsAppEvidenceAsksAfterSend({ client, ...args })));
+      || ((args) => withFirmDbClientFn((client) => deliverStatutoryAsks({ client, surface: 'finland_prepayment_register', ...args })));
     await deliver({ firmId, clientId, evidenceRequestIds: [ask.id] });
   }
   return { check: recorded, escalation: ask ? { ask, bill_count: billCount } : null };
@@ -1732,9 +1742,9 @@ export const createAlvReturnEvidenceRequestInDb = async ({
     const result = await client.query(
       `insert into client_evidence_requests (
          id, firm_id, client_id, status, evidence_type, question, request_payload,
-         first_sent_at, last_sent_at, send_count, created_by
+         send_count, created_by
        )
-       values ($1, $2, $3, 'open', $4, $5, $6::jsonb, now(), now(), 1, $7)
+       values ($1, $2, $3, 'open', $4, $5, $6::jsonb, 0, $7)
        returning *`,
       [
         requestId,
@@ -2295,7 +2305,7 @@ export const startFinlandAlvReturnFilingInDb = async ({
       actorId
     });
     const deliver = deliverAsksImpl
-      || ((args) => withFirmDbClient((client) => deliverWhatsAppEvidenceAsksAfterSend({ client, ...args })));
+      || ((args) => withFirmDbClient((client) => deliverStatutoryAsks({ client, surface: 'finland_alv_return', ...args })));
     await deliver({ firmId, clientId, evidenceRequestIds: [ask.id] });
     return { action: 'escalated', blockers, ask, period: computed.period };
   }
@@ -2320,7 +2330,7 @@ export const startFinlandAlvReturnFilingInDb = async ({
     actorId
   });
   const deliver = deliverAsksImpl
-    || ((args) => withFirmDbClient((client) => deliverWhatsAppEvidenceAsksAfterSend({ client, ...args })));
+    || ((args) => withFirmDbClient((client) => deliverStatutoryAsks({ client, surface: 'finland_alv_return', ...args })));
   await deliver({ firmId, clientId, evidenceRequestIds: [ask.id] });
   return { action: 'confirmation_requested', alvReturn: row, ask };
 };
