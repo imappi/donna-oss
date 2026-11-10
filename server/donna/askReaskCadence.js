@@ -37,12 +37,16 @@
 // keeps the ask off the next tick's overdue list.
 //
 // When no channel delivered, the portal is the only surface left. It counts
-// as a reminder ONLY if a customer-side person can actually see it there (an
-// active, signed-in, client-scoped owner assigned to this client): then the
-// sweep refreshes the request_payload.evidence_request envelope the portal
-// renders and counts the send, as before. When nobody can be reached at all,
-// re-asking is meaningless: the ask is escalated to the firm at once
-// ('owner_unreachable'), never left to age on an invisible clock.
+// as a reminder step ONLY if a customer-side person can actually see it there
+// (an active, signed-in, client-scoped owner assigned to this client). The
+// question waiting in the portal is not a delivery by a deliverer, so it moves
+// no sent stamp (send_count, last_sent_at, the envelope's sent_at/send_count
+// stay as the last real delivery left them): the sweep appends the step to
+// request_payload.portal_reminders, re-arms due_at, marks the envelope
+// `nudged_at`, and counts the step toward the escalation bound exactly as the
+// old count did. When nobody can be reached at all, re-asking is meaningless:
+// the ask is escalated to the firm at once ('owner_unreachable'), never left to
+// age on an invisible clock.
 //
 // One owner for channel reminders: while this cadence ACTS for a client, the
 // evidence-topic reminder sweep (channels/evidenceTopicReminders.js) defers
@@ -60,7 +64,7 @@ import {
   clientFlagActs, clientFlagObserves, readClientConfigSnapshot
 } from './clientConfig.js';
 import {
-  escalateAskToFirmWithClient, gateOwnerSendWithClient, hasPortalRecipientWithClient
+  escalateAskToFirmWithClient, gateOwnerSendWithClient, hasPortalRecipientWithClient, portalRemindersOf
 } from './ownerAskDelivery.js';
 
 export const REASK_CADENCE_FLAG_KEY = 'ASK_REASK_CADENCE';
@@ -77,12 +81,19 @@ export const ASK_REASK_MAX_SEND_COUNT = 3;
 
 const DEFAULT_LIMIT = 25;
 
-// Sends the owner has not answered. An owner who answered "still unpaid"
-// (request_payload.obligation_open_acknowledged, written by the owner-reply
-// reader with the send_count at that answer) is not unresponsive: only the
-// sends after that answer count toward the escalation bound.
-const unansweredSendCount = (row) => Number(row.send_count || 0)
-  - Number(row.request_payload?.obligation_open_acknowledged?.send_count || 0);
+// Reminder steps the owner has not answered: delivered sends plus portal
+// reminders (a step that reached only the portal; see the header). An owner who
+// answered "still unpaid" (request_payload.obligation_open_acknowledged,
+// written by the owner-reply reader with the send_count at that answer and its
+// time) is not unresponsive: only the steps after that answer count toward the
+// escalation bound.
+const unansweredSendCount = (row) => {
+  const acknowledged = row.request_payload?.obligation_open_acknowledged;
+  const acknowledgedMs = acknowledged?.at ? new Date(acknowledged.at).getTime() : NaN;
+  const portalSteps = portalRemindersOf(row)
+    .filter((at) => !Number.isFinite(acknowledgedMs) || new Date(at).getTime() > acknowledgedMs).length;
+  return Number(row.send_count || 0) - Number(acknowledged?.send_count || 0) + portalSteps;
+};
 
 // Overdue open asks: past due_at (when set — the flag-gated mint path sets it)
 // AND at least the nudge interval past the LAST GENUINE SEND, so the recorded
@@ -115,6 +126,10 @@ const OVERDUE_ASKS_SQL = `
          ) < $4::timestamptz
    order by coalesce(due_at, last_sent_at) asc
    limit $5`;
+
+// How many channels delivered this ask in one fan-out (each moved send_count).
+const deliveredChannelCount = (fanout, id) => ['whatsapp', 'sms', 'telegram', 'email']
+  .filter((channel) => Array.isArray(fanout?.[channel]?.delivered) && fanout[channel].delivered.includes(id)).length;
 
 const defaultDeliver = async (args) => {
   const { deliverEvidenceAsksOnAllChannels } = await import('./db/asks.js');
@@ -209,20 +224,15 @@ export const runAskReaskSweep = async ({
       }
 
       // NUDGE — the same one fan-out the first send used. Only a channel that
-      // genuinely delivered moves send_count (the deliverer's 108 bump), so
-      // the re-read below is an honest execution verifier.
+      // genuinely delivered moves send_count (the deliverer's 108 bump), and
+      // the fan-out names the asks it delivered.
       // deps.askWording marks this send as a REMINDER for the wording only
       // (the email wrapper says so); the fan-out forwards deps to every
       // deliverer unchanged, and no gate or stamp reads it.
       const channelFanout = await deliver({
         client, firmId, clientId, evidenceRequestIds: [row.id], surface: 'ask_reask', deps: { askWording: 'reminder' }
       }).catch((error) => ({ error: error?.message || 'fanout_failed' }));
-      const after = await client.query(
-        'select send_count from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
-        [firmId, row.id]
-      );
-      const afterCount = Number(after.rows?.[0]?.send_count ?? sendCount);
-      const delivered = afterCount > sendCount;
+      const delivered = Array.isArray(channelFanout?.delivered) && channelFanout.delivered.includes(row.id);
       if (!delivered && channelFanout?.refused) {
         // The fan-out's own gate refused (the client was contained between the
         // sweep's check and this send): held, exactly like the check above.
@@ -243,31 +253,24 @@ export const runAskReaskSweep = async ({
         continue;
       }
 
-      const nextSendCount = surface === 'portal' ? sendCount + 1 : afterCount;
       const nextDueIso = new Date(now + nudgeDays * 86400000).toISOString();
+      const portalReminders = surface === 'portal' ? [...portalRemindersOf(row), nowIso] : portalRemindersOf(row);
       await client.query('begin');
       if (surface === 'portal') {
-        // The portal is the delivery surface for this reminder: the bumped
-        // send stamp in the envelope it renders IS what the owner sees.
-        const envelope = {
-          ...(row.request_payload?.evidence_request || {}),
-          id: row.id,
-          status: 'open',
-          question: row.question || row.request_payload?.evidence_request?.question || '',
-          sent_at: now,
-          send_count: nextSendCount,
-          nudged_at: now
-        };
+        // The question waits in the portal; nothing was delivered, so no sent
+        // stamp moves. The step is recorded as a portal reminder, the clock is
+        // re-armed, and the envelope is marked nudged (not sent).
         await client.query(
           `update client_evidence_requests
-              set send_count = $3,
-                  last_sent_at = $4::timestamptz,
-                  due_at = $5::timestamptz,
-                  request_payload = request_payload || $6::jsonb,
+              set due_at = $3::timestamptz,
+                  request_payload = request_payload
+                    || jsonb_build_object('portal_reminders', $5::jsonb)
+                    || jsonb_build_object('evidence_request',
+                         coalesce(request_payload->'evidence_request', '{}'::jsonb)
+                         || jsonb_build_object('nudged_at', $4::bigint)),
                   updated_at = now()
             where firm_id = $1 and id = $2 and status = 'open'`,
-          [firmId, row.id, nextSendCount, nowIso, nextDueIso,
-            JSON.stringify({ evidence_request: envelope })]
+          [firmId, row.id, nextDueIso, now, JSON.stringify(portalReminders)]
         );
       } else {
         // The deliverer already stamped send_count / last_sent_at and the
@@ -288,7 +291,10 @@ export const runAskReaskSweep = async ({
          values ($1, $2, 'system', 'evidence_request.nudged', 'client_evidence_request', $3, $4::jsonb)`,
         [firmId, clientId, row.id, JSON.stringify({
           transaction_id: row.transaction_id || null,
-          send_count: nextSendCount,
+          // The delivered count: the one this step left (each delivering
+          // channel moved it once), or unchanged for a portal reminder.
+          send_count: delivered ? sendCount + deliveredChannelCount(channelFanout, row.id) : sendCount,
+          ...(portalReminders.length ? { portal_reminder_count: portalReminders.length } : {}),
           due_at: nextDueIso,
           nudge_days: nudgeDays,
           surface,

@@ -11,14 +11,18 @@ import {
 } from './evidenceTopicReminders.js';
 
 // A db-client fake for the bound-channel sender: binding readers query
-// client_whatsapp_bindings by channel; the responder map answers per channel
-// and everything else (delivery ledger insert) gets { rows: [] }.
-const bindingDbClient = (bindings = {}) => {
+// client_whatsapp_bindings by channel; the responder map answers per channel;
+// the pre-send re-read of the ask finds it still open unless `notAwaiting`
+// names it; everything else (delivery ledger insert) gets { rows: [] }.
+const bindingDbClient = (bindings = {}, { notAwaiting = [] } = {}) => {
   const queries = [];
   return {
     queries,
     query: async (sql, params = []) => {
       queries.push({ sql, params });
+      if (/from client_evidence_requests/.test(sql) && /status in \('draft', 'open'\)/.test(sql)) {
+        return { rows: notAwaiting.includes(params[2]) ? [] : [{ id: params[2], status: 'open' }] };
+      }
       if (/client_whatsapp_bindings/.test(sql)) {
         if (/'telegram'/.test(sql)) return { rows: bindings.telegram ? [bindings.telegram] : [] };
         if (/'sms'/.test(sql)) return { rows: bindings.sms ? [bindings.sms] : [] };
@@ -286,4 +290,16 @@ test('the reminder ledger entry records the language sent', async () => {
   const insert = db.queries.find((q) => /insert into message_delivery_ledger/i.test(q.sql));
   const payload = JSON.parse(insert.params[insert.params.length - 1]);
   assert.deepEqual(payload.reminder, { status: 'sent', language: 'fi' });
+});
+
+test('the bound-channel sender re-reads the ask right before sending: an answered ask is skipped, nothing sent or receipted', async () => {
+  const db = bindingDbClient({ sms: { phone_e164: '+15555550199', phone_hash: 'hash-sms' } }, { notAwaiting: ['ask-1'] });
+  const sent = [];
+  const result = await sendEvidenceTopicReminderViaBoundChannel({
+    firmId: 'firm-1', clientId: 'client-1', evidenceRequestId: 'ask-1', text: 'Quick reminder: the receipt.',
+    deps: { withFirmDbClient: async (fn) => fn(db), sendSmsText: async (m) => { sent.push(m); return { ok: true, id: 'sms-1' }; } }
+  });
+  assert.deepEqual(result, { ok: false, skipped: true, reason: 'not_awaiting' });
+  assert.equal(sent.length, 0);
+  assert.equal(db.queries.some((q) => /message_delivery_ledger/.test(q.sql)), false, 'no ledger row for a send that did not happen');
 });

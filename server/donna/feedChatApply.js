@@ -1020,10 +1020,11 @@ const amendAsk = async ({ firmId, clientId, action, actorId, d }) => {
 // Re-deliver ONE already-open owner ask (G1b). NO new writer (INV-1): the
 // orchestrator routes to deliverEvidenceAsksOnAllChannels — the SAME one ask
 // fan-out ask_client uses — which is also what makes minting a duplicate ask
-// structurally impossible (the KUILI rule). Its send_count delta is the
-// execution verifier: bumped only on a genuinely successful send, so
-// `delivered: false` means every channel was dark or refused, never a silent
-// "sent". A draft, replied, or closed ask reports skipped.
+// structurally impossible (the KUILI rule). The fan-out names the asks a
+// deliverer delivered — the same ones whose send_count it bumped, only on a
+// genuinely successful send — so `delivered: false` means every channel was
+// dark or refused, never a silent "sent". A draft, replied, or closed ask
+// reports skipped.
 const resendAsk = async ({ firmId, clientId, action, actorId, d }) => {
   if (!action.ask_id) throw badRequest('resend_ask requires ask_id.');
   const askId = String(action.ask_id);
