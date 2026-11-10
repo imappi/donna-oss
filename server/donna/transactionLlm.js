@@ -27,6 +27,7 @@ import { canonicalMerchantPattern, conversionDetailFor, normalizeIntelText } fro
 import { requireCodingPolicyForClient, codingPolicyReceipt, CodingPolicyError } from './codingPolicy.js';
 import { decideJevCoding, SOURCE_DOCUMENT_QUESTION } from './jevCoding.js';
 import { resolvePostingPolicy } from './postingPolicy.js';
+import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 import { nativeCodingPromptProjection, accountChoicePrompt, decodeNativeCodingChoice, codingChoiceFailure } from './codingAccountChoices.js';
 
 export const fallbackAccountOptionsForClient = (profile = {}) => requireCodingPolicyForClient(profile).accountOptions;
@@ -730,6 +731,36 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
         ...(sourceTax?.clear ? { cause: UNSETTLED_TREATMENT_CLEAR_SOURCE } : {}) }
     : null;
   const lineLabel=String(transaction.description || transaction.raw_description || 'this bank transaction').slice(0, 160);
+  // The same guard, for the posting policy's tax-registration refusal. A line
+  // the ledger refused because the business is not recorded as VAT/ALV
+  // registered on its date reaches this contract again through the evidence
+  // clock, with the refusal on posting_recovery (codingPolicyRecovery.js
+  // TAX_REGISTRATION_REFUSALS). No treatment the coder picks can post it —
+  // only the registration record can — so the missing thing is the owner's
+  // fact: whether, and from when, the business is registered. The line becomes
+  // that owner question, in the owner's language (ownerLanguage.js), worded by
+  // the country policy that raised the refusal (taxRegistration.ownerQuestion).
+  // Scope: any country whose posting policy declares taxRegistration (FI, GB),
+  // not only the source-tax countries the unsure-marker guard above serves —
+  // the refusal comes from the registration record, not from the source.
+  // Once the record says registered on the line's date the guard is silent and
+  // the coding meets the posting policy as before. When the owner has already
+  // answered (the reply re-runs this contract), it does not ask again and does
+  // not let the coding apply: the answer must be recorded by a person first.
+  let taxRegistration=null;
+  try { taxRegistration=resolvePostingPolicy({ jurisdiction: policy.jurisdiction }).taxRegistration; } catch { taxRegistration=null; }
+  const registrationRefusal=transaction.posting_recovery?.review?.previous_refusal || null;
+  const registrationGuard=taxRegistration && taxRegistration.refusalCodes.includes(registrationRefusal?.code) ? (()=>{
+    const asOf=String(registrationRefusal.details?.as_of || transaction.date || transaction.transaction_date || '').slice(0, 10) || null;
+    let status;
+    try { status=taxRegistration.onDate({ profile: clientProfile || {}, onDate: asOf }); } catch { status={ registered: null, reason: 'registration_unavailable' }; }
+    if (status?.registered===true) return null;
+    const language=preferredOwnerTemplateLanguage(clientProfile || {}, { jurisdiction: clientProfile?.jurisdiction ?? policy.jurisdiction });
+    return { receipt: { treatment: suggestion.tax_treatment || fallback.tax_treatment || '', constraint: 'tax_registration_unrecorded',
+        refusal_code: registrationRefusal.code, as_of: asOf, registered: status?.registered ?? null, registration_reason: status?.reason || null,
+        language, owner_answered: Boolean(String(transaction.client_reply_context?.client_reply || '').trim()) },
+      question: String(taxRegistration.ownerQuestion({ language, lineLabel, onDate: asOf, registered: status?.registered ?? null }) || '').slice(0, 500) };
+  })() : null;
   const unsureSourceQuestion=()=>{
     const doc=transaction.matched_document || {};
     const printed=transaction.posting_recovery?.review?.printed_summary || {};
@@ -808,7 +839,17 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
     // it rides the receipt as evidence of what the coder was unsure about.
     ...(unresolvedTreatmentGuard?.constraint==='unsure_treatment_clear_source'?{remember_candidate:false,evidence_required:false,ask_client_question:'',
       tax_unresolved_guard:{...unresolvedTreatmentGuard,
-        ...(unresolvedTreatmentGuard.model_asked?{suppressed_question:String(suggestion.ask_client_question).trim().slice(0, 500)}:{})}}:{})
+        ...(unresolvedTreatmentGuard.model_asked?{suppressed_question:String(suggestion.ask_client_question).trim().slice(0, 500)}:{})}}:{}),
+    // The registration question (above) outranks every tax guard: until the
+    // record says registered on this date no tax treatment can post the line.
+    ...(registrationGuard && !registrationGuard.receipt.owner_answered ? { tax_unresolved_guard: registrationGuard.receipt,
+      posting_requirement: 'owner_fact', evidence_required: true, remember_candidate: false, auto_explain_limit: 0,
+      ask_client_question: registrationGuard.question,
+      support_note: `${String(suggestion.support_note || '').slice(0, 300)} The ledger refused this line (${registrationGuard.receipt.refusal_code}): the business is not recorded as registered for VAT on ${registrationGuard.receipt.as_of || 'its date'}. The owner is asked whether, and from when, it is registered.`.trim().slice(0, 500) } : {}),
+    ...(registrationGuard?.receipt.owner_answered ? { tax_unresolved_guard: registrationGuard.receipt,
+      posting_requirement: 'single_account', evidence_required: false, confidence: 'low', remember_candidate: false, auto_explain_limit: 0,
+      ask_client_question: '',
+      support_note: `${String(suggestion.support_note || '').slice(0, 300)} The owner answered the VAT registration question. Record the registration on the client profile (or correct the coding); the ledger posts this line only once the record says registered on ${registrationGuard.receipt.as_of || 'its date'}.`.trim().slice(0, 500) } : {})
   };
 };
 

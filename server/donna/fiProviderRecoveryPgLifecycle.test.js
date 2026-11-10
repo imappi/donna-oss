@@ -52,7 +52,7 @@ test('real PG (FI): provider failures keep their cause and every lane finishes o
   const firmId = 'fi-outage-firm', clientId = 'lumo';
   await pool.query("insert into firms(id,name,slug,metadata) values($1,'FI Outage Firm','fi-outage-firm',$2)", [firmId, { loops: { tier: 'canary' } }]);
   await pool.query(`insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Lumo Kahvila Oy','fi','fi-oy',$3)`,
-    [clientId, firmId, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'accrual' }]);
+    [clientId, firmId, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'accrual', alv_registration: { status: 'registered', registered_from: '2020-01-01' } }]);
   for (const flag of ['FINLAND_ALV_CODING', 'JURISDICTION_ACCOUNT_PALETTE', 'RECONCILIATION_CODE_MATCHED_NO_REVIEW', 'CODING_AUTO_POST', 'LEDGER_AUTO_POST'])
     await pool.query(`insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$4,'auto','manual')`, [flag, firmId, clientId, flag]);
   const tx = (id, amount, description, date = '2026-03-05') => pool.query(`insert into transactions(id,firm_id,client_id,transaction_date,description,money_out,money_in,currency,status,payload) values($1,$2,$3,$4,$5,$6,0,'EUR','needs_review','{}')`, [id, firmId, clientId, date, description, amount]);

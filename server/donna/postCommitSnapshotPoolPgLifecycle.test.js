@@ -47,7 +47,7 @@ test('real PG max-two pool: concurrent committed writers release before canonica
   pool.connect=(...args)=>{if(snapshotAcquireError){const error=snapshotAcquireError;snapshotAcquireError=null;return Promise.reject(error);}return connect(...args);};
   const firmId='pool-proof',clientId='pool-proof-client';
   await seed.query("insert into firms(id,name,slug) values($1,'Pool proof',$1)",[firmId]);
-  await seed.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Pool proof Oy','FI','fi-oy',$3)",[clientId,firmId,{jurisdiction:"FI",accounting_system:"none",accounting_basis:"accrual"}]);
+  await seed.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Pool proof Oy','FI','fi-oy',$3)",[clientId,firmId,{jurisdiction:"FI",accounting_system:"none",accounting_basis:"accrual",alv_registration:{status:'registered',registered_from:'2020-01-01'}}]);
   const add=async id=>{
     await seed.query("insert into transactions(id,firm_id,client_id,transaction_date,description,money_out,currency,status,payload) values($1,$2,$3,'2025-01-10','Rent',600,'EUR','needs_review','{}')",[id,firmId,clientId]);
     await seed.query("insert into documents(id,firm_id,client_id,filename,document_type,parse_status,total_amount,currency,document_date,payload) values($1,$2,$3,$1,'supplier_bill','completed',600,'EUR','2025-01-03','{}')",['doc-'+id,firmId,clientId]);

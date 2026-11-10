@@ -29,7 +29,7 @@ test('real PG: Jev component selections reach the existing posting writer with e
   t.after(()=>{globalThis.fetch=savedFetch;for(const [key,value] of Object.entries(savedKeys)){if(value===undefined)delete process.env[key];else process.env[key]=value;}});
   const firmId = 'component-firm', clientId = 'component-client';
   await pool.query("insert into firms(id,name,slug) values($1,'Synthetic component proof',$1)", [firmId]);
-  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,profile) values($1,$2,'Synthetic company','fi',$3)", [clientId,firmId,{jurisdiction:'fi',accounting_system:'none',accounting_basis:'cash'}]);
+  await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,profile) values($1,$2,'Synthetic company','fi',$3)", [clientId,firmId,{jurisdiction:'fi',accounting_system:'none',accounting_basis:'cash',alv_registration:{status:'registered',registered_from:'2020-01-01'}}]);
   await pool.query("insert into firm_members(id,firm_id,email,name,role,status) values('fixture-member',$1,'member@example.invalid','Fixture','admin','active')",[firmId]);
   const enrollmentClient=await pool.connect();
   try {await enrollJevExperiment({client:enrollmentClient,firmId,clientId,actorId:'fixture-member',authorityBasis:'Synthetic integration proof',trialId:'component-proof',expiresAt:'2100-01-01',model:'fixture-provider'});}finally{enrollmentClient.release();}

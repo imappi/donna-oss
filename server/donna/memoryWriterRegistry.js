@@ -154,7 +154,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/db/ledger.js", "Reviewed source-read fences inside the existing posting writer. Interpolation selects only fixed FOR UPDATE clauses; settlement-row and transaction reads remain firm/client scoped. Accounting mutations still use the existing journal writer, with no memory mutation added.", [
     // select m.id as match_id, m.matched_line_id, m.status, dl.line_no, dl.description as row_label, dl.amount as row_net, dl.payload->'raw_extraction'->'settlement_row' as settlement_row, d.id as document_
-    ["resolveSettlementRowSplit","dynamic_sql","a69ab2145d7ada16af8f0add9800370e3420d471c2ec3247fda33afaf4e3d6ce",1,[]],
+    // Re-pinned 2026-11-10 (ALV registration parity): the SELECT, targets and count are unchanged; the enclosing body now refuses a processor-fee VAT split when the posting policy's registration reader does not say registered. No memory target.
+    ["resolveSettlementRowSplit","dynamic_sql","d55f92ec5630b5b3ce54ebe645cccda3155e4ec1d085ed9dac21faf1333dc662",1,[]],
     // select * from transactions where firm_id = $1 and client_id = $2 and id = $3__DYNAMIC_SQL__
     // Re-pinned 2026-11-10 (UK VAT posting checks): the SELECT, targets and count are unchanged; the enclosing body now passes the posting context's profile to assertPostableTaxCoding. No memory target.
     ["prepareLedgerTransactionPosting","dynamic_sql","eb68e8adda83631b22311bbe4d245ddb931dcce7cc6396e8a0cbddf0679d13aa",1,[]],

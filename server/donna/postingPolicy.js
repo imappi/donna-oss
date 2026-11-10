@@ -34,6 +34,13 @@ const validTaxEvidence = (rule) => Boolean(rule) && typeof rule === 'object' && 
   && typeof rule.inputRuleCoversAcceptedCoding === 'boolean'
   && ['resolveEntry', 'deductibleInput', 'taxedOutput'].every((key) => typeof rule[key] === 'function');
 const stringList = (value) => Array.isArray(value) && value.every(nonemptyString) && new Set(value).size === value.length;
+// Optional country-owned tax-registration declaration: the bank-line refusal
+// codes its posting policy raises when the business is not recorded as
+// registered on the line's date, the tri-state reader of its one registration
+// record, and the owner question that asks for that fact (transactionLlm.js
+// turns a refused line into that question). Nothing here knows a country.
+const validTaxRegistration = (rule) => Boolean(rule) && typeof rule === 'object' && stringList(rule.refusalCodes)
+  && ['onDate', 'ownerQuestion'].every((key) => typeof rule[key] === 'function');
 
 // Validate the selected declaration and its exact explicit capabilities. A malformed
 // handler never becomes an implicit no-op, and unsupported is different from missing.
@@ -50,6 +57,7 @@ const validateDefinition = (definition, country) => {
       || !(definition.salesTaxControlRole === null || nonemptyString(definition.salesTaxControlRole))
       || (Object.hasOwn(definition, 'taxFactAutomation') && typeof definition.taxFactAutomation !== 'function')
       || (Object.hasOwn(definition, 'taxEvidence') && !validTaxEvidence(definition.taxEvidence))
+      || (Object.hasOwn(definition, 'taxRegistration') && !validTaxRegistration(definition.taxRegistration))
       || !definition.capabilities || typeof definition.capabilities !== 'object'
       || Object.keys(definition.capabilities).some((key) => !POSTING_POLICY_OPERATIONS.includes(key))) {
     refuse('posting_policy_invalid', country, 'definition_invalid');
@@ -109,6 +117,7 @@ export const resolvePostingPolicy = ({ jurisdiction, codingPolicy = null, regist
     arSettlementFlagKey: definition.arSettlementFlagKey,
     salesInvoiceChannels: Object.freeze([...definition.salesInvoiceChannels]), salesTaxControlRole: definition.salesTaxControlRole,
     taxEvidence: definition.taxEvidence || null,
+    taxRegistration: definition.taxRegistration || null,
     nativeTaxCodeOwnership };
   policy.adapter = Object.freeze(Object.fromEntries(POSTING_POLICY_OPERATIONS.map((operation) => [operation, (input = {}) => {
     if (!policy.capabilities[operation]) refuse('posting_operation_unsupported', country, 'operation_not_supported', { operation });

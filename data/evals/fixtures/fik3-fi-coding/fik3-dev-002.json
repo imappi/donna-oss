@@ -10,7 +10,8 @@
   "book": {
     "entity_type": "fi-oy",
     "company_name": "Synteettinen Alfa Oy",
-    "accounting_basis": "accrual"
+    "accounting_basis": "accrual",
+    "alv_registration": { "status": "registered", "registered_from": "2020-01-01" }
   },
   "facts": [],
   "transaction": {

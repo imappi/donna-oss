@@ -86,7 +86,10 @@ export async function seedBook(pool, seed, arm, models) {
     await client.query("insert into firms (id, name, slug) values ($1, 'Synthetic firm', 'fik3-synthetic')", [FIRM_ID]);
     await client.query("insert into firm_members (id, firm_id, email, name, role, status) values ('member', $1, 'fixture@example.invalid', 'Fixture', 'admin', 'active')", [FIRM_ID]);
     for (const [key, id] of Object.entries(ids)) {
-      const profile = { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: seed.book.accounting_basis || 'accrual' };
+      // The book's own ALV registration record, when the case states one
+      // (finland/postingPolicy.js posts ALV only for a registered business).
+      const profile = { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: seed.book.accounting_basis || 'accrual',
+        ...(key === seed.entity && seed.book.alv_registration ? { alv_registration: seed.book.alv_registration } : {}) };
       await client.query('insert into clients (id, firm_id, company_name, jurisdiction, entity_type, profile) values ($1, $2, $3, $4, $5, $6::jsonb)',
         [id, FIRM_ID, key === seed.entity ? seed.book.company_name : `Sibling ${id} Oy`, 'fi', seed.book.entity_type, JSON.stringify(profile)]);
     }

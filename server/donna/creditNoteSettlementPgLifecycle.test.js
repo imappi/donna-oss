@@ -86,7 +86,7 @@ const bootScratchDatabase = async () => {
   await seed.query(
     `insert into clients (id, firm_id, company_name, jurisdiction, status, profile)
      values ($1, $2, 'Kampaamo Kultalanka Oy', 'fi', 'active', $3)`,
-    [CLIENT, FIRM, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'cash' }]
+    [CLIENT, FIRM, { jurisdiction: 'fi', accounting_system: 'none', accounting_basis: 'cash', alv_registration: { status: 'registered', registered_from: '2020-01-01' } }]
   );
   const stop = async () => {
     await seed.end().catch(() => {});
