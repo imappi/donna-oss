@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/imappi/donna-mobile-oss",
   "path": "contract/mobile-api.yaml",
-  "commit": "098b484fa789fadfd0c8ad0c91e83784688dae1a",
-  "yaml_sha256": "a41ebd7dcb4545773a753384917013b152823360dd9982b7d66446d322f8a102",
+  "commit": "7d90cc4ae0dcbb7c5ac3ecccbd3a8dd666468f89",
+  "yaml_sha256": "88d6408f0b3b6453f108407261db84fe037c303e4d1a9b8ea29b2df5beb7fbe5",
   "contract_version": "0.1.0",
   "refresh": "node scripts/refresh_mobile_contract.mjs <path-to-donna-mobile-oss-checkout>"
 }
