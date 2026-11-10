@@ -16,6 +16,8 @@ const fakeClient = ({ jurisdiction = 'GB', incorporationDate = '2020-01-01', per
         assert.deepEqual(params, ['firm-1', 'client-1']);
         return { rows: [] };
       }
+      // The mint's existing-row lookup (2026-11-10): an empty chart, so it mints.
+      if (sql.startsWith('select id, code from ledger_accounts') || sql.startsWith('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3')) return { rows: [] };
       if (sql.includes('from client_capability_config')) return { rows: Object.entries(flags).map(([flag_key, stage]) => ({ flag_key, stage, source: 'test', client_id: 'client-1' })) };
       // Canonical lineage observes the same unmarked client and empty initial chart.
       if (sql.includes('as birth_created_at') && sql.includes('from clients')) return { rows: [{ id: params[1], firm_id: params[0], birth_created_at: null, jurisdiction, incorporation_date: incorporationDate }] };
@@ -107,6 +109,7 @@ const fakeFiClient = ({ incorporationDate = '2020-01-01', fiscalYearId = 'fy-fi-
       if (sql.includes('from fiscal_years')) return { rows: [{ id: fiscalYearId, label: '2026', starts_on: '2026-01-01', ends_on: '2026-12-31', status: 'open' }] };
       if (sql.includes('from ledger_journals lj')) return { rows: [] };
       if (sql.includes('from close_periods')) return { rows: [] };
+      if (sql.startsWith('select id, code from ledger_accounts') || sql.startsWith('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3')) return { rows: [] };
       if (/insert into (ledger_accounts|ledger_journals|ledger_lines|audit_events)/.test(sql)) {
         writes.push({ sql, params });
         if (sql.includes('ledger_journals')) return { rows: [{ id: 'journal-fi-1' }] };

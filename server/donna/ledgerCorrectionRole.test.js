@@ -61,6 +61,8 @@ test('insertLedgerCorrectionJournal persists role on the correction ledger_lines
       if (sql.includes('as birth_created_at') || sql.includes('select id,code,name,account_type,normal_balance,canonical_role,status,currency,payload')
         || sql.includes('from audit_events where firm_id=$1 and resource_id=$2')) return { rows: [] };
       if (sql.includes('insert into ledger_accounts')) return { rows: [] };
+      // The mint's existing-row lookup (2026-11-10): an empty chart, so it mints.
+      if (sql.startsWith('select id, code from ledger_accounts') || sql.startsWith('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3')) return { rows: [] };
       if (sql.includes('insert into ledger_journals')) return { rows: [] };
       if (sql.includes('insert into ledger_lines')) {
         lineInserts.push(params);
