@@ -45,6 +45,13 @@
 //    per-call input follows it as the user turn.
 //  - Long requests stream (`stream: true`); llmCall reassembles the events
 //    into the one Message the parser reads.
+//  - The lane's wall (`timeoutMs`, one attempt: headers AND body) is ONE
+//    deadline transport per call. Inside a worker llmCall wraps the fetch in
+//    the deadline transport and needs the wall handed to it (top-level
+//    `timeoutMs`), still capped by the job's remaining budget; outside a
+//    worker llmCall does not wrap, so the builder's own transport applies the
+//    wall. Before this, the builder's wall sat only on an inner wrapper and,
+//    inside a worker, llmCall's outer one cut every call at the 90 s default.
 
 import {
   ANTHROPIC_API_VERSION,
@@ -59,10 +66,27 @@ import {
   providerOutputLimit,
   providerRefused
 } from './providerTransport.js';
+import { currentExecutionBudget } from './executionBudget.js';
 import { validateStrictSchema } from './unifiedExtractorSchema.js';
 import { PROVIDER_FAULTS, providerFaultOfResponse } from './inngest/parseErrors.js';
 
 export const ANTHROPIC_EFFORT_LEVELS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
+
+// ── the lane's wall: one deadline transport per call ──────────────────────
+const laneWall = (timeoutMs) => (Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {});
+
+// The fetch a builder hands llmCall. Decided per attempt, in the same async
+// context llmCall reads the budget from: inside a worker the bare fetch (llmCall
+// adds the one deadline transport, with the wall); outside, the deadline
+// transport with the wall (the transport default when the lane names none).
+// `bareOutsideWorker` keeps a lane that had no deadline outside a worker
+// (the OpenAI bare-fetch lanes, when they name no wall) exactly as it was.
+export const laneDeadlineFetch = ({ provider, fetchImpl = fetch, timeoutMs = null, bareOutsideWorker = false } = {}) => {
+  const base = fetchImpl || fetch;
+  if (bareOutsideWorker && !laneWall(timeoutMs).timeoutMs) return base;
+  const outsideWorker = providerFetchWithDeadline({ provider, fetchImpl: base, ...laneWall(timeoutMs) });
+  return (url, init) => (currentExecutionBudget() ? base(url, init) : outsideWorker(url, init));
+};
 
 // ── schema: the wire copy and the full check ──────────────────────────────
 // Constraint keywords the structured-output grammar does not take. They are
@@ -404,12 +428,9 @@ export const anthropicStructuredRequest = ({
     // The socket stays llmCall's; one deadline over headers AND body (a
     // stream is read to its end under it), capped by the worker's budget,
     // with typed throws — the same transport contract as the coder's
-    // existing paths.
-    fetchImpl: providerFetchWithDeadline({
-      provider: 'anthropic',
-      fetchImpl: fetchImpl || fetch,
-      ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {})
-    })
+    // existing paths. The wall reaches llmCall too (see the header).
+    fetchImpl: laneDeadlineFetch({ provider: 'anthropic', fetchImpl, timeoutMs }),
+    ...laneWall(timeoutMs)
   };
 };
 
@@ -439,6 +460,9 @@ export const openAiStructuredRequest = ({
   promptVersion = null,
   sections = null,
   fetchImpl = fetch,
+  // The lane's wall, as for the Anthropic request. Without one, the bare
+  // fetch outside a worker and the transport default inside one, as before.
+  timeoutMs = null,
   parse = (payload) => JSON.parse(openAiResponsesText(payload))
 } = {}) => ({
   provider: 'openai',
@@ -462,7 +486,8 @@ export const openAiStructuredRequest = ({
     model: servedModelOf(payload),
     response_id: typeof payload?.id === 'string' ? payload.id : ''
   }),
-  fetchImpl
+  fetchImpl: laneDeadlineFetch({ provider: 'openai', fetchImpl, timeoutMs, bareOutsideWorker: true }),
+  ...laneWall(timeoutMs)
 });
 
 // ── a failed call, typed ──────────────────────────────────────────────────
