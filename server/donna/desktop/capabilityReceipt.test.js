@@ -87,7 +87,14 @@ test('2026-11-10: the Anthropic-only appliance — every text lane is on the LIT
   for (const lane of ['coding (batch coder)', 'ask drafting', 'memory extraction', 'owner invoice commands', 'document chat', 'marketing drafters + reply reader']) {
     assert.ok(MODEL_LANES.anthropic.includes(lane), lane);
   }
-  assert.match(r.line, /openai DARK — no OPENAI_API_KEY \([^)]*the text lanes only when no Anthropic key is set/);
+  assert.match(r.line, /openai DARK — no OPENAI_API_KEY \([^)]*the text and document lanes only when no Anthropic key is set/);
+  // The document lanes moved too: routing and extraction, the auto-explain
+  // classifier and the statement reader are on the Anthropic line.
+  for (const lane of ['document routing + extraction', 'auto-explain classifier', 'bank-statement parse', 'unified extractor']) {
+    assert.ok(MODEL_LANES.anthropic.includes(lane), lane);
+    assert.ok(r.line.includes(lane), lane);
+  }
+  assert.deepEqual([...MODEL_LANES.openai], ['the text and document lanes only when no Anthropic key is set'], 'no lane calls only OpenAI');
   const pinned = buildModelLaneReceipt({ ANTHROPIC_API_KEY: 'sk-ant-x', OPENAI_MODEL: 'claude-opus-4-8' });
   assert.match(pinned.line, /anthropic LIT — OPENAI_MODEL override: claude-opus-4-8 \(text lanes\)/);
 });

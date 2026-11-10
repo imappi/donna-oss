@@ -22,13 +22,16 @@ const present = (value) => typeof value === 'string' && value.trim().length > 0;
 // Anthropic first (modelLanes.js `providers`); OpenAI serves them only when
 // no Anthropic key is configured, which its line says.
 export const MODEL_LANES = Object.freeze({
+  // 2026-11-10 (Donna runs on Claude): every lane that called only OpenAI
+  // resolves Anthropic first now — the text lanes and the document lanes —
+  // so OpenAI serves them only when no Anthropic key is set.
   openai: Object.freeze([
-    'document extraction',
-    'auto-explain classifier',
-    'bank-statement parse',
-    'the text lanes only when no Anthropic key is set'
+    'the text and document lanes only when no Anthropic key is set'
   ]),
   anthropic: Object.freeze([
+    'document routing + extraction',
+    'auto-explain classifier',
+    'bank-statement parse',
     'reconciliation LLM triage + authority grants',
     'bank-line disposition producer',
     'merchant lookup',
