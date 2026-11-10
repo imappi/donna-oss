@@ -36,6 +36,75 @@ export const __setInboundNarrationForTests = (fn) => { generateClientPortalRepor
 export const __resetInboundNarrationForTests = () => { generateClientPortalReportNarrationForTests = null; };
 
 export const WHATSAPP_OWNER_CONVERSATION_FLAG_KEY = 'WHATSAPP_OWNER_CONVERSATION';
+
+// ── The owner's language on the inbound path ────────────────────────────────
+//
+// Every acknowledgement below is written in the owner's language: the ONE
+// resolver (preferredOwnerTemplateLanguage, read per client through
+// deps.getOwnerLanguage) over the client(s) the sender's number is bound to.
+// Never guessed from the message. A number bound to clients that disagree, or
+// no reader / no client, gets English, the historical copy, byte-identical.
+export const resolveInboundOwnerLanguage = async ({ firmId, bindings = [], deps = {} } = {}) => {
+  if (typeof deps.getOwnerLanguage !== 'function') return 'en';
+  const seen = new Map();
+  for (const binding of Array.isArray(bindings) ? bindings : []) {
+    const clientId = binding?.client_id;
+    if (!clientId || seen.has(clientId)) continue;
+    const language = await Promise.resolve()
+      .then(() => deps.getOwnerLanguage({ firmId: binding.firm_id || firmId, clientId }))
+      .catch(() => 'en');
+    seen.set(clientId, language === 'fi' ? 'fi' : 'en');
+  }
+  const languages = new Set(seen.values());
+  return languages.size === 1 ? [...languages][0] : 'en';
+};
+
+// The core's own owner-facing lines, per language. English is the historical
+// copy, unchanged. Channel copy (config.copy) still wins where a channel
+// defines the same line.
+const OWNER_INVOICE_REFUSAL_COPY_FI = Object.freeze({
+  issuance_gate_refused: 'Voin tehdä laskusta luonnoksen, mutta laskutusta ei ole vielä otettu käyttöön tililläsi. En ole lähettänyt mitään.',
+  recipient_blocked: 'En voi laskuttaa tätä vastaanottajaa, koska hän on kieltänyt yhteydenotot. Mitään ei lähetetty.',
+  no_pack_for_jurisdiction: 'Minulla ei ole vielä maasi laskutussääntöjä käytössä, joten en tehnyt luonnosta. Kerro, missä yrityksesi on rekisteröity, niin hoidan asian.',
+  tax_not_supported: 'Tämä laskutustapa ei tue arvonlisäverollisia laskuja, joten en tehnyt tästä luonnosta. Käytä tähän verolliseen laskuun tuettua laskutustapaa.',
+  issuer_not_configured: 'Ennen kuin voin laskuttaa puolestasi, tarvitsen yrityksesi tiedot: yrityksen nimen ja osoitteen sekä ALV-rekisteröinnin, jos sinulla on sellainen. Luonnosta ei tehty.',
+  draft_invalid: 'En saanut tästä tehtyä kelvollista laskua, joten en tehnyt luonnosta. Kerro asiakas, summa ja mistä lasku on, niin yritän uudelleen.'
+});
+
+const INBOUND_CORE_COPY = Object.freeze({
+  en: Object.freeze({
+    chatUnavailable: 'I cannot answer from the books right now. Please try again in a moment.',
+    memoryBlocked: "I can't safely reach your saved details right now, so I don't want to guess. Please try again in a moment.",
+    topicOpen: "Got it — I’ll keep this question open.",
+    invoiceTextRequired: 'Please reply in text with the invoice details I asked for. This invoice question remains open; attachments and voice messages cannot answer it yet.',
+    invoiceContinuationUnavailable: 'Invoice continuation is unavailable. The question remains open; please retry your complete invoice instruction when invoicing is available.',
+    invoiceRefusalStillOpen: ' The question remains open; reply with your complete invoice instruction to try again.',
+    savedCodingExhausted: 'Your answer is saved, but coding could not finish. The issue needs repair before it can continue.',
+    savedCodingPending: 'Your answer is saved. Coding has not finished yet.',
+    bookedPosted: "It's on your books now — reply if that's not right.",
+    bookedNotPosted: "Reply if that's not right.",
+    booked: (account, tail) => `Got it — booked to ${account}. ${tail}`
+  }),
+  fi: Object.freeze({
+    chatUnavailable: 'En pysty juuri nyt vastaamaan kirjanpidon perusteella. Kokeile hetken päästä uudelleen.',
+    memoryBlocked: 'En pääse juuri nyt turvallisesti käsiksi tallennettuihin tietoihisi, enkä halua arvailla. Kokeile hetken päästä uudelleen.',
+    topicOpen: 'Selvä, pidän tämän kysymyksen avoimena.',
+    invoiceTextRequired: 'Vastaa tekstinä ja kerro laskun tiedot, joita kysyin. Tämä laskua koskeva kysymys on yhä auki. Liitteet ja ääniviestit eivät vielä käy vastaukseksi.',
+    invoiceContinuationUnavailable: 'Laskun jatkaminen ei onnistu juuri nyt. Kysymys on yhä auki. Lähetä koko laskuohje uudelleen, kun laskutus on taas käytettävissä.',
+    invoiceRefusalStillOpen: ' Kysymys on yhä auki. Vastaa koko laskuohjeella, niin yritetään uudelleen.',
+    savedCodingExhausted: 'Vastauksesi on tallessa, mutta kirjausta ei saatu valmiiksi. Asia pitää korjata, ennen kuin se voi jatkua.',
+    savedCodingPending: 'Vastauksesi on tallessa. Kirjaus ei ole vielä valmis.',
+    bookedPosted: 'Se on nyt kirjanpidossasi. Vastaa, jos se ei ole oikein.',
+    bookedNotPosted: 'Vastaa, jos se ei ole oikein.',
+    booked: (account, tail) => `Selvä, kirjasin tämän tilille ${account}. ${tail}`
+  })
+});
+
+const coreCopyFor = (language) => INBOUND_CORE_COPY[language] || INBOUND_CORE_COPY.en;
+const invoiceRefusalFor = (language, reason) => {
+  const table = language === 'fi' ? OWNER_INVOICE_REFUSAL_COPY_FI : OWNER_INVOICE_COMMAND_REFUSAL_COPY;
+  return table[reason] || table.draft_invalid;
+};
 const capabilityActs = ({ config, capability, clientId, gateContext, env }) => {
   const declared = config.capabilities?.[capability];
   if (declared !== true && !(declared === undefined && config.channel === 'telegram')) return false;
@@ -222,7 +291,8 @@ export const assessEvidenceTopicTurn = ({ ask = {}, text = '', descriptor = null
   if (/(tomorrow|later|tonight|next week|send it|send this|i'll send|i will send|palaan|huomenna|myöhemmin|kohta)/i.test(lower)) {
     return { outcome: 'defer_later', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_deferred_evidence' };
   }
-  if (/\b(partial|some of|not sure|maybe|i think|only have|missing|don\'?t have all|osittain|ehkä)\b/i.test(lower)) {
+  // 'not sure' / 'en ole varma' are the keywords the ask templates invite.
+  if (/\b(partial|some of|not sure|maybe|i think|only have|missing|don\'?t have all|osittain|ehkä|en ole varma)\b/i.test(lower)) {
     return { outcome: 'partial_answer', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'owner_supplied_partial_or_uncertain_answer' };
   }
   if (/\b(can\'?t|cannot|unable|no idea|don\'?t know|en tiedä|ei onnistu)\b/i.test(lower)) {
@@ -273,7 +343,8 @@ export const buildEvidenceTopicState = ({ ask = {}, turn = {}, now, channel, act
 // a follow-up), we fall back to the channel's generic acknowledgement. We NEVER
 // claim a booking that didn't happen — the line is rendered from the persisted
 // recode verdict, not from optimism (honest-promise rail).
-export const buildResolvedReplyText = ({ resolved = {}, fallback = '' } = {}) => {
+export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language = 'en' } = {}) => {
+  const copy = coreCopyFor(language);
   const recode = resolved && typeof resolved === 'object' ? resolved.recode : null;
   const clarification = resolved?.evidence_request?.response_payload?.reply_processing?.clarification;
   if (resolved?.evidence_request?.status === 'open' && recode?.needsClarification === true
@@ -287,19 +358,15 @@ export const buildResolvedReplyText = ({ resolved = {}, fallback = '' } = {}) =>
   }
   if (!recode || recode.applied !== true) {
     if (resolved?.evidence_request?.status === 'replied' || recode?.error || recode?.skipped) {
-      return recode?.exhausted
-        ? 'Your answer is saved, but coding could not finish. The issue needs repair before it can continue.'
-        : 'Your answer is saved. Coding has not finished yet.';
+      return recode?.exhausted ? copy.savedCodingExhausted : copy.savedCodingPending;
     }
     return fallback;
   }
   const suggestion = recode.suggestion && typeof recode.suggestion === 'object' ? recode.suggestion : {};
   const account = String(suggestion.account_label || suggestion.account_name || suggestion.proposed_account || '').replace(/\s+/g, ' ').trim();
   if (!account) return fallback;
-  const tail = recode.posted === true
-    ? "It's on your books now — reply if that's not right."
-    : "Reply if that's not right.";
-  return `Got it — booked to ${account}. ${tail}`;
+  const tail = recode.posted === true ? copy.bookedPosted : copy.bookedNotPosted;
+  return copy.booked(account, tail);
 };
 
 const bindingActorId = (binding = {}, fallback = 'messaging:webhook') => String(binding.collaborator_id || binding.verified_set_by || binding.opted_in_set_by || fallback);
@@ -512,7 +579,7 @@ export const maybeRunOwnerInvoiceCommand = async ({ message, from, firmId, env =
     ? result.question
     : result.status === 'drafted'
       ? config.copy.ownerInvoiceCommandDrafted
-      : OWNER_INVOICE_COMMAND_REFUSAL_COPY[result.reason] || OWNER_INVOICE_COMMAND_REFUSAL_COPY.draft_invalid;
+      : invoiceRefusalFor(config.language, result.reason);
   await deps.sendText({ to: from, text: outbound });
   await deps.recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: result.evidenceRequestId || null, client_id: clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: result.evidenceRequestId || null, provider_payload: { inbound: { type: 'text', anchor: 'owner_invoice_command', owner_invoice_command: result.status, refusal_reason: result.reason || null } } } });
   return { status: 'owner_invoice_command', result };
@@ -758,7 +825,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
   // for every un-staged client the pack is null and the turn is byte-identical.
   const assembled = await (deps.assembleClientPortalTurn || assembleClientPortalTurn)({ firmId, clientId, userMessageRow, ownerPrincipal: principal, surface: 'owner_channel', channel: config.channel });
   if (assembled.ownerMemory?.shortCircuit) {
-    const content = "I can't safely reach your saved details right now, so I don't want to guess. Please try again in a moment.";
+    const content = coreCopyFor(config.language).memoryBlocked;
     await (deps.appendClientPortalChatMessage || persistClientPortalTurnMessage)({ firmId, clientId, id: newClientPortalChatMessageId({ clientId, kind: 'assistant' }), role: 'assistant', content, payload: { actions: [], memory_status: 'blocked' }, actorType: 'system' });
     await deps.sendText({ to: from, text: content });
     return { status: 'general_chat', clientId, shortCircuit: true };
@@ -783,7 +850,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
     ...(deps.callClientPortalChatModel ? { __callAnthropic: deps.callClientPortalChatModel } : {})
   });
   if (reply.kind !== 'ok') {
-    await deps.sendText({ to: from, text: config.copy.chatUnavailable || 'I cannot answer from the books right now. Please try again in a moment.' });
+    await deps.sendText({ to: from, text: config.copy.chatUnavailable || coreCopyFor(config.language).chatUnavailable });
     return { status: 'general_chat_unavailable', reason: reply.reason || reply.code || 'unknown' };
   }
   // `today` = the anchor the model was given this turn; it rides the persisted
@@ -806,7 +873,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
       });
     } catch (error) {
       console.warn('[inbound-owner-chat] report read failed', error?.message || error);
-      await deps.sendText({ to: from, text: config.copy.chatUnavailable || 'I cannot answer from the books right now. Please try again in a moment.' });
+      await deps.sendText({ to: from, text: config.copy.chatUnavailable || coreCopyFor(config.language).chatUnavailable });
       return { status: 'general_chat_unavailable', reason: 'report_read_failed' };
     }
     const narration = await (deps.generateClientPortalReportNarration || generateClientPortalReportNarrationForTests || generateClientPortalReportNarration)({
@@ -818,7 +885,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
       ...(deps.callClientPortalReportNarrationModel ? { __callAnthropic: deps.callClientPortalReportNarrationModel } : {})
     });
     if (narration.kind !== 'ok') {
-      await deps.sendText({ to: from, text: config.copy.chatUnavailable || 'I cannot answer from the books right now. Please try again in a moment.' });
+      await deps.sendText({ to: from, text: config.copy.chatUnavailable || coreCopyFor(config.language).chatUnavailable });
       return { status: 'general_chat_unavailable', reason: narration.reason || narration.code || 'report_narration_failed' };
     }
     finalReply = narration;
@@ -863,7 +930,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
     }
   }
   const outboundText = resolved
-    ? buildResolvedReplyText({ resolved, fallback: finalReply.text })
+    ? buildResolvedReplyText({ resolved, fallback: finalReply.text, language: config.language })
     : mileage?.status === 'booked'
       ? mileage.consequence
       : portalLink
@@ -902,8 +969,22 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
   const anchor = await resolveInboundAnchor({ message, from, firmId, env, deps, config });
   if (anchor.status === 'unbound') { await sendText({ to: from, text: config.copy.unbound }); return { status: 'nudged', reason: 'unbound' }; }
   if (anchor.status === 'flag_off') return { status: 'skipped', reason: 'flag_off' };
+  // From here a client is known (the anchored one, or the number's bindings):
+  // every reply below speaks the owner's language. A channel without copyFor
+  // keeps its one copy.
+  if (typeof config.copyFor === 'function') {
+    const languageBindings = anchor.status === 'anchored'
+      ? (anchor.bindings || []).filter((binding) => binding?.client_id === anchor.clientId)
+      : anchor.bindings;
+    const language = await resolveInboundOwnerLanguage({ firmId, bindings: languageBindings, deps });
+    config = { ...config, language, copy: config.copyFor(language) };
+  }
+  // The voice-note nudge rides the descriptor (built before the client is
+  // known); the channel copy carries the same line in the owner's language.
+  const deferredText = (item) => (config.language && item?.deferredReason === 'voice_deferred' ? config.copy.voiceDeferred : null)
+    || item?.deferredText || config.copy.voiceDeferred;
   if (anchor.status !== 'anchored') {
-    if (descriptor?.deferred) { await sendText({ to: from, text: descriptor.deferredText || config.copy.voiceDeferred }); return { status: 'nudged', reason: descriptor.deferredReason || 'voice_deferred' }; }
+    if (descriptor?.deferred) { await sendText({ to: from, text: deferredText(descriptor) }); return { status: 'nudged', reason: descriptor.deferredReason || 'voice_deferred' }; }
     const issuance = await maybeStartInvoiceIssuance({ message, from, firmId, env, deps, config, anchor, text, descriptor });
     if (issuance) return issuance;
     // Kernel-audit M2: the jurisdiction-neutral owner-invoice turn entry. Runs
@@ -934,11 +1015,11 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
     // enter generic evidence resolution and mark the invoice question replied
     // without either a draft or a successor question.
     if (descriptor) {
-      await sendText({ to: from, text: 'Please reply in text with the invoice details I asked for. This invoice question remains open; attachments and voice messages cannot answer it yet.' });
+      await sendText({ to: from, text: coreCopyFor(config.language).invoiceTextRequired });
       return { status: 'topic_open', reason: 'owner_invoice_text_required', askId: anchor.askId };
     }
     if (typeof deps.runOwnerInvoiceCommand !== 'function') {
-      await sendText({ to: from, text: 'Invoice continuation is unavailable. The question remains open; please retry your complete invoice instruction when invoicing is available.' });
+      await sendText({ to: from, text: coreCopyFor(config.language).invoiceContinuationUnavailable });
       return { status: 'topic_open', askId: anchor.askId };
     }
     const result = await deps.runOwnerInvoiceCommand({
@@ -952,7 +1033,7 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
     }
     const outbound = result?.status === 'asked' ? result.question
       : result?.status === 'drafted' ? config.copy.ownerInvoiceCommandDrafted
-        : `${OWNER_INVOICE_COMMAND_REFUSAL_COPY[result?.reason] || OWNER_INVOICE_COMMAND_REFUSAL_COPY.draft_invalid} The question remains open; reply with your complete invoice instruction to try again.`;
+        : `${invoiceRefusalFor(config.language, result?.reason)}${coreCopyFor(config.language).invoiceRefusalStillOpen}`;
     await sendText({ to: from, text: outbound });
     await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel,
       ask_id: result?.evidenceRequestId || anchor.askId, client_id: anchor.clientId,
@@ -996,7 +1077,7 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
     };
   }
 
-  if (descriptor?.deferred) { await sendText({ to: from, text: descriptor.deferredText || config.copy.voiceDeferred }); return { status: 'nudged', reason: descriptor.deferredReason || 'deferred' }; }
+  if (descriptor?.deferred) { await sendText({ to: from, text: deferredText(descriptor) }); return { status: 'nudged', reason: descriptor.deferredReason || 'deferred' }; }
 
   const resolveEvidenceRequest = deps.resolveEvidenceRequest;
   const openingBinding = resolveCountryOpeningBinding(ask);
@@ -1041,12 +1122,12 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
       const topicState = buildEvidenceTopicState({ ask, turn: { ...turn, text }, now: deps.now?.() || new Date().toISOString(), channel: config.channel, actorId, inboundMessageId: message.id, documentIds: [] });
       const recorded = await deps.recordEvidenceTopicTurn({ firmId, evidenceRequestId: anchor.askId, topicState, actorId, actorType: 'client' });
       await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: null, provider_payload: { inbound: { type: 'text', anchor: anchor.source, evidence_topic: { outcome: turn.outcome, status: 'open' } } } } });
-      await sendText({ to: from, text: config.copy.topicOpen || "Got it — I’ll keep this question open." });
+      await sendText({ to: from, text: config.copy.topicOpen || coreCopyFor(config.language).topicOpen });
       return { status: 'topic_open', askId: anchor.askId, result: recorded, topicState };
     }
     const resolved = await resolveEvidenceRequest({ firmId, evidenceRequestId: anchor.askId, reply: text, actorId, actorType: 'client' });
     await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: resolved?.evidence_request?.status === 'resolved' ? (resolved.evidence_request.id || anchor.askId) : null, provider_payload: { inbound: { type: 'text', anchor: anchor.source } } } });
-    await sendText({ to: from, text: buildResolvedReplyText({ resolved, fallback: config.copy.textResolved }) });
+    await sendText({ to: from, text: buildResolvedReplyText({ resolved, fallback: config.copy.textResolved, language: config.language }) });
     return { status: resolved?.evidence_request?.status === 'replied' ? 'reply_saved'
       : resolved?.evidence_request?.status === 'open' ? 'topic_open' : 'resolved', askId: anchor.askId, result: resolved };
   }

@@ -191,3 +191,17 @@ test('three duplicates collapse to one survivor and two losers', () => {
   assert.equal(plans[0].survivor.id, 'a');
   assert.equal(plans[0].losers.length, 2);
 });
+
+test('the affordance tail follows the owner language; English is unchanged', () => {
+  const withPhoto = askAffordances({ anchor: 'transaction:tx-1', evidenceType: 'business_purpose' });
+  const wordsOnly = askAffordances({ anchor: 'document:doc-1', evidenceType: 'business_purpose' });
+  assert.equal(renderAskAffordanceTail(withPhoto), "reply with a photo, answer in words, or reply 'not sure'");
+  assert.equal(renderAskAffordanceTail(wordsOnly), "just reply in words, or reply 'not sure'");
+  assert.equal(renderAskAffordanceTail(withPhoto, 'en'), renderAskAffordanceTail(withPhoto));
+  assert.equal(renderAskAffordanceTail(withPhoto, 'fi'), "vastaa kuvalla, kirjoita vastaus tai vastaa 'en ole varma'");
+  assert.equal(renderAskAffordanceTail(wordsOnly, 'fi'), "vastaa vain kirjoittamalla tai vastaa 'en ole varma'");
+  for (const aff of [withPhoto, wordsOnly]) {
+    const tail = renderAskAffordanceTail(aff, 'fi');
+    assert.ok(!tail.includes('—') && !tail.includes('–'), `dash in: ${tail}`);
+  }
+});

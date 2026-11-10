@@ -237,3 +237,50 @@ test('APUA replies with help; ordinary text is not handled and flows to anchored
   assert.equal(calls.revoked.length, 0);
   assert.equal(calls.texts.length, 1);
 });
+
+// ── The owner's language ────────────────────────────────────────────────────
+
+const fiAsk = { 'client-1:23DEF456': { id: 'ask_abc123def456', client_id: 'client-1', transaction_id: 'tx-1', status: 'open', question: 'Lähetä kuitti tästä illallisesta.' } };
+
+test("a Finnish owner's 'en ole varma' keeps the ask open and is answered in Finnish", async () => {
+  const reads = [];
+  const { deps, calls } = makeDeps({ openByRef: fiAsk, deps: { getOwnerLanguage: async (args) => { reads.push(args); return 'fi'; } } });
+  const result = await processWhatsAppInboundMessage({
+    from: '+447700900123', firmId: 'firm', env: envOn, deps,
+    message: { id: 'wamid.fi.not_sure', type: 'text', text: { body: 'En ole varma. Ref: 23DEF456' } }
+  });
+  assert.equal(result.status, 'topic_open');
+  assert.equal(calls.resolved.length, 0, 'never resolved as an answer');
+  assert.equal(calls.topics[0].topicState.last_assessment.outcome, 'partial_answer');
+  assert.equal(calls.texts.at(-1).text, 'Selvä, pidän tämän kysymyksen avoimena.');
+  assert.deepEqual(reads, [{ firmId: 'firm', clientId: 'client-1' }], 'the language is read for the anchored client');
+});
+
+test('a Finnish owner gets the Finnish media and unanchored acknowledgements; an English owner the historical ones', async () => {
+  const fiMedia = makeDeps({ openByRef: fiAsk, deps: { getOwnerLanguage: async () => 'fi' } });
+  await processWhatsAppInboundMessage({ from: '+447700900123', firmId: 'firm', env: envOn, deps: fiMedia.deps, message: { id: 'wamid.fi.media', type: 'image', image: { id: 'media-1', mime_type: 'image/jpeg' }, caption: 'Ref: 23DEF456' } });
+  assert.equal(fiMedia.calls.texts.at(-1).text, 'Selvä, luen sitä nyt.');
+
+  const fiNudge = makeDeps({ deps: { getOwnerLanguage: async () => 'fi' } });
+  await processWhatsAppInboundMessage({ from: '+447700900123', firmId: 'firm', env: envOn, deps: fiNudge.deps, message: { id: 'wamid.fi.nudge', type: 'text', text: { body: 'kyllä' } } });
+  assert.equal(fiNudge.calls.texts[0].text, 'Vastaa suoraan siihen kysymykseen, johon vastaat, tai lisää viestiin sen Ref, niin yhdistän sen oikein.');
+
+  const enMedia = makeDeps({ openByRef: fiAsk, deps: { getOwnerLanguage: async () => 'en' } });
+  await processWhatsAppInboundMessage({ from: '+447700900123', firmId: 'firm', env: envOn, deps: enMedia.deps, message: { id: 'wamid.en.media', type: 'image', image: { id: 'media-1', mime_type: 'image/jpeg' }, caption: 'Ref: 23DEF456' } });
+  assert.equal(enMedia.calls.texts.at(-1).text, 'Got it — reading that now.');
+});
+
+test('a number bound to clients whose owners read different languages gets English, never a guess', async () => {
+  const second = { ...binding, id: 'binding-2', client_id: 'client-2' };
+  const { deps, calls } = makeDeps({ bindings: [binding, second], deps: { getOwnerLanguage: async ({ clientId }) => (clientId === 'client-1' ? 'fi' : 'en') } });
+  await processWhatsAppInboundMessage({ from: '+447700900123', firmId: 'firm', env: envOn, deps, message: { id: 'wamid.mixed', type: 'text', text: { body: 'kyllä' } } });
+  assert.equal(calls.texts[0].text, WHATSAPP_INBOUND_COPY.unanchored);
+});
+
+test('an owner-invoice question answered with a photo is refused in the owner language', async () => {
+  const ask = { id: 'ask_inv', client_id: 'client-1', evidence_type: 'owner_invoice_command', status: 'open' };
+  const { deps, calls } = makeDeps({ openByRef: { 'client-1:AB12CD34': ask }, deps: { getOwnerLanguage: async () => 'fi' } });
+  const result = await processWhatsAppInboundMessage({ from: '+447700900123', firmId: 'firm', env: envOn, deps, message: { id: 'wamid.inv.photo', type: 'image', image: { id: 'media-2', mime_type: 'image/jpeg' }, caption: 'Ref: AB12CD34' } });
+  assert.equal(result.reason, 'owner_invoice_text_required');
+  assert.equal(calls.texts.at(-1).text, 'Vastaa tekstinä ja kerro laskun tiedot, joita kysyin. Tämä laskua koskeva kysymys on yhä auki. Liitteet ja ääniviestit eivät vielä käy vastaukseksi.');
+});

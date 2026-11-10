@@ -7,6 +7,7 @@ import {
   handleTelegramComplianceCommand,
   isTelegramHelp,
   isTelegramStop,
+  buildTelegramInboundCopy,
   TELEGRAM_INBOUND_COPY
 } from './channels/telegramInbound.js';
 import {
@@ -322,4 +323,52 @@ test('Telegram owner chat threads knowledgeGrounding into the prompt and the rec
   );
   const assistantRow = seen.appended.find((row) => row.role === 'assistant');
   assert.deepEqual(assistantRow?.payload?.knowledge_grounding, grounding.receipt, 'the K1 receipt rides the assistant payload');
+});
+
+// ── The owner's language ────────────────────────────────────────────────────
+
+test('the Finnish Telegram copy obeys the voice rule and the started text uses the resolved assistant name', () => {
+  const fi = buildTelegramInboundCopy({ language: 'fi', assistantName: 'Aino' });
+  for (const [key, value] of Object.entries(fi)) {
+    const text = typeof value === 'function' ? value('Esimerkki Oy') : value;
+    assert.equal(typeof text, 'string', `copy.${key} renders a string`);
+    assert.doesNotMatch(text, /–|—/, `copy.${key} carries no em or en dash`);
+  }
+  assert.deepEqual(Object.keys(fi).sort(), Object.keys(TELEGRAM_INBOUND_COPY).sort(), 'Finnish covers every English key');
+  assert.match(fi.started, /^Täällä Aino\./);
+  // The default build is byte-identical; a renamed assistant no longer reads "Donna".
+  assert.equal(TELEGRAM_INBOUND_COPY.started, "It's Donna. This chat is for receipts and quick bookkeeping questions. I'll message you here when I need one thing.");
+  assert.equal(buildTelegramInboundCopy({ assistantName: 'Aino' }).started, "It's Aino. This chat is for receipts and quick bookkeeping questions. I'll message you here when I need one thing.");
+});
+
+test('a Finnish owner is answered in Finnish: booked-to consequence and the named photo ack', async () => {
+  const booked = makeDeps({
+    openByRef: { 'client-1:23DEF456': { id: 'ask_x', client_id: 'client-1' } },
+    resolvedResult: { evidence_request: { id: 'ask_x' }, recode: { applied: true, posted: true, suggestion: { account_label: 'Matkakulut' } } },
+    deps: { getOwnerLanguage: async () => 'fi' }
+  });
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: booked.deps, message: { message_id: 40, chat: { id: Number(CHAT_ID) }, text: 'konferenssi Ref: 23DEF456' } });
+  assert.equal(booked.calls.texts.at(-1).text, 'Selvä, kirjasin tämän tilille Matkakulut. Se on nyt kirjanpidossasi. Vastaa, jos se ei ole oikein.');
+
+  const photo = makeDeps({ deps: {
+    getOwnerLanguage: async () => 'fi',
+    getClientDisplayName: async () => 'Esimerkki Oy',
+    registerOwnerInitiatedDocument: async (args) => ({ id: 'tg_doc_owner', client_id: args.clientId })
+  } });
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: photo.deps, message: { message_id: 41, chat: { id: Number(CHAT_ID) }, photo: [{ file_id: 'large-file-id' }] } });
+  assert.equal(photo.calls.texts.at(-1).text, 'Selvä. Tallensin sen yrityksen Esimerkki Oy tietoihin. Luen sitä nyt.');
+});
+
+test('Telegram HELP/STOP in Finnish: the help text invites LOPETA and LOPETA disconnects', async () => {
+  const texts = [];
+  const revoked = [];
+  const deps = { getOwnerLanguage: async () => 'fi', sendText: async (args) => { texts.push(args); }, revokeBinding: async (args) => { revoked.push(args); } };
+  await handleTelegramComplianceCommand({ body: 'apua', from: CHAT_ID, bindings: [binding], deps });
+  assert.equal(texts[0].text, 'Täällä Donna. Tämä keskustelu on kuitteja ja nopeita kirjanpitokysymyksiä varten. Vastaa LOPETA, niin katkaisen yhteyden.');
+  const invited = texts[0].text.match(/Vastaa (\S+),/)[1];
+  assert.equal(isTelegramStop(invited), true);
+  const stop = await handleTelegramComplianceCommand({ body: invited, from: CHAT_ID, bindings: [binding], deps });
+  assert.equal(stop.action, 'stop');
+  assert.equal(revoked.length, 1);
+  assert.equal(texts.at(-1).text, 'Yhteys katkaistu. En lähetä enää viestejä tähän keskusteluun, ellet yhdistä uudelleen Donna-portaalistasi. Avoimet kysymykset odottavat portaalissa.');
 });

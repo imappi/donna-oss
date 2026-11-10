@@ -19,6 +19,7 @@ import { smsEnvAllowsClient } from '../channels/sms.js';
 import { buildTelegramAskDigestText, TELEGRAM_ASK_DIGEST_TEMPLATE, telegramEnvAllowsClient } from '../channels/telegram.js';
 import { OWNER_TEMPLATE_FALLBACK_LANGUAGE, preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
 
+import { senderWithDisplayName } from '../email/resendClient.js';
 import { withFirmDbClient } from './pool.js';
 import { DEFAULT_FIRM_ID } from './clients.js';
 
@@ -665,6 +666,20 @@ export const recordMessageDeliveryLedgerInDb = async ({ client = null, entry = {
 // the ask drafter); re-exported here under the same names.
 export { OWNER_TEMPLATE_FALLBACK_LANGUAGE, preferredOwnerTemplateLanguage };
 
+// The period an ask names when its payload carries none, in the owner's
+// language. It rides the message as a template parameter, so a Finnish owner
+// must not read the English fallback inside a Finnish sentence.
+const OWNER_ASK_PERIOD_FALLBACK = Object.freeze({ en: 'this period', fi: 'tämä kausi' });
+const askPeriodFor = (request, language) => request.request_payload?.period || request.request_payload?.period_label
+  || OWNER_ASK_PERIOD_FALLBACK[language] || OWNER_ASK_PERIOD_FALLBACK[OWNER_TEMPLATE_FALLBACK_LANGUAGE];
+
+// One profile read per batch for the code-side channels (SMS/Telegram): the
+// assistant display name ('Donna' fallback) and the owner's language ('en' on
+// any read failure).
+const readOwnerVoice = (client, { firmId, clientId }) => client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
+  .then((res) => ({ assistantName: resolveAssistantName(res.rows[0]?.profile), language: preferredOwnerTemplateLanguage(res.rows[0]?.profile) }))
+  .catch(() => ({ assistantName: resolveAssistantName(null), language: OWNER_TEMPLATE_FALLBACK_LANGUAGE }));
+
 // Meta Cloud API returns error code 132001 when the template exists but has no
 // approved translation in the requested language. Treat that (and a defensive
 // message match) as "this language isn't live yet" ⇒ safe to retry in English.
@@ -726,9 +741,10 @@ export const deliverSensitiveAskPortalNotice = async ({
   const askRef = shortAskRef(request.id);
   let result;
   let templateName;
+  let sentLanguage = preferredLanguage;
   if (channel === 'whatsapp') {
     templateName = SENSITIVE_ASK_WA_TEMPLATE;
-    ({ result } = await deliverOwnerTemplateWithLanguageFallback({
+    ({ result, languageCode: sentLanguage } = await deliverOwnerTemplateWithLanguageFallback({
       deliverOwnerMessage,
       channel: OWNER_CHANNELS.WHATSAPP,
       recipient: { phone_e164: binding.phone_e164 },
@@ -737,11 +753,11 @@ export const deliverSensitiveAskPortalNotice = async ({
     }));
   } else {
     templateName = SENSITIVE_ASK_NOTICE_TEMPLATE;
-    const text = sensitiveAskPortalNoticeText({ assistantName, url: link.url, askRef });
+    const text = sensitiveAskPortalNoticeText({ assistantName, url: link.url, askRef, language: preferredLanguage });
     result = await deliverOwnerMessage({
       channel: channel === 'sms' ? OWNER_CHANNELS.SMS : OWNER_CHANNELS.TELEGRAM,
       recipient: { phone_e164: binding.phone_e164 },
-      template: { name: templateName, bodyParameters: [text], metadata: { ask_id: request.id, client_id: clientId }, assistantName }
+      template: { name: templateName, bodyParameters: [text], metadata: { ask_id: request.id, client_id: clientId }, assistantName, language: preferredLanguage }
     });
   }
   const at = new Date().toISOString();
@@ -759,7 +775,8 @@ export const deliverSensitiveAskPortalNotice = async ({
       link_status: link.status,
       link_path: link.path,
       authority_basis: `config_stage:${OWNER_PORTAL_LINK_FLAG_KEY}`,
-      config_snapshot_id: snapshotId
+      config_snapshot_id: snapshotId,
+      language: sentLanguage
     }
   } });
   try {
@@ -796,10 +813,7 @@ export const deliverWhatsAppEvidenceAsksAfterSend = async ({ client, firmId, cli
     const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
     if (!request) { notAwaiting.push(askId); continue; }
-    // No period on the ask ⇒ the owner-language label the email copy uses
-    // ('this period' / 'tämä kausi'), matching the template language asked for.
-    const period = request.request_payload?.period || request.request_payload?.period_label
-      || (OWNER_EMAIL_ASK_COPY[preferredLanguage] || OWNER_EMAIL_ASK_COPY[OWNER_TEMPLATE_FALLBACK_LANGUAGE]).periodFallback;
+    const period = askPeriodFor(request, preferredLanguage);
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
       // Sensitive-identifier ask: never send over WhatsApp — record a visible
@@ -858,15 +872,13 @@ export const deliverSmsEvidenceAsksAfterSend = async ({ client, firmId, clientId
   const ids = evidenceRequestIds.filter(Boolean);
   const notAwaiting = [];
   // D-PA-3: SMS bodies render code-side, so the owner's chosen assistant
-  // name interpolates here. One profile read per batch, 'Donna' fallback.
-  const assistantName = await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
-    .then((res) => resolveAssistantName(res.rows[0]?.profile))
-    .catch(() => resolveAssistantName(null));
+  // name and the owner's language apply here. One profile read per batch.
+  const { assistantName, language } = await readOwnerVoice(client, { firmId, clientId });
   for (const askId of ids) {
     const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
     if (!request) { notAwaiting.push(askId); continue; }
-    const period = request.request_payload?.period || request.request_payload?.period_label || 'this period';
+    const period = askPeriodFor(request, language);
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
       // Sensitive-identifier ask: never send over SMS — record a visible
@@ -876,20 +888,20 @@ export const deliverSmsEvidenceAsksAfterSend = async ({ client, firmId, clientId
       // notice with the deep link (no question content). Fail-soft.
       await deliverSensitiveAskPortalNotice({
         client, firmId, clientId, request, binding, channel: 'sms', provider: 'twilio',
-        deliverOwnerMessage, OWNER_CHANNELS, assistantName, env
+        deliverOwnerMessage, OWNER_CHANNELS, assistantName, preferredLanguage: language, env
       }).catch((error) => console.warn('[sms-asks] sensitive-ask portal notice failed', error?.message || error));
       continue;
     }
     const result = await attemptDelivery(() => deliverOwnerMessage({
       channel: OWNER_CHANNELS.SMS,
       recipient: { phone_e164: binding.phone_e164 },
-      template: { name: 'donna_evidence_ask_v1', bodyParameters: [period, safeQuestion.text, shortAskRef(request.id)], metadata: { ask_id: request.id, client_id: clientId }, assistantName }
+      template: { name: 'donna_evidence_ask_v1', bodyParameters: [period, safeQuestion.text, shortAskRef(request.id)], metadata: { ask_id: request.id, client_id: clientId }, assistantName, language }
     }));
     if (result?.ok) {
-      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: result.id, channel: 'sms', provider: 'twilio', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', sent_at: new Date().toISOString(), provider_payload: { send: result.body || null } } });
+      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: result.id, channel: 'sms', provider: 'twilio', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', sent_at: new Date().toISOString(), provider_payload: { send: result.body || null, language } } });
       await __bumpEvidenceRequestSendCountWithClient({ client, firmId, clientId, askIds: [request.id] });
     } else {
-      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `sms_fallback_${request.id}`, channel: 'sms', provider: 'twilio', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', failed_at: new Date().toISOString(), failure_reason: failureReasonFor(result, 'SMS_SEND_FAILED'), fallback_triggered_at: new Date().toISOString() } });
+      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `sms_fallback_${request.id}`, channel: 'sms', provider: 'twilio', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', failed_at: new Date().toISOString(), failure_reason: failureReasonFor(result, 'SMS_SEND_FAILED'), fallback_triggered_at: new Date().toISOString(), provider_payload: { language } } });
       await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: [request.id], channel: 'sms', result });
     }
   }
@@ -909,11 +921,9 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
   const OWNER_CHANNELS = deps.OWNER_CHANNELS || channelModule.OWNER_CHANNELS;
   const ids = evidenceRequestIds.filter(Boolean);
   const notAwaiting = [];
-  // Telegram bodies render code-side, so the owner's chosen assistant name
-  // interpolates here. One profile read per batch, 'Donna' fallback.
-  const assistantName = await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])
-    .then((res) => resolveAssistantName(res.rows[0]?.profile))
-    .catch(() => resolveAssistantName(null));
+  // Telegram bodies render code-side, so the owner's chosen assistant name and
+  // the owner's language apply here. One profile read per batch.
+  const { assistantName, language } = await readOwnerVoice(client, { firmId, clientId });
 
   // Pass 1: load each ask and split it. A sensitive-identifier ask NEVER rides
   // the channel, batched or not, so it keeps its own per-ask handling exactly
@@ -923,7 +933,7 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
     const requestResult = await client.query(AWAITING_OWNER_ASK_SQL, [firmId, clientId, askId]);
     const request = requestResult.rows[0];
     if (!request) { notAwaiting.push(askId); continue; }
-    const period = request.request_payload?.period || request.request_payload?.period_label || 'this period';
+    const period = askPeriodFor(request, language);
     const safeQuestion = prepareOwnerAskQuestion(request.question);
     if (safeQuestion.blocked) {
       // Sensitive-identifier ask: never send over Telegram — record a visible
@@ -933,14 +943,15 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
       // notice with the deep link (no question content). Fail-soft.
       await deliverSensitiveAskPortalNotice({
         client, firmId, clientId, request, binding, channel: 'telegram', provider: 'telegram',
-        deliverOwnerMessage, OWNER_CHANNELS, assistantName, env
+        deliverOwnerMessage, OWNER_CHANNELS, assistantName, preferredLanguage: language, env
       }).catch((error) => console.warn('[telegram-asks] sensitive-ask portal notice failed', error?.message || error));
       continue;
     }
     // 108: affordances are explicit per ask. A document/case-anchored ask must
     // not solicit the artifact Donna already holds.
     const affordanceTail = renderAskAffordanceTail(
-      askAffordances({ anchor: request.canonical_anchor || '', evidenceType: request.evidence_type })
+      askAffordances({ anchor: request.canonical_anchor || '', evidenceType: request.evidence_type }),
+      language
     );
     sendable.push({ request, period, question: safeQuestion.text, affordanceTail });
   }
@@ -955,14 +966,14 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
     const result = await attemptDelivery(() => deliverOwnerMessage({
       channel: OWNER_CHANNELS.TELEGRAM,
       recipient: { phone_e164: binding.phone_e164 },
-      template: { name: 'donna_evidence_ask_v1', bodyParameters: [period, question, shortAskRef(request.id), affordanceTail], metadata: { ask_id: request.id, client_id: clientId }, assistantName }
+      template: { name: 'donna_evidence_ask_v1', bodyParameters: [period, question, shortAskRef(request.id), affordanceTail], metadata: { ask_id: request.id, client_id: clientId }, assistantName, language }
     }));
     if (result?.ok) {
-      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: result.id, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', sent_at: new Date().toISOString(), provider_payload: { send: result.body || null } } });
+      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: result.id, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', sent_at: new Date().toISOString(), provider_payload: { send: result.body || null, language } } });
       // 108: the prompt actually left, so this is a real send.
       await __bumpEvidenceRequestSendCountWithClient({ client, firmId, clientId, askIds: [request.id] });
     } else {
-      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `telegram_fallback_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', failed_at: new Date().toISOString(), failure_reason: failureReasonFor(result, 'TELEGRAM_SEND_FAILED'), fallback_triggered_at: new Date().toISOString() } });
+      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `telegram_fallback_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', failed_at: new Date().toISOString(), failure_reason: failureReasonFor(result, 'TELEGRAM_SEND_FAILED'), fallback_triggered_at: new Date().toISOString(), provider_payload: { language } } });
       await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: [request.id], channel: 'telegram', result });
     }
     return { sent: 1, ...skippedNotAwaiting(notAwaiting) };
@@ -994,7 +1005,8 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
   const text = buildTelegramAskDigestText({
     assistantName,
     items: sendable.map(({ request, period, question }) => ({ question, period, askRef: shortAskRef(request.id) })),
-    portalUrl: portalLink?.url || null
+    portalUrl: portalLink?.url || null,
+    language
   });
   // An empty digest means nothing fit the character budget. Rather than send a
   // useless message, fall back to the per-ask path so the asks still land.
@@ -1003,13 +1015,13 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
       const one = await attemptDelivery(() => deliverOwnerMessage({
         channel: OWNER_CHANNELS.TELEGRAM,
         recipient: { phone_e164: binding.phone_e164 },
-        template: { name: 'donna_evidence_ask_v1', bodyParameters: [period, question, shortAskRef(request.id), affordanceTail], metadata: { ask_id: request.id, client_id: clientId }, assistantName }
+        template: { name: 'donna_evidence_ask_v1', bodyParameters: [period, question, shortAskRef(request.id), affordanceTail], metadata: { ask_id: request.id, client_id: clientId }, assistantName, language }
       }));
       if (one?.ok) await __bumpEvidenceRequestSendCountWithClient({ client, firmId, clientId, askIds: [request.id] });
       const at = new Date().toISOString();
       await recordMessageDeliveryLedgerInDb({ client, entry: one?.ok
-        ? { message_id: one.id, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', sent_at: at, provider_payload: { send: one.body || null } }
-        : { message_id: `telegram_fallback_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', failed_at: at, failure_reason: failureReasonFor(one, 'TELEGRAM_SEND_FAILED'), fallback_triggered_at: at } });
+        ? { message_id: one.id, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', sent_at: at, provider_payload: { send: one.body || null, language } }
+        : { message_id: `telegram_fallback_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: 'donna_evidence_ask_v1', failed_at: at, failure_reason: failureReasonFor(one, 'TELEGRAM_SEND_FAILED'), fallback_triggered_at: at, provider_payload: { language } } });
       await recordUnknownIfIndeterminate({ client, firmId, clientId, askIds: [request.id], channel: 'telegram', result: one, at });
     }
     return { sent: sendable.length, digest: false, reason: 'digest_empty', ...skippedNotAwaiting(notAwaiting) };
@@ -1018,7 +1030,7 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
   const result = await attemptDelivery(() => deliverOwnerMessage({
     channel: OWNER_CHANNELS.TELEGRAM,
     recipient: { phone_e164: binding.phone_e164 },
-    template: { name: TELEGRAM_ASK_DIGEST_TEMPLATE, bodyParameters: [text], metadata: { ask_ids: sendable.map(({ request }) => request.id), client_id: clientId }, assistantName }
+    template: { name: TELEGRAM_ASK_DIGEST_TEMPLATE, bodyParameters: [text], metadata: { ask_ids: sendable.map(({ request }) => request.id), client_id: clientId }, assistantName, language }
   }));
   const at = new Date().toISOString();
   // One ledger row PER ASK, exactly as the email deliverer does: the row is what
@@ -1032,8 +1044,8 @@ export const deliverTelegramEvidenceAsksAfterSend = async ({ client, firmId, cli
   // route for an owner who wants to answer exactly one.
   for (const { request } of sendable) {
     await recordMessageDeliveryLedgerInDb({ client, entry: result?.ok
-      ? { message_id: `${result.id || 'telegram_digest'}_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: TELEGRAM_ASK_DIGEST_TEMPLATE, sent_at: at, provider_payload: { batch_message_id: result.id || null, digest_size: sendable.length, portal_link_status: portalLink ? 'sent' : 'absent', send: result.body || null } }
-      : { message_id: `telegram_digest_fallback_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: TELEGRAM_ASK_DIGEST_TEMPLATE, failed_at: at, failure_reason: failureReasonFor(result, 'TELEGRAM_SEND_FAILED'), fallback_triggered_at: at } });
+      ? { message_id: `${result.id || 'telegram_digest'}_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: TELEGRAM_ASK_DIGEST_TEMPLATE, sent_at: at, provider_payload: { batch_message_id: result.id || null, digest_size: sendable.length, portal_link_status: portalLink ? 'sent' : 'absent', send: result.body || null, language } }
+      : { message_id: `telegram_digest_fallback_${request.id}`, channel: 'telegram', provider: 'telegram', ask_id: request.id, client_id: clientId, recipient_phone_hash: binding.phone_hash, template_name: TELEGRAM_ASK_DIGEST_TEMPLATE, failed_at: at, failure_reason: failureReasonFor(result, 'TELEGRAM_SEND_FAILED'), fallback_triggered_at: at, provider_payload: { language } } });
   }
   if (result?.ok) {
     await __bumpEvidenceRequestSendCountWithClient({
@@ -1066,34 +1078,45 @@ export const OWNER_EMAIL_ASKS_FLAG_KEY = 'OWNER_EMAIL_ASKS';
 // the sinä form, the way a small accounting firm writes to its client; any
 // other language gets the English copy. "(ref X)" stays verbatim in every
 // language because extractAskRef anchors a reply on the literal word "ref".
+// The reminder* lines replace subject and need when the re-ask sweep sends the
+// same questions again (deps.askWording === 'reminder'); the first ask keeps
+// its own wording.
 const OWNER_EMAIL_ASK_COPY = Object.freeze({
   en: Object.freeze({
-    periodFallback: 'this period',
+    periodFallback: OWNER_ASK_PERIOD_FALLBACK.en,
     count: (n) => `${n} question${n === 1 ? '' : 's'}`,
     subject: (count) => `${count} about your books`,
+    reminderSubject: (count) => `${count} about your books (reminder)`,
     greeting: (name, firm) => `Hi — ${name} here${firm ? ` from ${firm}` : ''}.`,
     need: (n) => `To keep your books current I need ${n === 1 ? 'one answer' : 'a few answers'} only you can give:`,
+    reminderNeed: (n) => `A quick reminder: I still need ${n === 1 ? 'one answer' : 'a few answers'} only you can give to keep your books current:`,
     closing: 'Just reply to this email with the answers (or photos/receipts attached) and I will take it from there.'
   }),
   fi: Object.freeze({
-    periodFallback: 'tämä kausi',
+    periodFallback: OWNER_ASK_PERIOD_FALLBACK.fi,
     count: (n) => `${n} ${n === 1 ? 'kysymys' : 'kysymystä'}`,
     subject: (count) => `${count} kirjanpidostasi`,
+    reminderSubject: (count) => `${count} kirjanpidostasi (muistutus)`,
     greeting: (name, firm) => `Hei! Täällä ${name}${firm ? `, ${firm}` : ''}.`,
     need: (n) => (n === 1
       ? 'Jotta kirjanpitosi pysyy ajan tasalla, tarvitsen sinulta vastauksen yhteen kysymykseen:'
       : 'Jotta kirjanpitosi pysyy ajan tasalla, tarvitsen sinulta vastauksia muutamaan kysymykseen:'),
+    reminderNeed: (n) => (n === 1
+      ? 'Muistutan vielä: tarvitsen sinulta vastauksen yhteen kysymykseen, jotta kirjanpitosi pysyy ajan tasalla:'
+      : 'Muistutan vielä: tarvitsen sinulta vastauksia muutamaan kysymykseen, jotta kirjanpitosi pysyy ajan tasalla:'),
     closing: 'Vastaa vain tähän sähköpostiin (kuvat ja kuitit voit liittää mukaan), niin hoidan loput.'
   })
 });
 
-const buildOwnerEmailAskMessage = ({ language = OWNER_TEMPLATE_FALLBACK_LANGUAGE, assistantName, firmName = null, clientName = '', items = [] } = {}) => {
+const buildOwnerEmailAskMessage = ({ language = OWNER_TEMPLATE_FALLBACK_LANGUAGE, assistantName, firmName = null, clientName = '', items = [], reminder = false } = {}) => {
   const copy = OWNER_EMAIL_ASK_COPY[language] || OWNER_EMAIL_ASK_COPY[OWNER_TEMPLATE_FALLBACK_LANGUAGE];
   const sender = firmName || assistantName;
   const lines = items.map((item, i) => `${i + 1}. [${item.period || copy.periodFallback}] ${item.question} (ref ${item.askRef})`);
-  const subject = `${sender}: ${copy.subject(copy.count(items.length))}${clientName ? ` — ${clientName}` : ''}`;
+  const subjectLine = reminder ? copy.reminderSubject : copy.subject;
+  const needLine = reminder ? copy.reminderNeed : copy.need;
+  const subject = `${sender}: ${subjectLine(copy.count(items.length))}${clientName ? ` — ${clientName}` : ''}`;
   const text = [
-    `${copy.greeting(assistantName, firmName)} ${copy.need(items.length)}`,
+    `${copy.greeting(assistantName, firmName)} ${needLine(items.length)}`,
     '',
     ...lines,
     '',
@@ -1134,8 +1157,11 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   const assistantName = resolveAssistantName(profile);
   const firmName = await client.query('select name from firms where id = $1 limit 1', [firmId])
     .then((res) => String(res.rows[0]?.name || '').trim() || null).catch(() => null);
+  // The re-ask sweep (askReaskCadence.js) marks its sends through the deps the
+  // fan-out forwards to every deliverer; the first send carries no marker.
+  const reminder = deps.askWording === 'reminder';
   const { subject, text } = buildOwnerEmailAskMessage({
-    language, assistantName, firmName, clientName,
+    language, assistantName, firmName, clientName, reminder,
     items: requests.map((request) => ({
       period: request.request_payload?.period || request.request_payload?.period_label || null,
       question: String(request.question || '').replace(/\s+/g, ' ').trim(),
@@ -1146,17 +1172,21 @@ export const deliverEmailEvidenceAsksAfterSend = async ({ client, firmId, client
   const channelModule = deps.channelModule || await import('../channels/index.js');
   const deliverOwnerMessage = deps.deliverOwnerMessage || channelModule.deliverOwnerMessage;
   const OWNER_CHANNELS = deps.OWNER_CHANNELS || channelModule.OWNER_CHANNELS;
+  // The From display name names the firm the owner knows; the sender ADDRESS
+  // stays exactly as configured (senderWithDisplayName keeps it verbatim).
+  // No firm on file ⇒ the configured sender, unchanged.
+  const from = firmName ? senderWithDisplayName(`${assistantName}, ${firmName}`) : null;
   const result = await attemptDelivery(() => deliverOwnerMessage({
     channel: OWNER_CHANNELS.EMAIL,
     recipient: { email: ownerEmail },
-    email: { subject, text }
+    email: { subject, text, ...(from ? { from } : {}) }
   }));
   const at = new Date().toISOString();
   for (const request of requests) {
     if (result?.ok) {
-      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `${result.id || 'email'}_${request.id}`, channel: 'email', provider: 'resend', ask_id: request.id, client_id: clientId, template_name: 'donna_evidence_ask_email_v1', sent_at: at, provider_payload: { batch_message_id: result.id || null, language } } });
+      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `${result.id || 'email'}_${request.id}`, channel: 'email', provider: 'resend', ask_id: request.id, client_id: clientId, template_name: 'donna_evidence_ask_email_v1', sent_at: at, provider_payload: { batch_message_id: result.id || null, language, ...(reminder ? { wording: 'reminder' } : {}) } } });
     } else {
-      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `email_fallback_${request.id}`, channel: 'email', provider: 'resend', ask_id: request.id, client_id: clientId, template_name: 'donna_evidence_ask_email_v1', failed_at: at, failure_reason: failureReasonFor(result, 'EMAIL_SEND_FAILED'), fallback_triggered_at: at, provider_payload: { language } } });
+      await recordMessageDeliveryLedgerInDb({ client, entry: { message_id: `email_fallback_${request.id}`, channel: 'email', provider: 'resend', ask_id: request.id, client_id: clientId, template_name: 'donna_evidence_ask_email_v1', failed_at: at, failure_reason: failureReasonFor(result, 'EMAIL_SEND_FAILED'), fallback_triggered_at: at, provider_payload: { language, ...(reminder ? { wording: 'reminder' } : {}) } } });
     }
   }
   if (result?.ok) {

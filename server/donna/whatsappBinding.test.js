@@ -417,3 +417,39 @@ test('deliverWhatsAppEvidenceAsksAfterSend does NOT retry on a non-language fail
   const failed = fi.state.ledger.get('meta:fallback_ask_err');
   assert.ok(failed.failed_at, 'the failure is recorded');
 });
+
+test('deliverSmsEvidenceAsksAfterSend renders the Finnish SMS for a Finnish owner and records the language', async () => {
+  const { renderSmsTemplate } = await import('./channels/sms.js');
+  const phoneHash = hashPhoneE164('+358401234567');
+  const binding = { id: 'sms-binding', firm_id: 'firm', client_id: 'client', phone_e164: '+358401234567', phone_hash: phoneHash, channel: 'sms', revoked_at: null };
+  const render = ({ template }) => renderSmsTemplate({ templateName: template.name, bodyParameters: template.bodyParameters, assistantName: template.assistantName, language: template.language });
+
+  const fi = makeFakeClient({ profile: { jurisdiction: 'FI' }, bindings: [binding], asks: [{ id: 'ask_fi', firm_id: 'firm', client_id: 'client', question: 'Mikä tämä kuitti on', request_payload: {} }] });
+  const fiTexts = [];
+  await deliverSmsEvidenceAsksAfterSend({ client: fi, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask_fi'], env: { SMS_ENABLED: 'true', SMS_CLIENTS: 'client' }, deps: { deliverOwnerMessage: async (msg) => { fiTexts.push(render(msg)); return { ok: true, id: 'SM.fi', body: {} }; }, OWNER_CHANNELS: { SMS: 'sms' } } });
+  assert.deepEqual(fiTexts, ["Donna tarvitsee sinulta yhden asian (tämä kausi): Mikä tämä kuitti on. Vastaa kuvalla, kirjoita vastaus tai vastaa 'en ole varma'. Ref: ASKFI"]);
+  assert.equal(fi.state.ledger.get('twilio:SM.fi').provider_payload.language, 'fi');
+
+  const en = makeFakeClient({ bindings: [binding], asks: [{ id: 'ask_en', firm_id: 'firm', client_id: 'client', question: 'receipt?', request_payload: { period: 'June' } }] });
+  const enTexts = [];
+  await deliverSmsEvidenceAsksAfterSend({ client: en, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask_en'], env: { SMS_ENABLED: 'true', SMS_CLIENTS: 'client' }, deps: { deliverOwnerMessage: async (msg) => { enTexts.push(render(msg)); return { ok: false, error: 'carrier blocked' }; }, OWNER_CHANNELS: { SMS: 'sms' } } });
+  assert.deepEqual(enTexts, ["Donna needs one thing for June: receipt? — reply with a photo, answer in words, or reply 'not sure'. Ref: ASKEN"]);
+  assert.equal(en.state.ledger.get('twilio:sms_fallback_ask_en').provider_payload.language, 'en', 'a failed send still records the language attempted');
+});
+
+test('deliverWhatsAppEvidenceAsksAfterSend names a missing period in the owner language', async () => {
+  const phoneHash = hashPhoneE164('+358401234567');
+  const binding = { id: 'binding', firm_id: 'firm', client_id: 'client', phone_e164: '+358401234567', phone_hash: phoneHash, revoked_at: null };
+  const run = async (profile) => {
+    const db = makeFakeClient({ profile, bindings: [binding], asks: [{ id: 'ask_p', firm_id: 'firm', client_id: 'client', question: 'kuitti?', request_payload: {} }] });
+    const params = [];
+    await deliverWhatsAppEvidenceAsksAfterSend({
+      client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask_p'],
+      env: { WHATSAPP_ENABLED: 'true', WHATSAPP_CLIENTS: 'client' },
+      deps: { deliverOwnerMessage: async (msg) => { params.push(msg.template.bodyParameters[0]); return { ok: true, id: 'wamid.p', body: {} }; }, OWNER_CHANNELS: { WHATSAPP: 'whatsapp' } }
+    });
+    return params;
+  };
+  assert.deepEqual(await run({ jurisdiction: 'FI' }), ['tämä kausi']);
+  assert.deepEqual(await run({ jurisdiction: 'US' }), ['this period']);
+});

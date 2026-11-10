@@ -211,8 +211,11 @@ export const runAskReaskSweep = async ({
       // NUDGE — the same one fan-out the first send used. Only a channel that
       // genuinely delivered moves send_count (the deliverer's 108 bump), so
       // the re-read below is an honest execution verifier.
+      // deps.askWording marks this send as a REMINDER for the wording only
+      // (the email wrapper says so); the fan-out forwards deps to every
+      // deliverer unchanged, and no gate or stamp reads it.
       const channelFanout = await deliver({
-        client, firmId, clientId, evidenceRequestIds: [row.id], surface: 'ask_reask'
+        client, firmId, clientId, evidenceRequestIds: [row.id], surface: 'ask_reask', deps: { askWording: 'reminder' }
       }).catch((error) => ({ error: error?.message || 'fanout_failed' }));
       const after = await client.query(
         'select send_count from client_evidence_requests where firm_id = $1 and id = $2 limit 1',

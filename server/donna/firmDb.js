@@ -60,6 +60,7 @@ export {
   getClientIdentityInDb,
   getClientJurisdictionInDb,
   getClientOwnBankAccountsFromDb,
+  getClientOwnerLanguageInDb,
   getDefaultFirmId,
   getFirmJurisdictionInDb,
   isDemoFirmScopeAllowed,

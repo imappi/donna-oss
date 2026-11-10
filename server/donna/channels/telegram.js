@@ -29,8 +29,41 @@ export const telegramEnvAllowsClient = (clientId, envObj = process.env) => {
 // copy identical to renderSmsTemplate so the owner reads the same question
 // regardless of channel. Callers without a client profile omit assistantName →
 // 'Donna'.
-export const renderTelegramTemplate = ({ templateName, bodyParameters = [], assistantName = null } = {}) => {
+//
+// The copy follows the owner's language (preferredOwnerTemplateLanguage, passed
+// in as `language`); anything but 'fi' gets the English copy, unchanged. The
+// Finnish copy follows the Telegram voice rule (no em or en dashes). "Ref:"
+// stays verbatim because extractAskRef anchors a reply on the word "ref".
+const fiCount = (value, one, many) => `${value} ${String(value).trim() === '1' ? one : many}`;
+const fiSentence = (text) => (/[.?!:]$/.test(String(text).trim()) ? String(text).trim() : `${String(text).trim()}.`);
+const capitalize = (text) => (text ? `${text[0].toUpperCase()}${text.slice(1)}` : text);
+
+const TELEGRAM_TEMPLATE_COPY = Object.freeze({
+  en: Object.freeze({
+    defaultTail: "reply with a photo, answer in words, or reply 'not sure'",
+    donna_evidence_ask_v1: ({ name, period = 'this period', question = 'one thing', askRef = 'ASK', tail }) =>
+      `${name} needs one thing for ${period}: ${question} — ${tail}. Ref: ${askRef}`,
+    donna_close_queue_v1: ({ name, period = 'this period', openItems = '0', missingReceipts = '0' }) =>
+      `${name} is almost ready to close ${period}. Open: ${openItems} questions, ${missingReceipts} missing receipts. Reply 'show' to go through them one by one.`,
+    donna_decision_check_v1: ({ name, transactionShort = 'this transaction', category = 'the selected category', askRef = 'ASK' }) =>
+      `${name} treated ${transactionShort} as ${category} based on your past rules. Reply 'correct' or 'wrong'. Ref: ${askRef}`
+  }),
+  fi: Object.freeze({
+    defaultTail: "vastaa kuvalla, kirjoita vastaus tai vastaa 'en ole varma'",
+    donna_evidence_ask_v1: ({ name, period = 'tämä kausi', question = 'yksi asia', askRef = 'ASK', tail }) =>
+      `${name} tarvitsee sinulta yhden asian (${period}): ${fiSentence(question)} ${capitalize(tail)}. Ref: ${askRef}`,
+    donna_close_queue_v1: ({ name, period = 'tämä kausi', openItems = '0', missingReceipts = '0' }) =>
+      `${name} on melkein valmis sulkemaan kauden (${period}). Avoinna: ${fiCount(openItems, 'kysymys', 'kysymystä')}, ${fiCount(missingReceipts, 'puuttuva kuitti', 'puuttuvaa kuittia')}. Vastaa 'näytä', niin käydään ne läpi yksi kerrallaan.`,
+    donna_decision_check_v1: ({ name, transactionShort = 'tämän tapahtuman', category = 'valittu luokka', askRef = 'ASK' }) =>
+      `${name} kirjasi ${transactionShort} aiempien sääntöjesi perusteella näin: ${category}. Vastaa 'oikein' tai 'väärin'. Ref: ${askRef}`
+  })
+});
+
+const telegramCopyFor = (language) => TELEGRAM_TEMPLATE_COPY[language] || TELEGRAM_TEMPLATE_COPY.en;
+
+export const renderTelegramTemplate = ({ templateName, bodyParameters = [], assistantName = null, language = 'en' } = {}) => {
   const name = resolveAssistantName({ assistant_name: assistantName });
+  const copy = telegramCopyFor(language);
   if (templateName === 'donna_evidence_ask_v1') {
     // The 4th parameter is the AFFORDANCE TAIL (askIdentity.renderAskAffordanceTail).
     // It is optional and defaults to the historical string, so every caller that
@@ -38,17 +71,17 @@ export const renderTelegramTemplate = ({ templateName, bodyParameters = [], assi
     // one can drop "reply with a photo" for a document-anchored ask, where Donna
     // is already holding the photo and asking for it reads as nonsense (the
     // 2026-07-29 KUILI report).
-    const [period = 'this period', question = 'one thing', askRef = 'ASK', affordanceTail = ''] = bodyParameters;
-    const tail = String(affordanceTail || '').trim() || "reply with a photo, answer in words, or reply 'not sure'";
-    return `${name} needs one thing for ${period}: ${question} — ${tail}. Ref: ${askRef}`;
+    const [period, question, askRef, affordanceTail = ''] = bodyParameters;
+    const tail = String(affordanceTail || '').trim() || copy.defaultTail;
+    return copy.donna_evidence_ask_v1({ name, period, question, askRef, tail });
   }
   if (templateName === 'donna_close_queue_v1') {
-    const [period = 'this period', openItems = '0', missingReceipts = '0'] = bodyParameters;
-    return `${name} is almost ready to close ${period}. Open: ${openItems} questions, ${missingReceipts} missing receipts. Reply 'show' to go through them one by one.`;
+    const [period, openItems, missingReceipts] = bodyParameters;
+    return copy.donna_close_queue_v1({ name, period, openItems, missingReceipts });
   }
   if (templateName === 'donna_decision_check_v1') {
-    const [transactionShort = 'this transaction', category = 'the selected category', askRef = 'ASK'] = bodyParameters;
-    return `${name} treated ${transactionShort} as ${category} based on your past rules. Reply 'correct' or 'wrong'. Ref: ${askRef}`;
+    const [transactionShort, category, askRef] = bodyParameters;
+    return copy.donna_decision_check_v1({ name, transactionShort, category, askRef });
   }
   return String(bodyParameters[0] || '');
 };
@@ -80,22 +113,44 @@ export const TELEGRAM_ASK_DIGEST_MAX_CHARS = 3500;
 
 const plural = (count, one, many) => (count === 1 ? one : many);
 
+// Digest wording per owner language. English is the historical copy, unchanged.
+const TELEGRAM_DIGEST_COPY = Object.freeze({
+  en: Object.freeze({
+    periodFallback: 'this period',
+    headerPeriod: (name, count, period) => `${name} needs ${count} ${plural(count, 'thing', 'things')} for ${period}:`,
+    headerMixed: (name, count) => `${name} needs ${count} ${plural(count, 'thing', 'things')} from you:`,
+    replyHint: "Reply here with a photo or in words. If you're answering just one, mention its Ref.",
+    remaining: (count) => `${count} more ${plural(count, 'question is', 'questions are')} waiting in your portal.`,
+    portal: 'You can also answer them all in your portal:'
+  }),
+  fi: Object.freeze({
+    periodFallback: 'tämä kausi',
+    headerPeriod: (name, count, period) => `${name} tarvitsee sinulta ${count} ${plural(count, 'asian', 'asiaa')} (${period}):`,
+    headerMixed: (name, count) => `${name} tarvitsee sinulta ${count} ${plural(count, 'asian', 'asiaa')}:`,
+    replyHint: 'Vastaa tähän kuvalla tai kirjoittamalla. Jos vastaat vain yhteen, mainitse sen Ref.',
+    remaining: (count) => `${plural(count, 'Yksi kysymys', `${count} kysymystä`)} lisää odottaa portaalissasi.`,
+    portal: 'Voit myös vastata kaikkiin portaalissasi:'
+  })
+});
+
 // items: [{ question, askRef, period }] — question is already sanitized and
 // length-capped by askSafety.prepareOwnerAskQuestion at the call site.
 export const buildTelegramAskDigestText = ({
   assistantName = null,
   items = [],
   portalUrl = null,
+  language = 'en',
   maxItems = TELEGRAM_ASK_DIGEST_MAX_ITEMS,
   maxChars = TELEGRAM_ASK_DIGEST_MAX_CHARS
 } = {}) => {
   const name = resolveAssistantName({ assistant_name: assistantName });
+  const copy = TELEGRAM_DIGEST_COPY[language] || TELEGRAM_DIGEST_COPY.en;
   const all = (Array.isArray(items) ? items : []).filter((item) => item && String(item.question || '').trim());
   if (!all.length) return '';
 
   // A period only earns a mention when the batch does NOT share one. Repeating
   // "for June 2026" on every line is noise when it is true of all of them.
-  const periods = new Set(all.map((item) => String(item.period || '').trim() || 'this period'));
+  const periods = new Set(all.map((item) => String(item.period || '').trim() || copy.periodFallback));
   const commonPeriod = periods.size === 1 ? [...periods][0] : null;
 
   const shown = [];
@@ -104,7 +159,7 @@ export const buildTelegramAskDigestText = ({
     if (shown.length >= maxItems) break;
     const question = String(item.question).replace(/\s+/g, ' ').trim();
     const ref = String(item.askRef || '').trim();
-    const period = String(item.period || '').trim() || 'this period';
+    const period = String(item.period || '').trim() || copy.periodFallback;
     const prefix = commonPeriod ? '' : `[${period}] `;
     const line = `${shown.length + 1}. ${prefix}${question}${ref ? ` Ref: ${ref}` : ''}`;
     if (line.length > budget) break;
@@ -117,15 +172,15 @@ export const buildTelegramAskDigestText = ({
 
   const remaining = all.length - shown.length;
   const header = commonPeriod
-    ? `${name} needs ${all.length} ${plural(all.length, 'thing', 'things')} for ${commonPeriod}:`
-    : `${name} needs ${all.length} ${plural(all.length, 'thing', 'things')} from you:`;
+    ? copy.headerPeriod(name, all.length, commonPeriod)
+    : copy.headerMixed(name, all.length);
 
-  const footer = ['', "Reply here with a photo or in words. If you're answering just one, mention its Ref."];
+  const footer = ['', copy.replyHint];
   if (remaining > 0) {
-    footer.push(`${remaining} more ${plural(remaining, 'question is', 'questions are')} waiting in your portal.`);
+    footer.push(copy.remaining(remaining));
   }
   if (portalUrl) {
-    footer.push('You can also answer them all in your portal:');
+    footer.push(copy.portal);
     footer.push(portalUrl);
   }
   return [header, '', ...shown, ...footer].join('\n');
@@ -169,5 +224,5 @@ export const sendTelegramText = ({ to, chatId, text, deps = {} } = {}) =>
   sendTelegramMessage({ chatId: chatId ?? to, text, deps });
 
 // deliverOwnerMessage's TELEGRAM branch renders code-side then sends free-form.
-export const sendTelegramTemplate = ({ to, chatId, templateName, bodyParameters = [], assistantName = null, deps = {} } = {}) =>
-  sendTelegramMessage({ chatId: chatId ?? to, text: renderTelegramTemplate({ templateName, bodyParameters, assistantName }), deps });
+export const sendTelegramTemplate = ({ to, chatId, templateName, bodyParameters = [], assistantName = null, language = 'en', deps = {} } = {}) =>
+  sendTelegramMessage({ chatId: chatId ?? to, text: renderTelegramTemplate({ templateName, bodyParameters, assistantName, language }), deps });

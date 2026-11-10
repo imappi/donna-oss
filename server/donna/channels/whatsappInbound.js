@@ -13,6 +13,7 @@ import {
   createOpeningBalanceEvidenceRequestInDb,
   getClientEvidenceRequestByIdInDb,
   getClientEntityAxisFromDb,
+  getClientOwnerLanguageInDb,
   openingBalanceWhatsAppFlagActsInDb,
   gbOpeningBalanceFlagActsInDb,
   createGbOpeningBalanceEvidenceRequestInDb,
@@ -70,8 +71,28 @@ import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
 // that is the product brand, not the assistant. Default build is byte-identical
 // to the pre-rename copy. The unbound fast-path has no resolvable client, so it
 // keeps the default.
-export const buildWhatsAppInboundCopy = ({ assistantName } = {}) => {
+//
+// `language` is the owner's (preferredOwnerTemplateLanguage); anything but 'fi'
+// gets the English copy, unchanged. help/stopped are bilingual already and stay
+// identical in both (they run before any client is resolved for the number).
+export const buildWhatsAppInboundCopy = ({ assistantName, language = 'en' } = {}) => {
   const name = resolveAssistantName({ assistant_name: assistantName });
+  const help = `Tämä on ${name} — kuittikuvat ja kirjanpitokysymykset tähän numeroon. Vastaa LOPETA, niin katkaisen yhteyden. / It's ${name}. This number is for receipts and quick bookkeeping questions. Reply LOPETA or STOP to disconnect.`;
+  const stopped = "Yhteys katkaistu. En lähetä enää viestejä tähän numeroon, ellet yhdistä uudelleen Donna-portaalista. Avoimet kysymykset odottavat portaalissa. / You're disconnected. I won't message this number again unless you reconnect from your Donna portal. Open questions remain in the portal.";
+  if (language === 'fi') {
+    return Object.freeze({
+      textResolved: 'Selvä, hoidettu.',
+      mediaSaved: 'Selvä, luen sitä nyt.',
+      topicOpen: 'Selvä, pidän tämän kysymyksen avoimena.',
+      unanchored: 'Vastaa suoraan siihen kysymykseen, johon vastaat, tai lisää viestiin sen Ref, niin yhdistän sen oikein.',
+      voiceDeferred: 'En osaa vielä kuunnella ääniviestejä. Kirjoita vastaus tai lähetä kuva, niin hoidan sen.',
+      unbound: 'Yhdistä WhatsApp ensin Donna-portaalistasi, niin hoidan tämän.',
+      einvoiceReceived: 'Sain verkkolaskun. Luen sen ja kirjaan sen ostolaskuksi.',
+      ownerInvoiceCommandDrafted: 'Tein laskusta luonnoksen. Se odottaa hyväksyntääsi, ennen kuin se lähtee.',
+      help,
+      stopped
+    });
+  }
   return Object.freeze({
     textResolved: "Got it. That's handled.",
     // Forward-looking: a photo parses asynchronously, then (when it reconciles)
@@ -90,12 +111,14 @@ export const buildWhatsAppInboundCopy = ({ assistantName } = {}) => {
     // G-9 (D-G9-7) — the compliance lane, bilingual Finnish-first: the WhatsApp
     // number is the Finnish delivery surface (§1A) but bindings are not
     // Finland-only.
-    help: `Tämä on ${name} — kuittikuvat ja kirjanpitokysymykset tähän numeroon. Vastaa LOPETA, niin katkaisen yhteyden. / It's ${name}. This number is for receipts and quick bookkeeping questions. Reply LOPETA or STOP to disconnect.`,
-    stopped: "Yhteys katkaistu. En lähetä enää viestejä tähän numeroon, ellet yhdistä uudelleen Donna-portaalista. Avoimet kysymykset odottavat portaalissa. / You're disconnected. I won't message this number again unless you reconnect from your Donna portal. Open questions remain in the portal."
+    help,
+    stopped
   });
 };
 
 export const WHATSAPP_INBOUND_COPY = buildWhatsAppInboundCopy();
+const WHATSAPP_INBOUND_COPY_FI = buildWhatsAppInboundCopy({ language: 'fi' });
+const whatsappInboundCopyFor = (language) => (language === 'fi' ? WHATSAPP_INBOUND_COPY_FI : WHATSAPP_INBOUND_COPY);
 
 // G-9 (D-G9-6) — the opt-out keyword set. Exact whole-message match only
 // ("lopeta laskutus" is an instruction, not an opt-out). Deliberately NARROWER
@@ -180,6 +203,7 @@ const whatsappConfig = {
   actorFallback: 'whatsapp:webhook',
   capabilities: { generalOwnerChat: true, ownerInitiatedMedia: true, persistOwnerThread: true },
   copy: WHATSAPP_INBOUND_COPY,
+  copyFor: whatsappInboundCopyFor,
   allowsClient: (clientId, gateContext, env) => ownerChannelAllowsClient({ channel: 'whatsapp', clientId, gateContext, envFallback: whatsappEnvAllowsClient, env }),
   extractText: (message = {}) => message.text?.body || message.caption || '',
   extractContextId: (message = {}) => String(message.context?.id || '').trim(),
@@ -207,6 +231,8 @@ const defaultDeps = (deps = {}) => ({
   // toiminimi private account. Soft-fails to null ⇒ inboundCore's 'toiminimi'
   // default (byte-identical for a client whose form is unset/unreadable).
   getClientEntityType: deps.getClientEntityType || getClientEntityAxisFromDb,
+  // The owner's language for the acknowledgement copy (inboundCore picks it).
+  getOwnerLanguage: deps.getOwnerLanguage || getClientOwnerLanguageInDb,
   resolveOpeningBalanceInbound: deps.resolveOpeningBalanceInbound,
   resolveGbOpeningBalanceInbound: deps.resolveGbOpeningBalanceInbound,
   createOpeningBalanceAsk: deps.createOpeningBalanceAsk || createOpeningBalanceEvidenceRequestInDb,

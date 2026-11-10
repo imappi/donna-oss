@@ -517,3 +517,23 @@ test('portal_link_enabled arms on external_chat with OWNER_PORTAL_LINK canary (t
   assert.match(external.fingerprint, /^selfknow-/);
   assert.notEqual(external.fingerprint, portal.fingerprint, 'a different surface is a different resolved pack');
 });
+
+test('sensitiveAskPortalNoticeText follows the owner language; English is unchanged', () => {
+  const url = 'https://app.books.example/client/c-1#list';
+  assert.equal(
+    sensitiveAskPortalNoticeText({ assistantName: 'Maija', url, askRef: 'AB12CD34' }),
+    `Maija here. I have a question for you that is too sensitive for this chat, so I put it in your secure Donna portal. Answer it under What I still need from you: ${url} (ref AB12CD34)`
+  );
+  assert.equal(
+    sensitiveAskPortalNoticeText({ assistantName: 'Maija', url, askRef: 'AB12CD34', language: 'en' }),
+    sensitiveAskPortalNoticeText({ assistantName: 'Maija', url, askRef: 'AB12CD34' })
+  );
+  const fiLink = sensitiveAskPortalNoticeText({ assistantName: 'Maija', url, askRef: 'AB12CD34', language: 'fi' });
+  assert.equal(fiLink, `Hei, täällä Maija. Minulla on sinulle kysymys, joka on liian arkaluonteinen tähän keskusteluun, joten laitoin sen suojattuun Donna-portaaliisi. Löydät sen kohdasta What I still need from you: ${url} (ref AB12CD34)`);
+  const fiDegraded = sensitiveAskPortalNoticeText({ url: null, askRef: 'AB12CD34', language: 'fi' });
+  assert.equal(fiDegraded, 'Hei, täällä Donna. Minulla on sinulle kysymys, joka on liian arkaluonteinen tähän keskusteluun, joten laitoin sen suojattuun Donna-portaaliisi. Avaa Donna-portaalisi ja katso kohta What I still need from you. (ref AB12CD34)');
+  for (const copy of [fiLink, fiDegraded]) {
+    assert.ok(!copy.includes('—') && !copy.includes('–'), `no em/en dash in: ${copy}`);
+    assert.match(copy, /\(ref AB12CD34\)/, 'the reply anchor is kept verbatim');
+  }
+});

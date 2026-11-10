@@ -152,9 +152,11 @@ const realFanoutHarness = ({ emailOn = true, contained = false, portal = false }
     { match: 'select * from client_evidence_requests', rows: [OVERDUE_ROW()] },
     cannedOverdue([OVERDUE_ROW()])
   ]);
+  // The sweep's own deps (its reminder-wording marker) ride through, as the
+  // production defaultDeliver forwards them; only the transport is faked.
   const deliver = (args) => deliverEvidenceAsksOnAllChannels({
     ...args,
-    deps: { deliverOwnerMessage: async (msg) => { sends.push(msg); return { ok: true, id: 'email-msg-1' }; } }
+    deps: { ...(args.deps || {}), deliverOwnerMessage: async (msg) => { sends.push(msg); return { ok: true, id: 'email-msg-1' }; } }
   });
   return { client, sends, deliver, sendCount: () => sendCount };
 };
@@ -172,6 +174,10 @@ await test('email channel on: the nudge is ONE real email, ONE ledger row, send_
   assert.equal(h.sends[0].channel, 'email');
   assert.equal(h.sends[0].recipient.email, 'owner@example.test');
   assert.match(h.sends[0].email.text, /Who was check 3851 paid to\?/);
+  // A nudge is a reminder, and its email says so (the first ask's wording is
+  // pinned unchanged in ownerEmailAsks.test.js).
+  assert.match(h.sends[0].email.subject, /\(reminder\)/);
+  assert.match(h.sends[0].email.text, /A quick reminder: I still need one answer/);
   const ledger = callsMatching(h.client, 'insert into message_delivery_ledger');
   assert.equal(ledger.length, 1, 'one delivery-ledger entry');
   assert.equal(ledger[0].params[2], 'email');

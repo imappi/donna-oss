@@ -113,3 +113,67 @@ test('downloadTwilioMedia uses HTTP basic auth and injected fetch', async () => 
   assert.equal(media.mimeType, 'image/png');
   assert.equal(media.size, 4);
 });
+
+// ── The owner's language ────────────────────────────────────────────────────
+//
+// The acknowledgement follows the bound client's owner language (read through
+// deps.getOwnerLanguage, never guessed from the message). The keywords the
+// Finnish copy invites ('en ole varma', LOPETA, APUA) round-trip through the
+// parsers the English ones use.
+
+const fiOwner = { getOwnerLanguage: async () => 'fi' };
+const enOwner = { getOwnerLanguage: async () => 'en' };
+const openAsk = { 'client-1:23DEF456': { id: 'ask_abc123def456', client_id: 'client-1', transaction_id: 'tx-1' } };
+
+test('SMS replies to a Finnish owner in Finnish; an English owner keeps the English copy', async () => {
+  const fi = makeDeps({ openByRef: openAsk, deps: fiOwner });
+  await processSmsInboundMessage({ from: '+15551234567', firmId: 'firm', env: envOn, deps: fi.deps, message: { MessageSid: 'SM.fi.ref', Body: 'yksityinen Ref: 23DEF456' } });
+  assert.equal(fi.calls.texts.at(-1).text, 'Vastauksesi on tallessa. Kirjaus ei ole vielä valmis.');
+
+  const fiNudge = makeDeps({ deps: fiOwner });
+  await processSmsInboundMessage({ from: '+15551234567', firmId: 'firm', env: envOn, deps: fiNudge.deps, message: { MessageSid: 'SM.fi.no-ref', Body: 'kyllä' } });
+  assert.equal(fiNudge.calls.texts[0].text, 'Vastaa suoraan siihen kysymykseen, johon vastaat, tai lisää viestiin sen Ref, niin yhdistän sen oikein.');
+
+  const fiVoice = makeDeps({ deps: fiOwner });
+  await processSmsInboundMessage({ from: '+15551234567', firmId: 'firm', env: envOn, deps: fiVoice.deps, message: { MessageSid: 'SM.fi.voice', Body: '', NumMedia: '1', MediaUrl0: 'https://api.twilio.com/media/ME3', MediaContentType0: 'audio/ogg' } });
+  assert.equal(fiVoice.calls.texts[0].text, 'En osaa vielä kuunnella ääniviestejä. Kirjoita vastaus tai lähetä kuva, niin hoidan sen.');
+
+  const en = makeDeps({ openByRef: openAsk, deps: enOwner });
+  await processSmsInboundMessage({ from: '+15551234567', firmId: 'firm', env: envOn, deps: en.deps, message: { MessageSid: 'SM.en.ref', Body: 'personal Ref: 23DEF456' } });
+  assert.equal(en.calls.texts.at(-1).text, 'Your answer is saved. Coding has not finished yet.');
+});
+
+test("the invited 'not sure' keyword keeps the question open in both languages", async () => {
+  for (const [ownerDeps, body, expectedText] of [
+    [fiOwner, 'en ole varma Ref: 23DEF456', 'Selvä, pidän tämän kysymyksen avoimena.'],
+    [enOwner, 'not sure Ref: 23DEF456', "Got it — I’ll keep this question open."]
+  ]) {
+    const topics = [];
+    const { deps, calls } = makeDeps({ openByRef: openAsk, deps: { ...ownerDeps, recordEvidenceTopicTurn: async (args) => { topics.push(args); return { ok: true }; } } });
+    const result = await processSmsInboundMessage({ from: '+15551234567', firmId: 'firm', env: envOn, deps, message: { MessageSid: `SM.notsure.${body}`, Body: body } });
+    assert.equal(result.status, 'topic_open', body);
+    assert.equal(calls.resolved.length, 0, `${body}: never resolved as an answer`);
+    assert.equal(topics[0].topicState.last_assessment.outcome, 'partial_answer');
+    assert.equal(calls.texts.at(-1).text, expectedText);
+  }
+});
+
+test('SMS HELP/STOP: the Finnish copy invites LOPETA, and LOPETA / APUA are accepted', async () => {
+  assert.equal(isSmsStop('lopeta'), true);
+  assert.equal(isSmsHelp(' apua '), true);
+  assert.equal(isSmsStop('lopeta laskutus'), false, 'an instruction, not an opt-out');
+  const texts = [];
+  const revoked = [];
+  const help = await handleSmsComplianceCommand({ body: 'APUA', from: '+15551234567', bindings: [binding], deps: { ...fiOwner, sendText: async (args) => { texts.push(args); } } });
+  assert.equal(help.action, 'help');
+  assert.equal(texts[0].text, 'Täällä Donna. Tämä numero on nopeita kirjanpitokysymyksiä ja kuitteja varten. Vastaa LOPETA, niin katkaisen yhteyden.');
+  const invited = texts[0].text.match(/Vastaa (\S+),/)[1];
+  const stop = await handleSmsComplianceCommand({ body: invited, from: '+15551234567', bindings: [binding], deps: { ...fiOwner, sendText: async (args) => { texts.push(args); }, revokeBinding: async (args) => { revoked.push(args); } } });
+  assert.equal(stop.action, 'stop');
+  assert.equal(revoked[0].bindingId, 'sms-binding-1');
+  assert.equal(texts.at(-1).text, 'Yhteys katkaistu. En lähetä enää viestejä tähän numeroon, ellet yhdistä uudelleen portaalistasi.');
+
+  const enTexts = [];
+  await handleSmsComplianceCommand({ body: 'HELP', from: '+15551234567', bindings: [binding], deps: { ...enOwner, sendText: async (args) => { enTexts.push(args); } } });
+  assert.equal(enTexts[0].text, "It's Donna. This line is for quick bookkeeping questions and receipts. Reply STOP to disconnect.");
+});

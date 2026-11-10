@@ -29,6 +29,7 @@ import {
   claimOwnerMediaSummarySendInDb,
   getActiveTelegramBindingForClientInDb,
   getClientDisplayNameInDb,
+  getClientOwnerLanguageInDb,
   getOwnerMediaDocForSummaryInDb,
   listOwnerMediaDocsNeedingTerminalSummaryInDb,
   listOwnerMediaGroupDocsInDb,
@@ -41,7 +42,11 @@ export const OWNER_MEDIA_PARSE_SUMMARY_FLAG_KEY = 'OWNER_MEDIA_PARSE_SUMMARY';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const formatDocumentDate = (value) => {
+// The owner's language (preferredOwnerTemplateLanguage) picks the copy, the
+// date format and the decimal mark. English is the historical copy, unchanged;
+// Finnish owners read 12.2.2026 and 12,50 EUR. Same voice rule in both: no em
+// or en dashes.
+const formatDocumentDate = (value, language = 'en') => {
   // pg returns date columns as Date objects; strings arrive from tests and
   // JSON payloads. Both normalize to ISO before slicing.
   const iso = value instanceof Date && !Number.isNaN(value.getTime()) ? value.toISOString() : String(value || '');
@@ -50,15 +55,64 @@ const formatDocumentDate = (value) => {
   if (!match) return null;
   const month = MONTHS[Number(match[2]) - 1];
   if (!month) return null;
+  if (language === 'fi') return `${Number(match[3])}.${Number(match[2])}.${match[1]}`;
   return `${Number(match[3])} ${month} ${match[1]}`;
 };
 
-const formatAmount = (total, currency) => {
+const decimal = (value, language = 'en') => {
+  const fixed = Number(value).toFixed(2);
+  return language === 'fi' ? fixed.replace('.', ',') : fixed;
+};
+
+const formatAmount = (total, currency, language = 'en') => {
   const amount = Number(total);
   if (!Number.isFinite(amount) || amount === 0) return null;
   const code = String(currency || '').trim().toUpperCase();
-  return code ? `${amount.toFixed(2)} ${code}` : amount.toFixed(2);
+  return code ? `${decimal(amount, language)} ${code}` : decimal(amount, language);
 };
+
+const OWNER_MEDIA_SUMMARY_COPY = Object.freeze({
+  en: Object.freeze({
+    forClient: (clientName) => (clientName ? ` for ${clientName}` : ''),
+    heldFor: (clientName) => (clientName ? ` for ${clientName}` : ''),
+    fromDate: (date) => (date ? ` from ${date}` : ''),
+    failed: (filename, fromDate, forClient) => `I could not read ${filename ? `the photo ${filename}${fromDate}` : 'that photo'}. It is saved${forClient} and marked as needing another look.`,
+    duplicateOf: (existingName, existingFrom, forClient) => `I already have this one on file${forClient}. It matches ${existingName}${existingFrom}. Nothing else needed.`,
+    duplicate: (filename, fromDate, forClient) => `I already have ${filename ? `${filename}${fromDate}` : 'this one'} on file${forClient}. Nothing else needed.`,
+    read: (parts, forClient) => `Read it: ${parts}. It is filed${forClient}.`,
+    readNoFields: (forClient) => `I read the photo but could not pull a vendor or amount from it. It is saved${forClient}.`,
+    oneFile: 'One file',
+    groupReadNoFields: (name) => `${name}: read, but I could not pull a vendor or amount.`,
+    groupDuplicateOf: (name, existingName) => `${name}: already on file, it matches ${existingName}.`,
+    groupDuplicate: (name) => `${name}: already on file.`,
+    groupFailed: (name) => `${name}: I could not read it. It is saved and marked as needing another look.`,
+    groupAllRead: (count, clientName) => `Read ${count} documents${clientName ? ` for ${clientName}` : ''}:`,
+    groupSome: (count, clientName) => `Your ${count} files${clientName ? ` for ${clientName}` : ''}:`,
+    total: (totalText) => `Total ${totalText}.`,
+    allFiled: 'All filed.'
+  }),
+  fi: Object.freeze({
+    forClient: (clientName) => (clientName ? ` yrityksen ${clientName} tietoihin` : ''),
+    heldFor: (clientName) => (clientName ? ` yrityksen ${clientName} tiedoissa` : ''),
+    fromDate: (date) => (date ? ` (${date})` : ''),
+    failed: (filename, fromDate, forClient) => `En saanut selvää ${filename ? `kuvasta ${filename}${fromDate}` : 'siitä kuvasta'}. Se on tallennettu${forClient} ja merkitty tarkistettavaksi uudelleen.`,
+    duplicateOf: (existingName, existingFrom, forClient) => `Tämä on minulla jo tallessa${forClient}. Se on sama kuin ${existingName}${existingFrom}. Muuta ei tarvita.`,
+    duplicate: (filename, fromDate, forClient) => `${filename ? `${filename}${fromDate}` : 'Tämä'} on minulla jo tallessa${forClient}. Muuta ei tarvita.`,
+    read: (parts, forClient) => `Luin sen: ${parts}. Se on arkistoitu${forClient}.`,
+    readNoFields: (forClient) => `Luin kuvan, mutta en saanut siitä myyjää tai summaa. Se on tallennettu${forClient}.`,
+    oneFile: 'Yksi tiedosto',
+    groupReadNoFields: (name) => `${name}: luettu, mutta en saanut myyjää tai summaa.`,
+    groupDuplicateOf: (name, existingName) => `${name}: jo tallessa, sama kuin ${existingName}.`,
+    groupDuplicate: (name) => `${name}: jo tallessa.`,
+    groupFailed: (name) => `${name}: en saanut siitä selvää. Se on tallennettu ja merkitty tarkistettavaksi uudelleen.`,
+    groupAllRead: (count, clientName) => `Luin ${count} tositetta${clientName ? ` (${clientName})` : ''}:`,
+    groupSome: (count, clientName) => `Lähettämäsi ${count} tiedostoa${clientName ? ` (${clientName})` : ''}:`,
+    total: (totalText) => `Yhteensä ${totalText}.`,
+    allFiled: 'Kaikki arkistoitu.'
+  })
+});
+
+const summaryCopyFor = (language) => OWNER_MEDIA_SUMMARY_COPY[language] || OWNER_MEDIA_SUMMARY_COPY.en;
 
 // registerDocumentInDb's duplicate envelope, tolerant of jsonb (object)
 // and stringified (test/legacy) shapes.
@@ -81,15 +135,14 @@ const duplicateEnvelope = (document = {}) => {
 // byte-identical texts that read as a double-send (Kari hit exactly that on
 // the sweep's first production tick, 2026-07-21). Degrade gracefully: no
 // filename keeps the anonymous copy, no date drops the "from" clause.
-export const buildOwnerMediaSummaryText = ({ document = {}, clientName = null } = {}) => {
-  const forClient = clientName ? ` for ${clientName}` : '';
+export const buildOwnerMediaSummaryText = ({ document = {}, clientName = null, language = 'en' } = {}) => {
+  const copy = summaryCopyFor(language);
+  const forClient = copy.forClient(clientName);
   const status = String(document.parse_status || '').toLowerCase();
   const filename = String(document.filename || '').trim();
-  const uploadedDate = formatDocumentDate(document.uploaded_at);
-  const fromDate = uploadedDate ? ` from ${uploadedDate}` : '';
+  const fromDate = copy.fromDate(formatDocumentDate(document.uploaded_at, language));
   if (status === 'failed') {
-    const photo = filename ? `the photo ${filename}${fromDate}` : 'that photo';
-    return `I could not read ${photo}. It is saved${forClient} and marked as needing another look.`;
+    return copy.failed(filename, fromDate, forClient);
   }
   if (status === 'duplicate_pending') {
     // The placeholder's parse_summary is registerDocumentInDb's duplicate
@@ -99,23 +152,21 @@ export const buildOwnerMediaSummaryText = ({ document = {}, clientName = null } 
     // the 2026-07-21 report ("the first message was unclear").
     const existingName = duplicateEnvelope(document).existingName;
     if (existingName) {
-      const existingDate = formatDocumentDate(duplicateEnvelope(document).existingUploadedAt);
-      const existingFrom = existingDate ? ` from ${existingDate}` : '';
-      return `I already have this one on file${forClient}. It matches ${existingName}${existingFrom}. Nothing else needed.`;
+      const existingFrom = copy.fromDate(formatDocumentDate(duplicateEnvelope(document).existingUploadedAt, language));
+      return copy.duplicateOf(existingName, existingFrom, copy.heldFor(clientName));
     }
-    const photo = filename ? `${filename}${fromDate}` : 'this one';
-    return `I already have ${photo} on file${forClient}. Nothing else needed.`;
+    return copy.duplicate(filename, fromDate, copy.heldFor(clientName));
   }
   if (status !== 'completed') return null;
   const vendor = String(document.vendor_name || '').trim();
-  const amount = formatAmount(document.total_amount, document.currency);
-  const date = formatDocumentDate(document.document_date);
+  const amount = formatAmount(document.total_amount, document.currency, language);
+  const date = formatDocumentDate(document.document_date, language);
   if (vendor && amount) {
     const parts = [vendor, amount];
     if (date) parts.push(date);
-    return `Read it: ${parts.join(', ')}. It is filed${forClient}.`;
+    return copy.read(parts.join(', '), forClient);
   }
-  return `I read the photo but could not pull a vendor or amount from it. It is saved${forClient}.`;
+  return copy.readNoFields(forClient);
 };
 
 // Combined renderer for a Telegram album (multi-file send): one message,
@@ -123,36 +174,36 @@ export const buildOwnerMediaSummaryText = ({ document = {}, clientName = null } 
 // acknowledgement and one summary, summary of all in terms of amounts").
 // Same voice rules as the single renderer: no em or en dashes, short
 // sentences, renders only the persisted verdicts.
-export const buildOwnerMediaGroupSummaryText = ({ documents = [], clientName = null } = {}) => {
+export const buildOwnerMediaGroupSummaryText = ({ documents = [], clientName = null, language = 'en' } = {}) => {
   const docs = (documents || []).filter(Boolean);
   if (!docs.length) return null;
-  const forClient = clientName ? ` for ${clientName}` : '';
+  const copy = summaryCopyFor(language);
   const lines = [];
   const totals = new Map();
   let readCount = 0;
   for (const doc of docs) {
     const status = String(doc.parse_status || '').toLowerCase();
-    const name = String(doc.filename || '').trim() || 'One file';
+    const name = String(doc.filename || '').trim() || copy.oneFile;
     if (status === 'completed') {
       readCount += 1;
       const vendor = String(doc.vendor_name || '').trim();
-      const amount = formatAmount(doc.total_amount, doc.currency);
-      const date = formatDocumentDate(doc.document_date);
+      const amount = formatAmount(doc.total_amount, doc.currency, language);
+      const date = formatDocumentDate(doc.document_date, language);
       if (vendor && amount) {
         const code = String(doc.currency || '').trim().toUpperCase();
         const value = Number(doc.total_amount);
         if (code && Number.isFinite(value)) totals.set(code, (totals.get(code) || 0) + value);
         lines.push([vendor, amount, date].filter(Boolean).join(', '));
       } else {
-        lines.push(`${name}: read, but I could not pull a vendor or amount.`);
+        lines.push(copy.groupReadNoFields(name));
       }
     } else if (status === 'duplicate_pending') {
       const { existingName } = duplicateEnvelope(doc);
       lines.push(existingName
-        ? `${name}: already on file, it matches ${existingName}.`
-        : `${name}: already on file.`);
+        ? copy.groupDuplicateOf(name, existingName)
+        : copy.groupDuplicate(name));
     } else if (status === 'failed') {
-      lines.push(`${name}: I could not read it. It is saved and marked as needing another look.`);
+      lines.push(copy.groupFailed(name));
     } else {
       return null; // a non-terminal member means the group is not ready
     }
@@ -160,15 +211,15 @@ export const buildOwnerMediaGroupSummaryText = ({ documents = [], clientName = n
   const allRead = readCount === docs.length;
   const parts = [
     allRead
-      ? `Read ${docs.length} documents${forClient}:`
-      : `Your ${docs.length} files${forClient}:`,
+      ? copy.groupAllRead(docs.length, clientName)
+      : copy.groupSome(docs.length, clientName),
     ...lines
   ];
   if (totals.size) {
-    const totalText = [...totals.entries()].map(([code, sum]) => `${sum.toFixed(2)} ${code}`).join(', ');
-    parts.push(`Total ${totalText}.`);
+    const totalText = [...totals.entries()].map(([code, sum]) => `${decimal(sum, language)} ${code}`).join(', ');
+    parts.push(copy.total(totalText));
   }
-  if (allRead) parts.push('All filed.');
+  if (allRead) parts.push(copy.allFiled);
   return parts.join('\n');
 };
 
@@ -185,7 +236,7 @@ const GROUP_TERMINAL_STATUSES = new Set(['completed', 'failed', 'duplicate_pendi
 // falls through to the single-document path (a lone member either has an
 // unregistered sibling coming, which will re-enter here, or is genuinely
 // alone and deserves its own summary).
-const sendOwnerMediaGroupSummary = async ({ firmId, clientId, mediaGroupId, binding, clientName, deps = {} }) => {
+const sendOwnerMediaGroupSummary = async ({ firmId, clientId, mediaGroupId, binding, clientName, language = 'en', deps = {} }) => {
   const listGroupDocs = deps.listGroupDocs || listOwnerMediaGroupDocsInDb;
   const members = await listGroupDocs({ firmId, clientId, mediaGroupId });
   if (!Array.isArray(members) || members.length < 2) return null;
@@ -201,7 +252,7 @@ const sendOwnerMediaGroupSummary = async ({ firmId, clientId, mediaGroupId, bind
   }
   const speakFor = members.filter((doc) => !spokenIds.has(doc.id));
   if (!speakFor.length) return { sent: false, skipped: 'group_all_spoken' };
-  const text = buildOwnerMediaGroupSummaryText({ documents: speakFor, clientName });
+  const text = buildOwnerMediaGroupSummaryText({ documents: speakFor, clientName, language });
   if (!text) return { sent: false, skipped: 'group_pending' };
   const claimGroup = deps.claimGroupSend || claimOwnerMediaGroupSendInDb;
   const claimed = await claimGroup({ firmId, clientId, mediaGroupId, kind: 'summary', phoneHash: binding.phone_hash || null });
@@ -280,6 +331,11 @@ const sendOwnerMediaParseSummaryInner = async ({
   } catch {
     clientName = null; // the summary still sends, just unnamed
   }
+  // The owner's language for the summary copy; English when unreadable.
+  const getOwnerLanguage = deps.getOwnerLanguage || getClientOwnerLanguageInDb;
+  const language = await Promise.resolve()
+    .then(() => getOwnerLanguage({ firmId, clientId }))
+    .catch(() => 'en');
 
   // Album member: coalesce into ONE combined summary for the whole
   // multi-file send. A null return means the album has only this one
@@ -295,7 +351,7 @@ const sendOwnerMediaParseSummaryInner = async ({
   const mediaGroupId = String(outer.media_group_id || inner.media_group_id || '').trim();
   if (mediaGroupId) {
     try {
-      const groupOutcome = await sendOwnerMediaGroupSummary({ firmId, clientId, mediaGroupId, binding, clientName, deps });
+      const groupOutcome = await sendOwnerMediaGroupSummary({ firmId, clientId, mediaGroupId, binding, clientName, language, deps });
       if (groupOutcome) return groupOutcome;
     } catch (err) {
       console.error('[ownerMediaSummary] group path failed; degrading to the per-file summary', {
@@ -307,7 +363,7 @@ const sendOwnerMediaParseSummaryInner = async ({
     }
   }
 
-  const text = buildOwnerMediaSummaryText({ document, clientName });
+  const text = buildOwnerMediaSummaryText({ document, clientName, language });
   if (!text) return { sent: false, skipped: `no_text_for_status_${document.parse_status || 'unknown'}` };
 
   // Claim BEFORE sending: an Inngest leg retry that reaches here again finds

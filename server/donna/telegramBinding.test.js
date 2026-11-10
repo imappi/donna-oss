@@ -361,3 +361,93 @@ test('no portal base URL degrades to a digest with no link, never a dead one', a
   assert.ok(!sends[0].template.bodyParameters[0].includes('http'), 'no dead link');
   assert.equal(result.sent, 2, 'the digest still sends');
 });
+
+// ── The owner's language ────────────────────────────────────────────────────
+//
+// The deliverer reads the profile once per batch and the ONE resolver decides:
+// a Finnish owner reads Finnish, rendered through the real Telegram renderer;
+// the language sent is recorded on every ledger row.
+
+const fiBinding = () => ({ id: 'tgb_1', firm_id: 'firm', client_id: 'client', collaborator_id: 'c', phone_e164: CHAT_ID, phone_hash: hashPhoneE164(CHAT_ID), channel: 'telegram', revoked_at: null, verified_at: new Date().toISOString() });
+
+test('a Finnish owner gets the Finnish ask, affordance tail and period fallback; the ledger records fi', async () => {
+  const { renderTelegramTemplate } = await import('./channels/telegram.js');
+  const db = makeFakeClient({
+    profile: { jurisdiction: 'FI', assistant_name: 'Aino' },
+    bindings: [fiBinding()],
+    asks: [{ id: 'ask-1', firm_id: 'firm', client_id: 'client', question: 'Mikä oli 42,00 euron veloitus?', request_payload: {} }]
+  });
+  const sends = [];
+  await deliverTelegramEvidenceAsksAfterSend({
+    client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask-1'], env: TG_ENV,
+    deps: { OWNER_CHANNELS: { TELEGRAM: 'telegram' }, deliverOwnerMessage: async (args) => { sends.push(args); return { ok: true, id: '9301', body: { ok: true } }; } }
+  });
+  assert.equal(sends[0].template.language, 'fi');
+  assert.equal(sends[0].template.bodyParameters[0], 'tämä kausi', 'the period fallback is Finnish');
+  const { name: templateName, bodyParameters, assistantName, language } = sends[0].template;
+  const text = renderTelegramTemplate({ templateName, bodyParameters, assistantName, language });
+  assert.equal(text, "Aino tarvitsee sinulta yhden asian (tämä kausi): Mikä oli 42,00 euron veloitus? Vastaa kuvalla, kirjoita vastaus tai vastaa 'en ole varma'. Ref: ASK1");
+  assert.doesNotMatch(text, /[–—]/, 'Telegram voice rule: no em or en dash');
+  const row = await __getTelegramDeliveryByMessageIdWithClient({ client: db, messageId: '9301' });
+  assert.equal(row.provider_payload.language, 'fi');
+});
+
+test('an English owner keeps the English ask byte-identically; the ledger records en', async () => {
+  const { renderTelegramTemplate } = await import('./channels/telegram.js');
+  const db = makeFakeClient({
+    profile: { jurisdiction: 'US' },
+    bindings: [fiBinding()],
+    asks: [{ id: 'ask-1', firm_id: 'firm', client_id: 'client', question: 'What was the Delta charge for?', request_payload: {} }]
+  });
+  const sends = [];
+  await deliverTelegramEvidenceAsksAfterSend({
+    client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask-1'], env: TG_ENV,
+    deps: { OWNER_CHANNELS: { TELEGRAM: 'telegram' }, deliverOwnerMessage: async (args) => { sends.push(args); return { ok: true, id: '9302', body: { ok: true } }; } }
+  });
+  assert.equal(sends[0].template.bodyParameters[0], 'this period');
+  const { name: templateName, bodyParameters, assistantName, language } = sends[0].template;
+  assert.equal(renderTelegramTemplate({ templateName, bodyParameters, assistantName, language }), "Donna needs one thing for this period: What was the Delta charge for? — reply with a photo, answer in words, or reply 'not sure'. Ref: ASK1");
+  const row = await __getTelegramDeliveryByMessageIdWithClient({ client: db, messageId: '9302' });
+  assert.equal(row.provider_payload.language, 'en');
+});
+
+test('a Finnish owner gets the Finnish digest, and every per-ask ledger row records fi', async () => {
+  const db = makeFakeClient({
+    profile: { jurisdiction: 'FI' },
+    bindings: [fiBinding()],
+    asks: [
+      { id: 'ask-1', firm_id: 'firm', client_id: 'client', question: 'Mikä tämä ostos oli?', request_payload: { period: 'heinäkuu 2026' } },
+      { id: 'ask-2', firm_id: 'firm', client_id: 'client', question: 'Oliko tämä työmatka?', request_payload: { period: 'heinäkuu 2026' } }
+    ]
+  });
+  const sends = [];
+  await deliverTelegramEvidenceAsksAfterSend({
+    client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask-1', 'ask-2'], env: TG_ENV,
+    deps: { OWNER_CHANNELS: { TELEGRAM: 'telegram' }, deliverOwnerMessage: async (args) => { sends.push(args); return { ok: true, id: '9303', body: { ok: true } }; } }
+  });
+  const text = sends[0].template.bodyParameters[0];
+  assert.match(text, /^Donna tarvitsee sinulta 2 asiaa \(heinäkuu 2026\):/);
+  assert.match(text, /Vastaa tähän kuvalla tai kirjoittamalla\. Jos vastaat vain yhteen, mainitse sen Ref\./);
+  const rows = [...db.state.ledger.values()].filter((row) => row.template_name === 'donna_evidence_ask_digest_v1');
+  assert.deepEqual(rows.map((row) => row.provider_payload.language), ['fi', 'fi']);
+});
+
+test('a blocked sensitive ask sends the Finnish portal notice to a Finnish owner', async () => {
+  const db = makeFakeClient({
+    profile: { jurisdiction: 'FI' },
+    bindings: [fiBinding()],
+    asks: [{ id: 'ask_s', firm_id: 'firm', client_id: 'client', question: 'reply with your IBAN', request_payload: {} }],
+    configStages: [{ flag_key: 'OWNER_PORTAL_LINK', stage: 'canary', source: 'test', client_id: 'client' }]
+  });
+  const sends = [];
+  await deliverTelegramEvidenceAsksAfterSend({
+    client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask_s'], env: TG_ENV,
+    deps: { OWNER_CHANNELS: { TELEGRAM: 'telegram' }, deliverOwnerMessage: async (args) => { sends.push(args); return { ok: true, id: '9304', body: { ok: true } }; } }
+  });
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].template.bodyParameters[0], /^Hei, täällä Donna\. Minulla on sinulle kysymys, joka on liian arkaluonteinen/);
+  assert.match(sends[0].template.bodyParameters[0], /\(ref [A-Z0-9_]+\)$/);
+  assert.doesNotMatch(sends[0].template.bodyParameters[0], /IBAN/);
+  const notice = db.state.ledger.get('telegram:9304');
+  assert.equal(notice.provider_payload.language, 'fi');
+});

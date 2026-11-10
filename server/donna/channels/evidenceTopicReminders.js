@@ -3,6 +3,7 @@ import {
   getActiveSmsBindingForClientInDb,
   getActiveTelegramBindingForClientInDb,
   getActiveWhatsAppBindingForClientInDb,
+  getClientOwnerLanguageInDb,
   listOpenEvidenceTopicsForReminderInDb,
   recordMessageDeliveryLedgerInDb,
   stampEvidenceTopicReminderInDb,
@@ -29,16 +30,31 @@ const asDateMs = (value) => {
 
 const clean = (value = '', max = 500) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 
-export const buildEvidenceTopicReminderText = ({ request = {}, topic = {} } = {}) => {
-  const need = clean(topic.current_need || request.question || 'that open item', 240);
+// Reminder wording per owner language (preferredOwnerTemplateLanguage). English
+// is the historical copy, unchanged; 'fi' is everyday sinä-form Finnish.
+const fiNeed = (need) => (/[.?!]$/.test(need) ? need : `${need}.`);
+const EVIDENCE_TOPIC_REMINDER_COPY = Object.freeze({
+  en: Object.freeze({
+    needFallback: 'that open item',
+    deferLater: (need) => `Quick reminder: ${need}. Send the answer or attach the evidence when you have it.`,
+    clarification: (need) => `Quick reminder: ${need}. If the question was unclear, reply here and I’ll keep it with the open request.`,
+    general: (need) => `Quick reminder: ${need}. Reply here or in the portal when you have it.`
+  }),
+  fi: Object.freeze({
+    needFallback: 'avoin asia',
+    deferLater: (need) => `Pieni muistutus: ${fiNeed(need)} Lähetä vastaus tai liitä tosite, kun se on sinulla.`,
+    clarification: (need) => `Pieni muistutus: ${fiNeed(need)} Jos kysymys oli epäselvä, vastaa tähän, niin liitän viestisi avoimeen pyyntöön.`,
+    general: (need) => `Pieni muistutus: ${fiNeed(need)} Vastaa tähän tai portaalissa, kun sinulla on vastaus.`
+  })
+});
+
+export const buildEvidenceTopicReminderText = ({ request = {}, topic = {}, language = 'en' } = {}) => {
+  const copy = EVIDENCE_TOPIC_REMINDER_COPY[language] || EVIDENCE_TOPIC_REMINDER_COPY.en;
+  const need = clean(topic.current_need || request.question || copy.needFallback, 240);
   const outcome = clean(topic.last_assessment?.outcome || '', 80).replace(/_/g, ' ');
-  if (outcome === 'defer later') {
-    return `Quick reminder: ${need}. Send the answer or attach the evidence when you have it.`;
-  }
-  if (outcome === 'clarification requested') {
-    return `Quick reminder: ${need}. If the question was unclear, reply here and I’ll keep it with the open request.`;
-  }
-  return `Quick reminder: ${need}. Reply here or in the portal when you have it.`;
+  if (outcome === 'defer later') return copy.deferLater(need);
+  if (outcome === 'clarification requested') return copy.clarification(need);
+  return copy.general(need);
 };
 
 export const selectDueEvidenceTopicReminders = ({
@@ -81,6 +97,7 @@ export const sendEvidenceTopicReminderViaBoundChannel = async ({
   clientId,
   evidenceRequestId,
   text,
+  language = null,
   now = new Date().toISOString(),
   env = process.env,
   deps = {}
@@ -132,7 +149,7 @@ export const sendEvidenceTopicReminderViaBoundChannel = async ({
         sent_at: result?.ok === false ? null : now,
         failed_at: result?.ok === false ? now : null,
         failure_reason: result?.ok === false ? (result.reason || result.error || 'SEND_FAILED') : null,
-        provider_payload: { reminder: { status: result?.ok === false ? 'failed' : 'sent' } }
+        provider_payload: { reminder: { status: result?.ok === false ? 'failed' : 'sent', ...(language ? { language } : {}) } }
       }
     });
     return { ...result, id: messageId, message_id: messageId, channel };
@@ -151,12 +168,15 @@ export const runEvidenceTopicReminderSweep = async ({
   const stampReminder = deps.stampReminder || stampEvidenceTopicReminderInDb;
   const sendReminder = deps.sendReminder || ((args) => sendEvidenceTopicReminderViaBoundChannel({ ...args, now, env, deps }));
   const withClient = deps.withFirmDbClient || withFirmDbClient;
+  const getOwnerLanguage = deps.getOwnerLanguage || getClientOwnerLanguageInDb;
 
   const requests = await listOpenEvidenceTopics({ firmId, clientId, limit });
   const candidates = selectDueEvidenceTopicReminders({ requests, now, limit });
   const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, deferred: 0, refused: 0, failed: 0 };
   const snapshots = new Map();
   const sendGates = new Map();
+  // The owner's language, read once per client (wording only).
+  const languages = new Map();
 
   for (const candidate of candidates) {
     const request = candidate.request;
@@ -207,11 +227,16 @@ export const runEvidenceTopicReminderSweep = async ({
     }
 
     try {
+      if (!languages.has(key)) {
+        languages.set(key, await getOwnerLanguage({ firmId: request.firm_id || firmId, clientId: request.client_id }).catch(() => 'en'));
+      }
+      const language = languages.get(key);
       const delivery = await sendReminder({
         firmId: request.firm_id || firmId,
         clientId: request.client_id,
         evidenceRequestId: request.id,
-        text: buildEvidenceTopicReminderText({ request, topic: candidate.topic }),
+        text: buildEvidenceTopicReminderText({ request, topic: candidate.topic, language }),
+        language,
         request,
         topic: candidate.topic
       });
