@@ -53,6 +53,7 @@ test('every contract operation is either routed or answers NOT_IMPLEMENTED — n
     'GET /entities/{entityId}/documents/{documentId}',
     'GET /entities/{entityId}/queue',
     'GET /entities/{entityId}/queue/cards/{cardId}',
+    'GET /entities/{entityId}/settings',
     'GET /entities/{entityId}/status',
     'GET /me',
     'POST /auth/sessions',
@@ -63,6 +64,7 @@ test('every contract operation is either routed or answers NOT_IMPLEMENTED — n
     'POST /entities/{entityId}/documents/{documentId}/resolve-duplicate',
     'POST /entities/{entityId}/documents/{documentId}/retry',
     'POST /entities/{entityId}/queue/cards/{cardId}/decision',
+    'POST /entities/{entityId}/settings',
     'POST /notifications/registrations'
   ]);
   assert.equal(operations.length - implemented.length, NOT_IMPLEMENTED.length, 'one 501 entry per remaining operation');

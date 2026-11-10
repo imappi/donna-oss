@@ -63,6 +63,7 @@ import {
   readOutboundAction,
   readOwnerName
 } from './mobileReads.js';
+import { readMobileSettings, updateMobileSettings } from './mobileSettings.js';
 import { describePendingAction } from '../outbound/ownerDigest.js';
 
 export const MOBILE_API_PATH_PREFIX = '/api/donna/mobile/v1';
@@ -527,8 +528,6 @@ export const NOT_IMPLEMENTED = Object.freeze([
   ['POST', /^\/entities\/[^/]+\/onboarding\/voice-draft$/, 'Voice onboarding is not available on this server.'],
   ['POST', /^\/entities\/[^/]+\/onboarding\/text-draft$/, 'Onboarding drafts are not available on this server.'],
   ['PUT', /^\/entities\/[^/]+\/onboarding\/profile$/, 'Donna has no business-profile writer yet.'],
-  ['GET', /^\/entities\/[^/]+\/settings$/, 'Mobile settings are not stored by this server yet.'],
-  ['POST', /^\/entities\/[^/]+\/settings$/, 'Mobile settings are not stored by this server yet.'],
   ['POST', /^\/entities\/[^/]+\/business-setup\/lookup$/, 'Business register lookup is not available on this server yet. You can enter your business details yourself.'],
   ['GET', /^\/entities\/[^/]+\/reviews\/(taxes|month)$/, 'Tax and month reviews are not available on this server yet.'],
   ['GET', /^\/entities\/[^/]+\/chat$/, 'Chat is not available in the app on this server yet; use Donna on the web.'],
@@ -550,6 +549,8 @@ const ENTITY_ROUTES = [
     const { periods, checks } = await readClosePeriods({ firmId: ctx.firmId, clientId: ctx.clientId });
     return buildBooksStatus({ periods, checks, queue, requests: sources.requests, locale: ctx.locale });
   }],
+  ['GET', /^\/settings$/, (ctx) => readMobileSettings(ctx)],
+  ['POST', /^\/settings$/, async (ctx) => updateMobileSettings(ctx, await readJson(ctx.req))],
   ['POST', /^\/documents\/upload-intent$/, async (ctx) => uploadIntent(ctx, await readJson(ctx.req))],
   ['POST', /^\/documents\/register$/, async (ctx) => registerDocuments(ctx, await readJson(ctx.req))],
   ['GET', /^\/documents\/parse-status$/, (ctx) => parseStatus(ctx, ctx.query)],
