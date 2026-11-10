@@ -156,7 +156,7 @@ test(`FI real HTTP and PG (${browserDefaultScope ? 'browser omitted firm_id' : '
     join ledger_journals j on j.id=l.journal_id where j.source_id='rent' order by l.line_no`)).rows;
   assert.equal(rentLines.length,2);
   assert.ok(rentLines.some(line=>Number(line.debit)===600 && /rent/i.test(line.name)),JSON.stringify(rentLines));
-  assert.ok(rentLines.some(line=>Number(line.credit)===600 && /bank|checking/i.test(line.name)),JSON.stringify(rentLines));
+  assert.ok(rentLines.some(line=>Number(line.credit)===600 && /bank|checking|pankkitili/i.test(line.name)),JSON.stringify(rentLines));
   assert.equal((await pool.query("select status from client_evidence_requests where id='ask-rent'")).rows[0].status,'resolved');
   await apply('rent',fresh);assert.equal(await journals('rent'),1,'replay cannot duplicate journal');
   assert.equal(Number((await pool.query("select count(*) n from audit_events where action='evidence_request.superseded_by_coding' and resource_id='rent'")).rows[0].n),1);
@@ -434,7 +434,7 @@ test(`FI real HTTP and PG (${browserDefaultScope ? 'browser omitted firm_id' : '
   const salesLines=(await pool.query(`select l.debit,l.credit,l.tax_type,a.name from ledger_lines l join ledger_accounts a on a.id=l.account_id
     join ledger_journals j on j.id=l.journal_id where j.source_id='sales-accrual' order by l.line_no`)).rows;
   assert.equal(salesLines.length,3,JSON.stringify(salesLines));
-  assert.ok(salesLines.some(line=>Number(line.debit)===2510 && /bank|checking/i.test(line.name)),JSON.stringify(salesLines));
+  assert.ok(salesLines.some(line=>Number(line.debit)===2510 && /bank|checking|pankkitili/i.test(line.name)),JSON.stringify(salesLines));
   assert.ok(salesLines.some(line=>Number(line.credit)===2000 && /sales/i.test(line.name)),JSON.stringify(salesLines));
   assert.ok(salesLines.some(line=>Number(line.credit)===510 && /vat|alv|arvonlisävero/i.test(line.name)),JSON.stringify(salesLines));
   assert.equal((await row('sales-accrual')).coding_state,'posted');

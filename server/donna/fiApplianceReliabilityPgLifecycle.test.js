@@ -120,7 +120,7 @@ test('FI appliance: statement-first and documents-first converge on the same per
         }
         assert.equal(observation.journals.length, footing.length, JSON.stringify(observation.journals));
         const supplies = observation.journals.find((j) => j.description.includes('TARVIKETUKKU'));
-        assert.deepEqual(supplies.lines.map((l) => l.slice(0, 3)), [[fiBornAccount('Operating supplies').name, 200, 0], ['Vähennettävä arvonlisävero', 51, 0], ['Business Checking · EUR', 0, 251]].map((l) => l), JSON.stringify(supplies));
+        assert.deepEqual(supplies.lines.map((l) => l.slice(0, 3)), [[fiBornAccount('Operating supplies').name, 200, 0], ['Vähennettävä arvonlisävero', 51, 0], ['Pankkitili', 0, 251]].map((l) => l), JSON.stringify(supplies));
         assert.equal(observation.asks.filter((a) => ['draft', 'open'].includes(a.status)).length, 0, JSON.stringify(observation.asks));
         assert.deepEqual(observation.jobs.filter((j) => j.status === 'dead'), [], 'no dead-lettered job');
         assert.deepEqual(observation.review.filter((r) => r.status === 'open'), [], JSON.stringify(observation.review));
