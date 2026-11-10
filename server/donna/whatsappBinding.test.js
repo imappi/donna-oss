@@ -399,6 +399,36 @@ test('deliverWhatsAppEvidenceAsksAfterSend falls back to en when the fi template
   assert.equal(sent.provider_payload.language, 'en');
 });
 
+test('deliverWhatsAppEvidenceAsksAfterSend: on the en fallback a missing period follows the template actually sent', async () => {
+  const phoneHash = hashPhoneE164('+358401234567');
+  const binding = { id: 'binding', firm_id: 'firm', client_id: 'client', phone_e164: '+358401234567', phone_hash: phoneHash, revoked_at: null };
+  const run = async (request_payload) => {
+    const db = makeFakeClient({ profile: { jurisdiction: 'FI' }, bindings: [binding], asks: [{ id: 'ask_np', firm_id: 'firm', client_id: 'client', question: 'kuitti?', request_payload }] });
+    const attempts = [];
+    await deliverWhatsAppEvidenceAsksAfterSend({
+      client: db, firmId: 'firm', clientId: 'client', evidenceRequestIds: ['ask_np'],
+      env: { WHATSAPP_ENABLED: 'true', WHATSAPP_CLIENTS: 'client' },
+      deps: {
+        deliverOwnerMessage: async (msg) => {
+          attempts.push([msg.template.languageCode, ...msg.template.bodyParameters]);
+          if (msg.template.languageCode === 'fi') return { ok: false, status: 400, body: { error: { code: 132001, message: 'Template name does not exist in the translation' } } };
+          return { ok: true, id: 'wamid.np', body: {} };
+        },
+        OWNER_CHANNELS: { WHATSAPP: 'whatsapp' }
+      }
+    });
+    return { attempts, sent: db.state.ledger.get('meta:wamid.np') };
+  };
+  // No period: the Finnish attempt names it in Finnish, the English retry in
+  // English (it was 'tämä kausi' inside the English template before).
+  const missing = await run({});
+  assert.deepEqual(missing.attempts, [['fi', 'tämä kausi', 'kuitti?', 'ASKNP'], ['en', 'this period', 'kuitti?', 'ASKNP']]);
+  assert.equal(missing.sent.provider_payload.language, 'en');
+  // A stored period is the ask's own text and rides both attempts unchanged.
+  const stored = await run({ period: 'kesäkuu 2026' });
+  assert.deepEqual(stored.attempts.map((row) => row[1]), ['kesäkuu 2026', 'kesäkuu 2026']);
+});
+
 test('deliverWhatsAppEvidenceAsksAfterSend does NOT retry on a non-language failure', async () => {
   const phoneHash = hashPhoneE164('+358401234567');
   const binding = { id: 'binding', firm_id: 'firm', client_id: 'client', phone_e164: '+358401234567', phone_hash: phoneHash, revoked_at: null };

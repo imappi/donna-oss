@@ -27,7 +27,7 @@ import {
 } from '../statutoryRegistry.js';
 import { readClientConfigSnapshot } from '../clientConfig.js';
 import { createIrasSubmitGstF5 } from '../inboundCountryRegistry.js';
-import { processAnchoredInboundMessage, resolveInboundOwnerLanguage } from './inboundCore.js';
+import { bilingualOwnerText, processAnchoredInboundMessage, resolveInboundOwnerLanguage } from './inboundCore.js';
 import { telegramEnvAllowsClient, sendTelegramText, telegramApiUrl } from './telegram.js';
 import { resolveAssistantName } from '../assistantIdentity.js';
 import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
@@ -40,6 +40,12 @@ import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
 // `language` is the owner's (preferredOwnerTemplateLanguage); anything but 'fi'
 // gets the English copy, unchanged. The Finnish copy holds the same voice rule
 // (no em or en dashes) and invites LOPETA, which isTelegramStop accepts.
+// `unbound` is sent before any client is known for the chat, so it is
+// bilingual and identical in both (bilingualOwnerText).
+const TELEGRAM_UNBOUND = bilingualOwnerText(
+  'Yhdistä Telegram ensin Donna-portaalistasi, niin hoidan tämän.',
+  "Connect Telegram from your Donna portal first, then I'll pick this up."
+);
 const buildTelegramInboundCopyFi = (name) => Object.freeze({
   textResolved: 'Selvä, hoidettu.',
   mediaSaved: 'Selvä. Luen sitä nyt.',
@@ -50,7 +56,7 @@ const buildTelegramInboundCopyFi = (name) => Object.freeze({
   topicOpen: 'Selvä. Pidän tämän kysymyksen avoimena.',
   unanchored: 'Vastaa suoraan siihen kysymykseen, johon vastaat (napauta Vastaa), tai lisää viestiin sen Ref, niin yhdistän sen oikein.',
   voiceDeferred: 'En osaa vielä kuunnella ääniviestejä. Kirjoita vastaus tai lähetä kuva, niin hoidan sen.',
-  unbound: 'Yhdistä Telegram ensin Donna-portaalistasi, niin hoidan tämän.',
+  unbound: TELEGRAM_UNBOUND,
   started: `Täällä ${name}. Tämä keskustelu on kuitteja ja nopeita kirjanpitokysymyksiä varten. Kirjoitan sinulle tänne, kun tarvitsen jotain.`,
   help: `Täällä ${name}. Tämä keskustelu on kuitteja ja nopeita kirjanpitokysymyksiä varten. Vastaa LOPETA, niin katkaisen yhteyden.`,
   stopped: 'Yhteys katkaistu. En lähetä enää viestejä tähän keskusteluun, ellet yhdistä uudelleen Donna-portaalistasi. Avoimet kysymykset odottavat portaalissa.'
@@ -86,7 +92,7 @@ export const buildTelegramInboundCopy = ({ assistantName, language = 'en' } = {}
     topicOpen: "Got it. I’ll keep this question open.",
     unanchored: "Reply right on the question you're answering (tap Reply), or add its Ref and I'll match it.",
     voiceDeferred: "I can't do voice notes yet. Type your answer or send a photo and I'll take it.",
-    unbound: "Connect Telegram from your Donna portal first, then I'll pick this up.",
+    unbound: TELEGRAM_UNBOUND,
     started: `It's ${name}. This chat is for receipts and quick bookkeeping questions. I'll message you here when I need one thing.`,
     help: `It's ${name}. This chat is for receipts and quick bookkeeping questions. Reply STOP to disconnect.`,
     stopped: "You're disconnected. I won't message this chat again unless you reconnect from your Donna portal. Open questions remain in the portal."
@@ -96,6 +102,19 @@ export const buildTelegramInboundCopy = ({ assistantName, language = 'en' } = {}
 export const TELEGRAM_INBOUND_COPY = buildTelegramInboundCopy();
 const TELEGRAM_INBOUND_COPY_FI = buildTelegramInboundCopy({ language: 'fi' });
 const telegramInboundCopyFor = (language) => (language === 'fi' ? TELEGRAM_INBOUND_COPY_FI : TELEGRAM_INBOUND_COPY);
+
+// Texts the webhook sends outside the anchored path (api.js). `language` is the
+// owner language once a binding names a client (ownerLanguageForBindings); null
+// means no client is known, and the text is bilingual, Finnish first. English
+// is the historical copy, unchanged.
+//   connected:   after a /start <token> binding is redeemed
+//   started:     a bare /start (sent before any binding lookup, so bilingual)
+//   mediaFailed: a photo whose processing threw in the webhook
+const TELEGRAM_CONNECTED = Object.freeze({ en: 'Got it. Telegram is connected.', fi: 'Selvä, Telegram on nyt yhdistetty.' });
+export const telegramWebhookText = (key, language = null) => {
+  const lineFor = (lang) => (key === 'connected' ? TELEGRAM_CONNECTED[lang] : telegramInboundCopyFor(lang)[key]);
+  return language ? lineFor(language === 'fi' ? 'fi' : 'en') : bilingualOwnerText(lineFor('fi'), lineFor('en'));
+};
 
 const sha256Hex = (bytes) => createHash('sha256').update(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || '')).digest('hex');
 
