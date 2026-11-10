@@ -2,6 +2,7 @@ import fiDetails from './fiDetails.fi.js';
 import pilotSetup from './pilotSetup.fi.js';
 import reconciliationAuthority from './reconciliationAuthority.fi.js';
 import interfaceValues from './interfaceValues.fi.js';
+import ownerAccess from './ownerAccess.fi.js';
 import foundation from './fi/foundation.js';
 import upload from './fi/upload.js';
 import documentFirm from './fi/documentFirm.js';
@@ -21,7 +22,7 @@ import mounted from './fi/mounted.js';
 // translated locale. Machine-authored and not yet reviewed by a professional
 // translator: the registry marks it alpha and its label says "early version".
 // Bump the date and suffix in the same change as any message edit.
-export const FI_CATALOG_VERSION = '2026-11-10.fi-alpha.5';
+export const FI_CATALOG_VERSION = '2026-11-10.fi-alpha.6';
 
 export const FI_CATALOG_METADATA = Object.freeze({
   locale: 'fi',
@@ -32,7 +33,7 @@ export const FI_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-28.sg-native-intake.1',
   catalogVersion: FI_CATALOG_VERSION,
-  expectedMessageCount: 2731,
+  expectedMessageCount: 2864,
   register: 'informal second person singular (sinä); never teitittely',
   outOfScope: Object.freeze([
     'server-built text: emails, SMS, chat-channel messages, questions written by code or a model',
@@ -169,6 +170,7 @@ const fi = Object.freeze({
   ...pilotSetup,
   ...reconciliationAuthority,
   ...interfaceValues,
+  ...ownerAccess,
   ...foundation,
   ...upload,
   ...documentFirm,

@@ -120,12 +120,12 @@ for (const locale of LOCALES) {
       const pill = [...document.querySelectorAll('button[title]')].find((b) => b.title.startsWith(PREVIEW_PREFIX[locale][owner]));
       assert.ok(pill, `a pill previews the question as "${PREVIEW_PREFIX[locale][owner]}…": ${[...document.querySelectorAll('button[title]')].map((b) => b.title).join(' | ')}`);
       const previewed = pill.title.slice(PREVIEW_PREFIX[locale][owner].length);
-      assert.match(previewed, OWNER_QUESTION[owner]);
+      assert.match(previewed.replace(/[\u00a0\u202f]/g, ' '), OWNER_QUESTION[owner]);
       await click(pill);
       const draft = document.querySelector('textarea')?.value || '';
       assert.equal(draft, previewed, 'the composer holds exactly the previewed text');
       assert.ok(text(document.body).includes(COMPOSER_LANGUAGE[locale][owner]), `the composer says which language: ${text(document.body)}`);
-      const send = [...document.querySelectorAll('button')].find((b) => /Send to client|Lähetä asiakkaalle/.test(text(b)));
+      const send = [...document.querySelectorAll('button[aria-label]')].find((b) => /^(Send to client|Lähetä asiakkaalle)$/.test(b.getAttribute('aria-label')));
       assert.ok(send, 'the client-mode send button renders');
       await click(send);
       const sent = requests.find((r) => r.url.pathname.endsWith('/transaction-chat/ask-client'));
@@ -154,8 +154,8 @@ const rosterResponder = (address) => {
   return null;
 };
 const TEAM_EXPECTED = {
-  en: ['Send payment reminders for counterparty:asiakas-esimerkki up to €1,200.00 review 1 Dec 2026', 'Suspended', 'Another action', 'Status not recognised', 'Role not recognised', 'Invite email failed to send'],
-  fi: ['Lähetä maksumuistutuksia', 'counterparty:asiakas-esimerkki', '1 200,00 €', 'Keskeytetty', 'Muu toimenpide', 'Tuntematon tila', 'Rooli tuntematon', 'Kutsusähköpostin lähetys epäonnistui']
+  en: ['Send payment reminders for counterparty:asiakas-esimerkki up to 1,200.00 EUR review Dec 1, 2026', 'Suspended', 'Another action', 'Status not recognised', 'Role not recognised', 'Invite email failed to send'],
+  fi: ['Lähetä maksumuistutuksia (counterparty:asiakas-esimerkki) enintään 1 200,00 EUR, tarkistus 1.12.2026', 'Keskeytetty', 'Muu toimenpide', 'Tuntematon tila', 'Rooli tuntematon', 'Kutsusähköposti: lähetys epäonnistui']
 };
 for (const locale of LOCALES) {
   test(`team panel (${locale}): grant actions, statuses, amounts and dates, seat roles and invite email status read as labels`, async () => {
@@ -205,8 +205,8 @@ for (const locale of LOCALES) {
 
 // ── 2c. ClientOwnerAccessCard ──────────────────────────────────────────────
 const OWNER_ACCESS_EXPECTED = {
-  en: ['Owner portal access', 'Invited', 'Link valid until 30 Nov 2026.', 'The invitation email was not sent from this deployment.'],
-  fi: ['Omistajan pääsy portaaliin', 'Kutsuttu', 'Linkki on voimassa 30. marrask. 2026 asti.', 'Kutsusähköpostia ei lähetetty tästä palvelusta.']
+  en: ['Owner portal access', 'Invited', 'Link valid until Nov 30, 2026.', 'The invitation email was not sent from this deployment.'],
+  fi: ['Yrittäjän pääsy portaaliin', 'Kutsuttu', 'Linkki on voimassa 30.11.2026 asti.', 'Kutsusähköpostia ei lähetetty tästä palvelusta.']
 };
 for (const locale of LOCALES) {
   test(`owner portal access card (${locale}): the invite's email status reads as a sentence in the interface language`, async () => {
@@ -290,7 +290,7 @@ for (const locale of LOCALES) {
       await render(React.createElement(m.AuditTimeline, { clientId: 'client-synthetic', transactionId: 'tx-synthetic-1' }), { locale });
       const shown = text(document.body);
       assert.ok(shown.includes(AUDIT_EXPECTED[status][locale]), `${AUDIT_EXPECTED[status][locale]} in: ${shown}`);
-      assert.doesNotMatch(shown, /request failed with|\b\d{3}\b/, `a transport error is shown: ${shown}`);
+      assert.doesNotMatch(shown, new RegExp(`request failed with|\\b${status}\\b`), `a transport error is shown: ${shown}`);
     });
   }
 }

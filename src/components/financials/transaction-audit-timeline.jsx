@@ -12,6 +12,7 @@ import { D } from '../shared/design-tokens.js';
 import { fetchFirmCaseSnapshot } from '../../lib/firmApi.js';
 import { buildAuditTimelineView } from '../../lib/auditTimelineView.js';
 import { buildCaseHealthView } from '../../lib/caseHealthView.js';
+import { auditLoadErrorMessageId } from '../../lib/interfaceValueLabels.js';
 import { BidiText, FormattedValue, IdentifierText } from '../../i18n/BidiText.jsx';
 import { useInterfaceLocale } from '../../i18n/LocaleProvider.jsx';
 import { formatAccountingTimestamp } from '../../i18n/localeFormatting.js';
@@ -211,9 +212,11 @@ const TransactionAuditTimeline = ({
         })
         .catch((error) => {
           if (cancelled || request.signal.aborted) return;
+          // The transport error never reaches the screen: its status picks a
+          // sentence that says what to do (auditLoadErrorMessageId).
           if (initial) setState({
             status: 'error',
-            message: error?.message || message('transaction.audit.error.load')
+            messageId: auditLoadErrorMessageId(error)
           });
         })
         .finally(() => {
@@ -246,7 +249,7 @@ const TransactionAuditTimeline = ({
       }} message={message} />;
     }
     if (state.status === 'error') {
-      return <div style={{ paddingTop: 9, borderTop: `1px solid ${D.ruleSoft}`, color: D.alert, fontSize: 12 }}>{state.message}</div>;
+      return <div style={{ paddingTop: 9, borderTop: `1px solid ${D.ruleSoft}`, color: D.alert, fontSize: 12 }}>{message(state.messageId || 'transaction.audit.error.load')}</div>;
     }
     if (!state.view.present) {
       return <div style={{ paddingTop: 9, borderTop: `1px solid ${D.ruleSoft}`, color: D.inkSoft, fontSize: 12 }}>{message('transaction.audit.empty')}</div>;

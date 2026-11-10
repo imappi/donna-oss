@@ -4,16 +4,25 @@ import assert from 'node:assert/strict';
 import { createApiSeamPool, requestDonnaApi } from './testSupport/apiSeamHarness.js';
 
 const TOKEN = 'fi-report-route-seam';
-const priorToken = process.env.DONNA_ACCESS_TOKEN;
-const priorDb = process.env.DATABASE_URL;
-process.env.DONNA_ACCESS_TOKEN = TOKEN;
-process.env.DATABASE_URL = 'postgres://seam.invalid/donna';
 const auth = { authorization: `Bearer ${TOKEN}` };
 
-test.after(() => {
-  if (priorToken === undefined) delete process.env.DONNA_ACCESS_TOKEN; else process.env.DONNA_ACCESS_TOKEN = priorToken;
-  if (priorDb === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = priorDb;
-});
+// No real database is used: every query goes to the seam pool below. The
+// routes only check that a firm database is configured, so each test sets a
+// placeholder DATABASE_URL (and the access token) for its own duration and
+// restores the caller's environment afterwards. A file-level test.after hook
+// can run before a later top-level test, which is how test 2 used to fail
+// with 503 unless DATABASE_URL was exported by the caller.
+const withSeamEnv = async (fn) => {
+  const held = { token: process.env.DONNA_ACCESS_TOKEN, db: process.env.DATABASE_URL };
+  process.env.DONNA_ACCESS_TOKEN = TOKEN;
+  process.env.DATABASE_URL = 'postgres://seam.invalid/donna';
+  try {
+    return await fn();
+  } finally {
+    if (held.token === undefined) delete process.env.DONNA_ACCESS_TOKEN; else process.env.DONNA_ACCESS_TOKEN = held.token;
+    if (held.db === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = held.db;
+  }
+};
 
 const poolFor = () => createApiSeamPool([
   [/select id from clients where firm_id/, { rows: [{ id: 'fi-1' }], rowCount: 1 }],
@@ -44,9 +53,9 @@ const withFixedNow = async (fn) => {
 
 await test('FI ALV return route preserves its complete current envelope byte-for-byte', async () => {
   const pool = poolFor();
-  const response = await withFixedNow(() => requestDonnaApi({
+  const response = await withSeamEnv(() => withFixedNow(() => requestDonnaApi({
     url: '/api/donna/firms/reports/finland-alv-return?firm_id=firm-1&client_id=fi-1&period=2026-06', headers: auth, pool
-  }));
+  })));
   assert.equal(response.statusCode, 200, response.body);
   assert.deepEqual(response.json, {
     period: { key: '2026-06', type: 'month', starts_on: '2026-06-01', ends_on: '2026-06-30' },
@@ -80,9 +89,9 @@ await test('FI ALV return route preserves its complete current envelope byte-for
 
 await test('FI ALV threshold route preserves its complete current envelope byte-for-byte', async () => {
   const pool = poolFor();
-  const response = await withFixedNow(() => requestDonnaApi({
+  const response = await withSeamEnv(() => withFixedNow(() => requestDonnaApi({
     url: '/api/donna/firms/reports/finland-alv-threshold?firm_id=firm-1&client_id=fi-1&year=2026', headers: auth, pool
-  }));
+  })));
   assert.equal(response.statusCode, 200, response.body);
   assert.deepEqual(response.json, {
     watch: {
@@ -106,11 +115,7 @@ await test('FI ALV threshold route preserves its complete current envelope byte-
 });
 
 await test('FI ALV start route: dates already covered by a live return answer 409 with the code, the plain reason and the covering return — no ask is written', async () => {
-  // This file's test.after can restore the env before a later top-level test
-  // runs, so this test holds its own token + database setting.
-  const held = { token: process.env.DONNA_ACCESS_TOKEN, db: process.env.DATABASE_URL };
-  process.env.DONNA_ACCESS_TOKEN = TOKEN; process.env.DATABASE_URL = 'postgres://seam.invalid/donna';
-  try {
+  await withSeamEnv(async () => {
     const pool = createApiSeamPool([
       [/select id from clients where firm_id/, { rows: [{ id: 'fi-1' }], rowCount: 1 }],
       [/from client_capability_config/, { rows: [
@@ -136,8 +141,5 @@ await test('FI ALV start route: dates already covered by a live return answer 40
     assert.equal(pool.matching(/insert into alv_returns/).length, 0);
     assert.equal(pool.matching(/insert into client_evidence_requests/).length, 0, 'the owner is not asked to confirm');
     assert.equal(pool.matching(/^\s*rollback\s*$/i).length, 1, 'the writer transaction rolls back');
-  } finally {
-    if (held.token === undefined) delete process.env.DONNA_ACCESS_TOKEN; else process.env.DONNA_ACCESS_TOKEN = held.token;
-    if (held.db === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = held.db;
-  }
+  });
 });

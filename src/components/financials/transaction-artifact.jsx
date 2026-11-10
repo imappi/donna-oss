@@ -73,7 +73,12 @@ import {
   OPERATOR_ACTION_TYPE_MESSAGE_IDS,
   TRANSACTION_REJECTION_MESSAGE_IDS
 } from '../../i18n/catalogs/remainingSurfaces.en.js';
-import { askClientBusinessUse, askClientTransactionPhrase } from '../../lib/interfaceValueLabels.js';
+import {
+  ASK_CLIENT_COMPOSER_LANGUAGE_MESSAGE_IDS,
+  ASK_CLIENT_PREVIEW_MESSAGE_IDS,
+  buildAskClientQuestion,
+  ownerMessageLocale
+} from '../../lib/askClientQuestion.js';
 import {
   buildOptimisticUserMessage,
   removeOptimisticChatTurn,
@@ -133,7 +138,8 @@ const TransactionArtifact = ({
   setArtifact,
   onRefreshRef,
   onSuggestTransactionCoding,
-  onApplyLifecycle = null
+  onApplyLifecycle = null,
+  client = null
 }) => {
   const intl = useIntl();
   const { formatAmount, formatDate, formatTimestamp } = useInterfaceLocale();
@@ -147,6 +153,9 @@ const TransactionArtifact = ({
   const onOpenMatchedDocument = data.onOpenMatchedDocument || null;
   const onOpenDocument = data.onOpenDocument || null;
   const clientId = tx.client_id || data.clientId || null;
+  // The language a message to this client's owner is written in (the
+  // ownerLanguage.js rule), never the staff member's interface language.
+  const ownerLocale = ownerMessageLocale(client || data.client || null);
   const transactionId = tx.id || null;
   const onSnapshotApplied = data.onSnapshotApplied;
 
@@ -184,6 +193,9 @@ const TransactionArtifact = ({
   const [explanation, setExplanation] = useState(() => (actionPreview ? data.previewExplanation || null : null));
   const [loading, setLoading] = useState(!actionPreview);
   const [draft, setDraft] = useState('');
+  // The owner language of a client question the ask-client pill wrote into
+  // the composer; null for any other draft (typed, or Donna's suggestion).
+  const [clientDraftLocale, setClientDraftLocale] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [activeMentionAgent, setActiveMentionAgent] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -729,7 +741,7 @@ const TransactionArtifact = ({
     event.target.style.height = `${Math.min(event.target.scrollHeight, 200)}px`;
   };
 
-  const handlePillClick = ({ prompt, sendMode: pillMode = 'chat' }) => {
+  const handlePillClick = ({ prompt, sendMode: pillMode = 'chat', locale: pillLocale = null }) => {
     // Resize lives in the useEffect below so it runs *after* React
     // commits the new value to the DOM. If we measured scrollHeight
     // here we'd be reading the textarea before its value updated,
@@ -737,6 +749,7 @@ const TransactionArtifact = ({
     // clipped the long pill-filled prompts on first render.
     setDraft(prompt);
     setSendMode(pillMode);
+    setClientDraftLocale(pillMode === 'client_question' ? pillLocale : null);
     setComposerFlow(null);
     setSendError(null);
     if (textareaRef.current) {
@@ -959,6 +972,7 @@ const TransactionArtifact = ({
                     onSend={(question) => {
                       setDraft(question);
                       setSendMode('client_question');
+                      setClientDraftLocale(null);
                       setSendError(null);
                       if (textareaRef.current) textareaRef.current.focus();
                     }}
@@ -989,10 +1003,11 @@ const TransactionArtifact = ({
         onInput={handleTextareaInput}
         onKeyDown={handleKeyDown}
         onSend={handleSend}
-        onCancelClientMode={() => setSendMode('chat')}
+        onCancelClientMode={() => { setSendMode('chat'); setClientDraftLocale(null); }}
         submitting={submitting}
         sendError={sendError}
         sendMode={sendMode}
+        clientDraftLocale={clientDraftLocale}
         mentionChips={(
           <MentionChipsRow
             mentions={mentionComposer.mentions}
@@ -1017,6 +1032,7 @@ const TransactionArtifact = ({
             submitting={submitting}
             formatAmount={formatAmount}
             formatDate={formatDate}
+            ownerLocale={ownerLocale}
             onPickPill={handlePillClick}
             onStartReject={handleStartReject}
             onPickRejectReason={handleRejectionChoice}
@@ -1662,13 +1678,12 @@ const QuickPrompts = ({
   onCancelFlow,
   onOpenMatchedDocument,
   formatAmount,
-  formatDate
+  formatDate,
+  ownerLocale = 'en'
 }) => {
   const intl = useIntl();
   const message = (id, values = undefined) => intl.formatMessage({ id }, values);
   const aiCat = tx.proposed_account || tx.aiCat || null;
-  const amount = amountLabel(tx, formatAmount);
-  const date = dateLabel(tx.transaction_date || tx.date, formatDate);
   const merchantHint = extractMerchantHint(tx.description || tx.raw_description || '');
   const conf = explanation?.confidence || 'uncertain';
   const matchPresent = isMeaningfulMatch(match);
@@ -1679,22 +1694,10 @@ const QuickPrompts = ({
   const showAskClient = !matchPresent && !missingAccount
     && (explanation?.actions?.includes('ask_client') || conf !== 'confident');
 
-  const askPromptParts = [];
-  if (merchantHint) askPromptParts.push(`the ${merchantHint} transaction`);
-  else askPromptParts.push('this transaction');
-  const dateAmount = [date, amount].filter((value) => value && value !== '—').join(' for ');
-  if (dateAmount) askPromptParts.push(`on ${dateAmount}`);
-  const promptTransaction = askPromptParts.join(' ');
-  const moneyIn = Number(tx.money_in || 0) > 0;
-  const businessUse = moneyIn ? 'business income' : 'a business expense';
-  // The draft below is what Send transmits and stays as it was. The pill's
-  // preview reads in the interface language: the same phrases through the
-  // catalog, never the English fragments inside a translated sentence.
-  const askClientValues = {
-    transaction: askClientTransactionPhrase({ vendor: merchantHint, date, amount }, intl.formatMessage),
-    businessUse: askClientBusinessUse(moneyIn, intl.formatMessage)
-  };
-  const askClientPrompt = `Hi — quick check on ${promptTransaction}. Could you let me know what this was for and confirm whether it's ${businessUse}? Thanks!`;
+  // ONE text for the pill's preview and the draft Send transmits, written in
+  // the owner's language; the preview names that language in the interface
+  // language (askClientQuestion.js).
+  const askClientPrompt = buildAskClientQuestion({ tx, vendor: merchantHint, locale: ownerLocale });
 
   const prompts = [];
 
@@ -1763,9 +1766,9 @@ const QuickPrompts = ({
   if (showAskClient) {
     prompts.push({
       labelId: OPERATOR_ACTION_TYPE_MESSAGE_IDS.ask_client,
-      promptId: 'transaction.question.example',
-      values: askClientValues,
+      title: message(ASK_CLIENT_PREVIEW_MESSAGE_IDS[ownerLocale] || ASK_CLIENT_PREVIEW_MESSAGE_IDS.en, { question: askClientPrompt }),
       prompt: askClientPrompt,
+      locale: ownerLocale,
       sendMode: 'client_question'
     });
   }
@@ -1821,7 +1824,7 @@ const QuickPrompts = ({
           key={pill.labelId}
           type="button"
           onClick={() => onPickPill(pill)}
-          title={message(pill.promptId, pill.values)}
+          title={pill.title || message(pill.promptId, pill.values)}
           style={{ ...btnChip, fontFamily: D.ui, transition: 'all 0.15s' }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = D.ink;
@@ -2353,6 +2356,7 @@ const Composer = ({
   submitting,
   sendError,
   sendMode = 'chat',
+  clientDraftLocale = null,
   starters = null,
   // Universal @mentions: staged-mention chips (rendered above the card) and
   // the typeahead dropdown (floats over the card, which is why the card
@@ -2402,6 +2406,9 @@ const Composer = ({
           >
             <span style={{ fontWeight: 600 }}>{message('transaction.composer.clientMode')}</span>
             <span style={{ color: T.muted }}>{message('transaction.composer.clientModeBody')}</span>
+            {ASK_CLIENT_COMPOSER_LANGUAGE_MESSAGE_IDS[clientDraftLocale] && (
+              <span style={{ color: T.muted }}>{message(ASK_CLIENT_COMPOSER_LANGUAGE_MESSAGE_IDS[clientDraftLocale])}</span>
+            )}
             <button
               type="button"
               onClick={onCancelClientMode}

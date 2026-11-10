@@ -531,6 +531,7 @@ const FirmOpsConsole = ({
         <ArtifactPanel
           artifact={null}
           setArtifact={setArtifact}
+          clients={clients}
           onSuggestTransactionCoding={onSuggestTransactionCoding}
           onApplyLifecycle={emitFeedApplyLifecycle}
           dock={dockNode}
@@ -574,7 +575,7 @@ const FirmOpsConsole = ({
             firmDataSource={firmDataSource}
           />
         </div>
-        <ArtifactPanel artifact={artifact} setArtifact={setArtifact} onSuggestTransactionCoding={onSuggestTransactionCoding} onApplyLifecycle={emitFeedApplyLifecycle} dock={dockNode} dockOpen={dockOpen} />
+        <ArtifactPanel artifact={artifact} setArtifact={setArtifact} clients={clients} onSuggestTransactionCoding={onSuggestTransactionCoding} onApplyLifecycle={emitFeedApplyLifecycle} dock={dockNode} dockOpen={dockOpen} />
         {dockCanShare && dockPill}
         <ToastHost />
       </section>
@@ -1054,7 +1055,7 @@ const FirmOpsConsole = ({
       </div>
       </div>
       </div>
-      <ArtifactPanel artifact={artifact} setArtifact={setArtifact} onSuggestTransactionCoding={onSuggestTransactionCoding} onApplyLifecycle={emitFeedApplyLifecycle} dock={dockNode} dockOpen={dockOpen} />
+      <ArtifactPanel artifact={artifact} setArtifact={setArtifact} clients={clients} onSuggestTransactionCoding={onSuggestTransactionCoding} onApplyLifecycle={emitFeedApplyLifecycle} dock={dockNode} dockOpen={dockOpen} />
       {dockCanShare && dockPill}
       <ToastHost />
     </section>
