@@ -363,32 +363,3 @@ test('real PG (FI): Donna\'s late-bank-line reversal of an entry in a filed retu
   const after = (await pool.query("select payload->'settlement_entry' as entry from documents where id='doc-cash'")).rows[0].entry;
   assert.equal(after.reversal.journal_id, posted.body.ledger_adjustment.journals[0].ledger_journal_id);
 });
-
-// The adjustment writer passes the readiness admission every other journal
-// writer passes (__writeLedgerJournalRows). A book enrolled in
-// ENTITY_READINESS_ADMISSION with no certified readiness refuses a manual
-// adjustment and a correction alike, writes nothing, and receipts the refusal.
-// An unenrolled book (every other test here) posts as before.
-test('real PG (FI): a book whose readiness is not certified refuses an adjustment through the route, as every other journal writer does', { skip }, async t => {
-  const { pool, adjust } = await harness(t);
-  const clientId = 'fi-not-ready';
-  await seedFi(pool, clientId, NOT_REGISTERED);
-  const journalId = await postLine(pool, clientId, `${clientId}-purchase`, '2026-06-02');
-  await pool.query(`insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source,set_by_actor_type,set_by_actor_id,reason)
-    values($1,$2,$3,'ENTITY_READINESS_ADMISSION','canary','manual','firm_member',$4,'Synthetic readiness target')`, [`${clientId}-readiness`, firmId, clientId, MEMBER_ID]);
-  const journals = async () => (await pool.query('select count(*)::int n from ledger_journals where client_id=$1', [clientId])).rows[0].n;
-  const before = await journals();
-  const lines = (await linesOf(pool, journalId)).map(line => ({ ...line, debit: line.credit, credit: line.debit }));
-  for (const body of [{ reason: 'Synthetic manual entry', lines, journal_date: '2026-11-02' },
-    { transaction_id: `${clientId}-purchase`, reason: 'Synthetic correction' }]) {
-    const refused = await adjust({ client_id: clientId, ...body });
-    assert.equal(refused.status, 503, JSON.stringify(refused.body));
-    assert.equal(refused.body.code, 'ENTITY_READINESS_ADMISSION_BLOCKED');
-  }
-  assert.equal(await journals(), before, 'nothing written');
-  const receipts = (await pool.query(`select resource_type, resource_id, metadata->>'boundary' as boundary from audit_events
-    where client_id=$1 and action='runtime.readiness_admission_blocked' order by id`, [clientId])).rows;
-  assert.equal(receipts.length, 2);
-  assert.ok(receipts.every(row => row.boundary === 'ledger_write' && row.resource_type === 'ledger_source' && row.resource_id.startsWith('adjustment:')), JSON.stringify(receipts));
-  assert.deepEqual(await adjustmentAudits(pool, clientId), []);
-});

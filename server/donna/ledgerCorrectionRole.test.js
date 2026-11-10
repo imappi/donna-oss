@@ -59,9 +59,7 @@ test('insertLedgerCorrectionJournal persists role on the correction ledger_lines
   const fakeClient = {
     async query(sql, params = []) {
       if (sql.includes('as birth_created_at') || sql.includes('select id,code,name,account_type,normal_balance,canonical_role,status,currency,payload')
-        || sql.includes('from audit_events where firm_id=$1 and resource_id=$2')
-        // The readiness admission's flag read (the book is not enrolled).
-        || sql.includes('from client_capability_config')) return { rows: [] };
+        || sql.includes('from audit_events where firm_id=$1 and resource_id=$2')) return { rows: [] };
       if (sql.includes('insert into ledger_accounts')) return { rows: [] };
       if (sql.includes('insert into ledger_journals')) return { rows: [] };
       if (sql.includes('insert into ledger_lines')) {

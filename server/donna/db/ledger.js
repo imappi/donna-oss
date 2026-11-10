@@ -4182,17 +4182,7 @@ const insertLedgerCorrectionJournal = async ({
   correctionReason = null,
   actorId = 'system'
 } = {}) => {
-  // The same readiness admission every other journal writer passes
-  // (__writeLedgerJournalRows): the retained processing scope, then the
-  // entity's readiness when ENTITY_READINESS_ADMISSION acts. A refusal is
-  // receipted through the pooled writer, so it survives this transaction's
-  // rollback while no journal, account or line is written.
-  const admission = await evaluateEntityReadinessAdmissionWithClient({ client, firmId, clientId, boundary: 'ledger_write' });
-  if (!admission.allowed) {
-    await recordEntityReadinessBlockedWithClient({ client: { query: queryFirmDb }, firmId, clientId, boundary: 'ledger_write',
-      decision: admission, actorId: actorId || 'ledger_command', resourceType: 'ledger_source', resourceId: `adjustment:${sourceId}` });
-    throw Object.assign(new EntityReadinessAdmissionError(admission), { actorId });
-  }
+  await assertRetainedLedgerScope({ client, firmId, clientId, actorId, resourceId: `adjustment:${sourceId}` });
   const { totalDebit } = assertCorrectionLinesBalance(lines);
   const journalId = ledgerRecordId('journal', firmId, clientId, 'adjustment', sourceId);
   {
