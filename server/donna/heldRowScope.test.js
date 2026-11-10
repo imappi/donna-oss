@@ -12,6 +12,7 @@ import { decideJevReconciliation } from './jevRuntimeDecision.js';
 import { runPayoutReconciliationLlmForDocument } from './payoutReconciliationLlm.js';
 import { __createHeldMatchPortalAsksWithClient, resolveClientEvidenceRequestInDb } from './db/asks.js';
 import { __setFirmDbPoolForTests, __resetFirmDbPoolForTests } from './firmDb.js';
+import { claudeMessageResponse, claudeRequestSystem } from './testSupport/claudeMessage.js';
 
 const SCOPE_TOOL = 'interpret_owner_reply';
 const scopeResponse = input => new Response(JSON.stringify({ model: 'fixture-strong-scope-model', stop_reason: 'tool_use',
@@ -110,17 +111,21 @@ test('real PG: a held statement row question names its siblings, and one answer 
   assert.match((await askFor('all-bank-4')).question, /rivi 1 ”Settlement 1”, 1600,00 EUR saatu 2\.9\.2026; rivi 3 ”Settlement 3”/, 'every held row names its siblings');
   assert.equal((await askFor('all-bank-2')), undefined, 'a settled row has no question');
 
-  // Synthetic transports: the reply coder (OpenAI) and the scope reader (Anthropic).
+  // Synthetic transports: the reply coder and the scope reader, both on
+  // Anthropic (the coder's default since 2026-11-10); the coder is the request
+  // whose system prompt is the coder's instructions.
   const calls = { coder: 0, scope: 0 };
   globalThis.fetch = async (endpoint, init) => {
-    if (/api\.openai\.com/.test(String(endpoint))) {
+    assert.match(String(endpoint), /api\.anthropic\.com/, 'only the synthetic coder and scope reader may be called');
+    const request = JSON.parse(init.body);
+    if (/^You code bank transactions/.test(claudeRequestSystem(request))) {
       calls.coder += 1;
-      return { ok: true, status: 200, json: async () => ({ id: 'fixture-coder', output_text: JSON.stringify({
+      return claudeMessageResponse({
         proposed_account: 'Sales', contact: 'Synthetic processor', tax_treatment: 'Ei ALV-käsittelyä', support_note: 'The owner confirms the statement row.',
         ask_client_question: '', evidence_required: false, remember_candidate: false, merchant_pattern: '', missing_account_name: '', missing_account_type: '',
-        missing_account_reason: '', auto_explain_limit: 0, confidence: 'high', materiality: 'material', reasoning: 'Confirmed by the owner.', warnings: [], alternatives: [] }) }) };
+        missing_account_reason: '', auto_explain_limit: 0, confidence: 'high', materiality: 'material', reasoning: 'Confirmed by the owner.', warnings: [], alternatives: [] },
+        { request, id: 'fixture-coder' });
     }
-    assert.match(String(endpoint), /api\.anthropic\.com/, 'only the synthetic coder and scope reader may be called');
     calls.scope += 1;
     const reply = JSON.parse(JSON.parse(init.body).messages[0].content).reply;
     if (/network/.test(reply)) return new Response('{}', { status: 503 });

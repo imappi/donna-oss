@@ -10,6 +10,7 @@ import {HOSTED_PILOT_VERSION, readInternalPilotSendRestrictionWithClient} from '
 import {healHostedPilotDispositionEnrollmentWithClient, runHostedPilotTerminalConvergenceInDb} from './hostedPilotTerminalConvergence.js';
 import {__createClientEvidenceRequestWithClient as createClientEvidenceRequestWithClient, __createHeldMatchPortalAsksWithClient, __sendClientAskBatchWithClient, resolveClientEvidenceRequestInDb} from './db/asks.js';
 import {runCodingConvergenceInDb} from './codingConvergence.js';
+import { ANTHROPIC_MESSAGES_TEST_URL, claudeMessageResponse } from './testSupport/claudeMessage.js';
 
 const pgUrl = process.env.DONNA_PG_TEST_URL;
 // One fresh database per test: every migration, the hosted runtime identity,
@@ -272,14 +273,16 @@ test('real PG: hosted processing heals disposition enrollment and mints grounded
   const {seedPackPaletteChartWithClient} = await import('./db/ledger.js');
   await withClient(client => seedPackPaletteChartWithClient(client,{firmId,clientId:'pilot'}));
   const pensionAsk = questions.find(row => row.transaction_id === 'pension');
+  // The reply recode runs on the default coder path: Claude since 2026-11-10.
   globalThis.fetch = async (target,init) => {
-    assert.equal(String(target),'https://api.openai.com/v1/responses');
-    return {ok:true,json:async()=>({id:'fixture-reply',output_text:JSON.stringify({
+    assert.equal(String(target),ANTHROPIC_MESSAGES_TEST_URL);
+    return claudeMessageResponse({
       proposed_account:'TyEL and payroll contributions payable',contact:'Synthetic supplier',tax_treatment:'Ei ALV-käsittelyä',
       support_note:'The customer confirms this payment settles the named pension bill.',ask_client_question:'',
       evidence_required:false,remember_candidate:false,merchant_pattern:'',missing_account_name:'',missing_account_type:'',
       missing_account_reason:'',auto_explain_limit:0,confidence:'high',materiality:'material',
-      reasoning:'The customer confirms payment of the pension liability shown on the held bill.',warnings:[],alternatives:[]})})};
+      reasoning:'The customer confirms payment of the pension liability shown on the held bill.',warnings:[],alternatives:[]},
+      {request:JSON.parse(init.body),id:'fixture-reply'});
   };
   const reply = await resolveClientEvidenceRequestInDb({firmId,evidenceRequestId:pensionAsk.id,
     reply:'Yes, this payment settles pension.pdf in full.',actorId:'fixture-customer',actorType:'client'});
