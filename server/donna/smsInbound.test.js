@@ -193,3 +193,12 @@ test('SMS HELP/STOP: the Finnish copy invites LOPETA, and LOPETA / APUA are acce
   await handleSmsComplianceCommand({ body: 'HELP', from: '+15551234567', bindings: [binding], deps: { ...enOwner, sendText: async (args) => { enTexts.push(args); } } });
   assert.equal(enTexts[0].text, "It's Donna. This line is for quick bookkeeping questions and receipts. Reply STOP to disconnect.");
 });
+
+test('SMS texts sent before a client is known are bilingual; the connected line follows the redeemed client', async () => {
+  const { smsConnectedText, buildSmsInboundCopy } = await import('./channels/smsInbound.js');
+  assert.equal(SMS_INBOUND_COPY.unbound, "Yhdistä tekstiviestit ensin Donna-portaalistasi, niin hoidan tämän. / Connect SMS from your Donna portal first, then I'll pick this up.");
+  assert.equal(buildSmsInboundCopy({ language: 'fi' }).unbound, SMS_INBOUND_COPY.unbound);
+  assert.equal(smsConnectedText('en'), 'Got it. SMS is connected.');
+  assert.equal(smsConnectedText('fi'), 'Selvä, tekstiviestit on nyt yhdistetty.');
+  assert.equal(smsConnectedText(null), 'Selvä, tekstiviestit on nyt yhdistetty. / Got it. SMS is connected.');
+});

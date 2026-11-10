@@ -9,8 +9,10 @@ export const readEntities = async ({ firmId, clientIds }) => {
   const result = await queryFirmDb(
     `select c.id, c.company_name, c.entity_type, c.jurisdiction,
             c.profile->>'defaultCurrency' as profile_currency,
-            f.jurisdiction as firm_jurisdiction, f.default_currency as firm_currency
+            f.jurisdiction as firm_jurisdiction, f.default_currency as firm_currency,
+            bp.facts as business_profile_facts
        from clients c join firms f on f.id = c.firm_id
+       left join client_business_profiles bp on bp.firm_id = c.firm_id and bp.client_id = c.id
       where c.firm_id = $1 and c.id = any($2::text[])
       order by c.company_name nulls last, c.id`,
     [firmId, clientIds]
