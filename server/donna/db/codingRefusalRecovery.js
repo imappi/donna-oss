@@ -11,7 +11,13 @@ import { toIsoDay } from '../dates.js';
 import { POSTING_SOURCE_RECHECK_REFUSALS } from '../codingPolicyRecovery.js';
 
 const CODES = [...POSTING_SOURCE_RECHECK_REFUSALS];
-const contract = 'fi-posting-source-recheck-v1';
+// One lane per country posting policy whose refusals are listed above. Each
+// keeps its own contract (part of the retry digest), authority label and
+// tax-coding flag; the Finnish entry is the lane exactly as it was.
+const LANES = Object.freeze({
+  fi: Object.freeze({ contract: 'fi-posting-source-recheck-v1', authorityBasis: 'existing_finnish_coding_automation', taxCodingFlag: 'FINLAND_ALV_CODING' }),
+  gb: Object.freeze({ contract: 'gb-posting-source-recheck-v1', authorityBasis: 'existing_gb_coding_automation', taxCodingFlag: 'JURISDICTION_TAX_CODING' })
+});
 const error = (code, message) => Object.assign(new Error(message), { code });
 // An episode exhausted on a RETRYABLE provider cause (429 / 5xx / timeout /
 // network / no key) is not final: after this cooldown a new episode may read
@@ -35,8 +41,8 @@ const priorDisposition = (prior, digest, now = Date.now()) => {
   const cooled = Number.isFinite(failedAt) && now - failedAt >= POSTING_RECOVERY_OUTAGE_COOLDOWN_MS;
   return prior.cause?.retryable === true && cooled ? 'reopenable' : 'settled';
 };
-const eligibleSql = `select t.* from transactions t join clients c on c.firm_id=t.firm_id and c.id=t.client_id
-  where t.firm_id=$1 and lower(c.jurisdiction)='fi' and t.id=any($2::text[])
+const eligibleSql = `select t.*, lower(c.jurisdiction) as recheck_jurisdiction from transactions t join clients c on c.firm_id=t.firm_id and c.id=t.client_id
+  where t.firm_id=$1 and lower(c.jurisdiction) in ('fi','gb') and t.id=any($2::text[])
     and t.coding_state in ('applied','proposed') and t.payload->'ai_suggestion' is not null
     and t.payload->'ledger_post_refusal'->>'code'=any($3::text[])
     and coalesce(c.profile->>'accounting_system','none')='none'
@@ -60,10 +66,14 @@ const contextFor = async (client, firmId, transactionId, lock = false) => {
     await client.query('select id from transactions where firm_id=$1 and id=$2 for update',[firmId,transactionId]);
     await client.query('select id from client_capability_config where firm_id=$1 and (client_id=$2 or client_id is null) and valid_to is null for share',[firmId,owner.client_id]);
   }
-  const tx = (await client.query(eligibleSql, [firmId, [transactionId], CODES])).rows[0];
-  if (!tx) return null;
+  const row = (await client.query(eligibleSql, [firmId, [transactionId], CODES])).rows[0];
+  if (!row) return null;
+  const { recheck_jurisdiction: jurisdiction, ...tx } = row;
+  const lane = LANES[jurisdiction];
+  if (!lane) return null;
+  const { contract } = lane;
   const flags = await readClientConfigSnapshot(client, { firmId, clientId: tx.client_id, strict: true });
-  if (!['FINLAND_ALV_CODING','CODING_AUTO_POST','LEDGER_AUTO_POST'].every(flagKey => clientFlagActs({ flagKey, snapshot: flags, envFallback: () => false }))) return null;
+  if (![lane.taxCodingFlag,'CODING_AUTO_POST','LEDGER_AUTO_POST'].every(flagKey => clientFlagActs({ flagKey, snapshot: flags, envFallback: () => false }))) return null;
   const document = await currentCodingEvidence({ client, firmId, clientId: tx.client_id, transactionId });
   if (!document || document.matched_line_id || !['confirmed','auto_matched'].includes(document.match_status)) return null;
   if(lock) await client.query('select id from documents where firm_id=$1 and client_id=$2 and id=$3 for update',[firmId,tx.client_id,document.document_id]);
@@ -75,7 +85,7 @@ const contextFor = async (client, firmId, transactionId, lock = false) => {
   const digest = codingEvidenceDigest({ contract, document, checksum:source.checksum_sha256,
     source: [tx.transaction_date,tx.description,tx.money_in,tx.money_out,tx.currency], policy,
     code:tx.payload.ledger_post_refusal.code });
-  return { tx, source, document, digest, policy };
+  return { tx, source, document, digest, policy, lane };
 };
 
 // Read-only activity projection uses the worker's actual admission and retry
@@ -149,8 +159,8 @@ export const recoverRefusedCodingEvidenceInDb = async ({ firmId, limit=2, runWor
         try {
           const current=await contextFor(client,firmId,candidate.id,true);
           if(!current || current.digest!==context.digest || codingEvidenceDigest(current.tx.payload)!==beforePayload) { await client.query('rollback'); results.push({transaction_id:candidate.id,skipped:'source_changed'}); return; }
-          const receipt={contract,context_digest:context.digest,attempts,episode,state:failure?(attempts>=3?'exhausted':'retry_pending'):'reconsidered',
-            authority_basis:'existing_finnish_coding_automation',model:extraction?.model || null,
+          const receipt={contract:context.lane.contract,context_digest:context.digest,attempts,episode,state:failure?(attempts>=3?'exhausted':'retry_pending'):'reconsidered',
+            authority_basis:context.lane.authorityBasis,model:extraction?.model || null,
             ...(failure ? {code:failure.code||'POSTING_SOURCE_RECHECK_FAILED',message:failure.message,cause:causeOf(failure,extraction),failed_at:new Date().toISOString()} : {review:{
               source_verified:true,filename:context.source.filename,refusal:context.tx.payload.ledger_post_refusal.error,
               printed_header:extraction.header,printed_summary:{tax_amount:extraction.summary.tax_amount,subtotal_amount:extraction.summary.subtotal_amount,warnings:extraction.summary.warnings||[]},
