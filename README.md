@@ -75,12 +75,13 @@ Reading and booking need keys, set in `.env`:
 | Provider | Variable | What it does |
 |---|---|---|
 | OpenAI | `OPENAI_API_KEY` | Routes and reads documents, including the bank statement; coding; drafts asks |
-| Anthropic | `ANTHROPIC_API_KEY` | Reads receipts and invoices; reconciliation triage; bank-line disposition; chat |
+| Anthropic | `ANTHROPIC_API_KEY` | Reads receipts and invoices (preferred over OpenAI when both are set); reconciliation triage; bank-line disposition; chat |
 | Typesafe | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | First-line decisions on matching, disposition and coding. Without it, bank lines stay "Stalled" |
 
 When a key is set, the contents of the documents you upload and of the
-books are sent to that provider. At start the runtime prints one line
-naming each lane as `LIT` or `DARK`.
+books are sent to that provider. At start the runtime prints a
+`model lanes:` line marking OpenAI and Anthropic `LIT` or `DARK`; the
+Typesafe lane is not on it.
 
 ### Steps
 
@@ -102,8 +103,9 @@ cp .env.example .env
 sed -i.bak "s/^DONNA_ACCESS_TOKEN=.*/DONNA_ACCESS_TOKEN=$(openssl rand -hex 24)/" .env && rm .env.bak
 ```
 
-To use model providers, put their keys in `.env` now. Documents uploaded
-without a key are not read again later (see Troubleshooting).
+To use model providers, put their keys in `.env` now. A document uploaded
+without a key is not read again by itself once a key is added (see
+Troubleshooting).
 
 **3. Start the runtime.** In a terminal of its own:
 
@@ -180,9 +182,9 @@ minute or two of step 5. Without one, the statement is the only row.
 
 **8. Upload a document.** Open the owner's view of the company at
 <http://127.0.0.1:5173/portal/kampaamo-kultalanka-oy>. It opens in
-Finnish; the language list at the top has English. Under the drop area,
-press **Choose files** (Valitse tiedostot) and pick a receipt from the
-pack, for example
+Finnish; to read it in English, choose English in the language list at
+the top (Käyttöliittymän kieli). In the upload area, press **Choose
+files** (Valitse tiedostot) and pick a receipt from the pack, for example
 `data/evals/fixtures/fi-kultalanka-2025-02/sources/47 Kuitti 21.02 - VR lippu.pdf`,
 then press **Upload 1 file** (Lähetä 1 tiedosto).
 
@@ -209,16 +211,17 @@ rm -rf ~/.donna-desktop
 - **`node: .env: not found`**: run step 2 in the repository folder.
 - **`[demo] nothing is listening on 127.0.0.1:8787`**: start the runtime
   (step 3) and wait for `Donna is up`.
-- **The web app shows `Donna runtime is not answering`**: the runtime
-  terminal has stopped or is still starting.
+- **The web app says `Your books are temporarily unavailable`**: the
+  runtime is stopped or still starting. Wait for `Donna is up` in its
+  terminal, then press Try again.
 - **`EADDRINUSE` on 8787 or 5173**: another program has the port. Set
   `DONNA_DESKTOP_PORT` or `DONNA_LOCAL_WEB_PORT` in `.env`; both commands
   read the same file.
 - **Uploads fail with `Evidence storage upload failed with 404`**: the web
   app is being served by `npm run dev`. The Vite dev server does not route
   the local document store. Use `npm run local:web`.
-- **The statement stays "Stalled" after you add a key**: documents
-  uploaded without a key are not read again. Stop the runtime, reset
+- **The statement stays "Stalled" after you add a key**: a document
+  uploaded without a key is not read again by itself. Stop both, reset
   (step 9), and run steps 3 to 5 again.
 - **Every bank line is "Stalled" although OpenAI and Anthropic are lit**:
   the runtime log shows `Configure the first-line provider model for this
