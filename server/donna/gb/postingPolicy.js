@@ -38,7 +38,7 @@ const assertGbVatRegistered = ({ profile = null, onDate, code, refusalCode, subj
 // owner for the fact only they know — whether, and from when, the business is
 // VAT-registered. It asks no tax judgement and names no rule.
 const GB_TAX_REGISTRATION = Object.freeze({
-  refusalCodes: Object.freeze(['TRANSACTION_GB_VAT_REGISTRATION_REQUIRED']),
+  refusalCodes: Object.freeze(['TRANSACTION_GB_VAT_REGISTRATION_REQUIRED', 'SUPPLIER_BILL_GB_VAT_REGISTRATION_REQUIRED']),
   onDate: ({ profile = null, onDate = null } = {}) => {
     const at = toIsoDay(onDate);
     if (!at) return { registered: null, reason: 'no_as_of_date' };

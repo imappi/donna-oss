@@ -328,3 +328,109 @@ test('real PG (FI): before the answer, a second clock tick neither re-asks nor p
   assert.equal((await liveAsks(pool, clientId)).length, 1);
   assert.equal(await journals(pool, id), 0);
 });
+
+// An answer never removes registered days the record already holds. The
+// record says registered from 2026-03-01 (or 2025-01-01 to 2026-03-31); a line
+// outside it is refused and asked about; the answer may only extend it.
+const COVERAGE = [
+  { name: 'a plain "no" confirms a registered record and writes nothing', record: { status: 'registered', registered_from: '2026-03-01' },
+    date: '2026-02-10', reading: answerWith('no'), outcome: 'confirmed' },
+  { name: 'a plain "no" keeps a deregistered window', record: { status: 'deregistered', registered_from: '2025-01-01', registered_until: '2026-03-31' },
+    date: '2026-06-02', reading: answerWith('no'), outcome: 'confirmed' },
+  { name: 'a later start is not recorded', record: { status: 'registered', registered_from: '2026-03-01' },
+    date: '2026-02-10', reading: answerWith('yes', '2026-04-01'), outcome: 'conflict' },
+  { name: 'an earlier start is recorded and the line posts', record: { status: 'registered', registered_from: '2026-03-01' },
+    date: '2026-02-10', reading: answerWith('yes', '2026-01-01'), outcome: 'written' }
+];
+for (const [label, country, seed] of [['GB', GB, seedGb], ['FI', FI, seedFi]]) for (const [index, item] of COVERAGE.entries()) {
+  test(`real PG (${label}): ${item.name}`, { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+    const pool = await freshDb(t);
+    const clientId = `${label.toLowerCase()}-coverage-${index}`;
+    await seed(pool, clientId, { [country.field]: item.record });
+    const stored = (await profileOf(pool, clientId))[country.field];
+    mockModels(t, { verdict: country.verdict, current: item.reading });
+    const id = `${clientId}-purchase`;
+    await addLine(pool, clientId, country, id, item.date);
+    await refuseAndAsk({ pool, clientId, ids: [id] });
+    const { ask } = await reply(pool, clientId, 'Synthetic owner answer.');
+    const record = (await profileOf(pool, clientId))[country.field];
+    const closed = (await pool.query('select status,response_payload from client_evidence_requests where id=$1', [ask.id])).rows[0];
+    if (item.outcome === 'written') {
+      assert.equal(record.registered_from, '2026-01-01');
+      assert.equal(closed.status, 'resolved');
+      await recodeAndPost(pool, clientId, [id]);
+      assert.equal(await journals(pool, id), 1);
+      return;
+    }
+    assert.deepEqual(record, stored, 'the recorded registration is unchanged');
+    if (item.outcome === 'confirmed') {
+      const [receipt] = await recordedReceipts(pool, clientId);
+      assert.equal(receipt.metadata.outcome, 'confirmed_record');
+      assert.equal(receipt.metadata.changed, false);
+      assert.equal(closed.status, 'resolved');
+    } else {
+      assert.equal((await recordedReceipts(pool, clientId)).length, 0);
+      const [refused] = (await pool.query("select metadata from audit_events where client_id=$1 and action='tax_registration.owner_answer_not_recorded'", [clientId])).rows;
+      assert.equal(refused.metadata.reason, 'conflicts_with_recorded_registration');
+      assert.deepEqual(refused.metadata.record, stored);
+      assert.equal(refused.metadata.proposed.registered_from, '2026-04-01');
+      assert.equal(closed.status, 'replied');
+      assert.equal(closed.response_payload.reply_processing.driven_action, 'tax_registration_record_conflict');
+    }
+    await recodeAndPost(pool, clientId, [id]);
+    const row = await lineRow(pool, id);
+    assert.equal(row.payload.tax_registration_answer.state, item.outcome === 'confirmed' ? 'recorded' : 'record_conflict');
+    assert.notEqual(row.convergence_state, 'auto_reconciled');
+    assert.equal(await journals(pool, id), 0);
+    assert.equal((await liveAsks(pool, clientId)).filter(a => a.status !== 'replied').length, 0, 'not asked again');
+  });
+}
+
+test('real PG (GB): after a "no", a newly refused line is not asked again while the record still says not registered', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+  const pool = await freshDb(t);
+  const clientId = 'gb-no-then-new-line';
+  await seedGb(pool, clientId);
+  mockModels(t, { verdict: GB.verdict, current: answerWith('no') });
+  await addLine(pool, clientId, GB, `${clientId}-a`);
+  await refuseAndAsk({ pool, clientId, ids: [`${clientId}-a`] });
+  const { ask } = await reply(pool, clientId, 'No.');
+  const later = `${clientId}-b`;
+  await addLine(pool, clientId, GB, later, '2026-07-01');
+  const [asked] = await refuseAndAsk({ pool, clientId, ids: [later] });
+  assert.equal(asked.owner_asked, 0, JSON.stringify(asked));
+  assert.equal((await liveAsks(pool, clientId)).length, 0, 'no fresh question');
+  const row = await lineRow(pool, later);
+  assert.equal(row.payload.tax_registration_answer.evidence_request_id, ask.id);
+  assert.equal(row.payload.tax_registration_answer.registration_reason, 'answered_before');
+  await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
+  assert.equal((await lineRow(pool, later)).payload.ai_suggestion.tax_unresolved_guard.owner_answered, true);
+  assert.equal((await liveAsks(pool, clientId)).length, 0);
+  // The reuse is receipted on the line.
+  assert.equal((await pool.query("select count(*)::int n from audit_events where client_id=$1 and action='tax_registration.answer_reapplied'", [clientId])).rows[0].n, 1);
+});
+
+test('real PG (FI): a supplier bill refused for registration on its own date is asked about and released by the answer', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+  const pool = await freshDb(t);
+  const clientId = 'fi-supplier-bill';
+  await seedFi(pool, clientId, { accounting_basis: 'accrual', alv_registration: { status: 'registered', registered_from: '2026-03-01' } });
+  await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,'FINLAND_EINVOICE_RECEIVE','auto','manual')", [`${clientId}-recv`, firmId, clientId]);
+  mockModels(t, { verdict: FI.verdict, current: answerWith('yes', '2026-01-01') });
+  const id = `${clientId}-payment`;
+  await pool.query("insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,payload) values($1,$2,$3,'2026-06-02','Synthetic supplier payment',0,125.5,'EUR','needs_review','{}')", [id, firmId, clientId]);
+  await pool.query("insert into documents(id,firm_id,client_id,filename,document_type,parse_status,vendor_name,total_amount,tax_amount,currency,document_date,payload) values($1,$2,$3,'Synthetic bill.pdf','supplier_bill','completed','Synthetic Supplier Oy',125.5,25.5,'EUR','2026-02-10','{}')", [`doc-${id}`, firmId, clientId]);
+  await pool.query("insert into reconciliation_matches(id,firm_id,client_id,bank_transaction_id,matched_object_type,matched_object_id,match_amount,match_confidence,status,created_by,payload) values($1,$2,$3,$4,'supplier_bill',$5,125.5,.98,'auto_matched','fixture','{}')", [`match-${id}`, firmId, clientId, id, `doc-${id}`]);
+  await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
+  const refused = (await lineRow(pool, id)).payload.ledger_post_refusal;
+  assert.equal(refused?.code, 'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED', JSON.stringify(refused));
+  await recoverChangedCodingEvidenceInDb({ firmId });
+  await batchSuggestTransactionCodingInDb({ firmId, clientIds: [clientId] });
+  const guard = (await lineRow(pool, id)).payload.ai_suggestion?.tax_unresolved_guard;
+  assert.equal(guard?.constraint, 'tax_registration_unrecorded');
+  assert.equal(guard?.as_of, '2026-02-10', 'asked about the bill\'s own date');
+  assert.equal((await runCodingAutoPostForTransaction({ firmId, clientId, transactionId: id, env: {}, configSnapshot: AUTO })).owner_asked, 1);
+  await reply(pool, clientId, 'Kyllä, 1.1.2026 alkaen.');
+  assert.equal((await profileOf(pool, clientId)).alv_registration.registered_from, '2026-01-01');
+  await recodeAndPost(pool, clientId, [id]);
+  const posted = (await pool.query('select count(*)::int n from ledger_journals where firm_id=$1 and client_id=$2', [firmId, clientId])).rows[0].n;
+  assert.equal(posted, 2, 'the AP journal and its settlement');
+});

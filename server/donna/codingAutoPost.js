@@ -1290,7 +1290,8 @@ export const sweepCodingAutoPost = async ({
         if (registrationGuard && createEvidenceRequestFn === createClientEvidenceRequestInDb) {
           const registration = await mintTaxRegistrationQuestionInDb({ firmId, clientId, transactionId: row.transaction_id,
             reviewItemId, question: ownerAsk.question, evidenceType: ownerAsk.evidence_type, guard: registrationGuard, actorId: 'coding_auto_post' });
-          if (registration.joined) { stats.skipped += 1; bump('tax_registration_question_joined'); } else stats.owner_asked += 1;
+          if (registration.answered_before) { stats.skipped += 1; bump('tax_registration_answered_before'); }
+          else if (registration.joined) { stats.skipped += 1; bump('tax_registration_question_joined'); } else stats.owner_asked += 1;
           continue;
         }
         await createEvidenceRequestFn({

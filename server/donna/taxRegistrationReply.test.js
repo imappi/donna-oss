@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolveStructuredOwnerReplyAdapter, supportsStructuredOwnerReply } from './statutoryRegistry.js';
-import { checkTaxRegistrationAnswer, validateTaxRegistrationAnswer, TAX_REGISTRATION_LANE } from './taxRegistrationReply.js';
+import { checkTaxRegistrationAnswer, registrationAnswerEffect, validateTaxRegistrationAnswer, TAX_REGISTRATION_LANE } from './taxRegistrationReply.js';
 import { resolvePostingPolicy } from './postingPolicy.js';
 
 const ask = { evidence_type: 'business_purpose', transaction_id: 'tx-1', request_payload: { lane: TAX_REGISTRATION_LANE } };
@@ -71,4 +71,23 @@ test('a registration declaration without its answer contract is refused, never a
     assert.throws(() => resolvePostingPolicy({ jurisdiction: 'fi', registry: { fi: { ...fi, taxRegistration } } }),
       (error) => error.code === 'posting_policy_invalid', omit);
   }
+});
+
+test('an answer never removes a registered day the record holds', () => {
+  const reg = (from, until = null) => ({ status: until ? 'deregistered' : 'registered', registered_from: from, registered_until: until });
+  const no = { registered: false, registeredFrom: null, registeredUntil: null };
+  const yes = (from, until = null) => ({ registered: true, registeredFrom: from, registeredUntil: until });
+  const effect = (before, record, checked) => registrationAnswerEffect({ before, record, checked });
+  assert.equal(effect(null, reg('2026-01-01'), yes('2026-01-01')), 'write', 'no record');
+  assert.equal(effect({ status: 'not_registered' }, reg('2026-01-01'), yes('2026-01-01')), 'write', 'a record that covers no day');
+  assert.equal(effect(null, { status: 'not_registered' }, no), 'write');
+  assert.equal(effect(reg('2026-03-01'), reg('2026-01-01'), yes('2026-01-01')), 'write', 'an earlier start');
+  assert.equal(effect(reg('2025-01-01', '2026-03-31'), reg('2025-01-01'), yes('2025-01-01')), 'write', 'an end removed');
+  assert.equal(effect(reg('2026-03-01'), reg('2026-03-01'), yes('2026-03-01')), 'confirm', 'restated');
+  assert.equal(effect(reg('2026-03-01'), { status: 'not_registered' }, no), 'confirm', 'a plain no when a record exists');
+  assert.equal(effect({ status: 'not_registered' }, { status: 'not_registered' }, no), 'confirm');
+  assert.equal(effect(reg('2026-03-01'), reg('2026-04-01'), yes('2026-04-01')), 'conflict', 'a later start');
+  assert.equal(effect(reg('2026-03-01'), reg('2026-03-01', '2026-06-30'), yes('2026-03-01', '2026-06-30')), 'conflict', 'a new end');
+  assert.equal(effect(reg('2025-01-01', '2026-03-31'), reg('2025-01-01', '2025-12-31'), yes('2025-01-01', '2025-12-31')), 'conflict', 'an earlier end');
+  assert.equal(effect(reg('2025-01-01', '2026-03-31'), reg('2025-06-01', '2026-03-31'), { registered: false, registeredFrom: '2025-06-01', registeredUntil: '2026-03-31' }), 'conflict');
 });

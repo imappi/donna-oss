@@ -858,7 +858,9 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
     ...(registrationGuard?.receipt.owner_answered ? { tax_unresolved_guard: registrationGuard.receipt,
       posting_requirement: 'single_account', evidence_required: false, confidence: 'low', remember_candidate: false, auto_explain_limit: 0,
       ask_client_question: '',
-      support_note: `${String(suggestion.support_note || '').slice(0, 300)} ${registrationGuard.receipt.answer?.state==='record_locked'
+      support_note: `${String(suggestion.support_note || '').slice(0, 300)} ${registrationGuard.receipt.answer?.state==='record_conflict'
+        ? `The owner answered the VAT registration question, but the answer would remove registered days the record already holds, so nothing was recorded; a person must reconcile the answer with the record before this line can post.`
+        : registrationGuard.receipt.answer?.state==='record_locked'
         ? `The owner answered the VAT registration question, but the recorded registration is locked by pilot preparation and was not changed; a reviewed reapproval must record it before this line can post with VAT.`
         : registrationGuard.receipt.answer?.state==='recorded'
           ? `The owner's answer is recorded: the business is not registered for VAT on ${registrationGuard.receipt.as_of || 'its date'}, so this line cannot post with VAT. It needs coding without a VAT deduction.`

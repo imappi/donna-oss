@@ -1118,7 +1118,7 @@ export const createClientEvidenceRequestInDb = async ({
 export const mintTaxRegistrationQuestionInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId, transactionId, reviewItemId,
   question, evidenceType, guard = {}, actorId = 'coding_auto_post' } = {}) =>
   withFirmDbClient(async (client) => {
-    const { TAX_REGISTRATION_LANE } = await import('../taxRegistrationReply.js');
+    const { TAX_REGISTRATION_LANE, sameRegistrationRecord } = await import('../taxRegistrationReply.js');
     const line = { transaction_id: transactionId, refusal_code: guard.refusal_code || null, as_of: guard.as_of || null };
     const mintOutcome = {};
     let request = null;
@@ -1131,6 +1131,36 @@ export const mintTaxRegistrationQuestionInDb = async ({ firmId = DEFAULT_FIRM_ID
         where firm_id = $1 and client_id = $2 and audience = 'client' and status in ('draft', 'open', 'replied')
           and request_payload->>'lane' = $3
         order by created_at, id limit 1 for update`, [firmId, clientId, TAX_REGISTRATION_LANE])).rows[0] || null;
+      // The owner already answered, and the record still says what they said
+      // (the last recorded or confirmed answer's record): the same question
+      // does not come back. The line carries that answer, so the coder's
+      // contract does not ask again (transactionLlm.js), and goes back to it.
+      const previous = live ? null : await (async () => {
+        const { resolvePostingPolicy } = await import('../postingPolicy.js');
+        const row = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
+        let rule = null;
+        try { rule = resolvePostingPolicy({ jurisdiction: row?.jurisdiction }).taxRegistration; } catch { rule = null; }
+        if (!rule) return null;
+        const receipt = (await client.query(`select id, metadata from audit_events where firm_id = $1 and client_id = $2
+          and action = 'tax_registration.owner_answer_recorded' order by id desc limit 1`, [firmId, clientId])).rows[0];
+        const current = row?.profile?.[rule.profileField] ?? null;
+        return receipt && receipt.metadata?.profile_field === rule.profileField && sameRegistrationRecord(receipt.metadata.after, current)
+          ? receipt : null;
+      })();
+      if (previous) {
+        const stamp = { evidence_request_id: previous.metadata.evidence_request_id, receipt_id: String(previous.id), state: 'recorded',
+          as_of: line.as_of, registered: false, registration_reason: 'answered_before' };
+        await client.query(`update transactions set status = 'needs_review', payload = payload || $4::jsonb, updated_at = now()
+          where firm_id = $1 and client_id = $2 and id = $3`, [firmId, clientId, transactionId,
+          JSON.stringify({ tax_registration_answer: stamp, status: 'needs_review', transaction_status: 'needs_review' })]);
+        await applyCodingTransitionIfAllowed(client, { firmId, clientId, transactionId, to: 'proposed' });
+        await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+          values ($1, $2, 'system', $3, 'tax_registration.answer_reapplied', 'transaction', $4, $5::jsonb)`,
+        [firmId, clientId, actorId, transactionId, JSON.stringify({ ...line, registration_receipt_id: String(previous.id),
+          evidence_request_id: previous.metadata.evidence_request_id, reason: 'record_unchanged_since_owner_answer' })]);
+        await client.query('commit');
+        return { evidence_request: null, minted: false, joined: false, answered_before: true };
+      }
       if (!live || live.transaction_id === transactionId) {
         request = await createClientEvidenceRequestWithClient({ client, firmId, clientId, transactionId, reviewItemId,
           question, evidenceType, actorId, mintOutcome,

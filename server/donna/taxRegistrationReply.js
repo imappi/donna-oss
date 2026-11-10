@@ -21,6 +21,13 @@
 //   asks one follow-up in the owner's language (the country's wording,
 //   taxRegistration.answerQuestion); past the bound the question stays on the
 //   owner with the country's fixed request.
+// - An answer never removes a registered day the record already holds
+//   (registrationAnswerEffect): it may add a record, extend one (an earlier
+//   start, an end removed) or restate it. A plain "no" when a record exists
+//   writes nothing: it confirms the record, which is why the question was
+//   asked. Anything that would remove a covered day (a later start, a new or
+//   earlier end, registered replaced by not_registered) records nothing and
+//   rests where a locked fact rests.
 // - The record is written through the one profile writer
 //   (updateClientProfileInDb), which applies the Finnish intake guard. A fact
 //   the guard locks is not worked around: nothing is recorded, the answer is
@@ -72,8 +79,30 @@ export const checkTaxRegistrationAnswer = (answer, { today = toUtcIsoDay(new Dat
   return { registered: answer.registered === 'yes', registeredFrom: from, registeredUntil: until };
 };
 
+export const sameRegistrationRecord = (left, right) => sameRecord(left, right);
 const sameRecord = (left, right) => ['status', 'registered_from', 'registered_until']
   .every((key) => (left?.[key] ?? null) === (right?.[key] ?? null));
+
+// The days a normalised record covers: [registered_from, registered_until]
+// (open-ended without an end) for a dated registered/deregistered record;
+// nothing for not_registered or a record that cannot be placed on a timeline.
+// Both countries' normalisers share these keys and statuses.
+const coveredDays = (record) => record && ['registered', 'deregistered'].includes(record.status) && record.registered_from
+  ? { from: record.registered_from, until: record.registered_until || null } : null;
+// An owner's answer never removes a registered day the record already holds:
+// the question was asked because the record does not say registered on the
+// line's date, so an answer may only extend what the record covers. Returns
+// 'write', 'confirm' (the answer restates the record, or a plain "no" when a
+// record exists: nothing to write) or 'conflict' (it would remove covered days).
+export const registrationAnswerEffect = ({ before = null, record, checked }) => {
+  if (sameRecord(before, record)) return 'confirm';
+  if (before && checked.registered === false && !checked.registeredFrom && !checked.registeredUntil) return 'confirm';
+  const held = coveredDays(before);
+  if (!held) return 'write';
+  const next = coveredDays(record);
+  const keeps = next && next.from <= held.from && (next.until === null || (held.until !== null && next.until >= held.until));
+  return keeps ? 'write' : 'conflict';
+};
 
 const readRule = async (row) => {
   const { resolvePostingPolicy } = await import('./postingPolicy.js');
@@ -160,8 +189,10 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
   const record = rule.recordFromAnswer({ current: before, registered: checked.registered,
     registeredFrom: checked.registeredFrom, registeredUntil: checked.registeredUntil,
     source: `Owner answer to question ${request.id}` });
-  const changed = !sameRecord(before, record);
-  let locked = null;
+  const effect = registrationAnswerEffect({ before, record, checked });
+  const changed = effect === 'write';
+  let locked = effect === 'conflict' ? { code: 'conflicts_with_recorded_registration',
+    message: 'The answer would remove registered days the record already holds; nothing was recorded.' } : null;
   if (changed) {
     const { updateClientProfileInDb } = await import('./db/clients.js');
     try {
@@ -179,17 +210,21 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
   const answeredBy = { actor_id: actorId, actor_type: actorType };
 
   if (locked) {
-    // The guard refused: nothing is recorded and nothing is worked around.
-    // The question stays answered (replied) and the lines keep the
-    // owner-answered note; changing a prepared client's recorded fact needs
-    // the reviewed reapproval workflow the guard names.
+    // Nothing is recorded and nothing is worked around: the profile guard
+    // refused (a prepared client's recorded fact), or the answer would remove
+    // registered days the record holds. The question stays answered (replied)
+    // and the lines keep the owner-answered note; the record changes only
+    // through a person (the reviewed reapproval workflow the guard names, or a
+    // firm correction of the record).
+    const conflict = locked.code === 'conflicts_with_recorded_registration';
     const receipt = (await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
       values ($1, $2, $3, $4, 'tax_registration.owner_answer_not_recorded', 'client', $2, $5::jsonb) returning id`,
     [firmId, clientId, actorType || 'client', actorId, JSON.stringify({ evidence_request_id: request.id, answered_by: answeredBy,
-      profile_field: rule.profileField, record: before, proposed: record, refusal: locked, reading,
-      line_ids: lines.map((line) => line.id), rests_on: 'firm_reapproval_workflow' })])).rows[0].id;
-    const stamped = await stampLines({ client, firmId, clientId, request, rule, profile: row.profile || {}, receiptId: String(receipt), state: 'record_locked', lines });
-    return { recorded: false, record_locked: true, receipt_id: String(receipt), lines: stamped, drivenAction: 'tax_registration_record_locked' };
+      profile_field: rule.profileField, record: before, proposed: record, refusal: locked, reason: locked.code, reading,
+      line_ids: lines.map((line) => line.id), rests_on: conflict ? 'firm_record_correction' : 'firm_reapproval_workflow' })])).rows[0].id;
+    const state = conflict ? 'record_conflict' : 'record_locked';
+    const stamped = await stampLines({ client, firmId, clientId, request, rule, profile: row.profile || {}, receiptId: String(receipt), state, lines });
+    return { recorded: false, [state]: true, receipt_id: String(receipt), lines: stamped, drivenAction: `tax_registration_${state}` };
   }
 
   const profile = changed ? (await readClient(client, firmId, clientId))?.profile || {} : row.profile || {};
@@ -198,7 +233,7 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
   const receipt = (await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
     values ($1, $2, $3, $4, 'tax_registration.owner_answer_recorded', 'client', $2, $5::jsonb) returning id`,
   [firmId, clientId, actorType || 'client', actorId, JSON.stringify({ evidence_request_id: request.id, answered_by: answeredBy,
-    profile_field: rule.profileField, before, after, changed, reading, owner_notice: ownerNotice, language,
+    profile_field: rule.profileField, before, after, changed, outcome: changed ? 'recorded' : 'confirmed_record', reading, owner_notice: ownerNotice, language,
     // The undo: write the prior record back through the same profile writer.
     undo: { profile_patch: { [rule.profileField]: before } },
     line_ids: lines.map((line) => line.id) })])).rows[0].id;

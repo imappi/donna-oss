@@ -76,7 +76,7 @@ const taxPosting = Object.freeze({ outputCodeForRate: alvOutputCodeForRate, cont
 // for the fact only they know — whether, and from when, the business is in
 // the Finnish VAT register (arvonlisäverorekisteri). It asks no tax judgement.
 const FI_TAX_REGISTRATION = Object.freeze({
-  refusalCodes: Object.freeze(['TRANSACTION_ALV_REGISTRATION_REQUIRED']),
+  refusalCodes: Object.freeze(['TRANSACTION_ALV_REGISTRATION_REQUIRED', 'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED']),
   onDate: ({ profile = null, onDate = null } = {}) =>
     resolveFiAlvRegistrationOnDate({ registration: profile?.alv_registration ?? null, onDate }),
   ownerQuestion: ({ language = 'fi', lineLabel = '', onDate = null, registered = null } = {}) => {
