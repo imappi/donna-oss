@@ -580,6 +580,13 @@ export const DIRECT_UNCODED_NEEDS_REVIEW_SQL = `
 // audit row per distinct failure per client names the transactions, and the
 // existing convergence clock re-drives the coder on its bounded cadence until
 // the provider answers. Any persisted verdict clears the receipt.
+//
+// 2026-11-10: the receipt rides only a line still WAITING for a coding. A
+// round can pool a line that already has one (a proposed line with an open
+// review row is re-coded by the next round); when that round's chunk fails
+// or is not started, the line keeps its coding and is not waiting, so it is
+// not stamped, and a stale receipt it carries is removed. Every move into a
+// coding state (codingState.js applyCodingTransition) removes it too.
 export const CODING_PROVIDER_FAILURE_PAYLOAD_KEY = 'coding_provider_failure';
 export const recordCodingProviderFailureWithClient = async ({ client, firmId = DEFAULT_FIRM_ID, clientId, transactionIds = [], failure = {} } = {}) => {
   const ids = [...new Set((transactionIds || []).filter(Boolean))];
@@ -606,10 +613,24 @@ export const recordCodingProviderFailureWithClient = async ({ client, firmId = D
   let prior = [];
   await client.query('begin');
   try {
-    prior = (await client.query(
-      `select id, payload->$3::text as receipt from transactions where firm_id = $1 and client_id = $2 and id = any($4::text[])`,
+    const pooled = (await client.query(
+      `select id, payload->$3::text as receipt,
+              (coding_state is not null or (payload->'ai_suggestion') is not null) as coded
+         from transactions where firm_id = $1 and client_id = $2 and id = any($4::text[])
+        for update`,
       [firmId, clientId, CODING_PROVIDER_FAILURE_PAYLOAD_KEY, ids]
     )).rows;
+    // A line that has a coding is not waiting on the provider: no receipt,
+    // and a stale one is removed.
+    const coded = pooled.filter((row) => row.coded).map((row) => row.id);
+    if (coded.length) {
+      await client.query(
+        `update transactions set payload = payload - $3::text
+          where firm_id = $1 and client_id = $2 and id = any($4::text[]) and payload ? $3::text`,
+        [firmId, clientId, CODING_PROVIDER_FAILURE_PAYLOAD_KEY, coded]
+      );
+    }
+    prior = pooled.filter((row) => !row.coded);
     const priorReceipt = prior.find((row) => row.receipt)?.receipt || null;
     const sameFailure = priorReceipt && priorReceipt.status === cause.status && priorReceipt.reason === cause.reason;
     for (const row of prior) {
@@ -625,7 +646,7 @@ export const recordCodingProviderFailureWithClient = async ({ client, firmId = D
         [firmId, clientId, row.id, CODING_PROVIDER_FAILURE_PAYLOAD_KEY, JSON.stringify(receipt)]
       );
     }
-    if (!sameFailure) {
+    if (prior.length && !sameFailure) {
       await client.query(
         `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
          values ($1, $2, 'system', 'transaction_ai_batch', 'transaction.coding_provider_failed', 'client', $2, $3::jsonb)`,
