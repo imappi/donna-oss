@@ -493,7 +493,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     // select * from client_evidence_requests where firm_id = $1 and client_id = $2 __DYNAMIC_SQL__ __DYNAMIC_SQL__ order by updated_at desc limit 500
     ["getClientEvidenceRequestsFromDb", "dynamic_sql", "b5a72fe5a89cf1388f5025f79117cd83de12fea9ef232bc1a9bf0d41f4997630", 1, []],
     // select t.*, -- The stale-ask law (reconciliationTwinAging.js): when the only open -- ask on the line is a supersedable sweep-minted generic evidence ask, -- the line is still gathered, tagged with that ask's identity and the -- citable rece …
-    ["ASK_BATCH_CANDIDATE_SQL", "dynamic_sql", "34f6501bb248c5aff546804ce69cbb955614e9a40f58abe3a6422653b05af20d", 1, []],
+    // Re-pinned 2026-11-10 (owner has no such document): the read gains one exclusion, a line whose payload records that the owner said its document does not exist (ownerDocumentUnavailable.js); targets and count are unchanged. No memory target.
+    ["ASK_BATCH_CANDIDATE_SQL", "dynamic_sql", "d53dd7e1f88ec26205e2a0fbe6d45246c113b18cbbf91c7145bcac047122f50e", 1, []],
     // select d.id, d.document_type, d.vendor_name, d.customer_name, d.filename, d.total_amount, d.currency, d.document_date, latest.payload as disposition_payload from documents d join lateral ( select ev.payload from reconciliation_evaluations e …
     ["ASK_BATCH_DOC_CANDIDATE_SQL", "dynamic_sql", "3365e814065e6ac2ac3f62495bcd9d691654b5792333dd26425651425e1b6082", 1, []],
     // select * from client_ask_batches where firm_id = $1 and client_id = $2 __DYNAMIC_SQL__ order by created_at desc limit $__DYNAMIC_SQL__
