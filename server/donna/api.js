@@ -4391,14 +4391,16 @@ const donnaFirmsApiHandler = async (req, res) => {
       // Render-the-persisted-verdict: the lifecycle row (pending/filed/cancelled
       // with its receipts) rides along so the surface shows the return's actual
       // state, never a client-side inference. Soft-fails to null pre-migration.
-      const lifecycle = await getAlvReturnForPeriodInDb({
+      // covered_by: the client's other live returns whose dates overlap this
+      // period (a filed 2026-Q3 covers 2026-09), by the writer's overlap rule.
+      const { lifecycle, covered_by: coveredBy } = await getAlvReturnForPeriodInDb({
         firmId,
         clientId,
         periodKey: envelope.period?.key
-      }).catch(() => null);
+      }).catch(() => ({ lifecycle: null, covered_by: [] }));
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ ...envelope, lifecycle }));
+      res.end(JSON.stringify({ ...envelope, lifecycle, covered_by: coveredBy }));
       return;
     }
 

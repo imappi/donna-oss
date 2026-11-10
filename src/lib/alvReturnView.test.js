@@ -252,3 +252,20 @@ test('cadence notice: a disagreement between the two recorded VAT periods, or a 
   const nothing = vm({ cadence: 'month', defaulted: true, recorded: { verokausi: null, alv_registration_tax_period: null }, disagreement: false }).cadenceNotice;
   assert.deepEqual(nothing, { kind: 'defaulted', text: 'Yritykselle ei ole kirjattu verokautta, joten luvut lasketaan oletuksella (kuukausi).' });
 });
+
+test('covered_by: another live return over these dates is shown as the server gives it; nothing covering ⇒ empty', () => {
+  const covered = buildAlvReturnViewModel({
+    ...envelope(),
+    period: { key: '2026-09', type: 'month', starts_on: '2026-09-01', ends_on: '2026-09-30' },
+    lifecycle: null,
+    covered_by: [
+      { id: 'alv-q3', period_key: '2026-Q3', period_type: 'quarter', starts_on: '2026-07-01', ends_on: '2026-09-30', status: 'filed', filed_at: '2026-10-12T09:00:00Z' },
+      { id: 'alv-x', period_key: '2026-08', starts_on: '2026-08-01', ends_on: '2026-08-31', status: 'cancelled' }
+    ]
+  });
+  assert.deepEqual(covered.coveredBy, [{ periodKey: '2026-Q3', status: 'filed', tone: 'ok', rangeLabel: '1.7.2026 – 30.9.2026' }], 'a cancelled row covers nothing');
+  assert.equal(covered.lifecycle, null);
+  const pending = buildAlvReturnViewModel({ ...envelope(), covered_by: [{ period_key: '2026', starts_on: '2026-01-01', ends_on: '2026-12-31', status: 'draft_pending_confirmation' }] });
+  assert.deepEqual(pending.coveredBy.map((c) => `${c.periodKey}:${c.tone}`), ['2026:pending']);
+  assert.deepEqual(buildAlvReturnViewModel(envelope()).coveredBy, [], 'an envelope without covered_by (older server) renders nothing extra');
+});

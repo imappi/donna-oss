@@ -138,6 +138,7 @@ test('start motion, ready compute: mints the row, creates + DELIVERS the confirm
     period: '2026-06',
     actorId: 'member-1',
     flagActsImpl: async () => true,
+    liveOverlapImpl: async () => [],
     scopeDriftImpl: async () => null,
     computeImpl: async () => ({ period, ...readyVerdict() }),
     createDraftImpl: async (args) => {
@@ -169,6 +170,7 @@ test('start motion, ready compute over dates already covered: the refusal surfac
     startFinlandAlvReturnFilingInDb({
       firmId: 'firm-1', clientId: 'client-1', period: '2026-06',
       flagActsImpl: async () => true,
+      liveOverlapImpl: async () => [],
       scopeDriftImpl: async () => null,
       computeImpl: async () => ({ period, ...readyVerdict() }),
       createDraftImpl: async () => { throw overlap; },
@@ -180,6 +182,27 @@ test('start motion, ready compute over dates already covered: the refusal surfac
   assert.deepEqual(created, { asks: [], delivered: [] }, 'the owner is never asked to confirm a return that would double-report');
 });
 
+test('start motion over dates another live return covers: refused BEFORE the compute — nothing computed, nobody asked', async () => {
+  const calls = { computed: 0, asks: 0, delivered: 0, overlapReads: [] };
+  const covering = [{ id: 'alv-q3', period_key: '2026-Q3', period_type: 'quarter', starts_on: '2026-07-01', ends_on: '2026-09-30', status: 'filed' }];
+  await assert.rejects(
+    startFinlandAlvReturnFilingInDb({
+      firmId: 'firm-1', clientId: 'client-1', period: '2026-09',
+      flagActsImpl: async () => true,
+      liveOverlapImpl: async (args) => { calls.overlapReads.push(args); return covering; },
+      scopeDriftImpl: async () => { throw new Error('must not read drift for a covered period'); },
+      computeImpl: async () => { calls.computed += 1; return { period, ...readyVerdict() }; },
+      createDraftImpl: async () => { throw new Error('must not reach the writer'); },
+      createAskImpl: async () => { calls.asks += 1; return { id: 'ask-x' }; },
+      deliverAsksImpl: async () => { calls.delivered += 1; }
+    }),
+    (e) => e.code === 'ALV_RETURN_PERIOD_OVERLAP' && e.statusCode === 409 && /2026-Q3/.test(e.message)
+      && e.details.overlapping[0].period_key === '2026-Q3'
+  );
+  assert.deepEqual({ computed: calls.computed, asks: calls.asks, delivered: calls.delivered }, { computed: 0, asks: 0, delivered: 0 });
+  assert.deepEqual(calls.overlapReads.map((a) => a.period), [{ key: '2026-09', type: 'month', starts_on: '2026-09-01', ends_on: '2026-09-30' }]);
+});
+
 test('start motion, needs_review compute: NO row — the blockers ride an owner clarification ask', async () => {
   const created = { drafts: [], asks: [], delivered: [] };
   const result = await startFinlandAlvReturnFilingInDb({
@@ -187,6 +210,7 @@ test('start motion, needs_review compute: NO row — the blockers ride an owner 
     clientId: 'client-1',
     period: '2026-06',
     flagActsImpl: async () => true,
+    liveOverlapImpl: async () => [],
     scopeDriftImpl: async () => null,
     computeImpl: async () => ({
       period,
@@ -225,6 +249,7 @@ test('start motion, G-7: a filing_blocked scope-drift verdict escalates — NO d
     clientId: 'client-1',
     period: '2026-06',
     flagActsImpl: async () => true,
+    liveOverlapImpl: async () => [],
     scopeDriftImpl: async () => ({
       verdict: 'filing_blocked',
       triggers: [
@@ -254,6 +279,7 @@ test('start motion, G-7: a filing_blocked scope-drift verdict escalates — NO d
     clientId: 'client-1',
     period: '2026-06',
     flagActsImpl: async () => true,
+    liveOverlapImpl: async () => [],
     scopeDriftImpl: async () => ({ verdict: 'supported_with_review', triggers: [{ id: 'cash_activity', severity: 'supported_with_review' }] }),
     computeImpl: async () => ({ period, ...readyVerdict() }),
     createDraftImpl: async (args) => {

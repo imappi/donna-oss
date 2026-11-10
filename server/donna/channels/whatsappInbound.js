@@ -47,6 +47,7 @@ import {
   finlandAlvFilingWhatsAppFlagActsInDb,
   getAlvReturnByIdInDb,
   getActiveSuomifiMandateInDb,
+  assertAlvReturnFileableInDb,
   markAlvReturnFiledInDb,
   cancelAlvReturnInDb,
   singaporeGstFilingFlagActsInDb,
@@ -336,6 +337,8 @@ const defaultDeps = (deps = {}) => ({
   // G-3: the Suomi.fi mandate (veroasioiden hoito) the transmit gate requires —
   // no valid recorded mandate, no filing (ALV_FILING_MANDATE_REQUIRED).
   getSuomifiMandate: deps.getSuomifiMandate || getActiveSuomifiMandateInDb,
+  // Before anything is transmitted: no other live return may cover these dates.
+  assertAlvReturnFileable: deps.assertAlvReturnFileable || assertAlvReturnFileableInDb,
   markAlvReturnFiled: deps.markAlvReturnFiled || markAlvReturnFiledInDb,
   cancelAlvReturn: deps.cancelAlvReturn || cancelAlvReturnInDb,
   submitAlvReturn: deps.submitAlvReturn || createIlmoitinSubmitAlvReturn({
