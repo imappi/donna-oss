@@ -78,6 +78,19 @@ Reading and booking need keys, set in `.env`:
 | Anthropic | `ANTHROPIC_API_KEY` | Reads receipts and invoices (preferred over OpenAI when both are set); reconciliation triage; bank-line disposition; chat |
 | Typesafe | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | First-line decisions on matching, disposition and coding. Without it, bank lines stay "Stalled" |
 
+A local book creates every company with the Typesafe lane switched on
+(`JEV_RECONCILIATION`). If you have OpenAI and Anthropic keys but no
+Typesafe key, add this line to `.env`:
+
+```bash
+CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION
+```
+
+It is the existing kill switch (`forceDisabled` in
+`server/donna/clientConfig.js`). It can only switch a capability off. With
+it, the bank lines are coded by the OpenAI coder and the Anthropic
+disposition step instead of staying "Stalled".
+
 When a key is set, the contents of the documents you upload and of the
 books are sent to that provider. At start the runtime prints a
 `model lanes:` line marking OpenAI and Anthropic `LIT` or `DARK`; the
@@ -225,7 +238,9 @@ rm -rf ~/.donna-desktop
   (step 9), and run steps 3 to 5 again.
 - **Every bank line is "Stalled" although OpenAI and Anthropic are lit**:
   the runtime log shows `Configure the first-line provider model for this
-  host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`.
+  host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`, or switch that lane
+  off with `CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION` in `.env`
+  (see "What needs a model provider key"), then restart the runtime.
 - **Provider calls fail with 401 behind an HTTPS proxy**: Node's `fetch`
   ignores `HTTPS_PROXY` unless `NODE_USE_ENV_PROXY=1` is set (Node 22.21
   or later).
