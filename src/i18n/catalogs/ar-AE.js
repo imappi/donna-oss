@@ -260,7 +260,7 @@ export const AR_AE_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-01.ar2-remaining-surfaces-contract',
   catalogVersion: AR_AE_CATALOG_VERSION,
-  expectedMessageCount: 2872,
+  expectedMessageCount: 2873,
   sourceContext: Object.freeze([
     'docs/design-donna-arabic-localization.md',
     'docs/ar4f-ae-native-review-packet.md'
@@ -310,6 +310,7 @@ const arAE = Object.freeze({
   "operator.providerFailure.cause.PROVIDER_UNAVAILABLE": "خدمة المزوّد غير متاحة.",
   "operator.providerFailure.cause.PROVIDER_REJECTED_REQUEST": "رفض مزوّد الخدمة الطلب.",
   "operator.providerFailure.cause.PROVIDER_TIMEOUT": "تجاوزت عملية مزوّد الخدمة المهلة المحددة.",
+  "operator.providerFailure.cause.PROVIDER_TIMEOUT.execution_budget_insufficient": "لم تبدأ: لم يتبقَّ للمهمة وقت كافٍ لهذه الخطوة. يتابعها التشغيل التالي.",
   "operator.providerFailure.cause.PROVIDER_NETWORK": "فشل الاتصال بمزوّد الخدمة.",
   "operator.providerFailure.cause.PROVIDER_INVALID_OUTPUT": "أعاد مزوّد الخدمة استجابة غير قابلة للقراءة.",
   "operator.providerFailure.cause.unknown": "تم تسجيل عطل لدى مزوّد الخدمة.",

@@ -19,6 +19,8 @@ import {
   callProviderJson,
   classifyProviderStatus,
   classifyProviderThrow,
+  PROVIDER_FAILURE_CODES,
+  ProviderFailureError,
   providerFailureReceipt,
   providerBudgetReserveMs,
   providerFetchWithDeadline,
@@ -117,8 +119,9 @@ const CODING_ANTHROPIC_TIMEOUT_MS = 300_000;
 // took 81–82 s on the appliance harness (2026-11-10, effort high, streamed);
 // a call started with less is cut by the budget before it can answer, and
 // billed for nothing. Below this the batch is not sent: the round stops with
-// the same typed PROVIDER_TIMEOUT (execution_budget_exhausted) a cut call
-// would have left, and the next job, with a fresh budget, codes the rest.
+// PROVIDER_TIMEOUT, reason execution_budget_insufficient and request_attempts
+// 0 (no request was made), retryable on the queue like a cut call, and the
+// next job, with a fresh budget, codes the rest.
 export const CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS = 120_000;
 
 let dotEnvCache = null;
@@ -535,8 +538,13 @@ const anthropicCodingCall = async ({ config, instructions: callInstructions, inp
   if (!config.apiKey) return { provider_failure: codingKeyMissing(config) };
   const remaining = remainingExecutionBudgetMs();
   if (minBudgetMs > 0 && remaining !== null && remaining - providerBudgetReserveMs() < minBudgetMs) {
-    const error = classifyProviderThrow({ provider: 'anthropic', error: null, timedOut: true, reason: 'execution_budget_exhausted' });
-    return { provider_failure: error.receipt() };
+    const error = new ProviderFailureError({
+      code: PROVIDER_FAILURE_CODES.TIMEOUT, provider: 'anthropic', status: null,
+      reason: 'execution_budget_insufficient',
+      message: `Anthropic batch not started: the job had less than ${Math.round(minBudgetMs / 1000)} s of its execution budget left; the next run continues it.`,
+      retryable: true, owner: 'queue'
+    });
+    return { provider_failure: { ...error.receipt(), request_attempts: 0 } };
   }
   try {
     const { result } = await llmCall(anthropicStructuredRequest({

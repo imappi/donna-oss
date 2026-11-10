@@ -97,12 +97,14 @@ const intentionalCanonicalValues = new Set([
 // Verdict-first activity pills add fifteen working-phase and batch-summary labels (2,611 total).
 // SG native intake adds five explicit processing-scope fact labels (2,626 total).
 // The portal's answered-questions notice adds one heading (2,868 total).
+// The operator provider-failure panel adds one cause for a coding batch the
+// job's remaining budget could not hold, never sent (2,873 total).
 // Re-pin deliberately, in the same change as the keys.
 test('AR-3A plus AR-3B install one immutable 2,621-message Alpha catalog for AR-3C activation', () => {
   assert.equal(AR_AE_CATALOG_VERSION, '2026-09-28.sg-native-intake.1');
-  assert.equal(Object.keys(en).length, 2872);
-  assert.equal(Object.keys(arAE).length, 2872);
-  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2872);
+  assert.equal(Object.keys(en).length, 2873);
+  assert.equal(Object.keys(arAE).length, 2873);
+  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2873);
   assert.equal(AR_AE_CATALOG_METADATA.maturity, 'alpha');
   assert.equal(AR_AE_CATALOG_METADATA.displayLabel, 'العربية · إصدار تجريبي');
   assert.equal(AR_AE_CATALOG_METADATA.authorship, 'machine-authored');
@@ -206,6 +208,8 @@ test('the frozen glossary preserves official versus proposed terminology status'
 // 2026-11-10: mounted source re-pinned for the two firm-view lines that name a
 // document's stored provider wait (`mounted.financial.waitingProviderKey`,
 // `mounted.financial.waitingProvider`, and the refused-key and no-credit lines `mounted.financial.waitingProviderKeyRefused`, `mounted.financial.waitingProviderCredit`).
+// 2026-11-10: English semantics re-pinned for the provider-failure cause of a
+// coding batch not started (`operator.providerFailure.cause.PROVIDER_TIMEOUT.execution_budget_insufficient`).
 test('the pre-AR-3B English catalog semantics are pinned and the mounted source is pinned', () => {
   const remainingSource = readFileSync(new URL('./catalogs/remainingSurfaces.en.js', import.meta.url));
   const mountedSource = readFileSync(new URL('./catalogs/mountedSurfaces.en.js', import.meta.url));
@@ -214,7 +218,7 @@ test('the pre-AR-3B English catalog semantics are pinned and the mounted source 
   );
   assert.equal(hash(remainingSource), '327d38f3bac59683faa61e2fc4dc7d127339bf9f1b954f567f02116ef931b488');
   assert.equal(hash(mountedSource), 'c7e959ffba18368f7e3d6fca93652e8b571b0b98ba5aea8dda75fa8f86d856c1');
-  assert.equal(hash(JSON.stringify(preAr3bEn)), '0262e7da2a8812f88961ab199f15555775c7b30b59d0115dfadf147b0baec4ef');
+  assert.equal(hash(JSON.stringify(preAr3bEn)), 'd99e0f77349b5ff7d9450ef2355cbd48861a8692431b22d670ddfa9f3e142103');
 });
 
 test('native intake authority and scope copy uses exact Arabic phrases rather than lexical fallback', () => {

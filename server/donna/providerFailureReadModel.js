@@ -73,7 +73,8 @@ export const readProviderFailuresWithClient = async ({ client, firmId, clientId 
       owner: receipt.owner === 'operator' ? 'operator' : 'queue',
       retryable: receipt.retryable !== false,
       attempts: Number(receipt.attempts) || null,
-      request_attempts: Number(receipt.request_attempts) || Number(receipt.attempts) || null,
+      // 0 is a real count (no request was made), never "no failure".
+      request_attempts: receipt.request_attempts === 0 ? 0 : Number(receipt.request_attempts) || Number(receipt.attempts) || null,
       last_failed_at: timestamp(receipt.last_failed_at || row.failure_at),
       recovery_status: row.recovery_status, recovery_request_id: row.recovery_request_id,
       recovery_error_code: machineValue(row.recovery_error_code),
