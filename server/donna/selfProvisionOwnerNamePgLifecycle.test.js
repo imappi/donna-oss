@@ -32,6 +32,10 @@ test('real PG + real route: a signed-up owner is named after themselves or not a
     const seed = new pg.Client({ connectionString: url.toString() });
     await seed.connect();
     const pool = new pg.Pool({ connectionString: url.toString(), max: 4 });
+    // pool.end() resolves before its sockets close; wait for them so the forced
+    // drop never terminates a backend this pool still holds (an uncaught error).
+    const closed = [];
+    pool.on('connect', (client) => closed.push(new Promise((resolve) => client.once('end', resolve))));
     __setFirmDbPoolForTests(pool);
     const savedEnv = Object.fromEntries(['DATABASE_URL', 'DONNA_ACCESS_TOKEN', 'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY',
       'DONNA_AUTH_ALLOWED_EMAILS', 'DONNA_DEFAULT_FIRM_ID', 'DONNA_DESKTOP_BLOB_DIR'].map((key) => [key, process.env[key]]));
@@ -43,6 +47,7 @@ test('real PG + real route: a signed-up owner is named after themselves or not a
       }
       __resetFirmDbPoolForTests();
       await pool.end();
+      await Promise.all(closed);
       await seed.end();
       await admin.query(`drop database "${name}" with (force)`);
       await admin.end();
