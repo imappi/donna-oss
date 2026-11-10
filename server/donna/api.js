@@ -665,6 +665,14 @@ const loadShadowCaseSnapshotWithRiskContext = async ({ firmId, clientId, transac
   };
 };
 
+// The surface that carried an owner decision, for the owner writers' audit
+// metadata. Read ONLY from req.donnaChannel, which the mobile adapter sets on
+// its in-process request (mobileDispatch.js) beside req.donnaAuth; nothing an
+// HTTP client sends can set it, so a web request records none. Attribution
+// only: no behaviour depends on it.
+const OWNER_WRITER_CHANNELS = new Set(['mobile']);
+const ownerWriterChannel = (req) => (OWNER_WRITER_CHANNELS.has(req?.donnaChannel) ? req.donnaChannel : null);
+
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const DOCUMENT_EXTRACTION_REQUEST_BYTES = 15 * 1024 * 1024;
 
@@ -873,6 +881,15 @@ export const isPublicDonnaHealthPath = (pathname) =>
 // not the rest of the firm API.
 const isParseCronPath = (pathname) => pathname === '/api/donna/firms/documents/parse-cron';
 
+const supabaseUserPersonName = (user) => {
+  const meta = user?.user_metadata && typeof user.user_metadata === 'object' ? user.user_metadata : {};
+  for (const value of [meta.full_name, meta.name]) {
+    const clean = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+    if (clean && clean.length <= 200) return clean;
+  }
+  return null;
+};
+
 const validateSupabaseBearerToken = async (token) => {
   const config = getSupabaseAuthConfig();
   if (!token || !config.url || !config.publishableKey) return null;
@@ -903,6 +920,10 @@ const validateSupabaseBearerToken = async (token) => {
     // GoTrue's own confirmation stamp. Read by the owner-invite acceptance,
     // which binds a principal by email and so needs the email proven.
     emailVerified: Boolean(user?.email_confirmed_at || user?.confirmed_at),
+    // The person's own name, when the identity provider holds one (Google
+    // fills user_metadata.full_name; an email + password sign-up has none).
+    // Read by self-provisioning to name the owner principal; null otherwise.
+    name: supabaseUserPersonName(user),
     staff: config.allowedEmails.size === 0 || config.allowedEmails.has(email)
   };
 };
@@ -3128,7 +3149,9 @@ const donnaFirmsApiHandler = async (req, res) => {
         firmId, clientId,
         actionId: String(body?.action_id || ''),
         decision: String(body?.decision || ''),
-        actorType: 'owner', actorId
+        note: body?.note ?? null,
+        actorType: 'owner', actorId,
+        channel: ownerWriterChannel(req)
       }));
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
@@ -3206,7 +3229,9 @@ const donnaFirmsApiHandler = async (req, res) => {
       const result = await withFirmDbClient((dbClient) => markOwnerAutoSentWrong(dbClient, {
         firmId, clientId,
         actionId: String(body?.action_id || ''),
-        actorType: 'owner', actorId
+        note: body?.note ?? null,
+        actorType: 'owner', actorId,
+        channel: ownerWriterChannel(req)
       }));
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
@@ -13072,7 +13097,8 @@ const donnaFirmsApiHandler = async (req, res) => {
         resolutionNote: body?.resolution_note || body?.resolutionNote || '',
         actorId,
         actorType: answerSource ? 'firm' : 'client',
-        ...(answerSource ? { answerSource } : {})
+        ...(answerSource ? { answerSource } : {}),
+        channel: ownerWriterChannel(req)
       });
 
       // Bridge the reply back into the transaction chat. When the

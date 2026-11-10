@@ -741,7 +741,10 @@ const actorCheck = ({ snapshot, admittedProfile, compatibilityScope }) => {
       if (!principalId || principalId.toLowerCase() === 'system') failures.push('legacy_heal_principal_missing');
       initiatingPrincipal = principalId ? { actor_type: 'legacy_profile_principal', actor_id: principalId } : null;
       authorityBasis = principalId ? { source: 'client.profile.update', principal_id: principalId } : null;
-      executor = { actor_type: receipt.actor_type, actor_id: 'updateClientProfileInDb' };
+      // The writer is the system executor whoever initiated the write: since
+      // the profile audit row names the acting principal's type (not
+      // 'system'), the executor is not read from the row's actor_type.
+      executor = { actor_type: 'system', actor_id: 'updateClientProfileInDb' };
     }
   } else {
     const receipt = snapshot.creation_receipts.at(-1) || null;

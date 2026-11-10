@@ -12,6 +12,8 @@ const chart = [
 const transaction = { id: 'fixture-transaction', date: '2026-09-05', currency: 'EUR', money_out: 125.5 };
 const expense = { account_code: 'OPERATING', account_name: 'Operating expense', xero_account_type: 'EXPENSE' };
 const bankAccount = { code: 'BANK', name: 'Entity bank' };
+// A VAT-registered UK business: VAT codes post only for one (gb/postingPolicy.js).
+const gbRegistered = { vat_registration: { status: 'registered', registered_from: '2020-01-01' } };
 const hasCode = (code) => (error) => error instanceof PostingPolicyError && error.code === code;
 
 test('six posting countries explicitly preserve native transaction behavior and operation capabilities', () => {
@@ -122,7 +124,7 @@ test('supplier adapters preserve stated VAT tolerance, country refusals, and cha
   assert.equal(fiResult.payablesAccount.code, '2870');
   assert.throws(() => fi.supplierBillTaxPosting({ ...fiInput, document: { total_amount: 125.5, tax_amount: 30 } }), { code: 'SUPPLIER_BILL_ALV_AMOUNT_MISMATCH' });
   assert.throws(() => fi.supplierBillTaxPosting({ ...fiInput, verdict: { tax_treatment: 'ALV-tarkistus' } }), { code: 'SUPPLIER_BILL_ALV_SPLIT_UNSUPPORTED' });
-  const gbInput = { verdict: { tax_treatment: 'VAT 20%' }, document: { total_amount: 120, tax_amount: 20 }, taxCodingEnabled: true, ledgerAccounts: chart };
+  const gbInput = { verdict: { tax_treatment: 'VAT 20%' }, document: { total_amount: 120, tax_amount: 20, document_date: '2026-09-05' }, taxCodingEnabled: true, ledgerAccounts: chart, profile: gbRegistered };
   const gbResult = gb.supplierBillTaxPosting(gbInput);
   assert.equal(gbResult.payablesAccount.code, 'AP-CUSTOM');
   assert.equal(gbResult.alvSplit.controlAccount.code, 'TAX-CUSTOM');
@@ -130,7 +132,7 @@ test('supplier adapters preserve stated VAT tolerance, country refusals, and cha
   assert.throws(() => gb.supplierBillTaxPosting({ ...gbInput, ledgerAccounts: [] }), { code: 'SUPPLIER_BILL_GB_PAYABLES_UNRESOLVED' });
   assert.throws(() => gb.supplierBillTaxPosting({ ...gbInput, ledgerAccounts: [chart[1]] }), { code: 'SUPPLIER_BILL_GB_VAT_CONTROL_UNRESOLVED' });
   assert.throws(() => gb.supplierBillTaxPosting({ ...gbInput, ledgerAccounts: [...chart, chart[0]] }), { code: 'SUPPLIER_BILL_GB_VAT_CONTROL_UNRESOLVED' });
-  assert.throws(() => gb.supplierBillTaxPosting({ ...gbInput, document: { total_amount: 120, tax_amount: 24 } }), { code: 'SUPPLIER_BILL_GB_VAT_AMOUNT_MISMATCH' });
+  assert.throws(() => gb.supplierBillTaxPosting({ ...gbInput, document: { ...gbInput.document, tax_amount: 24 } }), { code: 'SUPPLIER_BILL_GB_VAT_AMOUNT_MISMATCH' });
   const blocked = gb.supplierBillTaxPosting({ ...gbInput, verdict: { tax_type: 'VAT_BLOCKED_INPUT' }, ledgerAccounts: [chart[1]] });
   assert.equal(blocked.alvSplit, null);
   assert.equal(blocked.expenseTaxType, 'VAT_BLOCKED_INPUT');
@@ -153,7 +155,7 @@ test('registered invoice and supplier operations feed balanced real journal buil
     assert.equal(journal.lines[0].debit, journal.lines[1].credit + journal.lines[2].credit);
     const bill = { documentId: 'BILL-FIXTURE', date: '2026-09-05', total: 100 + rate };
     const tax = adapter.supplierBillTaxPosting({ verdict: { tax_treatment: jurisdiction === 'fi' ? 'ALV 25,5 %' : 'VAT 20%' },
-      document: { total_amount: 100 + rate, tax_amount: rate }, ledgerAccounts: chart, taxCodingEnabled: true });
+      document: { total_amount: 100 + rate, tax_amount: rate, document_date: '2026-09-05' }, ledgerAccounts: chart, taxCodingEnabled: true, profile: gbRegistered });
     const supplierJournal = buildSupplierBillJournal({ bill,
       expenseAccount: { code: 'EXP', name: 'Expense', type: 'expense', tax_type: tax.expenseTaxType },
       ...(tax.payablesAccount ? { payablesAccount: tax.payablesAccount } : {}), alvSplit: tax.alvSplit });
@@ -203,7 +205,7 @@ test('RT-23: assertPostableTaxCoding refuses an unresolved treatment on a P&L le
   assert.deepEqual(fi.assertPostableTaxCoding({ coding: { ...revenue, tax_treatment: 'ALV-tarkistus' }, taxCodingEnabled: false }), { ...revenue, tax_treatment: 'ALV-tarkistus' });
   // The GB twin.
   assert.throws(() => gb.assertPostableTaxCoding({ coding: { ...revenue, tax_treatment: 'VAT check' }, taxCodingEnabled: true }), { code: 'TRANSACTION_GB_VAT_TREATMENT_UNRESOLVED' });
-  assert.deepEqual(gb.assertPostableTaxCoding({ coding: { ...revenue, tax_type: 'VAT_SR_20_OUTPUT' }, taxCodingEnabled: true }), { ...revenue, tax_type: 'VAT_SR_20_OUTPUT' });
+  assert.deepEqual(gb.assertPostableTaxCoding({ coding: { ...revenue, tax_type: 'VAT_SR_20_OUTPUT' }, taxCodingEnabled: true, transaction: { date: '2026-09-05', money_in: 120 }, profile: gbRegistered }), { ...revenue, tax_type: 'VAT_SR_20_OUTPUT' });
   assert.deepEqual(gb.assertPostableTaxCoding({ coding: { ...liability, tax_treatment: 'VAT check' }, taxCodingEnabled: true }), { ...liability, tax_treatment: 'VAT check' });
   // A foreign native code still trips the ownership guard on this operation.
   assert.throws(() => fi.assertPostableTaxCoding({ coding: { ...revenue, tax_type: 'VAT_SR_20_OUTPUT' }, taxCodingEnabled: true }), hasCode('posting_tax_code_foreign'));
@@ -290,11 +292,11 @@ test('GB: the shared source-evidence rule, as UK law and practice allow it (synt
   assert.equal(fi.taxEvidence.refusalCode, 'TRANSACTION_ALV_EVIDENCE_REQUIRED');
   for (const jurisdiction of ['sg', 'us', 'au', 'ae']) assert.equal(resolvePostingPolicy({ jurisdiction }).taxEvidence, null, jurisdiction);
   const refusal = { code: 'TRANSACTION_GB_VAT_EVIDENCE_REQUIRED' };
-  const spent = { money_in: 0, money_out: 36 };
-  const received = { money_in: 47.88, money_out: 0 };
+  const spent = { date: '2026-06-02', money_in: 0, money_out: 36 };
+  const received = { date: '2026-06-02', money_in: 47.88, money_out: 0 };
   const invoice = { document_type: 'supplier_bill', match_status: 'confirmed', total_amount: 36, tax_amount: 6 };
   const sales = { document_type: 'sales_invoice', match_status: 'auto_matched', total_amount: 47.88, tax_amount: 7.98 };
-  const post = (coding, extra = {}) => gb.adapter.assertPostableTaxCoding({ coding, transaction: spent, taxCodingEnabled: true, autonomousCoding: true, ...extra });
+  const post = (coding, extra = {}) => gb.adapter.assertPostableTaxCoding({ coding, transaction: spent, taxCodingEnabled: true, autonomousCoding: true, profile: gbRegistered, ...extra });
   const software = (tax) => ({ proposed_account: 'Software subscriptions', account_type: 'expense', ...tax });
   // Input: the machine's deduction needs the settled source; a bank descriptor is not one.
   assert.throws(() => post(software({ tax_type: 'VAT_SR_20_INPUT' })), refusal);

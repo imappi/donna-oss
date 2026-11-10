@@ -872,7 +872,7 @@ const prepareLedgerTransactionPosting = async ({
     // RT-23: the Keep layer refuses an unresolved tax treatment on a P&L leg
     // before any journal is shaped — in the preview too, so the consequence
     // diff says "cannot commit" rather than rendering a code-less post.
-    assertPostableTaxCoding(policy, { coding: preview.coding, transaction, taxCodingEnabled, taxPostingContext, matchedDocument });
+    assertPostableTaxCoding(policy, { coding: preview.coding, transaction, taxCodingEnabled, profile: postingContext.profile, taxPostingContext, matchedDocument });
     documentAllocation = await resolveDocumentAllocation({ client, firmId, clientId, transaction, postingContext, ledgerAccounts, coding: preview.coding });
     // FI-9 wiring (D-FI9-P1): resolve the AP-settlement plan for the Donna
     // branch only — commit executes it (or receipts why not). The preview
@@ -894,7 +894,7 @@ const prepareLedgerTransactionPosting = async ({
     preview = { ...preview, coding: executePostingPolicyOperation(policy, 'enrichCoding', {
       coding: preview.coding, sourceCoding: authoritativeTaxCoding(transaction), transaction, ledgerAccounts: xeroAccounts, taxCodingEnabled
     }) };
-    assertPostableTaxCoding(policy, { coding: preview.coding, transaction, taxCodingEnabled, matchedDocument });
+    assertPostableTaxCoding(policy, { coding: preview.coding, transaction, taxCodingEnabled, profile: postingContext.profile, matchedDocument });
   }
   const ledgerPreview = buildLedgerJournalForTransaction({
     transaction,
@@ -944,7 +944,7 @@ const commitPreparedLedgerPosting = async ({
     throw Object.assign(new Error('The prepared tax facts, document or chart changed. Prepare again.'), { code: 'TRANSACTION_AE_VAT_FACTS_STALE', statusCode: 409 });
   }
   assertPostableTaxCoding(currentContext.policy, { coding: prepared.preview.coding, transaction: currentTransaction,
-    taxCodingEnabled: currentContext.taxCodingEnabled, taxPostingContext, matchedDocument });
+    taxCodingEnabled: currentContext.taxCodingEnabled, profile: currentContext.profile, taxPostingContext, matchedDocument });
   // FI-9 wiring (§T.1): the AP leg FIRST, in this same transaction. On success
   // the settlement journal's counterparty swaps to the payables account the AP
   // journal credited (DR 2870 / CR bank — the payable clears instead of the
@@ -2141,7 +2141,7 @@ export const postLedgerJournalForTransaction = async ({
   }
   const taxPostingContext = await loadTaxPostingContext({ client, firmId, clientId, transaction,
     postingContext, ledgerAccounts: transaction.tax_posting_facts ? await getDonnaLedgerAccountsForClient({ client, firmId, clientId }) : [], lock: true });
-  assertPostableTaxCoding(postingContext.policy, { coding, transaction, taxCodingEnabled: postingContext.taxCodingEnabled, taxPostingContext, matchedDocument });
+  assertPostableTaxCoding(postingContext.policy, { coding, transaction, taxCodingEnabled: postingContext.taxCodingEnabled, profile: postingContext.profile, taxPostingContext, matchedDocument });
   let codingRepresentation = null;
   const documentAllocation = await resolveDocumentAllocation({ client, firmId, clientId, transaction: currentTransaction, postingContext,
     coding, onSingleAccount: receipt => { codingRepresentation = receipt; },
@@ -2540,7 +2540,7 @@ export const postDocumentSettlementJournalWithClient = async ({
     ? await getDonnaLedgerAccountsForClient({client,firmId,clientId}) : [];
   const {alvSplit,expenseTaxType} = context.policy.capabilities.supplierBillTaxPosting
     ? executePostingPolicyOperation(context.policy,'supplierBillTaxPosting',{
-      verdict:expenseAccount,document:currentDocument,ledgerAccounts,taxCodingEnabled:context.taxCodingEnabled})
+      verdict:expenseAccount,document:currentDocument,ledgerAccounts,taxCodingEnabled:context.taxCodingEnabled,profile:context.profile})
     : {alvSplit:null,expenseTaxType:expenseAccount.tax_type || expenseAccount.xero_tax_type};
   const journal = buildLedgerJournalForDocumentSettlement({ document:currentDocument,
     expenseAccount:{...expenseAccount,tax_type:expenseTaxType,xero_tax_type:expenseTaxType},ownerFundsAccount,alvSplit });
@@ -3882,7 +3882,7 @@ export const postSupplierBillJournalWithClient = async ({
   const ledgerAccounts = datedContext.policy.supplierBillNeedsChart
     ? await getDonnaLedgerAccountsForClient({ client, firmId, clientId }) : [];
   const { alvSplit, payablesAccount, expenseTaxType } = executePostingPolicyOperation(datedContext.policy, 'supplierBillTaxPosting', {
-    verdict, document: doc, ledgerAccounts, taxCodingEnabled: datedContext.taxCodingEnabled
+    verdict, document: doc, ledgerAccounts, taxCodingEnabled: datedContext.taxCodingEnabled, profile: datedContext.profile
   });
 
   const journal = buildSupplierBillJournal({

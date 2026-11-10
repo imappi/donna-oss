@@ -230,16 +230,38 @@ export const setOwnerActionPartyLanguage = async (client, {
   }
 };
 
+// The owner's optional note on a decline or a "this was wrong": their own
+// words, trimmed, at most 2000 characters, stored on the decision's audit row.
+export const OWNER_NOTE_MAX_LENGTH = 2000;
+export const normalizeOwnerNote = (note) => {
+  if (note == null) return null;
+  if (typeof note !== 'string' || note.trim().length > OWNER_NOTE_MAX_LENGTH) {
+    const error = new Error(`note must be text of at most ${OWNER_NOTE_MAX_LENGTH} characters.`);
+    error.statusCode = 400;
+    error.code = 'OWNER_NOTE_INVALID';
+    throw error;
+  }
+  return note.trim() || null;
+};
+
 // Approve / decline a held action — the workspace twin of the digest link
 // route: same writers, same idempotency, the authenticated principal instead
-// of the bearer token. Owns one transaction.
+// of the bearer token. Owns one transaction. `note` (decline only) and
+// `channel` land on the writer's own audit row in that transaction.
 export const decideOwnerAction = async (client, {
-  firmId, clientId, actionId, decision, actorType, actorId = null
+  firmId, clientId, actionId, decision, actorType, actorId = null, note = null, channel = null
 }) => {
   if (!['approve', 'decline'].includes(decision)) {
     const error = new Error(`Unknown decision '${decision}'.`);
     error.statusCode = 400;
     error.code = 'OUTBOUND_DECISION_UNKNOWN';
+    throw error;
+  }
+  const ownerNote = normalizeOwnerNote(note);
+  if (ownerNote && decision !== 'decline') {
+    const error = new Error('A note is recorded with a decline only.');
+    error.statusCode = 400;
+    error.code = 'OWNER_NOTE_NOT_ACCEPTED';
     throw error;
   }
   const action = await client.query(
@@ -259,7 +281,7 @@ export const decideOwnerAction = async (client, {
   try {
     if (decision === 'approve') {
       const approved = await approveOutboundAction(client, {
-        firmId, clientId, actionId, actorType, actorId
+        firmId, clientId, actionId, actorType, actorId, channel
       });
       await client.query('commit');
       return approved
@@ -268,7 +290,7 @@ export const decideOwnerAction = async (client, {
     }
     const cancelled = await cancelOutboundAction(client, {
       firmId, clientId, actionId, reason: 'owner_declined',
-      actorType, actorId, authority: 'per_send_owner_decline'
+      actorType, actorId, authority: 'per_send_owner_decline', note: ownerNote, channel
     });
     if (cancelled) {
       await syncReceivableCaseAfterCancel(client, {
@@ -325,13 +347,14 @@ export const editOwnerHeldDraft = async (client, {
 // already-marked / not-executed idempotency report. No action-state change:
 // the send happened — this is a correction record, not a cancel.
 export const markOwnerAutoSentWrong = async (client, {
-  firmId, clientId, actionId, actorType, actorId = null, channel = null
+  firmId, clientId, actionId, actorType, actorId = null, channel = null, note = null
 }) => {
+  const ownerNote = normalizeOwnerNote(note);
   await client.query('begin');
   let marked;
   try {
     marked = await markExecutedOutboundActionWrong(client, {
-      firmId, clientId, actionId, actorType, actorId, channel
+      firmId, clientId, actionId, actorType, actorId, channel, note: ownerNote
     });
     await client.query('commit');
   } catch (error) {

@@ -266,6 +266,37 @@ test('real PG: an owner confirms their business facts through the mobile adapter
     'the refusal is atomic: the owner name in the same request is not saved either');
   assert.equal(await invoiceSellerName(clientId), 'Fixture Tiling Ltd');
 
+  // ── One owner, books in two firms, a different name in each ────────────
+  // The contract has one principal name. /me shows the name on the
+  // collaborator row the owner most recently declared a name on, in whichever
+  // firm; each firm keeps its own row. The second firm sorts after the first.
+  const secondFirmId = 'zz-mobile-second-firm';
+  await appliance.query("insert into firms (id, name, slug) values ($1, 'Synthetic second firm', $1)", [secondFirmId]);
+  process.env.DONNA_DEFAULT_FIRM_ID = secondFirmId;
+  const secondClient = await selfProvisionClientWorkspace({ auth: { userId: IDENTITIES.owner.id, email: IDENTITIES.owner.email },
+    companyName: 'Fixture Glazing Ltd', jurisdiction: 'GB', entityType: 'gb-ltd' });
+  delete process.env.DONNA_DEFAULT_FIRM_ID;
+  assert.ok(secondClient.clientId, JSON.stringify(secondClient));
+  await provisionEntityReadiness({ withFirmDbClientFn: withFirmDbClient, firmId: secondFirmId, clientId: secondClient.clientId,
+    creationPath: 'self_provision', lifecycle: 'cold_create', compatibilityScope: 'birth_residue_proof',
+    initiatingPrincipal: { actor_type: 'supabase_user', actor_id: IDENTITIES.owner.id },
+    authorityBasis: { source: 'authenticated_self_provision_route', principal_id: IDENTITIES.owner.id } });
+  const twoFirms = conform('/me', 'GET', await api({ path: '/me', token }));
+  assert.deepEqual(twoFirms.entities.map((row) => row.id).sort(), [clientId, secondClient.clientId].sort());
+  assert.equal(twoFirms.principal.display_name, 'Fixture Owner-Renamed', 'the name last declared, in the first firm');
+  const secondEntity = twoFirms.entities.find((row) => row.id === secondClient.clientId);
+  const secondPut = (overrides) => api({ method: 'PUT', path: `/entities/${secondClient.clientId}/onboarding/profile`, token,
+    body: body({ business_name: secondEntity.display_name, ...overrides }) });
+  const secondSaved = conform(PUT_PATH, 'PUT', await secondPut({ owner_name: 'Fixture Owner-Second' }));
+  assert.equal(secondSaved.principal.display_name, 'Fixture Owner-Second');
+  const afterSecond = conform('/me', 'GET', await api({ path: '/me', token }));
+  assert.equal(afterSecond.principal.display_name, 'Fixture Owner-Second', 'a name edited in the second firm shows');
+  assert.equal((await appliance.query('select name from firm_collaborators where id = $1', [ownerPrincipalId])).rows[0].name, 'Fixture Owner-Renamed',
+    'the first firm’s row is not rewritten');
+  conform(PUT_PATH, 'PUT', await put(body({ ...facts, owner_name: 'Fixture Owner-Again' })));
+  assert.equal(conform('/me', 'GET', await api({ path: '/me', token })).principal.display_name, 'Fixture Owner-Again',
+    'the latest declaration wins, whichever firm it was made in');
+
   // The kill switch still covers this endpoint.
   process.env.DONNA_MOBILE_API = 'off';
   try {

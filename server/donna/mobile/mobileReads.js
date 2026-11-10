@@ -3,6 +3,7 @@
 // a plain SELECT pinned to (firm_id, client_id) of an entity the caller has
 // ALREADY been admitted to (mobileAuth.ownerScopeForEntity); none writes.
 import { queryFirmDb } from '../firmDb.js';
+import { readCloudUploadIntentFileFacts } from '../cloudEvidenceIntake.js';
 
 export const readEntities = async ({ firmId, clientIds }) => {
   if (!clientIds.length) return [];
@@ -114,7 +115,29 @@ export const readOutboundAction = async ({ firmId, clientId, actionId }) => {
   return result.rows[0] || null;
 };
 
-export const readOwnerName = async ({ firmId, principalId }) => {
-  const result = await queryFirmDb('select name from firm_collaborators where firm_id = $1 and id = $2', [firmId, principalId]);
+// The contract has ONE principal name; an owner with books in two firms has
+// one collaborator row (and one name) per firm. The rule: the name on the row
+// the owner most recently declared a name on (`owner.name.declared`, the
+// owner-side name writer, mobileBusinessProfile.js), in whichever firm; with
+// no declaration, the first firm's (by firm id). Rows are only read, never
+// aligned: each firm keeps the name it has.
+export const readOwnerName = async ({ principals }) => {
+  if (!principals.length) return null;
+  const result = await queryFirmDb(
+    `select fc.firm_id, fc.name,
+            (select max(a.created_at) from audit_events a
+              where a.firm_id = fc.firm_id and a.action = 'owner.name.declared'
+                and a.resource_type = 'firm_collaborator' and a.resource_id = fc.id) as declared_at
+       from firm_collaborators fc
+       join unnest($1::text[], $2::text[]) as p(firm_id, id) on p.firm_id = fc.firm_id and p.id = fc.id
+      where coalesce(btrim(fc.name), '') <> ''
+      order by declared_at desc nulls last, fc.firm_id`,
+    [principals.map((row) => row.firmId), principals.map((row) => row.principalId)]
+  );
   return result.rows[0]?.name || null;
 };
+
+// The type and size the server signed for an upload this owner made (the
+// cloud pilot intake's intent row), or null. See cloudEvidenceIntake.js.
+export const readSignedUploadFileFacts = ({ firmId, clientId, key, principal }) =>
+  readCloudUploadIntentFileFacts({ query: queryFirmDb, firmId, clientId, key, principal });

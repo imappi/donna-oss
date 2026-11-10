@@ -86,7 +86,9 @@ test('real PG: Xero write-back refuses what native posting refuses, admits what 
     const clientId = `${jurisdiction}-xero-evidence-client`;
     const connectionId = `${jurisdiction}-xero-evidence-connection`;
     await pool.query(`insert into clients(id,firm_id,company_name,jurisdiction,profile) values($1,$2,'Synthetic company',$3,$4)`,
-      [clientId, firmId, jurisdiction, { jurisdiction, accounting_system: 'xero', accounting_basis: 'cash' }]);
+      // A UK VAT code posts only for a VAT-registered business (gb/postingPolicy.js).
+      [clientId, firmId, jurisdiction, { jurisdiction, accounting_system: 'xero', accounting_basis: 'cash',
+        ...(jurisdiction === 'gb' ? { vat_registration: { status: 'registered', registered_from: '2020-01-01' } } : {}) }]);
     await pool.query(`insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source)
       values($1,$2,$3,$4,'auto','manual')`, [`${jurisdiction}-xero-tax`, firmId, clientId, taxFlag]);
     await pool.query(`insert into xero_connections(id,firm_id,client_id,tenant_id,status,scopes,access_token,refresh_token,expires_at)

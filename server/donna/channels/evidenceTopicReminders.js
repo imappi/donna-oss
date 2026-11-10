@@ -5,6 +5,7 @@ import {
   getActiveWhatsAppBindingForClientInDb,
   getClientOwnerLanguageInDb,
   listOpenEvidenceTopicsForReminderInDb,
+  __readAwaitingOwnerAskWithClient,
   recordMessageDeliveryLedgerInDb,
   stampEvidenceTopicReminderInDb,
   withFirmDbClient
@@ -19,6 +20,7 @@ import { sendWhatsAppText } from './whatsapp.js';
 export const EVIDENCE_TOPIC_REMINDERS_FLAG_KEY = 'EVIDENCE_TOPIC_REMINDERS';
 
 const DEFAULT_LIMIT = 25;
+const NOT_AWAITING_REASON = 'not_awaiting';
 const DEFAULT_OWNER_QUIET_HOURS = 24;
 const DEFAULT_REMINDER_QUIET_HOURS = 48;
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -128,6 +130,12 @@ export const sendEvidenceTopicReminderViaBoundChannel = async ({
     // guard: a blocked text is skipped by name, never sent.
     const safe = prepareOwnerAskQuestion(text);
     if (safe.blocked) return { ok: false, skipped: true, reason: safe.reason || 'sensitive_ask_portal_only' };
+    // The question as it stands right before the send, the same re-check every
+    // ask deliverer makes (db/channels.js): one answered, cancelled or merged
+    // after the sweep's read is not reminded once more.
+    if (!(await __readAwaitingOwnerAskWithClient({ client, firmId, clientId, askId: evidenceRequestId }))) {
+      return { ok: false, skipped: true, reason: NOT_AWAITING_REASON };
+    }
     const sendText = safe.text;
     const result = channel === 'whatsapp'
       ? await sendWhatsApp({ to: binding.phone_e164, text: sendText })
@@ -172,7 +180,7 @@ export const runEvidenceTopicReminderSweep = async ({
 
   const requests = await listOpenEvidenceTopics({ firmId, clientId, limit });
   const candidates = selectDueEvidenceTopicReminders({ requests, now, limit });
-  const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, deferred: 0, refused: 0, failed: 0 };
+  const stats = { skipped: false, considered: candidates.length, sent: 0, held: 0, deferred: 0, refused: 0, not_awaiting: 0, failed: 0 };
   const snapshots = new Map();
   const sendGates = new Map();
   // The owner's language, read once per client (wording only).
@@ -240,6 +248,11 @@ export const runEvidenceTopicReminderSweep = async ({
         request,
         topic: candidate.topic
       });
+      if (delivery?.skipped && delivery.reason === NOT_AWAITING_REASON) {
+        // Answered between the sweep's read and the send: nothing sent, nothing stamped.
+        stats.not_awaiting += 1;
+        continue;
+      }
       if (delivery?.ok === false) throw new Error(delivery.reason || delivery.error || 'SEND_FAILED');
       const nextTopic = buildEvidenceTopicReminderState({
         topic: candidate.topic,

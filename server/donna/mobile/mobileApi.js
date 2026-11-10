@@ -63,7 +63,8 @@ import {
   readEntities,
   readOpenDocumentAsks,
   readOutboundAction,
-  readOwnerName
+  readOwnerName,
+  readSignedUploadFileFacts
 } from './mobileReads.js';
 import { readMobileSettings, updateMobileSettings } from './mobileSettings.js';
 import { describePendingAction } from '../outbound/ownerDigest.js';
@@ -176,7 +177,9 @@ const meBody = async (owner) => {
     for (const row of await readEntities({ firmId, clientIds })) entities.push(projectEntity(row));
   }
   const first = owner.owners[0];
-  const name = await readOwnerName({ firmId: first.firmId, principalId: first.principal.principalId });
+  const name = await readOwnerName({
+    principals: owner.owners.map((entry) => ({ firmId: entry.firmId, principalId: entry.principal.principalId }))
+  });
   return {
     principal: projectPrincipal({ principal: { ...first.principal, name }, identity: owner.identity }),
     entities,
@@ -262,6 +265,8 @@ const validateDecision = (body) => {
   }
 };
 
+const ownerNote = (note) => (typeof note === 'string' && note.trim() ? note.trim() : null);
+
 const wrongClass = (card, type) => mobileError(409, 'DECISION_NOT_VALID_FOR_CARD',
   `A ${card.class} card does not accept '${type}'.`);
 
@@ -293,14 +298,17 @@ const answerAsk = async (ctx, found, { text, documentIds }) => {
   };
 };
 
-const decideApproval = async (ctx, found, type) => {
+const decideApproval = async (ctx, found, type, note) => {
   const { card, parsed } = found;
   if (card.state !== 'open') return { applied: false, already: card.state, card };
   const watermark = await readAuditWatermark({ firmId: ctx.firmId });
   const routed = await ctx.dispatch({
     method: 'POST',
     path: '/outbound/owner-actions/decide',
-    body: { firm_id: ctx.firmId, client_id: ctx.clientId, action_id: parsed.id, decision: type === 'approve' ? 'approve' : 'decline' }
+    // The owner's note is the decline's reason; the writer records it on the
+    // decision's own audit row. An approval takes no note (GAPS.md).
+    body: { firm_id: ctx.firmId, client_id: ctx.clientId, action_id: parsed.id, decision: type === 'approve' ? 'approve' : 'decline',
+      ...(type === 'reject' && note ? { note } : {}) }
   });
   const result = expectOk(routed, 'DECISION_FAILED');
   const row = await readOutboundAction({ firmId: ctx.firmId, clientId: ctx.clientId, actionId: parsed.id });
@@ -313,14 +321,14 @@ const decideApproval = async (ctx, found, type) => {
   };
 };
 
-const flagFyi = async (ctx, found) => {
+const flagFyi = async (ctx, found, note) => {
   const { card, parsed } = found;
   if (card.state === 'flagged') return { applied: false, already: 'flagged', card };
   const watermark = await readAuditWatermark({ firmId: ctx.firmId });
   const routed = await ctx.dispatch({
     method: 'POST',
     path: '/outbound/owner-actions/mark-wrong',
-    body: { firm_id: ctx.firmId, client_id: ctx.clientId, action_id: parsed.id }
+    body: { firm_id: ctx.firmId, client_id: ctx.clientId, action_id: parsed.id, ...(note ? { note } : {}) }
   });
   const result = expectOk(routed, 'FLAG_FAILED');
   const after = (await findCard(ctx, card.id).catch(() => null))?.card || card;
@@ -345,10 +353,10 @@ const decide = async (ctx, rawCardId, body) => {
   }
   if (card.class === 'approval') {
     if (body.type !== 'approve' && body.type !== 'reject') throw wrongClass(card, body.type);
-    return decideApproval(ctx, found, body.type);
+    return decideApproval(ctx, found, body.type, ownerNote(body.note));
   }
   if (body.type !== 'veto_flag') throw wrongClass(card, body.type);
-  return flagFyi(ctx, found);
+  return flagFyi(ctx, found, ownerNote(body.note));
 };
 
 // ── Documents ─────────────────────────────────────────────────────────────
@@ -412,6 +420,13 @@ const registerDocuments = async (ctx, body) => {
       throw badRequest('answers_card_id must name a question card.');
     }
   }
+  // The contract's register item carries no type or size. Where the server
+  // signed them (the cloud pilot intake's intent for this key and this
+  // owner), pass the signed values: the writer checks them against that same
+  // intent and verifies the stored bytes. Never the phone's word.
+  const signedFacts = await Promise.all(incoming.map((doc) => readSignedUploadFileFacts({
+    firmId: ctx.firmId, clientId: ctx.clientId, key: doc.storage_object_key, principal: ctx.principal
+  })));
   const routed = await ctx.dispatch({
     method: 'POST',
     path: '/documents/register',
@@ -419,7 +434,7 @@ const registerDocuments = async (ctx, body) => {
       firm_id: ctx.firmId,
       // The web portal's register shape; the server types an `unknown`
       // document itself (filename recovery, then the router at parse).
-      documents: incoming.map((doc) => ({
+      documents: incoming.map((doc, index) => ({
         id: doc.id,
         client_id: ctx.clientId,
         filename: doc.filename,
@@ -431,12 +446,14 @@ const registerDocuments = async (ctx, body) => {
         storage_bucket: doc.storage_bucket,
         storage_object_key: doc.storage_object_key,
         checksum_sha256: doc.checksum_sha256.toLowerCase(),
+        ...(signedFacts[index] ? { mime_type: signedFacts[index].mime_type, file_size: signedFacts[index].size } : {}),
         file_storage: {
           mode: 'object_storage',
           bucket: doc.storage_bucket,
           key: doc.storage_object_key,
           checksum_sha256: doc.checksum_sha256.toLowerCase(),
-          filename: doc.filename
+          filename: doc.filename,
+          ...(signedFacts[index] ? { mime_type: signedFacts[index].mime_type, size: signedFacts[index].size } : {})
         },
         captured_at: typeof doc.captured_at === 'string' ? doc.captured_at : null,
         capture_source: ['camera', 'photo_library', 'file'].includes(doc.source) ? doc.source : null,
@@ -650,6 +667,7 @@ const route = async (req, res, requestUrl, deps) => {
         dispatch: createFirmRouteDispatcher({
           firmHandler: deps.dispatchFirmRoute,
           auth,
+          channel: 'mobile',
           forwardHeaders: Object.fromEntries(['host', 'x-forwarded-host', 'x-forwarded-proto', 'user-agent']
             .filter((name) => req.headers?.[name]).map((name) => [name, req.headers[name]]))
         })

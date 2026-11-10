@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { __commitPreparedLedgerPosting, postSupplierBillJournalWithClient } from './firmDb.js';
+
+// A VAT-registered business: VAT codes post only for one (gb/postingPolicy.js).
+const REGISTERED = { status: 'registered', registered_from: '2020-01-01' };
 import { resolvePostingContextWithClient, postingSourceReceipt } from './db/postingPolicyContext.js';
 
 const VAT = { id: 'vat', code: '2202', name: 'VAT control', account_type: 'liability', normal_balance: 'credit', currency: 'GBP', tax_type: 'NONE', canonical_role: 'liability.sales_tax_payable', status: 'active' };
@@ -15,8 +18,8 @@ const pool = ({ doc = document(), chart = [VAT, AP] } = {}) => {
       'rollback to savepoint runtime_policy_incident',
       'select pg_advisory_xact_lock(hashtextextended($1, 0))'].includes(sql)) return { rows: [] };
     // Canonical lineage observes this same unmarked client; no native birth is seeded.
-    if (sql.includes('as birth_created_at') && sql.includes('from clients')) return { rows: [{ id: params[1], firm_id: params[0], birth_created_at: null, jurisdiction: 'gb', entity_type: null, profile: { accounting_basis: 'accrual', accounting_system: 'none' } }] };
-    if (sql.includes('select jurisdiction, entity_type, profile from clients')) return { rows: [{ jurisdiction: 'gb', entity_type: null, profile: { accounting_basis: 'accrual', accounting_system: 'none' } }] };
+    if (sql.includes('as birth_created_at') && sql.includes('from clients')) return { rows: [{ id: params[1], firm_id: params[0], birth_created_at: null, jurisdiction: 'gb', entity_type: null, profile: { accounting_basis: 'accrual', accounting_system: 'none', vat_registration: REGISTERED } }] };
+    if (sql.includes('select jurisdiction, entity_type, profile from clients')) return { rows: [{ jurisdiction: 'gb', entity_type: null, profile: { accounting_basis: 'accrual', accounting_system: 'none', vat_registration: REGISTERED } }] };
     if (sql.includes('select * from transactions')) return { rows: this.transaction ? [this.transaction] : [] };
     if (sql.includes('select id from transactions')) return { rows: this.transaction ? [{ id: this.transaction.id }] : [] };
     if (sql.includes('from audit_events') && sql.trimStart().startsWith('select')) return { rows: [] };
@@ -24,7 +27,7 @@ const pool = ({ doc = document(), chart = [VAT, AP] } = {}) => {
     if (sql.includes('from cohort_capability_config')) return { rows: [] };
     if (sql.includes('select jurisdiction from clients')) return { rows: [{ jurisdiction: 'gb' }] };
     if (sql.includes('select coding_state from transactions')) return { rows: [{ coding_state: 'applied' }] }; // RT-16: the coding writer's lock read at commit
-    if (sql.includes('select profile from clients')) return { rows: [{ profile: { accounting_basis: 'accrual' } }] };
+    if (sql.includes('select profile from clients')) return { rows: [{ profile: { accounting_basis: 'accrual', vat_registration: REGISTERED } }] };
     // The caller supplies an AP plan here; this fixture has no persisted match
     // rows. Exercise the current source-lock/read fences without inventing one.
     if (sql.includes('from reconciliation_matches m') && sql.includes('join documents d')) return { rows: [] };

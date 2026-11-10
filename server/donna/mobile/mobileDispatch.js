@@ -13,6 +13,10 @@
 // The forwarded request never carries the caller's raw headers or body: the
 // adapter builds the body from the contract's closed request shape, so nothing
 // the phone sends reaches a route except the fields mapped here.
+//
+// `channel` rides on the in-process request object (req.donnaChannel), beside
+// req.donnaAuth: an HTTP client cannot set it, so a web request never claims
+// it. Routes copy it into the owner writers' audit metadata, attribution only.
 import { Readable } from 'node:stream';
 
 class CapturedResponse {
@@ -51,7 +55,7 @@ class CapturedResponse {
 
 // Run one firm route (path relative to /api/donna/firms) as the given verified
 // identity. Resolves { status, body } where body is the parsed JSON (or null).
-export const createFirmRouteDispatcher = ({ firmHandler, auth, forwardHeaders = {} }) => {
+export const createFirmRouteDispatcher = ({ firmHandler, auth, forwardHeaders = {}, channel = null }) => {
   if (typeof firmHandler !== 'function') throw new Error('mobile dispatch: the firm route handler was not injected.');
   return async ({ method = 'GET', path, query = null, body = undefined }) => {
     const url = new URL(path, 'http://internal');
@@ -68,6 +72,7 @@ export const createFirmRouteDispatcher = ({ firmHandler, auth, forwardHeaders = 
       'content-length': String(Buffer.byteLength(encoded))
     };
     req.donnaAuth = auth;
+    if (channel) req.donnaChannel = channel;
     const done = new Promise((resolve) => {
       const res = new CapturedResponse((captured) => resolve(captured));
       Promise.resolve(firmHandler(req, res)).catch((error) => {
