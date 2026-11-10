@@ -11,8 +11,10 @@ import assert from 'node:assert/strict';
 import {
   LocalJobDeferred, cancelLocalJob, claimNextLocalJob, completeLocalJob, deferLocalJob,
   deleteLocalStepResult, enqueueLocalJob, failLocalJob, getLocalStepResult, isLocalJobDeferral,
-  pruneFinishedLocalJobs, recoverAbandonedLocalJobs, saveLocalStepResult, setLocalCronState
+  pruneFinishedLocalJobs, recoverAbandonedLocalJobs, saveLocalStepResult, setLocalCronState,
+  settleSupersededDeadParseJobsWithClient
 } from './localJobQueue.js';
+import { PARSE_DOCUMENT_FUNCTION_ID } from './parseDocumentJob.js';
 
 const makeMockClient = (rows = []) => {
   const calls = [];
@@ -210,4 +212,29 @@ test('bumpLocalJobClaimGeneration: advances only a PENDING job (a running one is
   assert.match(call.sql, /where id = \$1::bigint and status = 'pending'/);
   assert.equal(await bumpLocalJobClaimGeneration({ client: makeMockClient([]), jobId: 42 }), null, 'not pending → null (in flight / finished / absent)');
   assert.equal(await bumpLocalJobClaimGeneration({ client: c }), null);
+});
+
+test('settleSupersededDeadParseJobsWithClient: settles only this document\'s dead parse jobs of OTHER runs, returns their ids, and is a no-op without the table', async () => {
+  const calls = [];
+  const client = {
+    query: async (sql, params) => {
+      const text = String(sql).toLowerCase().replace(/\s+/g, ' ').trim();
+      calls.push({ text, params });
+      if (text.includes('to_regclass')) return { rows: [{ table_name: 'local_jobs' }] };
+      return { rows: [{ id: '9' }, { id: '4' }], rowCount: 2 };
+    }
+  };
+  const ids = await settleSupersededDeadParseJobsWithClient({ client, firmId: 'firm-1', documentId: 'doc-1', currentRunId: 'run-new' });
+  assert.deepEqual(ids, [4, 9]);
+  const update = calls.find((call) => call.text.startsWith('update local_jobs'));
+  assert.match(update.text, new RegExp(`function_id = '${PARSE_DOCUMENT_FUNCTION_ID}'`), 'the parse job\'s own function id');
+  assert.match(update.text, /status = 'dead'/, 'only dead jobs move');
+  assert.match(update.text, /set status = 'cancelled', cancelled_at = now\(\)/);
+  assert.doesNotMatch(update.text, /last_error/, 'the dead job\'s last error is kept as it was');
+  assert.match(update.text, /payload->>'parse_run_id' is distinct from \$3/, 'never the new run\'s own job');
+  assert.deepEqual(update.params, ['firm-1', 'doc-1', 'run-new']);
+
+  const absent = { query: async (sql) => (String(sql).includes('to_regclass') ? { rows: [{ table_name: null }] } : assert.fail('no write without the table')) };
+  assert.deepEqual(await settleSupersededDeadParseJobsWithClient({ client: absent, firmId: 'firm-1', documentId: 'doc-1', currentRunId: 'run-new' }), []);
+  assert.deepEqual(await settleSupersededDeadParseJobsWithClient({ client, firmId: 'firm-1', documentId: 'doc-1' }), [], 'no run id, no write');
 });

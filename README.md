@@ -249,6 +249,14 @@ rm -rf ~/.donna-desktop
   such a document failed, or a scanned statement with no lines, reads it
   again once on the first start of this release (also one failed on a
   refused key or after four "no credit" or rate-limit answers).
+- **A document is "Couldn't parse after 4 attempts"**: that document
+  could not be read on any of its four automatic attempts (for example
+  four server errors in a row). It shows its own reason and a Retry; the rest of the book
+  keeps working, and new uploads are read as usual. Retry reads it again
+  under a new run with four fresh attempts. Do not delete the data folder:
+  a book an earlier release stopped over such a document (new uploads
+  refused, "The work queue needs recovery") accepts work again on the
+  first start of this release.
 - **Every bank line is "Stalled" although Anthropic is lit**:
   the runtime log shows `Configure the first-line provider model for this
   host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`, or switch that lane

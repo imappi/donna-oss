@@ -293,6 +293,30 @@ const buildIdentityCheck = (env) => {
   });
 };
 
+// The per-document parse job's function id (desktop/parseDocumentJob.js
+// PARSE_DOCUMENT_FUNCTION_ID; equality pinned by hostCertificateA.test.js —
+// importing it here would pull the whole parse worker into the observer).
+export const HOST_QUEUE_PARSE_DOCUMENT_FUNCTION_ID = 'parse-document';
+
+// When a dead `parse-document` job (`j`, bound to $2) is accounted for by its
+// document's stored outcome — see the work-queue rule in databaseCheck.
+const DEAD_PARSE_JOB_ACCOUNTED_FOR = `(
+  j.function_id = $2
+  and j.payload->>'parse_run_id' is not null
+  and exists (
+    select 1 from documents d
+     where d.firm_id = j.payload->>'firm_id'
+       and d.id = j.payload->>'document_id'
+       and d.parse_run_id is not null
+       and (
+         (d.parse_run_id::text = j.payload->>'parse_run_id'
+           and d.parse_status = 'failed'
+           and d.parse_error ? 'code')
+         or d.parse_run_id::text <> j.payload->>'parse_run_id'
+       )
+  )
+)`;
+
 const databaseCheck = async ({ query, rootDir, observedAt, cronFunctionIds = [] }) => {
   if (!query) return check('database_schema', 'INCOMPLETE', { reason: 'postgresql_not_configured' });
   try {
@@ -312,6 +336,21 @@ const databaseCheck = async ({ query, rootDir, observedAt, cronFunctionIds = [] 
       // and desktop life (sleep past a lease, a slow sweep) produces them
       // routinely. Only unsuperseded dead work — a dead non-cron job, or a
       // cron function with no success since its death — gates the host.
+      //
+      // A dead `parse-document` job is accounted for by its document's own
+      // stored state, never by its error text. On its last automatic
+      // attempt the worker writes the honest terminal on the row (failed,
+      // a typed parse_error, the retry on the human) and the queue's
+      // dead-letter is the receipt of that spent budget: an outcome about
+      // that document, not lost work of the host. So the job is accounted
+      // for when its document carries, for the SAME run, `failed` with a
+      // typed error (`parse_error.code`), or has since moved to a LATER run
+      // (a retry or re-admission minted a new parse_run_id: every worker
+      // write is fenced on the run id, so the old run can never write, and
+      // the new run's own job is counted here like any other). A dead
+      // parse job whose document still claims that run in flight, or whose
+      // document row is gone, is exactly the lost work this rule is for and
+      // still fails the host.
       query(
         `select
            count(*) filter (where status = 'pending')::integer as pending,
@@ -332,9 +371,14 @@ const databaseCheck = async ({ query, rootDir, observedAt, cronFunctionIds = [] 
                       and superseding.completed_at > coalesce(j.completed_at, j.created_at)
                  )
                )
-           )::integer as dead_unsuperseded
+               and not (${DEAD_PARSE_JOB_ACCOUNTED_FOR})
+           )::integer as dead_unsuperseded,
+           count(*) filter (
+             where status = 'dead'
+               and ${DEAD_PARSE_JOB_ACCOUNTED_FOR}
+           )::integer as dead_accounted_by_document
          from local_jobs j`,
-        [cronFunctionIds]
+        [cronFunctionIds, HOST_QUEUE_PARSE_DOCUMENT_FUNCTION_ID]
       )
     ]);
     const actual = migrationResult.rows.map(({ version }) => String(version)).sort();
