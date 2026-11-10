@@ -19,9 +19,16 @@ export const CODING_EVIDENCE_RECONSIDERED_REFUSALS = Object.freeze([
   'TRANSACTION_SOURCE_ACCOUNT_CLASS_CONFLICT',
   'REFUND_GROUP_CODING_CONFLICT'
 ]);
+// The unresolved-treatment refusal, one per country posting policy that
+// raises it (finland/postingPolicy.js, gb/postingPolicy.js). The clock and the
+// source re-read lane treat each the same way.
+export const UNRESOLVED_TREATMENT_REFUSALS = Object.freeze([
+  'TRANSACTION_ALV_TREATMENT_UNRESOLVED',
+  'TRANSACTION_GB_VAT_TREATMENT_UNRESOLVED'
+]);
 export const POSTING_SOURCE_RECHECK_REFUSALS = Object.freeze([
   'TRANSACTION_ALV_DOCUMENT_AMOUNT_MISMATCH',
-  'TRANSACTION_ALV_TREATMENT_UNRESOLVED'
+  ...UNRESOLVED_TREATMENT_REFUSALS
 ]);
 export const CODING_CONFLICT_MAX_RECONSIDERATIONS = 3;
 

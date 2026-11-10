@@ -44,7 +44,8 @@ const GB_FLAGS = { JURISDICTION_TAX_CODING: 'auto' };
 const fakeClient = ({
   flags = GB_FLAGS,
   jurisdiction = 'gb',
-  profile = { accounting_basis: 'accrual' },
+  // A VAT-registered business: VAT codes post only for one (gb/postingPolicy.js).
+  profile = { accounting_basis: 'accrual', vat_registration: { status: 'registered', registered_from: '2020-01-01' } },
   document = billRow(),
   chartRows = [VAT_CONTROL_ROW, PAYABLES_ROW]
 } = {}) => {

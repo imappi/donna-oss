@@ -32,7 +32,9 @@ const readPostingContextWithClient = async ({ client, firmId, clientId, business
     settlement_flags: Object.fromEntries(['supplierBillAdmissionFlagKey', 'arSettlementFlagKey'].map((key) => [key,
       Boolean(policy[key] && clientFlagActs({ flagKey: policy[key], snapshot, envFallback: () => false }))]))
   };
-  return { policy, codingPolicy, taxCodingEnabled, receipt, row, snapshot };
+  // The profile the receipt digests rides the context, so a country policy
+  // reads registration from the same locked row (gb/postingPolicy.js).
+  return { policy, codingPolicy, taxCodingEnabled, profile, receipt, row, snapshot };
 };
 
 export const resolvePostingContextWithClient = async (args) => {
