@@ -254,15 +254,19 @@ export const loadRecording = (name) => {
 
 const modelServedOf = (body) => (typeof body?.model === 'string' && body.model ? body.model : null);
 
-// An ANTHROPIC recording (or inline Messages body) authors the lane's
-// structured result as JSON text. When the request carries the
+// A committed ANTHROPIC recording authors the lane's structured result as
+// JSON text (the unified extractor's recordings predate the tool delivery). When the request carries the
 // `structured_answer` tool — the lane's schema is past the structured-output
 // limits (structuredRequest.js schemaDeliveryFor) — the provider returns that
 // result as the tool's call, so the stub delivers the same JSON that way
-// (`delivered_as: 'structured_answer_tool'` on the journal). A text reply
+// (the journal marks the call `adapted: 'anthropic_text_to_structured_answer'`,
+// as the Responses adaptation below marks its own). A text reply
 // that is not JSON stays text: the lane must refuse it by name. (A Responses
-// body is adapted below, tool call included.)
+// body is adapted below, tool call included.) An INLINE body a test scripts
+// is served exactly as scripted: a test that answers in prose is proving the
+// lane refuses prose.
 export const deliverAsStructuredTool = (step, requestBody = null) => {
+  if (!step?.recording) return step;
   const body = step?.body;
   const wantsTool = Array.isArray(requestBody?.tools) && requestBody.tools.some((tool) => tool?.name === STRUCTURED_ANSWER_TOOL_NAME);
   if (!wantsTool || step?.status !== 200 || body?.type !== 'message' || !Array.isArray(body.content)) return step;
@@ -274,7 +278,7 @@ export const deliverAsStructuredTool = (step, requestBody = null) => {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return step;
   const content = [...body.content];
   content[index] = { type: 'tool_use', id: `toolu_${String(body.id || 'fixture').replace(/^msg_/, '')}`, name: STRUCTURED_ANSWER_TOOL_NAME, input };
-  return { ...step, delivered_as: 'structured_answer_tool', body: { ...body, content, stop_reason: body.stop_reason === 'end_turn' ? 'tool_use' : body.stop_reason } };
+  return { ...step, adapted: 'anthropic_text_to_structured_answer', body: { ...body, content, stop_reason: body.stop_reason === 'end_turn' ? 'tool_use' : body.stop_reason } };
 };
 
 const jsonResponse = (status, body, headers = {}) =>
@@ -411,8 +415,7 @@ export const installRecordedProviders = ({
       status: step.status,
       model_served: modelServedOf(served),
       recording: step.recording,
-      ...(adapt ? { adapted: 'openai_responses_to_anthropic_messages' } : {}),
-      ...(step.delivered_as ? { delivered_as: step.delivered_as } : {}),
+      ...(adapt ? { adapted: 'openai_responses_to_anthropic_messages' } : step.adapted ? { adapted: step.adapted } : {}),
       refused: false
     });
     return jsonResponse(step.status, served, step.headers);

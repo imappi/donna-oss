@@ -319,3 +319,36 @@ test('the parse pipeline: a missing key waits on the key the installation is mea
   assert.deepEqual([receipt.provider, receipt.model], ['anthropic', 'claude-opus-5-5']);
   assert.equal(buildExtractorReceipt({ documentType: 'supplier_bill', result: {} }).provider, null, 'no provider is guessed');
 });
+
+// The stub's one conversion of an ANTHROPIC recording (a text JSON answer
+// delivered as the `structured_answer` call) must never make a wrong request
+// pass: it fires only when the request the lane built carries that tool, and
+// the journal marks it. A request on the format delivery gets the text as
+// recorded.
+test('test support: a recorded Anthropic text answer becomes the structured_answer call only for a request that carries that tool', async () => {
+  const { extractUnified } = await import('./unifiedExtractor.js');
+  keys({ anthropic: true });
+  const providers = installRecordedProviders();
+  try {
+    let sent = null;
+    providers.script('unified_extraction', { respond: (body) => { sent = body; return { recording: 'unified_extraction/screwfix-receipt' }; } });
+    const read = await extractUnified({ base64: PDF, filename: 'screwfix.pdf', mimeType: 'application/pdf', env: { ANTHROPIC_API_KEY: 'sk-ant-test' } });
+    assert.equal(schemaDeliveryFor(sent.tools?.[0]?.input_schema || {}).delivery, 'tool', 'the unified schema is over the grammar limits');
+    assert.deepEqual([sent.tools.map((tool) => tool.name), sent.tool_choice, 'format' in sent.output_config], [[STRUCTURED_ANSWER_TOOL_NAME], { type: 'auto' }, false],
+      'the request carries the tool the reply is converted for');
+    const call = providers.callsFor('unified_extraction')[0];
+    assert.equal(call.adapted, 'anthropic_text_to_structured_answer');
+    assert.deepEqual([read.kind, read.model], ['completed_header', loadRecording('unified_extraction/screwfix-receipt').body.model]);
+
+    // Format delivery (the receipt schema is within the limits): the same
+    // kind of recorded text answer is served as text, unconverted.
+    let receiptSent = null;
+    providers.script('receipt_extraction', { respond: (body) => { receiptSent = body; return message(sampleFrom(__RECEIPT_EXTRACTION_SCHEMA)); } });
+    const receipt = await extractReceiptFromBase64({ base64: PDF, filename: 'r.pdf', mimeType: 'application/pdf' });
+    assert.equal(receiptSent.output_config.format.type, 'json_schema', 'the request carries the format the text answers');
+    assert.equal(receiptSent.tools, undefined);
+    assert.equal(providers.callsFor('receipt_extraction')[0].adapted, undefined, 'no conversion without the tool');
+    assert.equal(receipt.kind, 'completed');
+    providers.assertNoUnscripted();
+  } finally { providers.restore(); restore(); }
+});
