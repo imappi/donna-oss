@@ -8,7 +8,7 @@ import { planRefundGroup } from '../jevRefundGroup.js';
 import { resolveDocumentAllocation } from './documentAllocation.js';
 import { assertCurrentCodingEvidence, autonomousCoding, CODING_EVIDENCE_REFUSAL_CODES } from './codingEvidence.js';
 import { taxRegistrationRuleFor, taxRegistrationPeriodState } from './taxRegistrationChange.js';
-import { correctionTaxMovement } from '../ledgerCorrectionLines.js';
+import { correctionReturnMovement } from '../ledgerCorrectionLines.js';
 import { hash } from '../jevEvidenceContract.js';
 
 import { loadTaxPostingContext, readTaxPostingEvidence, taxFactsDigest } from './taxPostingFacts.js';
@@ -4383,22 +4383,6 @@ export const postLedgerAdjustmentInDb = async ({
         throw error;
       }
       await assertJournalDateNotLocked({ client, firmId, clientId, journalDate: resolvedDate });
-      // The period state of the adjustment's own date and of the journal it
-      // corrects, through the one reader the correction consumer uses
-      // (taxRegistrationPeriodState: a locked close period; a VAT return the
-      // country records as filed, null where the country keeps no record).
-      // Filing a return does not lock its close period, so the lock check
-      // above does not cover a filed return: nothing is dated into one.
-      const periodCompany = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
-      const periodRule = taxRegistrationRuleFor(periodCompany?.jurisdiction || periodCompany?.profile?.jurisdiction);
-      const datePeriod = await taxRegistrationPeriodState({ client, firmId, clientId, rule: periodRule, onDate: resolvedDate });
-      if (datePeriod.return_filed) {
-        const error = new Error('Adjustment journal date falls inside a filed VAT return. Use a date after the filed return\'s period.');
-        error.statusCode = 409;
-        error.code = 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN';
-        error.details = { journal_date: resolvedDate, filed_return_id: datePeriod.filed_return_id, filed_return_period: datePeriod.filed_return_period };
-        throw error;
-      }
       // A manual entry needs explicit denomination. Corrections may inherit
       // the original journal, but its reversal always retains its own currency,
       // even when the replacement explicitly corrects that denomination.
@@ -4410,10 +4394,42 @@ export const postLedgerAdjustmentInDb = async ({
       const normalizedLines = lines.map((line) => normalizeCorrectionLine(line, currency, originalCurrency));
       for (const line of normalizedLines) assertLedgerCurrencyMatches(line.currency, currency, 'adjustment line', { retained: currency === originalCurrency });
       const reversalLines = originalJournal && reverseOriginal !== false ? originalLines.map(reverseLedgerLine) : [];
+      // What a filed VAT return protects is the figures it read, not the
+      // period's books: filing does not lock the close period, and entries
+      // the return does not read (a year-end accrual or depreciation with no
+      // tax code) are dated into it as on any open date. The period state of
+      // the adjustment's own date and of the journal it corrects comes from
+      // the one reader the correction consumer uses
+      // (taxRegistrationPeriodState: a locked close period; a VAT return the
+      // country records as filed, null where the country keeps no record).
+      // What this adjustment moves in what a return reads is the reversal
+      // plus the replacement (or the manual lines), netted by the country's
+      // own read of a line (taxRegistration.returnLineKey, the return
+      // builder's; else the tax code). Both rules below use that one
+      // movement.
+      const periodCompany = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
+      const periodRule = taxRegistrationRuleFor(periodCompany?.jurisdiction || periodCompany?.profile?.jurisdiction);
+      const taxMoved = correctionReturnMovement([...reversalLines, ...normalizedLines], periodRule?.returnLineKey || undefined);
+      const datePeriod = await taxRegistrationPeriodState({ client, firmId, clientId, rule: periodRule, onDate: resolvedDate });
+      // Dated inside a filed return and changing what it reads: refused, with
+      // no acknowledgement path. The correction is dated in an open period
+      // (and, for a journal in the filed return, acknowledged below).
+      if (datePeriod.return_filed && taxMoved.length) {
+        const error = new Error(`Adjustment journal date ${resolvedDate} falls inside the filed VAT return ${datePeriod.filed_return_period || datePeriod.filed_return_id}, and this adjustment changes what that return reads: `
+          + `${taxMoved.map((row) => `${row.key} ${row.amount.toFixed(2)} ${row.currency}`.trim()).join(', ')}. `
+          + 'Date it in an open period instead; a correction of a journal in the filed return is then posted with a person\'s acknowledgement.');
+        error.statusCode = 409;
+        error.code = 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN';
+        error.details = { journal_date: resolvedDate, filed_return_id: datePeriod.filed_return_id,
+          filed_return_period: datePeriod.filed_return_period, tax_moved: taxMoved };
+        throw error;
+      }
+      const datedInFiledReturn = datePeriod.return_filed
+        ? { filed_return_id: datePeriod.filed_return_id, filed_return_period: datePeriod.filed_return_period } : null;
       // The corrected journal's own period. An adjustment dated in an open
-      // period moves its tax-code difference into the open period's return.
-      // When the corrected journal sits in a filed VAT return and some tax
-      // code moves, whether that may be corrected in a later return is a
+      // period moves its difference into the open period's return. When the
+      // corrected journal sits in a filed VAT return and what that return
+      // reads moves, whether it may be corrected in a later return is a
       // person's decision: the writer refuses and says what would move, and
       // posts only with an authenticated person's acknowledgement of exactly
       // that movement. Donna's own callers never carry one.
@@ -4421,7 +4437,6 @@ export const postLedgerAdjustmentInDb = async ({
       if (originalJournal) {
         const originalDate = ledgerDateOnly(originalJournal.journal_date);
         const period = await taxRegistrationPeriodState({ client, firmId, clientId, rule: periodRule, onDate: originalDate });
-        const taxMoved = correctionTaxMovement([...reversalLines, ...normalizedLines]);
         correctsPeriod = { journal_date: originalDate, close_period_locked: period.locked, close_period_id: period.close_period_id,
           return_filed: period.return_filed, filed_return_id: period.filed_return_id, filed_return_period: period.filed_return_period,
           tax_moved: taxMoved };
@@ -4433,8 +4448,8 @@ export const postLedgerAdjustmentInDb = async ({
             && offered.principal_type === 'firm_member' && Boolean(offered.acknowledged_by)
             && offered.acknowledged_by === actorId && !AUTOMATIC_ADJUSTMENT_ACTORS.has(actorId);
           if (!acknowledged) {
-            const error = new Error(`The corrected journal (${originalDate}) is in the filed VAT return ${period.filed_return_period || period.filed_return_id}, and this adjustment changes its tax codes: `
-              + `${taxMoved.map((row) => `${row.tax_type} ${row.amount.toFixed(2)} ${row.currency}`.trim()).join(', ')}. `
+            const error = new Error(`The corrected journal (${originalDate}) is in the filed VAT return ${period.filed_return_period || period.filed_return_id}, and this adjustment changes what that return reads: `
+              + `${taxMoved.map((row) => `${row.key} ${row.amount.toFixed(2)} ${row.currency}`.trim()).join(', ')}. `
               + `Dated ${resolvedDate}, the difference lands in that period's return. A person must acknowledge this before it posts.`);
             error.statusCode = 409;
             error.code = 'LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN';
@@ -4507,6 +4522,7 @@ export const postLedgerAdjustmentInDb = async ({
             journal_date: resolvedDate,
             correction_journal_ids: journals.map((journal) => journal.ledger_journal_id),
             ...(correctsPeriod ? { corrects_period: correctsPeriod } : {}),
+            ...(datedInFiledReturn ? { dated_in_filed_return: datedInFiledReturn } : {}),
             ...(recovery ? { authority_basis: recovery.authority, model: recovery.suggestion.model,
               decision_digest: codingCorrection.decision_digest, verified_no_change: !lines.length } : {})
           })

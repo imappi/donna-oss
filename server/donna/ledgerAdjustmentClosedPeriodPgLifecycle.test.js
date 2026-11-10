@@ -36,7 +36,8 @@ import { runDocumentSettlementReversalsForClient, documentSettlementReversalProp
 import { getFinlandAlvReturnFromDb } from './finland/statutoryDb.js';
 import { DOCUMENT_SETTLEMENT_LEDGER_ENTRY_FLAG_KEY } from './documentDispositionShape.js';
 import { TAX_REGISTRATION_RECHECK_FLAG } from './db/taxRegistrationChange.js';
-import { correctionTaxMovement } from './ledgerCorrectionLines.js';
+import { correctionReturnMovement, taxCodeReturnKey } from './ledgerCorrectionLines.js';
+import { alvReturnLineKey, buildAlvReturnFromLedgerLines } from './finland/alvReturn.js';
 
 const pgUrl = process.env.DONNA_PG_TEST_URL;
 const skip = !pgUrl && 'DONNA_PG_TEST_URL required';
@@ -159,17 +160,54 @@ const withInputAlv = (lines) => {
   const expense = lines.find(line => line.account_type === 'expense');
   const bank = lines.find(line => Number(line.credit) === GROSS);
   return [{ ...expense, tax_type: 'ALV_25_5_INPUT', debit: 100, credit: 0 },
-    { account_code: '2940', account_name: 'Vähennettävä arvonlisävero', account_type: 'asset', role: 'alv_input', tax_type: null, debit: 25.5, credit: 0, currency: 'EUR' },
+    { account_code: '2940', account_name: 'Vähennettävä arvonlisävero', account_type: 'asset', role: 'alv_input_deductible', tax_type: null, debit: 25.5, credit: 0, currency: 'EUR' },
     { ...bank }];
 };
 const balanced = (journals) => { for (const journal of journals) assert.equal(journal.debit, journal.credit, `${journal.id} balances`); };
 
-test('correctionTaxMovement: nets the reversal and the replacement by tax code and currency; no code and NONE move nothing', () => {
+test('correctionReturnMovement: nets lines by the read key and currency; an unread line, no code and NONE move nothing', () => {
   const line = (tax_type, debit, credit, currency = 'EUR') => ({ account: { tax_type }, debit, credit, currency });
-  assert.deepEqual(correctionTaxMovement([line('ALV_25_5_INPUT', 0, 100), line(null, 125.5, 0), line('ALV_25_5_INPUT', 100, 0), line('NONE', 0, 125.5)]), []);
-  assert.deepEqual(correctionTaxMovement([line('B', 0, 10), line('A', 0, 100.1), line('A', 0.1, 0), line('A', 5, 0, 'SEK')]),
-    [{ tax_type: 'A', currency: 'EUR', amount: -100 }, { tax_type: 'A', currency: 'SEK', amount: 5 }, { tax_type: 'B', currency: 'EUR', amount: -10 }]);
-  assert.deepEqual(correctionTaxMovement([{ tax_type: 'ALV_24', debit: 3, credit: 0, currency: 'eur' }]), [{ tax_type: 'ALV_24', currency: 'EUR', amount: 3 }]);
+  assert.deepEqual(correctionReturnMovement([line('ALV_25_5_INPUT', 0, 100), line(null, 125.5, 0), line('ALV_25_5_INPUT', 100, 0), line('NONE', 0, 125.5)]), []);
+  assert.deepEqual(correctionReturnMovement([line('B', 0, 10), line('A', 0, 100.1), line('A', 0.1, 0), line('A', 5, 0, 'SEK')]),
+    [{ key: 'tax_code:A', currency: 'EUR', amount: -100 }, { key: 'tax_code:A', currency: 'SEK', amount: 5 }, { key: 'tax_code:B', currency: 'EUR', amount: -10 }]);
+  assert.equal(taxCodeReturnKey({ tax_type: 'none' }), null);
+  assert.deepEqual(correctionReturnMovement([{ account: { tax_type: 'ALV_EXEMPT', type: 'expense' }, debit: 3, credit: 0, currency: 'EUR' }], alvReturnLineKey), []);
+});
+
+// The predicate is the builder's own read: a line it says is not read leaves
+// every figure, blocker and control sum of the return as it was; a line it
+// says is read changes one of them. (An uncoded expense adds only to the
+// uncodedExpenseLineCount note, which is no figure.)
+test('alvReturnLineKey agrees with buildAlvReturnFromLedgerLines on every branch of its line walk', () => {
+  const base = [
+    { account_code: '3000', account_type: 'revenue', tax_type: 'ALV_25_5_OUTPUT', debit: 0, credit: 1000 },
+    { account_code: '2939', account_type: 'liability', tax_type: 'NONE', role: 'alv_output', debit: 0, credit: 255 },
+    { account_code: '1910', account_type: 'bank', tax_type: 'NONE', role: 'bank', debit: 1255, credit: 0 }
+  ];
+  const read = (lines) => { const r = buildAlvReturnFromLedgerLines({ period: '2026-06', lines });
+    return { boxes: r.alvReturn.boxes, blockers: r.review.blockers, uncodedRevenue: r.review.uncodedRevenueLines.length,
+      incompatible: r.review.incompatibleLines.length, control: { ...r.review.controlCheck, tolerance: undefined, legCount: undefined } }; };
+  const cases = [
+    [{ account_code: '4000', account_type: 'expense', tax_type: 'ALV_25_5_INPUT', debit: 100, credit: 0 }, 'tax_code:ALV_25_5_INPUT'],
+    [{ account_code: '4000', account_type: 'revenue', tax_type: 'ALV_25_5_INPUT', debit: 0, credit: 100 }, 'tax_code:ALV_25_5_INPUT'],
+    [{ account_code: '2939', account_type: 'liability', tax_type: 'ALV_25_5_OUTPUT', debit: 0, credit: 100 }, 'tax_code:ALV_25_5_OUTPUT'],
+    [{ account_code: '2940', account_type: 'asset', tax_type: 'NONE', role: 'alv_input_deductible', debit: 25.5, credit: 0 }, 'control_leg:alv_input_deductible'],
+    [{ account_code: '2939', account_type: 'liability', tax_type: 'NONE', role: 'alv_output', debit: 10, credit: 0 }, 'control_leg:alv_output'],
+    [{ account_code: '2939', account_type: 'liability', tax_type: 'NONE', debit: 0, credit: 40 }, 'control_account:2939'],
+    [{ account_code: '3100', account_type: 'revenue', tax_type: 'NONE', debit: 0, credit: 70 }, 'uncoded_revenue'],
+    [{ account_code: '4000', account_type: 'expense', tax_type: 'ALV_EXEMPT', debit: 50, credit: 0 }, null],
+    [{ account_code: '4000', account_type: 'expense', tax_type: 'ALV_NONDEDUCTIBLE_INPUT', debit: 50, credit: 0 }, null],
+    [{ account_code: '4000', account_type: 'expense', tax_type: 'ALV_OUT_OF_SCOPE', debit: 50, credit: 0 }, null],
+    [{ account_code: '6800', account_type: 'expense', tax_type: 'NONE', debit: 300, credit: 0 }, null],
+    [{ account_code: '1150', account_type: 'asset', tax_type: null, debit: 0, credit: 300 }, null]
+  ];
+  const before = read(base);
+  for (const [line, key] of cases) {
+    assert.equal(alvReturnLineKey(line), key, JSON.stringify(line));
+    const after = read([...base, line]);
+    if (key) assert.notDeepEqual(after, before, `read: ${JSON.stringify(line)}`);
+    else assert.deepEqual(after, before, `not read: ${JSON.stringify(line)}`);
+  }
 });
 
 test('real PG (FI): a filed ALV return, a person adjusts the line dated today and VAT moves: refused with the amounts, then posts on the acknowledgement; the pending case closes', { skip }, async t => {
@@ -207,8 +245,9 @@ test('real PG (FI): a filed ALV return, a person adjusts the line dated today an
   assert.equal(details.filed_return_id, 'alv-2026-q2');
   assert.equal(details.filed_return_period, '2026-Q2');
   assert.equal(details.close_period_locked, false);
-  assert.equal(details.tax_moved.find(row => row.tax_type === 'ALV_25_5_INPUT').amount, 100);
-  assert.match(refused.body.error, /filed VAT return 2026-Q2/);
+  assert.deepEqual(details.tax_moved, [{ key: 'control_leg:alv_input_deductible', currency: 'EUR', amount: 25.5 },
+    { key: 'tax_code:ALV_25_5_INPUT', currency: 'EUR', amount: 100 }], 'the reversed non-deductible code is not read by the return');
+  assert.match(refused.body.error, /filed VAT return 2026-Q2, and this adjustment changes what that return reads/);
   assert.deepEqual(await journalsCorrecting(pool, journalId), [], 'nothing posted');
   assert.deepEqual(await adjustmentAudits(pool, clientId), []);
 
@@ -301,11 +340,35 @@ test('real PG (FI): neighbours: an open period, a locked period with no VAT chan
   assert.equal(sameAudit.return_filed, true);
   assert.deepEqual(sameAudit.tax_moved, []);
 
-  // A date inside a filed return that is not locked: refused at the date.
-  const inside = await adjust({ client_id: same, transaction_id: `${same}-purchase`, reason: 'Synthetic back-dated entry', journal_date: '2026-06-15', lines: [] });
+  // A date inside a filed return that is not locked: refused only when the journal changes what the return reads.
+  const inside = await adjust({ client_id: same, transaction_id: `${same}-purchase`, reason: 'Synthetic back-dated reversal', journal_date: '2026-06-15', lines: [] });
   assert.equal(inside.status, 409, JSON.stringify(inside.body));
   assert.equal(inside.body.code, 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN');
   assert.equal(inside.body.details.filed_return_id, 'alv-same-q2');
+  assert.ok(inside.body.details.tax_moved.some(row => row.key === 'tax_code:ALV_25_5_INPUT'), JSON.stringify(inside.body.details));
+  assert.match(inside.body.error, /Date it in an open period instead/);
+  const untaxed = [{ account_name: 'Travel', account_type: 'expense', debit: 300, credit: 0, currency: 'EUR' },
+    { account_name: 'Director loan', account_type: 'liability', debit: 0, credit: 300, currency: 'EUR' }];
+  const taxed = [{ account_name: 'Travel', account_type: 'expense', tax_type: 'ALV_25_5_INPUT', debit: 100, credit: 0, currency: 'EUR' },
+    { account_code: '2940', account_name: 'Vähennettävä arvonlisävero', account_type: 'asset', role: 'alv_input_deductible', debit: 25.5, credit: 0, currency: 'EUR' },
+    { account_name: 'Director loan', account_type: 'liability', debit: 0, credit: 125.5, currency: 'EUR' }];
+  const accrual = await adjust({ client_id: same, reason: 'Synthetic June accrual with no tax code', journal_date: '2026-06-30', lines: untaxed });
+  assert.equal(accrual.status, 200, JSON.stringify(accrual.body));
+  const accrualAudit = (await adjustmentAudits(pool, same)).at(-1).metadata;
+  assert.deepEqual(accrualAudit.dated_in_filed_return, { filed_return_id: 'alv-same-q2', filed_return_period: '2026-Q2' });
+  assert.equal(accrualAudit.corrects_period, undefined, 'a manual journal corrects no journal');
+  const taxedInside = await adjust({ client_id: same, reason: 'Synthetic June purchase entered late', journal_date: '2026-06-30', lines: taxed });
+  assert.equal(taxedInside.status, 409, JSON.stringify(taxedInside.body));
+  assert.equal(taxedInside.body.code, 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN');
+  assert.deepEqual(taxedInside.body.details.tax_moved, [{ key: 'control_leg:alv_input_deductible', currency: 'EUR', amount: 25.5 },
+    { key: 'tax_code:ALV_25_5_INPUT', currency: 'EUR', amount: 100 }]);
+  // The same day once the period is locked: the lock refuses both first.
+  await lockPeriod(pool, same, `${same}-june`, '2026-06-01', '2026-06-30');
+  for (const lines of [untaxed, taxed]) {
+    const lockedDay = await adjust({ client_id: same, reason: 'Synthetic entry into a locked month', journal_date: '2026-06-30', lines });
+    assert.equal(lockedDay.status, 409, JSON.stringify(lockedDay.body));
+    assert.equal(lockedDay.body.code, 'LEDGER_ADJUSTMENT_DATE_LOCKED');
+  }
 });
 
 test('real PG (FI): Donna\'s late-bank-line reversal of an entry in a filed return: refusal recorded once, no repost; a person\'s reversal self-heals it', { skip }, async t => {
@@ -338,7 +401,7 @@ test('real PG (FI): Donna\'s late-bank-line reversal of an entry in a filed retu
   const doc = (await pool.query("select payload->'settlement_entry' as entry from documents where id='doc-cash'")).rows[0].entry;
   assert.equal(doc.reversal_refusal.code, 'LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN');
   assert.equal(doc.reversal_refusal.details.filed_return_id, 'alv-settle-q2');
-  assert.deepEqual(doc.reversal_refusal.details.tax_moved, [{ tax_type: 'ALV_25_5_INPUT', currency: 'EUR', amount: -GROSS }]);
+  assert.deepEqual(doc.reversal_refusal.details.tax_moved, [{ key: 'tax_code:ALV_25_5_INPUT', currency: 'EUR', amount: -GROSS }]);
   assert.equal(doc.late_bank_line.needs_ledger_adjustment, true);
   assert.equal(doc.reversal, undefined);
   const target = (await pool.query('select apply_status,apply_error from proposal_targets where proposal_id=$1', [documentSettlementReversalProposalId('doc-cash')])).rows[0];

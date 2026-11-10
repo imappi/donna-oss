@@ -235,7 +235,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  const filedBlock=(await tx('personal')).payload.coding_correction_required;
  assert.equal(filedBlock.status,'pending');assert.equal(filedBlock.recovery.state,'blocked');
  assert.equal(filedBlock.recovery.details.filed_return_id,'alv-2025-q1');
- assert.deepEqual(filedBlock.recovery.details.tax_moved,[{tax_type:'ALV_25_5_INPUT',currency:'EUR',amount:-41.51},{tax_type:'ALV_OUT_OF_SCOPE',currency:'EUR',amount:52.1}]);
+ assert.deepEqual(filedBlock.recovery.details.tax_moved,[{key:'control_account:2940',currency:'EUR',amount:-10.59},{key:'tax_code:ALV_25_5_INPUT',currency:'EUR',amount:-41.51}]);
  assert.equal(convergenceForTransaction(await tx('personal')).reason,'posted_evidence_correction_blocked:LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN');
  assert.equal((await pool.query("select count(*)::int n from ledger_journals where correction_of_journal_id=(select payload->>'ledger_journal_id' from transactions where id='personal')")).rows[0].n,0);
  assert.equal(await failureCount('personal'),filedFailures+1);
