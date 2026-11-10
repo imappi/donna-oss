@@ -5,6 +5,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolvePostingPolicy } from '../postingPolicy.js';
+import { alvCodeNeedsRegistration } from './postingPolicy.js';
+import { ALV_CODES } from './alvCodes.js';
 
 const policy = resolvePostingPolicy({ jurisdiction: 'fi' });
 const registered = { alv_registration: { status: 'registered', registered_from: '2020-01-01' } };
@@ -23,9 +25,8 @@ test('FI: a business recorded as not ALV-registered gets no ALV-coded bank-line 
     ['explicit input code on a purchase', expense({ tax_type: 'ALV_25_5_INPUT', xero_tax_type: 'ALV_25_5_INPUT' }), purchase],
     ['a treatment that resolves to an input code', expense({ tax_treatment: 'ALV 25,5 %' }), purchase],
     ['explicit output code on a sale', revenue({ tax_type: 'ALV_25_5_OUTPUT', xero_tax_type: 'ALV_25_5_OUTPUT' }), sale],
-    ['a zero-rated sale', revenue({ tax_type: 'ALV_0_OUTPUT', xero_tax_type: 'ALV_0_OUTPUT' }), sale],
-    ['an EU service acquisition', expense({ tax_type: 'ALV_EU_SERVICE_ACQUISITION', xero_tax_type: 'ALV_EU_SERVICE_ACQUISITION' }), purchase],
-    ['an out-of-scope code', expense({ tax_type: 'ALV_OUT_OF_SCOPE', xero_tax_type: 'ALV_OUT_OF_SCOPE' }), purchase]
+    ['an EU service acquisition (self-assessed tax and a deduction)', expense({ tax_type: 'ALV_EU_SERVICE_ACQUISITION', xero_tax_type: 'ALV_EU_SERVICE_ACQUISITION' }), purchase],
+    ['an import (self-assessed tax and a deduction)', expense({ tax_type: 'ALV_IMPORT', xero_tax_type: 'ALV_IMPORT' }), purchase]
   ]) {
     assert.throws(() => assertPostable({ coding, transaction, profile: notRegistered }),
       refusedWith('TRANSACTION_ALV_REGISTRATION_REQUIRED'), label);
@@ -56,6 +57,26 @@ test('FI: the registration rule binds an explicit ALV code even while the rollou
   // Switch off, no ALV code: the line posts exactly as before.
   const plain = expense();
   assert.deepEqual(assertPostable({ taxCodingEnabled: false, coding: plain, transaction: purchase, profile: notRegistered }), plain);
+});
+
+test('FI: registration binds exactly the codes that charge or deduct ALV (their ALV_CODES return boxes)', () => {
+  assert.deepEqual(ALV_CODES.filter(({ code }) => alvCodeNeedsRegistration(code)).map(({ code }) => code).sort(), [
+    'ALV_10_INPUT', 'ALV_10_OUTPUT', 'ALV_13_5_INPUT', 'ALV_13_5_OUTPUT', 'ALV_14_INPUT', 'ALV_14_OUTPUT',
+    'ALV_25_5_INPUT', 'ALV_25_5_OUTPUT', 'ALV_EU_ACQUISITION', 'ALV_EU_SERVICE_ACQUISITION', 'ALV_IMPORT', 'ALV_REVERSE_CHARGE_PURCHASE'
+  ]);
+  // The codes that only classify put no ALV on the books and claim nothing:
+  // an unregistered business posts them as before.
+  for (const [label, coding, transaction] of [
+    ['a zero-rated sale', revenue({ tax_type: 'ALV_0_OUTPUT', xero_tax_type: 'ALV_0_OUTPUT' }), sale],
+    ['an intra-EU supply', revenue({ tax_type: 'ALV_EU_SUPPLY', xero_tax_type: 'ALV_EU_SUPPLY' }), sale],
+    ['a construction reverse-charge sale', revenue({ tax_type: 'ALV_REVERSE_CHARGE_SALES', xero_tax_type: 'ALV_REVERSE_CHARGE_SALES' }), sale],
+    ['an exempt purchase', expense({ tax_type: 'ALV_EXEMPT', xero_tax_type: 'ALV_EXEMPT' }), purchase],
+    ['an out-of-scope purchase', expense({ tax_type: 'ALV_OUT_OF_SCOPE', xero_tax_type: 'ALV_OUT_OF_SCOPE' }), purchase],
+    ['an out-of-scope treatment', expense({ tax_treatment: 'Ei ALV' }), purchase],
+    ['a non-deductible purchase', expense({ tax_type: 'ALV_NONDEDUCTIBLE_INPUT', xero_tax_type: 'ALV_NONDEDUCTIBLE_INPUT' }), purchase]
+  ]) {
+    for (const profile of [notRegistered, {}]) assert.deepEqual(assertPostable({ coding, transaction, profile }), coding, label);
+  }
 });
 
 test('FI: what an unregistered business may still post is unchanged', () => {

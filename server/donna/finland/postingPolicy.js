@@ -44,7 +44,22 @@ export const resolveFiAlvRegistrationOnDate = ({ registration = null, onDate = n
 // `registered === true` posts. The line is never posted with its code
 // dropped: it stays unposted with this named refusal until the record is
 // corrected or the coding changes.
+//
+// Which codes: only those that put ALV on the books or claim a deduction —
+// read from each code's own ALV_CODES entry (alvCodes.js), never a list kept
+// here: an entry whose return boxes carry output/self-assessed tax (`tax`) or
+// an input deduction (`deductible`). Today: the rated domestic sale and
+// purchase codes, ALV_REVERSE_CHARGE_PURCHASE, ALV_EU_ACQUISITION,
+// ALV_EU_SERVICE_ACQUISITION and ALV_IMPORT. The codes that only classify
+// carry neither and post as before: ALV_0_OUTPUT, ALV_EU_SUPPLY,
+// ALV_EU_SERVICE_SUPPLY, ALV_REVERSE_CHARGE_SALES (a reported base, no tax),
+// ALV_EXEMPT, ALV_OUT_OF_SCOPE and ALV_NONDEDUCTIBLE_INPUT (no box at all).
+export const alvCodeNeedsRegistration = (code) => {
+  const entry = resolveAlvEntry(code);
+  return Boolean(entry && (entry.return_boxes?.tax || entry.return_boxes?.deductible));
+};
 const assertFiAlvRegistered = ({ profile = null, onDate, code, refusalCode, subject }) => {
+  if (!alvCodeNeedsRegistration(code)) return;
   const at = toIsoDay(onDate);
   const resolution = resolveFiAlvRegistrationOnDate({ registration: profile?.alv_registration ?? null, onDate: at });
   if (resolution.registered === true) return;
@@ -135,12 +150,16 @@ export const FI_POSTING_POLICY = Object.freeze({
     const suggestion = transaction.ai_suggestion || {};
     // The component writer validates every selected code against the locked source.
     // Its complete plan, rather than the summary account's tax, owns this journal.
-    // Every component carries an explicit ALV treatment (documentAllocation.js
-    // refuses one without), so the plan posts ALV codes: registration binds it.
+    // Each component carries its own explicit ALV treatment (documentAllocation.js
+    // refuses one without); registration binds every component code that
+    // charges or deducts ALV, on the line's tax side (the writer refines a
+    // component's side by its account; a rated treatment needs registration on
+    // either side).
     if (suggestion.posting_requirement === 'document_allocation') {
-      const treatments = (Array.isArray(suggestion.document_allocations) ? suggestion.document_allocations : [])
-        .map(item => item?.tax_treatment || suggestion.tax_treatment).filter(Boolean);
-      if (treatments.length) registration(entry?.code || 'document_allocation');
+      const direction = alvDirectionForTransaction(transaction, coding);
+      for (const item of Array.isArray(suggestion.document_allocations) ? suggestion.document_allocations : []) {
+        registration(resolveAlvCode({ taxType: '', taxTreatment: item?.tax_treatment || suggestion.tax_treatment || '', direction }));
+      }
       return coding;
     }
     if (['revenue', 'expense'].includes(ledgerAccountTypeFor(coding)) && entry && entry.direction !== 'both' && entry.direction !== alvDirectionForTransaction(transaction, coding)) {
