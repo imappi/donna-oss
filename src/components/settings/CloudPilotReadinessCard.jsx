@@ -4,6 +4,12 @@ import { getBookSessionIdentity } from '../../lib/bookSessionIdentity.js';
 import { cloudPilotOperation } from '../../lib/firmApi.js';
 import { isDesktopShell } from '../../lib/desktopShell.js';
 import { btnPrimary,btnChip } from '../shared/buttons.js';
+import { PILOT_CHECK_IDS,configStageLabel,pilotCheckReasonLabel,pilotCheckStatusLabel,pilotEntityStateLabel } from '../../lib/interfaceValueLabels.js';
+
+// A check's name: a known check id reads as its label, any other as "Another check".
+const checkName=(intl,id)=>PILOT_CHECK_IDS.includes(id)
+  ?intl.formatMessage({id:`mounted.settings.cloudPilot.${id}`})
+  :intl.formatMessage({id:'settings.cloudPilot.check.unknown',defaultMessage:'Another check'});
 
 function PilotProcessingReview({firmId,clientId,sessionIdentity,onSessionChanged}) {
   const intl=useIntl(),m=id=>intl.formatMessage({id:`mounted.settings.cloudPilot.${id}`});
@@ -23,7 +29,7 @@ function PilotProcessingReview({firmId,clientId,sessionIdentity,onSessionChanged
       if (result?.firm_id!==firmId || result?.client_id!==clientId || !result?.actor_id
         || (action!=='review' && result.actor_id!==review?.actor_id)) throw new Error(intl.formatMessage({id:'mounted.pilot.invalidResponse'}));
       if(action==='review')setReview(result);
-      else{setReview(null);setConfirmed(false);setNotice(action==='probe'?m('probeRequested'):m('staged')+' '+(result.entity_state||'INCOMPLETE'));}
+      else{setReview(null);setConfirmed(false);setNotice(action==='probe'?m('probeRequested'):m('staged')+' '+pilotEntityStateLabel(result.entity_state,intl.formatMessage));}
     }catch(e){if(current===version.current&&getBookSessionIdentity()===sessionIdentity){setReview(null);setConfirmed(false);setError(e.name==='AbortError'?intl.formatMessage({id:'mounted.pilot.timeout'}):e.message);}}
     finally{clearTimeout(timer);if(pending.current===controller)pending.current=null;if(current===version.current)setBusy(false);}
   };
@@ -34,10 +40,10 @@ function PilotProcessingReview({firmId,clientId,sessionIdentity,onSessionChanged
     {review&&<>
       <p role="status">{review.host_ready?m('hostReady'):m('hostIncomplete')} · {review.entity_ready?m('entityReady'):m('entityIncomplete')}</p>
       {review.expires_at&&<p>{m('expires')} <time dateTime={review.expires_at}>{intl.formatDate(review.expires_at,{dateStyle:'medium',timeStyle:'short'})}</time></p>}
-      <ul>{review.checks.map(check=><li key={check.id}>{m(check.id)}: {check.status}{check.reason?` (${check.reason})`:''}</li>)}</ul>
+      <ul>{review.checks.map(check=><li key={check.id}>{checkName(intl,check.id)}: {pilotCheckStatusLabel(check.status,intl.formatMessage)}{check.reason?` (${pilotCheckReasonLabel(check.reason,intl.formatMessage)})`:''}</li>)}</ul>
       <p>{m('probeDescription')}</p><button type="button" disabled={busy} onClick={()=>run('probe')} style={btnChip}>{m('probe')}</button>
-      <details><summary>{m('exactChanges')}</summary><p>{m('scope')}</p><ul>{review.changes.map(change=><li key={change.flag_key}><code>{change.flag_key}</code>: {change.stage}</li>)}</ul>
-        <p>{m('legacy')}</p><ul>{Object.entries(review.legacy_configuration||{}).map(([key,value])=><li key={key}><code>{key}</code>: {value??'unset'}</li>)}</ul>
+      <details><summary>{m('exactChanges')}</summary><p>{m('scope')}</p><ul>{review.changes.map(change=><li key={change.flag_key}><code>{change.flag_key}</code>: {configStageLabel(change.stage,intl.formatMessage)}</li>)}</ul>
+        <p>{m('legacy')}</p><ul>{Object.entries(review.legacy_configuration||{}).map(([key,value])=><li key={key}><code>{key}</code>: {value==null?intl.formatMessage({id:'settings.cloudPilot.notSet'}):<code>{String(value)}</code>}</li>)}</ul>
       </details>
       <p>{m('authority')}</p>
       <label style={{display:'block',margin:'12px 0'}}><input type="checkbox" checked={confirmed} disabled={busy||!review.host_ready} onChange={e=>setConfirmed(e.target.checked)}/> {m('confirm')}</label>
@@ -84,7 +90,7 @@ function PilotSendRelease({firmId,clientId,sessionIdentity,onSessionChanged}) {
       {review.draft_batches.length>0&&<ul>{review.draft_batches.map(batch=><li key={batch.id}>{batch.subject||batch.id} · {m('items',{count:batch.item_count+batch.document_ask_count})}</li>)}</ul>}
       <p>{m('effect')}</p>
       <ul>{(review.after_release.owner_channels||[]).map(channel=><li key={channel.flag_key}>
-        {m(CHANNEL_LABELS[channel.flag_key]||'ownerEmail')} (<code>{channel.flag_key}</code>): {channel.action==='stage'?m('willSwitchOn'):m('leftAsIs',{stage:channel.existing_stage})} · {onOff(channel.acts_after_release)}
+        {m(CHANNEL_LABELS[channel.flag_key]||'ownerEmail')} (<code>{channel.flag_key}</code>): {channel.action==='stage'?m('willSwitchOn'):m('leftAsIs',{stage:configStageLabel(channel.existing_stage,intl.formatMessage)})} · {onOff(channel.acts_after_release)}
       </li>)}<li>{m('autoSend')}: {onOff(review.after_release.firm_auto_send_client_asks)}</li></ul>
       {review.after_release.owner_email_recipient&&<p>{m('recipient',{email:review.after_release.owner_email_recipient})}</p>}
       {review.after_release.owner_email_missing&&<p><strong>{m('noOwnerEmail')}</strong></p>}

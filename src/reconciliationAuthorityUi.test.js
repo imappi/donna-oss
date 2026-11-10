@@ -13,8 +13,9 @@
 //     transaction artifact, fed by the mounted reconcile panel.
 import test, { before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdtemp, rm, readFile, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
@@ -61,7 +62,11 @@ before(async () => {
   }
   ({ createRoot } = await import('react-dom/client'));
   globalThis.fetch = async (url, init = {}) => { calls.push({ url: String(url), ...init }); return responder(String(url), init); };
-  directory = await mkdtemp(resolve('.recon-authority-ui-test-'));
+  // The bundle is written to the system temp directory, never the repository
+  // root; a node_modules link beside it lets its external imports resolve. The
+  // after() hook removes the directory (link included, never its target).
+  directory = await mkdtemp(join(tmpdir(), 'recon-authority-ui-test-'));
+  await symlink(resolve('node_modules'), join(directory, 'node_modules'), 'dir');
   await build({
     stdin: { contents: "export {default as Held} from './src/components/financials/HeldMatchAuthority.jsx'; export {default as Grants} from './src/components/ReconciliationAuthorityGrants.jsx'; export {default as Workspace} from './src/components/FirmClientWorkspace.jsx'; export {LocaleProvider} from './src/i18n/LocaleProvider.jsx';", resolveDir: process.cwd() },
     outfile: `${directory}/bundle.mjs`, bundle: true, platform: 'node', format: 'esm', packages: 'external', jsx: 'automatic', loader: { '.css': 'empty' }, define: { 'import.meta.env': '{}' }, logLevel: 'silent'

@@ -14,6 +14,13 @@ import {
 } from '../lib/teamRosterView.js';
 import { BidiText, IdentifierText } from '../i18n/BidiText.jsx';
 import { useInterfaceLocale } from '../i18n/LocaleProvider.jsx';
+import {
+  authorityGrantStatusLabel,
+  inviteEmailReasonLabel,
+  inviteEmailStatusWord,
+  seatRoleUnknownLabel,
+  teamGrantActionLabel
+} from '../lib/interfaceValueLabels.js';
 
 // The Team screen — the bench made visible (design-donna-specialist-roles.md
 // §4/§6). Buzz scale kept from the S3 preview: big cards, big mascots, one
@@ -149,6 +156,7 @@ const TEAMMATES = [
 // thread and no forms.
 const RoleDesk = ({ mate, role, busy, onAction, onClose }) => {
   const intl = useIntl();
+  const { formatAmount, formatDate } = useInterfaceLocale();
   const message = (id, values) => intl.formatMessage({ id }, values);
   const grants = role?.grants || [];
 
@@ -174,16 +182,26 @@ const RoleDesk = ({ mate, role, busy, onAction, onClose }) => {
       {grants.map((grant) => (
         <div key={grant.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
           <span style={{ fontSize: 13.5, color: D.ink, ...D.tabular }}>{(() => {
+            // Every inserted value reads in the interface language: the action
+            // as a label, the ceiling and dates through the formatter; the
+            // scope key stays a stored key.
             const parts = grantSummaryParts(grant);
+            const action = teamGrantActionLabel(grant.action_type, intl.formatMessage);
+            const day = (value) => {
+              try { return formatDate(value); } catch { return value; }
+            };
+            const ceiling = (() => {
+              try { return formatAmount(Number(parts.amount), { currency: null }); } catch { return String(parts.amount); }
+            })();
             let summary = parts.scopeKey
-              ? message('mounted.team.grant.scope', { action: parts.action, scope: parts.scopeKey })
-              : parts.action;
-            if (parts.amount != null && parts.currency) summary = message('mounted.team.grant.ceiling', { summary, amount: parts.amount, currency: parts.currency });
-            if (parts.expiresAt) summary = message('mounted.team.grant.until', { summary, date: parts.expiresAt });
-            else if (parts.reviewAfter) summary = message('mounted.team.grant.review', { summary, date: parts.reviewAfter });
+              ? message('mounted.team.grant.scope', { action, scope: parts.scopeKey })
+              : action;
+            if (parts.amount != null && parts.currency) summary = message('mounted.team.grant.ceiling', { summary, amount: ceiling, currency: parts.currency });
+            if (parts.expiresAt) summary = message('mounted.team.grant.until', { summary, date: day(parts.expiresAt) });
+            else if (parts.reviewAfter) summary = message('mounted.team.grant.review', { summary, date: day(parts.reviewAfter) });
             return summary;
           })()}</span>
-          {grant.status !== 'active' && <StatusChip label={grant.status} tone="amber" />}
+          {grant.status !== 'active' && <StatusChip label={authorityGrantStatusLabel(grant.status, intl.formatMessage)} tone="amber" />}
         </div>
       ))}
       <div style={{ fontSize: 12.5, color: D.inkMute, marginTop: 10 }}>
@@ -236,7 +254,7 @@ const SeatCard = ({ seat, entities = [], onResendInvite = null, resendBusy = fal
       </div>
       <div style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: '-0.005em' }}><BidiText direction="auto">{seat.name || seat.email}</BidiText></div>
       <div style={{ marginTop: 5, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <StatusChip label={SEAT_ROLE_LABELS[seat.seat_role] ? message(SEAT_ROLE_LABELS[seat.seat_role]) : seat.seat_role} tone="ok" />
+        <StatusChip label={SEAT_ROLE_LABELS[seat.seat_role] ? message(SEAT_ROLE_LABELS[seat.seat_role]) : seatRoleUnknownLabel(intl.formatMessage)} tone="ok" />
         {seat.status !== 'active' && (
           <StatusChip
             label={message(seat.status === 'invited' ? 'mounted.team.invited' : 'mounted.team.suspended')}
@@ -247,8 +265,8 @@ const SeatCard = ({ seat, entities = [], onResendInvite = null, resendBusy = fal
             §4.5): everywhere the seat appears, the affiliation shows. */}
         {seat.affiliation === 'external' && <StatusChip label={message('mounted.team.external')} tone="amber" />}
         {emailStatus && emailStatus !== 'sent' && (
-          <span title={seat.invite_email_reason || undefined}>
-            <StatusChip label={message('mounted.team.inviteEmailStatus', { status: emailStatus })} tone="amber" />
+          <span title={seat.invite_email_reason ? inviteEmailReasonLabel(seat.invite_email_reason, intl.formatMessage) : undefined}>
+            <StatusChip label={message('mounted.team.inviteEmailStatus', { status: inviteEmailStatusWord(emailStatus, intl.formatMessage) })} tone="amber" />
           </span>
         )}
       </div>
@@ -470,7 +488,7 @@ const TeamPanel = ({
       const emailStatus = result?.invite_email?.status || 'skipped';
       setInviteNotice(message(
         emailStatus === 'sent' ? 'mounted.team.inviteSent' : 'mounted.team.inviteStatus',
-        { email: result?.seat?.email || '', status: emailStatus }
+        { email: result?.seat?.email || '', status: inviteEmailStatusWord(emailStatus, intl.formatMessage) }
       ));
       setInviteOpen(false);
       setInviteForm(emptyInvite);
@@ -491,7 +509,11 @@ const TeamPanel = ({
       const emailStatus = result?.invite_email?.status || 'skipped';
       setInviteNotice(message(
         emailStatus === 'sent' ? 'mounted.team.resendSent' : 'mounted.team.resendStatus',
-        { email: seat.email, status: emailStatus, reason: result?.invite_email?.reason || 'none' }
+        {
+          email: seat.email,
+          status: inviteEmailStatusWord(emailStatus, intl.formatMessage),
+          reason: result?.invite_email?.reason ? inviteEmailReasonLabel(result.invite_email.reason, intl.formatMessage) : 'none'
+        }
       ));
       await reloadSeats();
     } catch (err) {
