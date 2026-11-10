@@ -595,6 +595,18 @@ Rules:
 - confidence is 0..1: how sure a competent bookkeeper would be of this disposition given only the document header + firm context.
 - Return ONLY valid JSON. No markdown, no commentary.`;
 
+// The language of the one owner-facing field (askPipeline's drafter rule):
+// `language` is the owner's (preferredOwnerTemplateLanguage), carried on
+// firmContext.ownerLanguage by the caller that read the client profile. It
+// governs only how owner_question is WRITTEN; the decision, the answer shape
+// and every other field are untouched. Absent ⇒ the prompt is the historical
+// one, byte for byte.
+export const ownerQuestionLanguageInstruction = (language) => (language ? `
+
+Owner language: "${language}" (ISO 639-1; "fi" = Finnish, "en" = English). The business owner reads "owner_question", so write that question entirely in this language, in plain everyday words (in Finnish, the informal sinä form). Keep amounts, currencies, dates, counterparty and company names, filenames and document identifiers exactly as they appear in the input. Every other field, including "reasoning", stays in English. The language changes nothing about what you decide.` : '');
+export const buildDocumentDispositionSystemPrompt = ({ ownerLanguage = null } = {}) =>
+  `${SYSTEM_PROMPT}${ownerQuestionLanguageInstruction(ownerLanguage)}`;
+
 // Pure prompt builder: the parsed document HEADER (never raw content —
 // INV-12-adjacent PII discipline: extracted fields only) + the firm context
 // the bank-line producer renders (identity anchor, known counterparties) +
@@ -752,7 +764,7 @@ export const proposeDocumentDisposition = async ({
   const materialityCeiling = materialityPolicy.ceiling;
   try {
     const result = await proposeMatchesViaAnthropic({
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: buildDocumentDispositionSystemPrompt({ ownerLanguage: firmContext?.ownerLanguage }),
       userPrompt,
       candidateBankLines: [],
       model,
@@ -845,7 +857,9 @@ const auditDispositionEvent = async ({ client, firmId, clientId, action, documen
 // on a failed mint or audit so the per-doc transaction rolls back: a
 // needs_human verdict cannot commit without its lane.
 const resolveNeedsHumanLane = async ({
-  client, firmId, clientId, document, semantic, mode, evaluationId, laneDeps = null
+  client, firmId, clientId, document, semantic, mode, evaluationId, laneDeps = null,
+  // The owner language the sweep already read for the prompt; absent ⇒ read here.
+  ownerLanguage = null
 }) => {
   const deps = { ...defaultNeedsHumanLaneDeps(), ...(laneDeps || {}) };
   const reason = semantic.unmatchable_reason || DISPOSITION_DEFAULT_REASON.needs_human;
@@ -920,7 +934,7 @@ const resolveNeedsHumanLane = async ({
     firmId,
     clientId,
     documentId: document.id,
-    question: buildNeedsHumanOwnerQuestion({ document, semantic, language: await readOwnerLanguage({ client, firmId, clientId }) }),
+    question: buildNeedsHumanOwnerQuestion({ document, semantic, language: ownerLanguage || await readOwnerLanguage({ client, firmId, clientId }) }),
     evidenceType,
     actorId: 'system',
     requestContext: {
@@ -958,7 +972,8 @@ const stampDocumentDisposition = async ({
   // which must resolve the answered request FIRST (else the writer's
   // open-ask dedup would collapse the clarification onto it).
   needsHumanLane = 'sweep',
-  laneDeps = null
+  laneDeps = null,
+  ownerLanguage = null
 }) => {
   const verdict = DISPOSITION_TO_VERDICT[semantic.disposition] || 'no_match';
   const reason = semantic.unmatchable_reason || DISPOSITION_DEFAULT_REASON[semantic.disposition] || null;
@@ -970,7 +985,7 @@ const stampDocumentDisposition = async ({
   });
   let lane = null;
   if (semantic.disposition === 'needs_human' && needsHumanLane === 'sweep') {
-    lane = await resolveNeedsHumanLane({ client, firmId, clientId, document, semantic, mode, evaluationId, laneDeps });
+    lane = await resolveNeedsHumanLane({ client, firmId, clientId, document, semantic, mode, evaluationId, laneDeps, ownerLanguage });
   }
   const dispositionReceipt = {
     // RT-10: the lane a needs_human verdict took (owner_ask / machine_rerun /
@@ -1355,6 +1370,12 @@ export const runDocumentDispositionForClient = async ({
     counterpartyRole: allMoneyIn ? 'customer' : 'supplier',
     paymentStatusIsSettlementSignal: false
   });
+  // The owner's language, read once per sweep through the one resolver: the
+  // prompt is told which language to write owner_question in, and the mint
+  // wraps it in the same language. A failed read leaves the prompt historical
+  // and the mint reads again.
+  let ownerLanguage = null;
+  try { ownerLanguage = await readOwnerLanguage({ client, firmId, clientId }); } catch { ownerLanguage = null; }
 
   // A claude-family policy rung rides the anthropic transport as a model
   // override (same as the fixed sweeps); a non-claude rung rides `transport`.
@@ -1383,7 +1404,7 @@ export const runDocumentDispositionForClient = async ({
     try {
       semantic = await proposeDocumentDisposition({
         document,
-        firmContext: { clientIdentity, knownCounterparties, bankFeedCoverage, ...(jevEnabled ? { localEvidence, jevProvider:await makeJevTrialProvider({client,firmId,clientId,resourceType:'document',resourceId:document.id,decisionKind:'document_disposition'}) } : {}) },
+        firmContext: { clientIdentity, knownCounterparties, bankFeedCoverage, ownerLanguage, ...(jevEnabled ? { localEvidence, jevProvider:await makeJevTrialProvider({client,firmId,clientId,resourceType:'document',resourceId:document.id,decisionKind:'document_disposition'}) } : {}) },
         apiKey,
         model,
         transport,
@@ -1449,7 +1470,7 @@ export const runDocumentDispositionForClient = async ({
     try {
       await client.query('begin');
       ({ stamped, settled, superseded, lane } = await stampDocumentDisposition({
-        client, firmId, clientId, document, semantic, model, mode: stats.mode, laneDeps
+        client, firmId, clientId, document, semantic, model, mode: stats.mode, laneDeps, ownerLanguage
       }));
       await client.query('commit');
     } catch (error) {

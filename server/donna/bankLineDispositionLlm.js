@@ -58,6 +58,8 @@ import { makeJevTrialProvider } from './jevTrialProvider.js';
 import { extractJson } from './extractJson.js';
 import { jevDispositionEnabled, loadJevDispositionEvidence, decideJevDisposition, withJevHandoff } from './jevDisposition.js';
 import { llmCall } from './llmCall.js';
+import { amountText, dayText } from './salesRecognitionGap.js';
+import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 import { resolveOpenAiCompatibleEndpoint, shapeOpenAiCompatibleRequest } from './providerEndpoints.js';
 import { canonicalMerchantPattern } from './transactionIntel.js';
 import {
@@ -280,9 +282,35 @@ const isoDay = (value) => {
   }
   return String(value).slice(0, 10);
 };
-export const buildNeedsHumanOwnerQuestion = ({ transaction = {}, direction = DEFAULT_DIRECTION, semantic = {} } = {}) => {
+// The Finnish header names the amount, day and bank text inside the brackets
+// so nothing from the line has to be inflected:
+// "Maksu tililtä (41,20 EUR, 14.5.2026, "KAUPPA ESIMERKKI")".
+const finnishBankLineHeader = ({ dir, amount, transaction, day, desc }) => {
+  const parts = [
+    Number.isFinite(amount) ? amountText(amount, transaction.currency, 'fi') : '',
+    day ? dayText(day, 'fi') : '',
+    desc ? `"${desc}"` : ''
+  ].filter(Boolean);
+  const kind = dir === 'money_in' ? 'Tilille tullut maksu' : 'Maksu tililtä';
+  return parts.length ? `${kind} (${parts.join(', ')})` : kind;
+};
+
+// `language` is the owner's (preferredOwnerTemplateLanguage); the caller that
+// holds the client profile passes it. The Finnish question is wholly
+// code-built: the verdict's `reasoning` is an internal English receipt, so it
+// is not spliced into Finnish text (the English wording keeps it, unchanged).
+export const buildNeedsHumanOwnerQuestion = ({ transaction = {}, direction = DEFAULT_DIRECTION, semantic = {}, language = 'en' } = {}) => {
   const dir = normalizeDirection(direction);
   const amount = Number(transaction?.[dir] ?? transaction?.amount ?? 0);
+  if (language === 'fi') {
+    const header = finnishBankLineHeader({
+      dir, amount, transaction, day: isoDay(transaction.transaction_date),
+      desc: String(transaction.description || transaction.raw_description || '').trim().slice(0, 80)
+    });
+    return dir === 'money_in'
+      ? `${header}: Emme tunnistaneet, mistä tässä tilillesi tulleessa rahassa on kyse. Mistä raha tuli: asiakkaan maksu, maksupalvelun tilitys, laina tai siirto, vai palautus? Onko siitä jokin tosite?`
+      : `${header}: Emme tunnistaneet, mistä tässä maksussa on kyse. Oliko se yrityksen kulu, ja mihin se liittyi? Onko sinulla siitä kuitti tai lasku?`;
+  }
   const money = `${transaction.currency ? `${transaction.currency} ` : ''}${Number.isFinite(amount) ? amount.toFixed(2) : '?'}`;
   const day = isoDay(transaction.transaction_date);
   const when = day ? ` on ${day}` : '';
@@ -340,6 +368,11 @@ const readPriorDispositionLane = async ({ client, firmId, clientId, transactionI
 // Decide the needs_human lane inside the caller's transaction and write its
 // receipts; returns the lane the verdict payload carries. Throws on a failed
 // mint/audit so the per-line transaction rolls back.
+// The owner's language for a question this lane mints: one profile read
+// through the one resolver (the pure builder above takes the result).
+const readOwnerLanguage = async ({ client, firmId, clientId }) => preferredOwnerTemplateLanguage(
+  (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows?.[0]?.profile);
+
 const resolveNeedsHumanLane = async ({ client, firmId, clientId, transaction, semantic, direction, laneDeps = null }) => {
   const deps = { ...defaultNeedsHumanLaneDeps(), ...(laneDeps || {}) };
   const reason = semantic.unmatchable_reason || DISPOSITION_DEFAULT_REASON.needs_human;
@@ -405,7 +438,7 @@ const resolveNeedsHumanLane = async ({ client, firmId, clientId, transaction, se
     firmId,
     clientId,
     transactionId: transaction.id,
-    question: buildNeedsHumanOwnerQuestion({ transaction, direction, semantic }),
+    question: buildNeedsHumanOwnerQuestion({ transaction, direction, semantic, language: await readOwnerLanguage({ client, firmId, clientId }) }),
     evidenceType: NEEDS_HUMAN_ASK_EVIDENCE_TYPE,
     actorId: 'system',
     requestContext: {
