@@ -1050,7 +1050,10 @@ export const postIssuanceArLeg = async (client, {
     OUTBOUND_AR_AMBIGUOUS_SALES_TAX_ACCOUNT: 'ambiguous_sales_tax_account',
     SALES_INVOICE_TAX_POSTING_UNAVAILABLE: 'sales_tax_unwired_market',
     OUTBOUND_INVOICING_DISABLED: 'outbound_invoicing_dark',
-    LEDGER_LOCKED_PERIOD_IMMUTABLE: 'locked_period'
+    LEDGER_LOCKED_PERIOD_IMMUTABLE: 'locked_period',
+    // The invoice is dated inside a filed VAT return and its journal changes
+    // what that return reads (db/ledger.js assertJournalDateOutsideFiledReturn).
+    LEDGER_JOURNAL_DATE_IN_FILED_RETURN: 'filed_return_period'
   };
   await client.query('savepoint outbound_ar_post');
   try {
