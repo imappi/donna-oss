@@ -414,9 +414,10 @@ export const buildResolvedReplyText = ({ resolved = {}, fallback = '', language 
     }
     return clarification.trim();
   }
-  // A factual answer whose writer says in one line what it recorded (the
-  // registration lane, taxRegistrationReply.js) speaks that line, already in
-  // the owner's language.
+  // A factual answer whose writer says in one line what it did with it (the
+  // registration lane, taxRegistrationReply.js: recorded, or not recorded)
+  // speaks that line, already in the owner's language. The worker keeps the
+  // same line on the answered question (ownerReplyNotice.js).
   if (recode?.applied === true && typeof recode.owner_notice === 'string' && recode.owner_notice.trim()) return recode.owner_notice.trim();
   if (!recode || recode.applied !== true) {
     if (resolved?.evidence_request?.status === 'replied' || recode?.error || recode?.skipped) {

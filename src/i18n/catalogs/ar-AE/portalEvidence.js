@@ -80,6 +80,7 @@ const portalEvidence = Object.freeze({
   'portal.reply.skip': 'تخطي الآن',
   'portal.reply.sendNoteEvidence': 'إرسال الملاحظة والمستندات',
   'portal.reply.sendEvidence': 'إرسال المستندات المؤيدة',
+  'portal.answered.title': 'ما فعلته Donna بإجاباتك',
   'portal.reply.sendNote': 'إرسال الملاحظة'
 });
 

@@ -121,13 +121,21 @@ const FI_TAX_REGISTRATION = Object.freeze({
         ? 'We cannot record the VAT registration yet. Please tell us the exact date the registration started, or send a copy of the Tax Administration decision or a business register extract.'
         : 'Thanks for your reply. We could not tell from it whether the business is in the Finnish VAT register. Please answer yes or no, and if yes, the date the registration started.';
   },
-  recordedNotice: ({ language = 'fi', record = null } = {}) => {
+  // replyInvitation: false drops the closing invitation, for a surface where
+  // the closed question has no reply (ownerReplyNotice.js).
+  recordedNotice: ({ language = 'fi', record = null, replyInvitation = true } = {}) => {
     const from = record?.registered_from || '', until = record?.registered_until || '';
     if (language === 'fi') return `${record?.status === 'not_registered' ? 'Kirjasimme, että yritys ei ole arvonlisäverorekisterissä.'
-      : until ? `Kirjasimme, että yritys oli arvonlisäverorekisterissä ${from ? `${from} – ` : ''}${until}.` : `Kirjasimme, että yritys on arvonlisäverorekisterissä ${from} alkaen.`} Vastaa tähän, jos tieto ei ole oikein.`;
+      : until ? `Kirjasimme, että yritys oli arvonlisäverorekisterissä ${from ? `${from} – ` : ''}${until}.` : `Kirjasimme, että yritys on arvonlisäverorekisterissä ${from} alkaen.`}${replyInvitation ? ' Vastaa tähän, jos tieto ei ole oikein.' : ''}`;
     return `${record?.status === 'not_registered' ? 'We recorded that the business is not in the Finnish VAT register.'
-      : until ? `We recorded that the business was in the Finnish VAT register ${from ? `from ${from} ` : ''}until ${until}.` : `We recorded that the business has been in the Finnish VAT register since ${from}.`} Reply here if that is not right.`;
-  }
+      : until ? `We recorded that the business was in the Finnish VAT register ${from ? `from ${from} ` : ''}until ${until}.` : `We recorded that the business has been in the Finnish VAT register since ${from}.`}${replyInvitation ? ' Reply here if that is not right.' : ''}`;
+  },
+  // The answer was saved but not recorded: the record is locked or the answer
+  // would remove registered days it holds (taxRegistrationReply.js). One fixed
+  // line for both; a person must check it before the record changes.
+  notRecordedNotice: ({ language = 'fi' } = {}) => (language === 'fi'
+    ? 'Vastauksesi on tallennettu, mutta emme muuttaneet yrityksen arvonlisäverorekisteröinnistä olevaa tietoa. Kirjanpitäjän on tarkistettava asia ennen kuin tietoa muutetaan.'
+    : 'Your answer is saved, but we did not change the Finnish VAT register details we hold for the business. Your accountant needs to check it before the record is changed.')
 });
 
 // Finnish evidence rule: every rated purchase code needs its settled source,
