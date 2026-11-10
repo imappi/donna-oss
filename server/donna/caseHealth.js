@@ -56,7 +56,7 @@ import {
 } from './reconcileConvergenceState.js';
 import { buildCaseTimeline } from './caseTimeline.js';
 import { summarizeBankLineDispositions } from './bankLineDispositionShape.js';
-import { codingPolicyFailuresForTransaction, CODING_EVIDENCE_RECONSIDERED_REFUSALS, POSTING_SOURCE_RECHECK_REFUSALS, CODING_CONFLICT_MAX_RECONSIDERATIONS, codingReconsiderationAttempts, unsettledTreatmentOnClearSource, refusedCrossWindowGroup } from './codingPolicyRecovery.js';
+import { codingPolicyFailuresForTransaction, CODING_EVIDENCE_RECONSIDERED_REFUSALS, POSTING_SOURCE_RECHECK_REFUSALS, codingReconsiderationsLeft, unsettledTreatmentOnClearSource, refusedCrossWindowGroup } from './codingPolicyRecovery.js';
 
 // Q7 — the typed recovery classes (the contract's enum, exactly; never
 // stretched). A non-terminal case NONE of these honestly fits answers
@@ -646,7 +646,8 @@ export const buildCaseHealth = ({
       // Attempts count only under the current coding contract (the worker's
       // own rule, codingPolicyRecovery.js): a receipt from an earlier contract
       // is a row the clock re-admits, so it is processing, never stuck.
-      const attemptsLeft = codingReconsiderationAttempts(reconsideration) < CODING_CONFLICT_MAX_RECONSIDERATIONS;
+      // A refusal on a date the record says not registered has one re-run (its own count).
+      const attemptsLeft = codingReconsiderationsLeft(reconsideration, holder);
       // H-5a: an unsure treatment the verified source's clear printed tax
       // should have settled is owned by no worker — the re-read is settled and
       // the clock never re-admits it. It renders stuck with its named cause.

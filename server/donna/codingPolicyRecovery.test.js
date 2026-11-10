@@ -153,3 +153,15 @@ for (const code of [
     assert.deepEqual(codingPolicyFailuresForTransaction({ transaction: applied, auditEvents: [receipt, recovered] }), []);
   });
 }
+
+test('a refusal on a date the record says not registered gets one coder re-run, counted on its own', async () => {
+  const { codingReconsiderationsLeft, CODING_RECONSIDERATION_CONTRACT } = await import('./codingPolicyRecovery.js');
+  const notRegistered = { code: 'TRANSACTION_ALV_REGISTRATION_REQUIRED', details: { registered: false } };
+  const unknown = { code: 'TRANSACTION_ALV_REGISTRATION_REQUIRED', details: { registered: null } };
+  const receipt = (fields) => ({ contract: CODING_RECONSIDERATION_CONTRACT, ...fields });
+  assert.equal(codingReconsiderationsLeft(receipt({ attempts: 2 }), notRegistered), true, 'attempts spent on another refusal do not count');
+  assert.equal(codingReconsiderationsLeft(receipt({ attempts: 2, not_registered_attempts: 1 }), notRegistered), false);
+  assert.equal(codingReconsiderationsLeft(receipt({ attempts: 2, not_registered_attempts: 1 }), unknown), true, 'an unknown record keeps the usual bound');
+  assert.equal(codingReconsiderationsLeft(receipt({ attempts: 3 }), unknown), false);
+  assert.equal(codingReconsiderationsLeft({ contract: 'earlier', not_registered_attempts: 1 }, notRegistered), true, 'an earlier contract counts nothing');
+});

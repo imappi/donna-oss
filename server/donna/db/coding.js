@@ -37,6 +37,7 @@ import { checkEntityReadinessAdmissionWithClient, EntityReadinessAdmissionError 
 // the machine, the legacy-input mapping, the DTO projection, the writer.
 import { applyCodingTransition, codingStateClosesReviewCase, isDecidedCodingState, legacyReviewStateFor, nextCodingStateForPatch, normalizeCodingState, normalizeTransactionReviewState, reviewCaseClosesForLegacyState } from '../codingState.js';
 import { classifyTaxCodeForPolicy } from '../taxCodeJurisdiction.js';
+import { withoutTaxTreatmentsFor } from '../postingPolicy.js';
 import { requireCodingPolicyForClient, CodingPolicyError, isCodingPolicyError, assertCodingPolicyReceipt, codingPolicyReceipt } from '../codingPolicy.js';
 import { recordCodingPolicyFailure, recordCodingPolicyRecovery, ACTIVE_CODING_POLICY_FAILURE_SQL, REFUSED_CROSS_WINDOW_GROUP_SQL } from '../codingPolicyRecovery.js';
 import { enrichCodingWithXeroAccount } from '../xeroAccountMatcher.js';
@@ -466,7 +467,9 @@ export const assertCodingSuggestionForPolicy = (policy, suggestion = {}, { requi
   assertNativeCodingChoice(policy.nativeMenu, suggestion);
   const taxCode = suggestion.tax_treatment;
   if (taxCode == null || String(taxCode).trim() === '') return;
-  if (classifyTaxCodeForPolicy(policy, taxCode) !== 'valid') {
+  // The country's no-VAT treatment is its own label, offered only on a line
+  // the record says not registered; the posting policy decides the date.
+  if (classifyTaxCodeForPolicy(policy, taxCode) !== 'valid' && !withoutTaxTreatmentsFor(policy.jurisdiction).includes(String(taxCode).trim())) {
     throw new CodingPolicyError('coding_policy_invalid', { jurisdiction: policy.jurisdiction, details: { reason: 'tax_code_not_in_policy' } });
   }
 };
