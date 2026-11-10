@@ -24,7 +24,7 @@ import { OY_WATCH_ACCOUNT_CODES } from './tilikartta.js';
 import { evaluateTaxAdjustments } from './taxAdjustments.js';
 import { CUTOVER_CONTROL_CODES, cutoverNetWorthForTaxYear, evaluateCutoverPack } from './cutover.js';
 import { evaluateEvlDepreciation } from './evlDepreciation.js';
-import { alvReturnBoxMapProvenance, buildAlvReturnFromLedgerLines, FINLAND_ALV_FILING_FLAG_KEY, FINLAND_ALV_RETURN_FLAG_KEY, resolveAlvPeriod, verokausiCadenceForProfile } from './alvReturn.js';
+import { alvReturnBoxMapProvenance, buildAlvReturnFromLedgerLines, FINLAND_ALV_FILING_FLAG_KEY, FINLAND_ALV_RETURN_FLAG_KEY, resolveAlvPeriod, verokausiBasisForProfile } from './alvReturn.js';
 import { alvReturnConfirmQuestion } from './alvReturnRoute.js';
 import { FINLAND_ALV_CODING_FLAG_KEY } from './alvCodes.js';
 import { evaluateSuomifiMandate, SUOMIFI_MANDATE_SCOPE_TAX } from './suomifiMandate.js';
@@ -420,7 +420,10 @@ export const getFinlandAlvReturnFromDb = async ({
       'select profile from clients where firm_id = $1 and id = $2',
       [firmId, clientId]
     );
-    const verokausi = verokausiCadenceForProfile(profileResult.rows[0]?.profile || {});
+    // The basis rides along so a disagreement with alv_registration.tax_period,
+    // or a monthly default with nothing recorded, is visible — not resolved here.
+    const verokausiBasis = verokausiBasisForProfile(profileResult.rows[0]?.profile || {});
+    const verokausi = verokausiBasis.cadence;
 
     const linesResult = await client.query(
       `select ll.*, la.account_type
@@ -456,6 +459,7 @@ export const getFinlandAlvReturnFromDb = async ({
       ...computed,
       review,
       verokausi,
+      verokausi_basis: verokausiBasis,
       provenance: {
         source: 'ledger_read_model',
         readAt: readAt || null,
@@ -1771,6 +1775,39 @@ const rowToAlvReturnPayload = (row) => {
 };
 
 
+const ALV_RETURN_STATUS_WORDS = { draft_pending_confirmation: 'waiting for the owner’s confirmation', filed: 'filed' };
+
+const alvReturnAlreadyLiveRefusal = (period) => {
+  const refusal = new Error(`An ALV return for ${period.key} is already pending or filed for this client.`);
+  refusal.statusCode = 409;
+  refusal.code = 'ALV_RETURN_ALREADY_LIVE';
+  return refusal;
+};
+
+// The same dates may be reported only once. The same period key keeps its
+// existing refusal (ALV_RETURN_ALREADY_LIVE); a DIFFERENT key over the same
+// dates (a month inside a live quarter, a quarter over a live month, a year
+// over either) is ALV_RETURN_PERIOD_OVERLAP, naming what already covers them.
+const alvReturnOverlapRefusal = ({ period, live = [] }) => {
+  if (live.some((row) => row.period_key === period.key)) return alvReturnAlreadyLiveRefusal(period);
+  const named = live.map((row) => `${row.period_key} (${row.starts_on} – ${row.ends_on}, ${ALV_RETURN_STATUS_WORDS[row.status] || row.status})`);
+  const refusal = new Error(
+    `ALV return ${period.key} (${period.starts_on} – ${period.ends_on}) was not created: `
+    + `${named.length ? `the return ${named.join(', ')}` : 'another return'} already covers some of these dates for this client. `
+    + 'The same sales and purchases cannot be reported twice. A return still waiting for confirmation '
+    + 'can be cancelled first; a filed return stays as filed.'
+  );
+  refusal.statusCode = 409;
+  refusal.code = 'ALV_RETURN_PERIOD_OVERLAP';
+  refusal.details = {
+    period: { key: period.key, type: period.type, starts_on: period.starts_on, ends_on: period.ends_on },
+    overlapping: live.map((row) => ({ id: row.id, period_key: row.period_key, period_type: row.period_type, starts_on: row.starts_on, ends_on: row.ends_on, status: row.status }))
+  };
+  return refusal;
+};
+
+// Callers must hold a transaction on `client` (createAlvReturnDraftInDb does):
+// the overlap check's advisory lock is transaction-scoped.
 export const __createAlvReturnDraftWithClient = async ({
   client,
   firmId = DEFAULT_FIRM_ID,
@@ -1793,6 +1830,25 @@ export const __createAlvReturnDraftWithClient = async ({
     error.code = 'ALV_RETURN_NEEDS_REVIEW';
     throw error;
   }
+  // No two live returns of a client may cover the same date, whatever their
+  // period keys (migration 172): after a verokausi change a monthly draft
+  // inside a pending or filed quarter (or year) would report the same sales
+  // and purchases twice. The
+  // check runs in the caller's transaction under a per-client advisory lock
+  // (the same key migration 172's trigger takes), so two overlapping drafts
+  // started together serialise and the second sees the first. A cancelled
+  // return frees its dates. Nothing here changes an existing return.
+  await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [`alv-return-periods:${firmId}:${clientId}`]);
+  const live = await client.query(
+    `select id, period_key, period_type, starts_on::text as starts_on, ends_on::text as ends_on, status
+       from alv_returns
+      where firm_id = $1 and client_id = $2
+        and status in ('draft_pending_confirmation', 'filed')
+        and starts_on <= $4::date and ends_on >= $3::date
+      order by starts_on, period_key`,
+    [firmId, clientId, period.starts_on, period.ends_on]
+  );
+  if (live.rows.length) throw alvReturnOverlapRefusal({ period, live: live.rows });
   const id = `alv-return-${firmId}-${clientId}-${period.key.toLowerCase()}-${shortHash(`${Date.now()}`)}`;
   let inserted;
   try {
@@ -1805,12 +1861,9 @@ export const __createAlvReturnDraftWithClient = async ({
       [id, firmId, clientId, period.key, period.type, period.starts_on, period.ends_on, JSON.stringify(verdict), model, actorId]
     );
   } catch (error) {
-    if (error?.code === '23505') {
-      const refusal = new Error(`An ALV return for ${period.key} is already pending or filed for this client.`);
-      refusal.statusCode = 409;
-      refusal.code = 'ALV_RETURN_ALREADY_LIVE';
-      throw refusal;
-    }
+    if (error?.code === '23505') throw alvReturnAlreadyLiveRefusal(period);
+    // Migration 172's backstop fired (a row the check above could not see).
+    if (error?.code === '23P01') throw alvReturnOverlapRefusal({ period, live: [] });
     throw error;
   }
   await client.query(

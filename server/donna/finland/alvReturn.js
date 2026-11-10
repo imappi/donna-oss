@@ -71,6 +71,34 @@ export const verokausiCadenceForProfile = (profile = {}) => {
   return alias || DEFAULT_VEROKAUSI_CADENCE;
 };
 
+// verokausiBasisForProfile(profile) — WHERE the cadence above came from, so a
+// read surface can show it instead of resolving it silently. The VAT period is
+// recorded in two places that coexist by decision (D-FI13-17, see
+// alvRegistration.js): clients.profile.verokausi (what the ALV engine reads)
+// and profile.alv_registration.tax_period. This does NOT reconcile them and
+// does not change which one is used — verokausiCadenceForProfile stays the one
+// reader. It reports:
+//   • defaulted — verokausi absent or unrecognised, so the monthly default applies;
+//   • disagreement — alv_registration.tax_period is recorded and differs from
+//     the cadence in use (including a defaulted one).
+const canonicalCadence = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+  const cadence = verokausiCadenceForProfile({ verokausi: raw });
+  return cadence === DEFAULT_VEROKAUSI_CADENCE && !['month', 'monthly', 'kuukausi'].includes(raw) ? null : cadence;
+};
+export const verokausiBasisForProfile = (profile = {}) => {
+  const cadence = verokausiCadenceForProfile(profile);
+  const recorded = canonicalCadence(profile?.verokausi);
+  const taxPeriod = canonicalCadence(profile?.alv_registration?.tax_period);
+  return {
+    cadence,
+    defaulted: !recorded,
+    recorded: { verokausi: recorded, alv_registration_tax_period: taxPeriod },
+    disagreement: Boolean(taxPeriod && taxPeriod !== cadence)
+  };
+};
+
 // resolveAlvPeriod(period) — parse a verokausi key into calendar bounds.
 // Accepted shapes: 'YYYY-MM' (month), 'YYYY-QN' (quarter), 'YYYY' (year).
 // Which length a given client USES is Verohallinto-assigned client data (D3 /
