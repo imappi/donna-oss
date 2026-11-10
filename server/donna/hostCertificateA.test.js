@@ -8,11 +8,13 @@ import {
   HOST_CERTIFICATE_RENEWAL_INTERVAL_MS,
   HOST_CERTIFICATE_REQUIRED_TABLES,
   HOST_CERTIFICATE_VALIDITY_MS,
+  HOST_QUEUE_PARSE_DOCUMENT_FUNCTION_ID,
   evaluateHostCertificateFreshness,
   configPlaneCheck,
   observeHostCertificateA
 } from './hostCertificateA.js';
 import { ENTITY_READINESS_ADMISSION_FLAG } from './clientConfig.js';
+import { PARSE_DOCUMENT_FUNCTION_ID } from './desktop/parseDocumentJob.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const OBSERVED_AT = '2026-08-29T12:00:00.000Z';
@@ -240,7 +242,11 @@ test('superseded dead cron ticks are residue, unsuperseded dead work fails the h
     query: residueQuery(0), storageOps: makeStorage().ops
   });
   assert.equal(residue.status, 'PASS', 'dead cron ticks superseded by later successes do not gate the host');
-  assert.deepEqual(queueParams, [['worker-a']], 'the queue probe names the manifest cron functions');
+  // $1 the manifest cron functions (superseded by a later success); $2 the
+  // per-document parse job, accounted for by its document's stored outcome
+  // (the real-PG proof is parseDocumentDeadJobPgLifecycle.test.js).
+  assert.deepEqual(queueParams, [['worker-a'], 'parse-document'], 'the queue probe names the manifest cron functions and the parse job');
+  assert.equal(HOST_QUEUE_PARSE_DOCUMENT_FUNCTION_ID, PARSE_DOCUMENT_FUNCTION_ID, 'the observer\'s parse function id is the parse job\'s own');
   const queue = residue.checks.find(({ id }) => id === 'database_schema').detail.queue;
   assert.equal(queue.dead, 72, 'residue stays visible in the receipt');
   assert.equal(queue.dead_unsuperseded, 0);
