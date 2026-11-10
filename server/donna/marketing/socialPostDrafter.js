@@ -78,7 +78,7 @@ export const draftSocialPosts = async ({
 } = {}) => {
   const resolved = resolveMarketingProvider({ openAiConfig });
   if (!resolved.ok) {
-    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'social drafter'));
+    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'the social drafter has no fallback copy by design.'));
   }
   const wanted = Math.min(Math.max(1, Number(count) || GENERATE_POSTS_DEFAULT), GENERATE_POSTS_MAX);
 

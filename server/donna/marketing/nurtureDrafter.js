@@ -95,7 +95,7 @@ const drafterUnavailable = (message) => {
 export const draftNurtureEmail = async ({ lead, fetchImpl = fetch, openAiConfig = null } = {}) => {
   const resolved = resolveMarketingProvider({ openAiConfig });
   if (!resolved.ok) {
-    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'nurture drafter'));
+    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'the nurture drafter has no fallback copy by design.'));
   }
 
   let call;

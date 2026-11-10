@@ -180,7 +180,7 @@ const drafterUnavailable = (message) => {
 export const draftProspectDossier = async ({ prospect, fetchImpl = fetch, openAiConfig = null } = {}) => {
   const resolved = resolveMarketingProvider({ openAiConfig });
   if (!resolved.ok) {
-    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'dossier drafter'));
+    throw drafterUnavailable(marketingKeyMissingMessage(resolved, 'the dossier drafter has no fallback by design.'));
   }
 
   const includeMessage = tierCapabilities(prospect.tier).can_generate_message;

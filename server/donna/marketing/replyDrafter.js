@@ -60,7 +60,7 @@ export const triageInboundMessage = async ({ message, lead = null, prospect = nu
   if (!resolved.ok) {
     throw providerUnavailable(
       'REPLY_TRIAGE_UNAVAILABLE',
-      marketingKeyMissingMessage(resolved, 'reply triage (no deterministic fallback)')
+      marketingKeyMissingMessage(resolved, 'reply triage has no deterministic fallback by design.')
     );
   }
   const { parsed, model } = await callResponsesApi({
@@ -149,7 +149,7 @@ export const draftInboundReply = async ({
   if (!resolved.ok) {
     throw providerUnavailable(
       'REPLY_DRAFTER_UNAVAILABLE',
-      marketingKeyMissingMessage(resolved, 'reply drafter')
+      marketingKeyMissingMessage(resolved, 'the reply drafter has no fallback copy by design.')
     );
   }
   const { parsed, model } = await callResponsesApi({

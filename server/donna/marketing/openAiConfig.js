@@ -56,9 +56,11 @@ export const getOpenAiConfig = () => {
 export const resolveMarketingProvider = ({ openAiConfig = null } = {}) =>
   resolveTextLaneProvider({ providers: LANE_PROVIDERS, openAiDefaultModel: STRONG_MODEL_DEFAULT, dotEnv: readDotEnv(), openAiConfig });
 
-export const marketingKeyMissingMessage = (resolved, what) => {
+// `tail` is the drafter's own sentence, unchanged ("the nurture drafter has
+// no fallback copy by design").
+export const marketingKeyMissingMessage = (resolved, tail) => {
   const { keyName } = missingKeyNameFor(resolved, LANE_PROVIDERS);
-  return `No model key is configured (${keyName || 'ANTHROPIC_API_KEY'}); the ${what} has no fallback by design.`;
+  return `No model key is configured (${keyName || 'ANTHROPIC_API_KEY'}); ${tail}`;
 };
 
 // The llmCall options for one drafter call on the resolved provider. The
