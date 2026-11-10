@@ -19,6 +19,11 @@ import { runDocumentDispositionForClient } from './documentDispositionLlm.js';
 import { convergenceForUnmatchedDocument } from './reconcileConvergenceState.js';
 import { recoverReconciliationProviderFailures } from './reconciliationProviderFailure.js';
 
+// The first-line lane decides only on a host with its provider configured
+// (firstLineLane.js, 2026-11-10); these cases are about the lane deciding.
+process.env.TYPESAFE_API_KEY ||= 'fixture-first-line-key';
+process.env.TYPESAFE_MODEL ||= 'fixture-first-line';
+
 const resultFor = (type = 'sales_invoice') => ({ document: { id: 'doc', document_type: type, total_amount: 100, currency: 'EUR' },
   candidates: [{ id: 'bank', currency: 'EUR', money_in: type === 'sales_invoice' ? 100 : 0, money_out: type === 'sales_invoice' ? 0 : 100 }],
   decision: { terminal: 'resolve', probability: 0.36, refusals: [], plan: { allocations: [{ transaction_id: 'bank', amount_minor: 10000, currency: 'EUR' }], retained_balance_minor: 0, requests: [] } } });

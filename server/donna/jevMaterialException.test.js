@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { decideJevMaterialException, exceptionOwnerAskAllowed } from './jevMaterialException.js';
 import { __writeParsedDocumentExtractionWithClient } from './parseDocumentsDb.js';
 
+// The first-line lane decides only on a host with its provider configured
+// (firstLineLane.js, 2026-11-10); these cases are about the lane deciding.
+process.env.TYPESAFE_API_KEY ||= 'fixture-first-line-key';
+process.env.TYPESAFE_MODEL ||= 'fixture-first-line';
+
 const scopedClient = () => ({ query: async sql => ({ rows: sql.includes('select client_id, filename')
   ? [{ client_id: 'client-1', filename: 'receipt.pdf', document_type: 'receipt' }]
   : sql.includes('from client_capability_config') ? [{ flag_key: 'JEV_RECONCILIATION', stage: 'auto', source: 'test', client_id: 'client-1' }] : [] }) });

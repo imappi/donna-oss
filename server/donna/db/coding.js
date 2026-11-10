@@ -4,6 +4,7 @@ import { assertFirmAccess } from './authority.js';
 import { codingStatutoryEvidenceGap } from '../codingStatutoryEvidence.js';
 import { codingRevenueEvidenceGap } from '../codingRevenueEvidence.js';
 import { makeJevTrialProvider } from '../jevTrialProvider.js';
+import { firstLineLaneDecidesWithClient } from '../firstLineLane.js';
 import { readClientCodingContextWithClient } from './codingPolicyContext.js';
 import { assertNativeCodingChoice, resolveNativeAccountChoice, codingChoiceFailure } from '../codingAccountChoices.js';
 import { readJevCase, jevCasePrompt, codingCaseRevision, matchedAllocationHandles } from '../jevPreview.js';
@@ -766,8 +767,8 @@ export const suggestTransactionCodingInDb = async ({ firmId = DEFAULT_FIRM_ID, t
       }));
       const codingCase = await readJevCase({client,firmId,clientId:transaction.client_id,transactionId,evidenceOnly:true});
       const matchedDocuments = new Map([[transactionId,codingCase.matchedDocument]]);
-      const jevEnabled = clientFlagActs({ flagKey: 'JEV_RECONCILIATION',
-        snapshot: await readClientConfigSnapshot(client, { firmId, clientId: transaction.client_id, strict: true }), envFallback: () => false });
+      const jevEnabled = await firstLineLaneDecidesWithClient(client, { firmId, clientId: transaction.client_id, decidedBy: 'transaction_coding',
+        snapshot: await readClientConfigSnapshot(client, { firmId, clientId: transaction.client_id, strict: true }) });
       let firmFactRead = null;
       const codingAdmission = clientFlagActs({ flagKey: CODING_FACT_ADMISSION_FLAG,
         snapshot: await readClientConfigSnapshot(client, { firmId, clientId: transaction.client_id, strict: true }), envFallback: () => false });
@@ -1571,8 +1572,8 @@ export const batchSuggestTransactionCodingInDb = async ({
       // the same policy row (a mid-round policy flip must not split a round
       // across two models).
       const codingTransport = await resolveCodingTransport(client, { firmId, clientId });
-      const jevEnabled = clientFlagActs({ flagKey: 'JEV_RECONCILIATION',
-        snapshot: await readClientConfigSnapshot(client, { firmId, clientId, strict: true }), envFallback: () => false });
+      const jevEnabled = await firstLineLaneDecidesWithClient(client, { firmId, clientId, decidedBy: 'transaction_coding',
+        snapshot: await readClientConfigSnapshot(client, { firmId, clientId, strict: true }) });
 
       if (jevEnabled) for (const transaction of codablePool) transaction._jevProvider = await makeJevTrialProvider({client,firmId,clientId,resourceType:'transaction',resourceId:transaction.id,decisionKind:'coding'});
       // Jev already solves independent cases separately. Persist those same units
