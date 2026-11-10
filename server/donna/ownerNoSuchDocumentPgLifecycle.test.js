@@ -46,6 +46,8 @@ const LINES = Object.freeze({
       lines: [['Bruttopalkka', 2400], ['Ennakonpidätys', -288], ['TyEL', -171.60], ['Työttömyysvakuutus', -14.16]] } },
   deposit: { date: '2025-02-03', description: 'KASSATALLETUS 28.2.-2.3. OP TAMPERE', amount: 640, moneyIn: true,
     coding: { proposed_account: 'Sales', tax_treatment: 'ALV 25,5 %', contact: '' } },
+  vero: { date: '2025-02-12', description: 'VEROHALLINTO ENNAKONPIDATYS+SAVA 1/2025', amount: 332.88,
+    coding: { proposed_account: 'Payroll withholding and employer health-insurance payable', tax_treatment: 'Ei ALV-käsittelyä', contact: 'Verohallinto' } },
   stationery: { date: '2026-03-04', description: 'CARD PAYMENT RYMAN STATIONERY LONDON', amount: 48.00,
     coding: { proposed_account: 'Office expenses', tax_treatment: 'VAT 20%', contact: 'Ryman', evidence_required: true,
       ask_client_question: 'Please send the receipt for the Ryman purchase of GBP 48.00 on 4 March 2026.' },
@@ -223,9 +225,9 @@ test('FI payroll: "there is no payroll journal" rests as one open request on the
     } finally { await app.stop(); }
   });
 
-test('FI cash deposit (B02/B29 "asked again"): the coder accepts the answer, the posting checks refuse revenue without a sales source, and the report is not asked for again',
+test('FI cash deposit and tax payment (B02/B29, B10/B11 "asked again"): the coder accepts the answer, the posting checks refuse it without the source, and the source is not asked for again',
   { skip: applianceHarnessSkipReason() }, async () => {
-    const s = await bootScenario(`nsd-dep-${process.pid}`, ['deposit']);
+    const s = await bootScenario(`nsd-dep-${process.pid}`, ['deposit', 'vero']);
     const { app } = s;
     try {
       const [asked] = await s.ask('deposit');
@@ -261,6 +263,17 @@ test('FI cash deposit (B02/B29 "asked again"): the coder accepts the answer, the
       const rests = await s.audits('evidence_request.document_unavailable_rest', question.id);
       assert.deepEqual(rests.map((a) => a.metadata.rest.reason), ['posting_checks_refused_without_document', 'recoded_without_document']);
       assert.deepEqual([(await s.line('deposit')).coding_state, (await s.line('deposit')).convergence_state], ['asked', 'on_owner']);
+      // The tax payment (B10 shape): the filing the owner says they do not have.
+      const [taxAsk] = await s.ask('vero');
+      assert.match(taxAsk.question, /filing or notice identifying the liability/);
+      app.providers.script('owner_reply', [readsNoSuchDocument()]);
+      await s.reply('vero', 'Minulla ei ole ilmoitusta tai päätöstä tästä maksusta.');
+      await settle(app);
+      const [taxQuestion] = await s.ask('vero');
+      const taxRest = taxQuestion.request_payload.document_unavailable_rest;
+      assert.deepEqual([taxQuestion.status, taxRest?.reason, Boolean(taxRest?.posting_refusal?.code)], ['open', 'posting_checks_refused_without_document', true], JSON.stringify(taxRest));
+      assert.deepEqual(await s.journal('vero'), { count: 0, lines: [] });
+      await s.assertNeverAskedAgain('vero', { questionId: taxQuestion.id, question: taxQuestion.question });
       // Any other producer is refused by the ask writer itself.
       const { createClientEvidenceRequestInDb } = await import('./firmDb.js');
       await assert.rejects(createClientEvidenceRequestInDb({ firmId: app.firmId, clientId: s.clientId, transactionId: 'deposit',
