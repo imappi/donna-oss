@@ -2,7 +2,7 @@
 // writers are injected by the shared transaction owner; this is not a new ledger writer.
 import { clientFlagActs, readClientConfigSnapshot } from '../clientConfig.js';
 import { assertTositeSequenceGapFree, assertValidTilikausi, FINLAND_OPENING_BALANCES_FLAG_KEY, FINLAND_TILIKAUSI_FLAG_KEY, FINLAND_TOSITENUMERO_FLAG_KEY, periodNestsInFiscalYear, resolveFiscalYearForEntity } from './tilikausi.js';
-import { describeArchiveRetention, evaluateRetentionHold } from './retention.js';
+import { describeArchiveRetention, evaluateRetentionHold, RETENTION_YEARS } from './retention.js';
 
 const heldFiscalYearsForRetention = async (client, { firmId, clientId, retentionClass, onDate = null, retainedFiscalStarts = null } = {}) => {
   if (!clientId) return null;
@@ -110,6 +110,13 @@ const enforceTositeSequenceGapFreeTx = async ({ client, firmId, clientId, period
   return true;
 };
 
+// The KPL 2:10 periods in an owner's words ('fi' informal sinä / 'en'), for
+// surfaces that tell an owner what cannot be deleted yet (the mobile account-
+// deletion request). Pure; the periods are retention.js's own.
+const ownerRetentionStatement = (language) => (language === 'fi'
+  ? `Suomessa kirjanpitokirjat on säilytettävä ${RETENTION_YEARS.kirjanpitokirja} vuotta tilikauden päättymisestä ja tositteet ${RETENTION_YEARS.tosite} vuotta sen vuoden lopusta, jona tilikausi päättyi.`
+  : `In Finland, the books must be kept for ${RETENTION_YEARS.kirjanpitokirja} years after the financial year ends, and receipts and other vouchers for ${RETENTION_YEARS.tosite} years after the end of the year in which the financial year ended.`);
+
 export const FI_CLOSE_POLICY = Object.freeze({
   readsPersistedPeriod: ({ entityType }) => entityType === 'fi-oy',
   resolveFiscalYear: resolveFiscalYearForEntity,
@@ -118,6 +125,7 @@ export const FI_CLOSE_POLICY = Object.freeze({
   retentionActs: ({ snapshot }) => clientFlagActs({ flagKey: FINLAND_TILIKAUSI_FLAG_KEY, snapshot, envFallback: () => false }),
   recognizesRetainedArchive: (retention) => retention?.statute === 'Kirjanpitolaki 2:10' && typeof retention?.fiscal_year?.starts_on === 'string',
   heldFiscalYearsForRetention,
+  ownerRetentionStatement,
   archiveRetentionForPeriod,
   enforcePeriodNesting: enforceTilikausiNestingTx,
   enforceVoucherSequence: enforceTositeSequenceGapFreeTx
