@@ -30,6 +30,7 @@ import { resolvePostingPolicy } from './postingPolicy.js';
 import { toIsoDay } from './dates.js';
 import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 import { nativeCodingPromptProjection, accountChoicePrompt, decodeNativeCodingChoice, codingChoiceFailure } from './codingAccountChoices.js';
+import { documentUnavailableCoderInput, documentUnavailableOf } from './ownerDocumentUnavailable.js';
 
 export const fallbackAccountOptionsForClient = (profile = {}) => requireCodingPolicyForClient(profile).accountOptions;
 export const suspenseAccountNameForClient = (profile = {}) => requireCodingPolicyForClient(profile).suspenseAccountName;
@@ -415,7 +416,9 @@ Material one-offs are never self-certifying. When a material inflow's reference 
 
 Evidence sufficiency is a separate judgment from account confidence. evidence_required false asserts the books can stand an audit on the bank line alone — appropriate for low-value recurring expenses (transport, meals, small subscriptions), never for a material line with no matched document and no client confirmation: there, set evidence_required true no matter how confident you are in the account, and keep support_note honest about what is missing. Material revenue gets the strictest bar — auditors test whether revenue actually occurred, and only the underlying document or the client's own words evidence that. When the line's reference names a document (an invoice number, a bill or PO reference) that is not matched in the system, ask for that document by name in ask_client_question. Other bank lines are never evidence: consistency with earlier lines from the same payer may support the account choice, never evidence_required false — two undocumented lines do not document each other.
 
-When the transaction carries client_reply_context, the firm already ASKED the client the question shown and the client REPLIED. The reply is the client speaking about their own business — second only to a matched document as evidence, and it normally settles the line: commit to the account the reply supports, set confidence high and evidence_required false, and leave ask_client_question empty. client_reply_context.prior_verdict is your own earlier UNCONFIRMED suggestion, not firm-approved truth — weigh the client's words above it. Only when the reply genuinely does not answer the question should you keep the line open: write ONE sharper follow-up ask_client_question (never repeat the original) and keep confidence honest.`;
+When the transaction carries client_reply_context, the firm already ASKED the client the question shown and the client REPLIED. The reply is the client speaking about their own business — second only to a matched document as evidence, and it normally settles the line: commit to the account the reply supports, set confidence high and evidence_required false, and leave ask_client_question empty. client_reply_context.prior_verdict is your own earlier UNCONFIRMED suggestion, not firm-approved truth — weigh the client's words above it. Only when the reply genuinely does not answer the question should you keep the line open: write ONE sharper follow-up ask_client_question (never repeat the original) and keep confidence honest.
+
+When the transaction carries owner_stated_no_such_document, the owner has stated that the document asked for does not exist or cannot be obtained: no further document will come for this line, so never ask for it again. Decide with the evidence in hand: choose the coding and posting_requirement that this evidence and the jurisdiction's contract support. If that contract requires the missing document before the line can be booked at all, keep the posting_requirement that names it; the line then rests on the owner as a statement that it cannot be booked without it.`;
 
 const outputTextFromResponse = (response = {}) => {
   if (typeof response.output_text === 'string') return response.output_text;
@@ -1338,6 +1341,7 @@ export const suggestTransactionCodingBatch = async ({
       merchant_web_context: transaction.merchant_web_context,
       merchant_pattern_hint: canonicalMerchantPattern(`${transaction.description || ''} ${transaction.raw_description || ''} ${transaction.source_line || ''}`),
       client_reply_context: clientReplyContextInputFor(transaction.client_reply_context),
+      ...documentUnavailableCoderInput(documentUnavailableOf(transaction)),
       ...(firmFactsByTransaction ? { known_facts: batchKnownFactsInput(firmFactsByTransaction.get(transaction.id)) } : {})
     })),
     activeClientRules: clientRules
@@ -1594,7 +1598,8 @@ export const suggestTransactionCoding = async ({
       posting_recovery: enrichedTransaction.posting_recovery?.review || null,
       ...taxRegistrationInputFor(policy, clientProfile, enrichedTransaction),
       merchant_web_context: enrichedTransaction.merchant_web_context,
-      client_reply_context: clientReplyContextInputFor(enrichedTransaction.client_reply_context)
+      client_reply_context: clientReplyContextInputFor(enrichedTransaction.client_reply_context),
+      ...documentUnavailableCoderInput(documentUnavailableOf(enrichedTransaction))
     },
     known_facts: firmFacts.slice(0, KNOWN_FACTS_LIMIT).map(fact => ({ scope: fact.scope, subject: fact.subject, fact: String(fact.fact || '').slice(0, 300), confidence: fact.confidence, status: fact.status })),
     activeClientRules: clientRules
