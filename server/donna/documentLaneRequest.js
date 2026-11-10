@@ -35,6 +35,7 @@ import {
   schemaDeliveryFor
 } from './structuredRequest.js';
 import { PROVIDER_FAILURE_CODES } from './providerTransport.js';
+import { sniffMimeFromBase64 } from './responsesInputPart.js';
 
 // Messages API request limits (32 MB per request; 600 PDF pages on the 1M
 // context models). The statement reader splits below these; a lane that
@@ -95,24 +96,28 @@ export const notConfiguredFailure = (resolved, laneId) => {
 };
 
 // ── a file as a content block ─────────────────────────────────────────────
-const looksLikePdfBase64 = (base64) => String(base64 || '').startsWith('JVBERi');
 const IMAGE_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 
-// The bytes outrank upload metadata (an empty / octet-stream mime on a good
-// PDF once sent it as an image). The file name rides as the document title:
-// the OpenAI input_file part carries it, so the model reads the same input
-// on either provider.
+// The bytes outrank upload metadata, with the OpenAI part builder's own
+// sniffer (responsesInputPart.js): a phone JPEG that arrives with an empty or
+// octet-stream type, or labelled application/pdf, is an image; a good PDF
+// with a wrong label is a document. Only when the bytes say nothing do the
+// declared type and the file name decide. The file name rides as the
+// document title: the OpenAI input_file part carries it, so the model reads
+// the same input on either provider.
 export const anthropicFileBlock = ({ base64, mimeType = '', filename = '' } = {}) => {
   const data = String(base64 || '').replace(/[\r\n\s]/g, '');
-  const mt = String(mimeType || '').toLowerCase();
-  const isPdf = mt === 'application/pdf' || mt === 'application/x-pdf' || looksLikePdfBase64(data)
-    || /\.pdf$/i.test(String(filename || '').trim());
+  const sniffed = sniffMimeFromBase64(data);
+  const declared = String(mimeType || '').toLowerCase() === 'image/jpg' ? 'image/jpeg' : String(mimeType || '').toLowerCase();
+  const kind = sniffed
+    || (declared === 'application/pdf' || declared === 'application/x-pdf' ? 'application/pdf' : null)
+    || (IMAGE_TYPES.includes(declared) ? declared : null)
+    || (/\.pdf$/i.test(String(filename || '').trim()) ? 'application/pdf' : null);
   const title = String(filename || '').trim();
-  if (isPdf) {
+  if (kind === 'application/pdf') {
     return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, ...(title ? { title: title.slice(0, 500) } : {}) };
   }
-  const imageType = mt === 'image/jpg' ? 'image/jpeg' : mt;
-  return { type: 'image', source: { type: 'base64', media_type: IMAGE_TYPES.includes(imageType) ? imageType : 'image/png', data } };
+  return { type: 'image', source: { type: 'base64', media_type: IMAGE_TYPES.includes(kind) ? kind : 'image/png', data } };
 };
 
 // ── a Responses body, carried over ────────────────────────────────────────
@@ -124,10 +129,18 @@ const parseDataUrl = (dataUrl = '') => {
 };
 
 // instructions → system; each user part, in the lane's order → a block.
+// The Responses API also takes `input` as one string (the receipt classifier
+// sends its JSON that way) and a turn's `content` as one string: each is one
+// text block, never dropped.
 export const anthropicContentFromResponses = ({ instructions = null, input = [] } = {}) => {
   const content = [];
-  for (const turn of Array.isArray(input) ? input : []) {
+  const turns = typeof input === 'string' ? [{ role: 'user', content: input }] : (Array.isArray(input) ? input : []);
+  for (const turn of turns) {
     if (turn?.role && turn.role !== 'user') continue;
+    if (typeof turn?.content === 'string') {
+      if (turn.content) content.push({ type: 'text', text: turn.content });
+      continue;
+    }
     for (const part of Array.isArray(turn?.content) ? turn.content : []) {
       if (part?.type === 'input_file') {
         const { mime, payload } = parseDataUrl(part.file_data);
@@ -220,6 +233,10 @@ export const documentLaneAnthropicRequest = ({
   }
   return {
     ...options,
+    // The lane's wall reaches the envelope too: inside a worker llmCall
+    // re-wraps the fetch in the deadline transport, which would otherwise
+    // apply the 90 s default over the whole stream.
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
     parseResponse: (payload) => {
       try {
         return read(payload);
@@ -234,6 +251,10 @@ export const documentLaneAnthropicRequest = ({
 
 export const documentLaneRequestFromResponses = ({ body, ...rest } = {}) => {
   const { system, content } = anthropicContentFromResponses(body);
+  // A carried-over request with nothing in its user turn is a defect in the
+  // carry-over, not a request to send: fail loudly, never ask the model
+  // about nothing.
+  if (!content.length) throw new Error('documentLaneRequestFromResponses: the lane body carried no user content');
   return documentLaneAnthropicRequest({
     ...rest,
     model: rest.model || body?.model,
@@ -257,6 +278,17 @@ export const isProviderStopFailure = (error) => error?.providerFailure === true 
 // vocabulary (provider_refused / provider_output_limit /
 // provider_invalid_output).
 export const stopFailureReason = (error) => String(error?.code || 'provider_invalid_output').toLowerCase();
+
+// The extractors' failure code for one. A refusal and a cut-off at the output
+// limit are the provider's final word on this request: terminal
+// (DOCUMENT_EXTRACTION_REJECTED). An answer that is not the structured answer
+// (prose where the tool call was due, a broken schema) is retryable, exactly
+// as unparseable JSON is on OpenAI (DOCUMENT_EXTRACTION_FAILED) and as the
+// shared failure types it.
+export const stopFailureCode = (error) => (error?.code === PROVIDER_FAILURE_CODES.INVALID_OUTPUT
+  ? 'DOCUMENT_EXTRACTION_FAILED'
+  : 'DOCUMENT_EXTRACTION_REJECTED');
+export const stopFailureRetryable = (error) => stopFailureCode(error) === 'DOCUMENT_EXTRACTION_FAILED';
 
 const SPEND_LIMIT_CODES = Object.freeze(['trial_spend_cap_refused', PROVIDER_FAILURE_CODES.SPEND_LIMIT]);
 

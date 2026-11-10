@@ -433,6 +433,9 @@ const EXECUTION = { root: { type: 'receipt_classification', id: 'semantic' } };
 
 const defaultCallOpenAi = async ({ apiKey, signal, ...args }) => asProviderResponse(llmCall({
   provider: 'openai',
+  // The lane's own wall, honoured inside a worker too (llmCall hands it to
+  // the deadline transport, bounded by the job's remaining budget).
+  timeoutMs: REQUEST_TIMEOUT_MS,
   url: 'https://api.openai.com/v1/responses',
   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
   body: buildBody(args),

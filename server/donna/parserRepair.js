@@ -168,6 +168,9 @@ const executionFor = (filename) => ({ root: { type: 'parser_repair', id: filenam
 
 const defaultCallOpenAi = buildDefaultCall(({ apiKey, signal, filename, body }) => asProviderResponse(llmCall({
   provider: 'openai',
+  // The lane's own wall, honoured inside a worker too (llmCall hands it to
+  // the deadline transport, bounded by the job's remaining budget).
+  timeoutMs: REQUEST_TIMEOUT_MS,
   url: 'https://api.openai.com/v1/responses',
   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
   body,

@@ -49,10 +49,14 @@ const REQUEST_TIMEOUT_MS = 30_000;
 // A routing decision names a family from a fixed list: `low` effort is the
 // depth it needs (adaptive thinking cannot be switched off). The Anthropic
 // request reads the whole file with thinking on, so it gets a longer wall
-// than the 30s the OpenAI call has always had.
+// than the 30s the OpenAI call has always had — but it must stay UNDER the
+// parse worker's own 45 s wait on the router (inngest/parseDocument.js
+// ROUTER_CLASSIFY_TIMEOUT_MS): the router's call aborts itself, typed, before
+// the worker stops waiting, so no call is left running after its answer can
+// no longer be used. (Measured live: about 3 s per routing call.)
 const ANTHROPIC_EFFORT = 'low';
 const ANTHROPIC_MAX_TOKENS = 16_000;
-const ANTHROPIC_REQUEST_TIMEOUT_MS = 90_000;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 40_000;
 
 // ── Document families ───────────────────────────────────────────────
 const DOCUMENT_FAMILIES = Object.freeze([
@@ -342,6 +346,9 @@ const defaultCallOpenAi = async ({ apiKey, model, dataUrl, filename, clientConte
 
   return asProviderResponse(llmCall({
     provider: 'openai',
+    // The lane's own wall, honoured inside a worker too (llmCall hands it to
+    // the deadline transport, bounded by the job's remaining budget).
+    timeoutMs: REQUEST_TIMEOUT_MS,
     url: 'https://api.openai.com/v1/responses',
     headers: {
       'Content-Type': 'application/json',

@@ -204,3 +204,68 @@ test('the plain transcription entry on Anthropic asks for text: effort, no forma
     assert.equal(seen.messages[0].content[0].type, 'document');
   } finally { providers.restore(); restoreEnv(); }
 });
+
+// A refusal or a cut-off from the strong reader is the named failure on the
+// document — never the plain transcription + regex fallback, never the
+// text-layer regex tiers — and the parse worker throws it with the model that
+// answered (refusal / output limit final, an answer outside the schema
+// retryable).
+test('the statement pipeline: a strong-reader stop is a named failure on the document, never a weaker reader\'s guess', async () => {
+  const { extractBankStatementFromBase64 } = await import('./bankStatement.js');
+  const { readFileSync } = await import('node:fs');
+  const scanned = readFileSync(new URL('../../data/evals/fixtures/fi-kultalanka-2025-02/sources/01 OP Tiliote 02-2025.pdf', import.meta.url)).toString('base64');
+  onlyAnthropic();
+  const providers = installRecordedProviders();
+  try {
+    providers.script('bank_statement_extraction', [message(null, { stopReason: 'refusal' })]);
+    const refused = await extractBankStatementFromBase64({ base64: scanned, filename: 'tiliote.pdf', mimeType: 'application/pdf' });
+    assert.equal(refused.extraction_diagnostics.vision_skipped, 'provider_stop', JSON.stringify(refused.extraction_diagnostics));
+    assert.deepEqual(refused.extraction_diagnostics.vision_skipped_details,
+      { fault: 'provider_refused', code: 'DOCUMENT_EXTRACTION_REJECTED', provider: 'anthropic', model: 'claude-opus-5-5' });
+    assert.deepEqual(refused.transactions, []);
+    assert.equal(providers.callsFor('bank_statement_ocr').length, 0, 'no plain transcription after a refusal');
+
+    // Forced vision (the validation re-read) stops the same way.
+    providers.script('bank_statement_extraction', [message({ transactions: [] }, { stopReason: 'max_tokens' })]);
+    const cut = await extractBankStatementFromBase64({ base64: scanned, filename: 'tiliote.pdf', mimeType: 'application/pdf', preferVision: true, bypassCache: true });
+    assert.deepEqual([cut.extraction_diagnostics.vision_skipped, cut.extraction_diagnostics.vision_skipped_details.code, cut.extraction_diagnostics.vision_skipped_details.fault],
+      ['provider_stop', 'DOCUMENT_EXTRACTION_REJECTED', 'provider_output_limit']);
+
+    // The text-layer LLM-first path: no regex tiers after a stop.
+    providers.script('bank_statement_extraction', [message(null, { text: 'I read the statement but here is prose.' })]);
+    const text = Buffer.from('03.02.2025 KAHVILA AROMA OY -12,40\n04.02.2025 NETS FINLAND OY +2 452,72\n').toString('base64');
+    const prose = await extractBankStatementFromBase64({ base64: text, filename: 'tiliote.txt', mimeType: 'text/plain', llmFirst: true });
+    assert.deepEqual([prose.extraction_diagnostics.vision_skipped, prose.extraction_diagnostics.vision_skipped_details.code, prose.transactions.length],
+      ['provider_stop', 'DOCUMENT_EXTRACTION_FAILED', 0], 'an answer outside the schema is retryable, and no regex guess is kept');
+    providers.assertNoUnscripted();
+  } finally { providers.restore(); restoreEnv(); }
+});
+
+// The model on the statement's receipt: the id each response named, per call,
+// with its source; a read whose chunks were answered by different ids stores
+// the id that answered most chunks and every chunk's id — never a joined
+// string; a response that names no model is a configured fallback.
+test('statement receipt: the served model per call with its source; a mixed read stores every chunk\'s model', async () => {
+  onlyAnthropic();
+  const providers = installRecordedProviders();
+  try {
+    const base64 = await buildPdfBase64(9);
+    const served = ['claude-opus-5-5', 'claude-opus-5-5-variant', 'claude-opus-5-5'];
+    let index = 0;
+    providers.script('bank_statement_extraction', { times: 3, respond: () => message({ transactions: [], statement_summary: null }, { model: served[index++] }) });
+    const mixed = await extractStructuredFromOpenAiVisionPaginated({ base64, filename: 'tiliote.pdf', pagesPerChunk: 4, concurrency: 1 });
+    assert.deepEqual([mixed.model, mixed.model_source], ['claude-opus-5-5', 'response_proven']);
+    assert.ok(!String(mixed.model).includes('+'), 'never a joined id');
+    assert.deepEqual(mixed.chunk_models.map(({ model, model_source, page_start, page_end }) => [model, model_source, page_start, page_end]),
+      [['claude-opus-5-5', 'response_proven', 1, 4], ['claude-opus-5-5-variant', 'response_proven', 5, 8], ['claude-opus-5-5', 'response_proven', 9, 9]]);
+
+    providers.script('bank_statement_extraction', { respond: () => {
+      const reply = message({ transactions: [], statement_summary: null });
+      delete reply.body.model;
+      return reply;
+    } });
+    const unnamed = await extractStructuredFromOpenAiVisionPaginated({ base64: await buildPdfBase64(2), filename: 'b.pdf', pagesPerChunk: 4, concurrency: 1 });
+    assert.deepEqual([unnamed.model, unnamed.model_source, unnamed.chunk_models], ['claude-opus-5-5', 'configured_fallback', undefined],
+      'a response that names no model: the requested id, receipted as a fallback');
+  } finally { providers.restore(); restoreEnv(); }
+});

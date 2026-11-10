@@ -769,6 +769,8 @@ const buildStatementSummary = (extraction, fingerprint) => {
     extraction_source: extraction?.extraction_source || null,
     extraction_model: extraction?.extraction_model || null,
     extraction_provider: extraction?.extraction_provider || null,
+    extraction_model_source: extraction?.extraction_model_source || null,
+    ...(extraction?.extraction_chunk_models ? { extraction_chunk_models: extraction.extraction_chunk_models } : {}),
     warnings: Array.isArray(extraction?.warnings) ? extraction.warnings.slice(0, 6) : [],
     account_fingerprint: fingerprint || null
   };
@@ -1424,6 +1426,20 @@ const extractDocumentInner = async ({
     ...(Number(document.parse_attempts) > 1 ? { bypassCache: true } : {})
   });
   const visionSkipped = extraction?.extraction_diagnostics?.vision_skipped;
+  if (visionSkipped === 'provider_stop') {
+    // The strong reader stopped without a usable answer (bankStatement.js
+    // strongReaderStop): that named failure, with the model that answered —
+    // a refusal or a cut-off is final, an answer outside the schema
+    // retryable — never `no transactions` from a weaker reader.
+    const details = extraction.extraction_diagnostics.vision_skipped_details || {};
+    throw new ParseError(details.code || 'DOCUMENT_EXTRACTION_FAILED', {
+      provider: details.provider || null,
+      retryable: details.code === 'DOCUMENT_EXTRACTION_FAILED',
+      reason: details.fault || 'provider_invalid_output',
+      model: details.model || null,
+      message: `Bank statement extraction stopped: ${details.fault || 'provider_invalid_output'}`
+    });
+  }
   if (visionSkipped === 'not_configured' || visionSkipped === 'provider_fault') {
     // The statement has no text layer and cloud OCR could not be used — no
     // key, a refused key, or no credit on the account. It was never read: a

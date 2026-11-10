@@ -63,6 +63,7 @@ import {
   isProviderStopFailure,
   notConfiguredFailure,
   resolveDocumentLaneProvider,
+  stopFailureCode,
   stopFailureReason,
   thrownReason
 } from './documentLaneRequest.js';
@@ -670,6 +671,9 @@ export const extractPayoutStatementFromBase64 = async ({
       result = { parsed: answer.parsed, servedModel: answer.model || null };
     } else ({ result } = await llmCall({
       provider: 'openai',
+      // The lane's own wall, honoured inside a worker too (llmCall hands it to
+      // the deadline transport, bounded by the job's remaining budget).
+      timeoutMs: REQUEST_TIMEOUT_MS,
       url: 'https://api.openai.com/v1/responses',
       headers: {
         'Content-Type': 'application/json',
@@ -701,11 +705,12 @@ export const extractPayoutStatementFromBase64 = async ({
     }
     if (isProviderStopFailure(err)) {
       // A refusal or a cut-off reply will not clear with a retry of the same
-      // request: terminal, named, receipted with the model that gave it.
+      // request: terminal, named, receipted with the model that gave it. An
+      // answer that is not the structured answer is retryable (stopFailureCode).
       console.error('[payout-statement] provider stopped without a usable reply', {
         correlation_id: correlationId, provider: config.provider, failure: err.code, reason: err.reason, elapsed_ms: Date.now() - startedAt
       });
-      return { kind: 'failed', ...stamp(err.servedModel), code: 'DOCUMENT_EXTRACTION_REJECTED', reason: stopFailureReason(err) };
+      return { kind: 'failed', ...stamp(err.servedModel), code: stopFailureCode(err), reason: stopFailureReason(err) };
     }
     if (err?.code === 'PAYOUT_STRUCTURED_BAD_JSON') {
       console.error('[payout-statement] structured response was not valid JSON', {

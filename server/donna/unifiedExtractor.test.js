@@ -636,13 +636,14 @@ test('extractUnified on Anthropic: a streamed reply is reassembled; refusal and 
   assert.deepEqual([ok.kind, ok.provider, ok.model, ok.model_source], ['completed_header', 'anthropic', 'claude-opus-4-8', 'response_proven']);
   const refused = await extractUnified({ base64: PDF_B64, filename: 'x.pdf', env: { ANTHROPIC_API_KEY: 'sk-a' },
     fetchImpl: stubFetch({ provider: 'anthropic', text: '', model: 'claude-opus-4-8', stopReason: 'refusal', sse: true }).fetchImpl });
-  // PROVIDER_REFUSED is not retryable; PROVIDER_OUTPUT_LIMIT is (the shared
-  // failures' own posture, providerTransport.js).
+  // Refusal and the output limit are final for the same request; an answer
+  // that is not the structured call is retryable (documentLaneRequest.js
+  // stopFailureRetryable).
   assert.deepEqual([refused.kind, refused.code, refused.reason, refused.retryable, refused.model, refused.model_source, refused.provider_failure],
     ['failed', 'DOCUMENT_EXTRACTION_FAILED', 'provider_refused', false, 'claude-opus-4-8', 'response_proven', 'refusal']);
   const cut = await extractUnified({ base64: PDF_B64, filename: 'x.pdf', env: { ANTHROPIC_API_KEY: 'sk-a' },
     fetchImpl: stubFetch({ provider: 'anthropic', text: '{"document_type":', model: 'claude-opus-4-8', stopReason: 'max_tokens' }).fetchImpl });
-  assert.deepEqual([cut.code, cut.reason, cut.retryable, cut.model], ['DOCUMENT_EXTRACTION_FAILED', 'provider_output_limit', true, 'claude-opus-4-8']);
+  assert.deepEqual([cut.code, cut.reason, cut.retryable, cut.model], ['DOCUMENT_EXTRACTION_FAILED', 'provider_output_limit', false, 'claude-opus-4-8']);
 });
 
 test('extractUnified: the model id falls back to the configured string, receipted as configured_fallback, when the response omits it', async () => {

@@ -55,7 +55,8 @@ import {
   anthropicFileBlock,
   documentLaneAnthropicRequest,
   isProviderStopFailure,
-  stopFailureReason
+  stopFailureReason,
+  stopFailureRetryable
 } from './documentLaneRequest.js';
 import { extractJson } from './extractJson.js';
 import { buildClientIdentityPromptFragment } from './clientIdentityPrompt.js';
@@ -1000,6 +1001,9 @@ const callProvider = async ({ provider, apiKey, model, system, userText, base64,
     ];
     const { result } = await llmCall({
       provider: 'openai',
+      // The lane's own wall, honoured inside a worker too (llmCall hands it to
+      // the deadline transport, bounded by the job's remaining budget).
+      timeoutMs: REQUEST_TIMEOUT_MS,
       url: 'https://api.openai.com/v1/responses',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: {
@@ -1120,14 +1124,15 @@ export const extractUnified = async ({
     if (isProviderStopFailure(error)) {
       // A refusal, a cut-off reply or an answer that is not the structured
       // call is the provider's named answer, not a transport hiccup:
-      // receipted with the model that gave it; whether the queue may re-ask
-      // is the shared failure's own posture (providerTransport.js).
+      // receipted with the model that gave it. Refusal and the output limit
+      // are final; an answer that is not the structured call may be re-asked
+      // (stopFailureRetryable, the same rule as every document lane).
       const provenance = classifyModelProvenance({ responseModel: error.servedModel, requestedModel: resolved.model });
       console.error('[unifiedExtractor] provider stopped without a usable reply', {
         correlation_id: correlationId, provider: resolved.provider, failure: error.code, reason: error.reason, elapsed_ms: elapsed
       });
       return receipt({
-        kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: stopFailureReason(error), retryable: error.retryable === true,
+        kind: 'failed', code: 'DOCUMENT_EXTRACTION_FAILED', reason: stopFailureReason(error), retryable: stopFailureRetryable(error),
         model: provenance.model, model_source: provenance.model_source, provider_failure: error.reason || null
       });
     }

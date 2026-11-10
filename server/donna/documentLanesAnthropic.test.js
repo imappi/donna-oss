@@ -203,9 +203,10 @@ test('a lane on tool delivery: a prose reply (no tool call) and a reply that bre
       replyTo({ ...sampleFrom(__BILL_EXTRACTION_SCHEMA), extra_field: 1 })
     ]);
     const prose = await extractSupplierBillFromBase64({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
-    assert.deepEqual([prose.code, prose.reason, prose.model], ['DOCUMENT_EXTRACTION_REJECTED', 'provider_invalid_output', 'claude-opus-5-5']);
+    // Not the structured answer: retryable, as unparseable JSON is on OpenAI.
+    assert.deepEqual([prose.code, prose.reason, prose.model], ['DOCUMENT_EXTRACTION_FAILED', 'provider_invalid_output', 'claude-opus-5-5']);
     const broken = await extractSupplierBillFromBase64({ base64: PDF, filename: 'a.pdf', mimeType: 'application/pdf' });
-    assert.deepEqual([broken.code, broken.reason], ['DOCUMENT_EXTRACTION_REJECTED', 'provider_invalid_output']);
+    assert.deepEqual([broken.code, broken.reason], ['DOCUMENT_EXTRACTION_FAILED', 'provider_invalid_output']);
   } finally { providers.restore(); restore(); }
 });
 
@@ -299,7 +300,10 @@ test('receipt classifier on Anthropic: low effort, text only, the provider and s
     providers.script('receipt_classification', { respond: (sent) => { body = sent; return message(sampleFrom(__RECEIPT_CLASSIFIER_SCHEMA), { sent }); } });
     const result = await classifyReceipt({ header: { vendor_name: 'Synteetti Kahvila', total_amount: 4.2, currency: 'EUR' }, summary: {}, lines: [], filename: 'kuitti.pdf' });
     assertAnthropicRequest(body, { effort: 'low', schema: __RECEIPT_CLASSIFIER_SCHEMA, label: 'classifier', system: CLASSIFIER_INSTRUCTIONS, fileFirst: false });
-    assert.ok(body.messages[0].content.every((block) => block.type === 'text'), 'text only, never vision');
+    const blocks = body.messages[0].content;
+    assert.ok(blocks.length > 0 && blocks.every((block) => block.type === 'text'), 'text only, never vision — and never empty');
+    const sentText = blocks.map((block) => block.text).join('\n');
+    assert.ok(sentText.includes('Synteetti Kahvila') && sentText.includes('4.2'), `the receipt's vendor and total reach Claude: ${sentText.slice(0, 200)}`);
     assert.deepEqual([result.used_fallback, result.provider, result.model], [false, 'anthropic', 'claude-opus-5-5']);
     keys({});
     const none = await classifyReceipt({ header: { vendor_name: 'x' } });

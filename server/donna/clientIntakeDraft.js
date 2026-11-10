@@ -40,6 +40,7 @@ import {
   notConfiguredFailure,
   readDocumentLaneReply,
   resolveDocumentLaneProvider,
+  stopFailureCode,
   stopFailureReason,
   thrownReason
 } from './documentLaneRequest.js';
@@ -320,6 +321,9 @@ const executionFor = (filename) => ({ root: { type: 'client_intake_draft', id: f
 
 const defaultCallOpenAi = buildDefaultCall(({ apiKey, signal, filename, body }) => asProviderResponse(llmCall({
   provider: 'openai',
+  // The lane's own wall, honoured inside a worker too (llmCall hands it to
+  // the deadline transport, bounded by the job's remaining budget).
+  timeoutMs: REQUEST_TIMEOUT_MS,
   url: 'https://api.openai.com/v1/responses',
   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
   body,
@@ -509,7 +513,9 @@ export const extractClientIntakeDraft = async ({
     console.error('[clientIntakeDraft] provider stopped without a usable reply', {
       correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason, elapsed_ms: Date.now() - startedAt
     });
-    return { kind: 'failed', code: 'DOCUMENT_EXTRACTION_REJECTED', reason: reply.error.reason, model: reply.error.servedModel || null };
+    // Refusal / output limit final; an answer that is not the structured
+    // answer retryable (stopFailureCode), receipted with the served model.
+    return { kind: 'failed', code: stopFailureCode(reply.error), reason: stopFailureReason(reply.error), model: reply.error.servedModel || null, provider: config.provider };
   }
 
   if (!reply.ok) {

@@ -74,4 +74,7 @@ export const buildResponsesDocumentPart = ({
   return { type: 'input_file', filename: filename || fallbackFilename, file_data: dataUrl };
 };
 
+// The one sniffer: the Anthropic content block reads the bytes the same way
+// (documentLaneRequest.js anthropicFileBlock).
+export { sniffMimeFromBase64 };
 export const __sniffMimeFromBase64 = sniffMimeFromBase64;

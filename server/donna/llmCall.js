@@ -193,6 +193,10 @@ export const llmCall = async ({
   parseResponse = (payload) => payload,
   maxAttempts = 1,
   fetchImpl = fetch,
+  // The caller's wall for one attempt (headers AND body, a stream read to its
+  // end). Inside a worker it is still bounded by the job's remaining budget,
+  // never above it. Absent, the transport default (PROVIDER_REQUEST_TIMEOUT_MS).
+  timeoutMs = null,
   now = Date.now,
   logger = null
 } = {}) => {
@@ -207,7 +211,7 @@ export const llmCall = async ({
   // when they did not supply the deadline-bearing transport themselves.
   // Outside a worker budget the existing caller's transport is unchanged.
   const boundedFetch = currentExecutionBudget()
-    ? providerFetchWithDeadline({ provider, fetchImpl })
+    ? providerFetchWithDeadline({ provider, fetchImpl, ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}) })
     : fetchImpl;
 
   let response = null;

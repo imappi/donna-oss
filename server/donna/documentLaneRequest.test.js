@@ -65,6 +65,16 @@ test('files: a PDF is a document block titled with its file name, an image an im
   assert.equal(anthropicFileBlock({ base64: '/9j/4AAQ', mimeType: 'image/jpeg' }).type, 'image');
   assert.equal(anthropicFileBlock({ base64: '/9j/4AAQ', mimeType: 'image/jpg' }).source.media_type, 'image/jpeg');
   assert.equal(anthropicFileBlock({ base64: 'AAAA', mimeType: 'application/octet-stream', filename: 'x.PDF' }).type, 'document');
+  // The bytes outrank the label: a phone JPEG with no type, with an
+  // octet-stream type, or mislabelled as a PDF is a JPEG image; PNG, GIF and
+  // WebP likewise; a PDF labelled as an image is a document.
+  for (const mimeType of ['', 'application/octet-stream', 'application/pdf']) {
+    assert.deepEqual(anthropicFileBlock({ base64: '/9j/4AAQSkZJRg', mimeType, filename: 'IMG_0412.jpg' }).source.media_type, 'image/jpeg', mimeType || '(none)');
+  }
+  assert.equal(anthropicFileBlock({ base64: 'iVBORw0KGgoAAAA', mimeType: '' }).source.media_type, 'image/png');
+  assert.equal(anthropicFileBlock({ base64: 'R0lGODlhAQAB', mimeType: 'application/octet-stream' }).source.media_type, 'image/gif');
+  assert.equal(anthropicFileBlock({ base64: 'UklGRiQAAABXRUJQVlA4', mimeType: '' }).source.media_type, 'image/webp');
+  assert.equal(anthropicFileBlock({ base64: 'JVBERi0x', mimeType: 'image/png' }).type, 'document');
 });
 
 test('a Responses body carries over unchanged: instructions → system, parts in order, image and file parts as blocks', () => {
@@ -78,6 +88,13 @@ test('a Responses body carries over unchanged: instructions → system, parts in
   assert.deepEqual(content.map((block) => block.type), ['document', 'text', 'image', 'text']);
   assert.equal(content[0].title, 'a.pdf');
   assert.equal(content[2].source.media_type, 'image/jpeg', 'the sniffed image type survives');
+});
+
+test('a string input (and a string turn content) is carried over as one text block; an empty user turn is refused', () => {
+  assert.deepEqual(anthropicContentFromResponses({ instructions: 'S', input: '{"header":{"vendor_name":"Kahvila"}}' }).content,
+    [{ type: 'text', text: '{"header":{"vendor_name":"Kahvila"}}' }]);
+  assert.deepEqual(anthropicContentFromResponses({ input: [{ role: 'user', content: 'plain' }] }).content, [{ type: 'text', text: 'plain' }]);
+  assert.throws(() => documentLaneRequestFromResponses({ apiKey: 'k', body: { model: 'm', instructions: 'S', input: [] }, effort: 'low', maxTokens: 1000, execution: EXECUTION }), /no user content/);
 });
 
 test('the request is the shared structured request: output_config.format, adaptive thinking, the lane\'s effort, streamed, no fallbacks', () => {
@@ -181,4 +198,40 @@ test('fetchProviderJson (callers that own their socket) reads a streamed reply a
   assert.deepEqual([failed.ok, failed.status, failed.payload.error.type], [false, 529, 'overloaded_error']);
   const cut = await fetchProviderJson({ provider: 'anthropic', url: 'https://api.anthropic.com/v1/messages', fetchImpl: async () => streamOf(textReply('claude-opus-5-5', '{}').slice(0, 3)) });
   assert.deepEqual([cut.ok, cut.status], [false, 500], 'a stream that ended before message_stop is a failed call');
+});
+
+// Inside a worker llmCall re-wraps every fetch in the deadline transport. The
+// lane's wall must reach it: a slow streamed reply survives past the
+// transport default up to the lane's wall, and fails typed at the wall. (The
+// default is shrunk through its env knob so the test runs in milliseconds;
+// the same arithmetic holds for the real 90 s default and 120–240 s walls.)
+test('inside an execution budget a slow stream lives to the lane\'s wall, past the transport default, and fails typed at the wall', async () => {
+  const { createExecutionBudget, runWithExecutionBudget } = await import('./executionBudget.js');
+  const prior = process.env.PROVIDER_REQUEST_TIMEOUT_MS;
+  process.env.PROVIDER_REQUEST_TIMEOUT_MS = '60';
+  const schema = { type: 'object', additionalProperties: false, required: ['a'], properties: { a: { type: 'string' } } };
+  // Headers at once; the events arrive after `delayMs`.
+  const slowStream = (delayMs) => async (_url, init) => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream({
+      start(controller) {
+        const timer = setTimeout(() => { controller.enqueue(encoder.encode(sse(textReply('claude-opus-5-5', '{"a":"late"}')))); controller.close(); }, delayMs);
+        init?.signal?.addEventListener('abort', () => { clearTimeout(timer); controller.error(Object.assign(new Error('aborted'), { name: 'AbortError' })); }, { once: true });
+      }
+    });
+    return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  };
+  const call = (delayMs, timeoutMs) => runWithExecutionBudget(createExecutionBudget({ timeoutMs: 120_000, label: 'parse-test' }), () => llmCall(documentLaneAnthropicRequest({
+    apiKey: 'k', model: 'claude-opus-5-5', content: [{ type: 'text', text: 'T' }], schema, effort: 'high', maxTokens: 64000, execution: EXECUTION,
+    timeoutMs, fetchImpl: slowStream(delayMs)
+  })));
+  try {
+    const { result } = await call(150, 400);
+    assert.deepEqual(result.parsed, { a: 'late' }, 'a reply slower than the transport default but inside the lane\'s wall is read');
+    await assert.rejects(() => call(600, 250), (error) => error.code === 'PROVIDER_TIMEOUT', 'past the lane\'s wall: a typed timeout');
+    // Without a lane wall the transport default still applies.
+    await assert.rejects(() => call(150, null), (error) => error.code === 'PROVIDER_TIMEOUT');
+  } finally {
+    if (prior === undefined) delete process.env.PROVIDER_REQUEST_TIMEOUT_MS; else process.env.PROVIDER_REQUEST_TIMEOUT_MS = prior;
+  }
 });

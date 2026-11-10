@@ -28,6 +28,7 @@ import {
   notConfiguredFailure,
   readDocumentLaneReply,
   resolveDocumentLaneProvider,
+  stopFailureCode,
   stopFailureReason,
   thrownReason
 } from './documentLaneRequest.js';
@@ -533,6 +534,9 @@ const executionFor = (filename) => ({ root: { type: 'document_extraction', id: f
 
 const sendOpenAi = ({ apiKey, signal, body }) => asProviderResponse(llmCall({
   provider: 'openai',
+  // The lane's own wall, honoured inside a worker too (llmCall hands it to
+  // the deadline transport, bounded by the job's remaining budget).
+  timeoutMs: REQUEST_TIMEOUT_MS,
   url: 'https://api.openai.com/v1/responses',
   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
   body,
@@ -671,11 +675,12 @@ export const extractGenericDocumentFromBase64 = async ({
 
   if (!reply.ok && reply.kind === 'stop') {
     // A refusal or a cut-off reply will not clear with a retry of the same
-    // request: terminal, named, receipted with the model that gave it.
+    // request: terminal, named, receipted with the model that gave it. An
+    // answer that is not the structured answer is retryable (stopFailureCode).
     console.error('[genericDocument] provider stopped without a usable reply', {
       correlation_id: correlationId, provider: config.provider, failure: reply.error.code, reason: reply.error.reason, elapsed_ms: Date.now() - startedAt
     });
-    return { kind: 'failed', ...stamp(reply.error.servedModel), code: 'DOCUMENT_EXTRACTION_REJECTED', reason: stopFailureReason(reply.error) };
+    return { kind: 'failed', ...stamp(reply.error.servedModel), code: stopFailureCode(reply.error), reason: stopFailureReason(reply.error) };
   }
 
   if (!reply.ok) {
@@ -715,6 +720,9 @@ export const extractGenericDocumentFromBase64 = async ({
     });
     return {
       kind: 'failed',
+      // The model that answered and its provider: the parse error names
+      // them, never a default.
+      ...served,
       code: 'DOCUMENT_EXTRACTION_UNREADABLE',
       reason: parsed?.extraction_status === 'failed' ? 'extractor_status_failed' : 'low_confidence'
     };

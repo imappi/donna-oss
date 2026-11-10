@@ -7,6 +7,7 @@ import { PDFDocument } from 'pdf-lib';
 
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
 import { asProviderResponse, llmCall } from './llmCall.js';
+import { classifyModelProvenance } from './providerEndpoints.js';
 import {
   ANTHROPIC_MAX_REQUEST_BYTES,
   anthropicFileBlock,
@@ -558,6 +559,9 @@ const requestStatementModel = async ({ config, file = null, prompt, schema = nul
     if (schema) body.text = { format: { type: 'json_schema', name: 'bank_statement_extraction', strict: true, schema } };
     const response = await asProviderResponse(llmCall({
       provider: 'openai',
+      // The lane's own wall, honoured inside a worker too (llmCall hands it to
+      // the deadline transport, bounded by the job's remaining budget).
+      timeoutMs: OPENAI_VISION_TIMEOUT_MS,
       url: 'https://api.openai.com/v1/responses',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
       body,
@@ -585,12 +589,29 @@ const requestStatementModel = async ({ config, file = null, prompt, schema = nul
   }
 };
 
-// The models that answered, as the receipt names them: the response's id,
-// or the configured id when a response named none. One id in practice; a
-// chunked read answered by two ids says so rather than picking one.
-const servedModelOfResults = (results, config) => {
-  const ids = [...new Set(results.map((result) => result?.served_model || null).filter(Boolean))];
-  return ids.length ? ids.join('+') : config.model;
+// The model on the statement's receipt is the one each RESPONSE named,
+// recorded per call with its source (providerEndpoints.js
+// classifyModelProvenance): `response_proven` when the response named it,
+// `configured_fallback` when it named none (the requested id stands in), and
+// a chunk read back from the cache keeps the source it was stored with
+// (`legacy_unproven` for an entry written before sources were stored).
+// The read's `model_source` is the weakest of its calls'. One id answers in
+// practice; when chunks were answered by different ids (a chunk cached under
+// one model, the rest read under another) the read stores the id that
+// answered most chunks (the first in page order on a tie) as `model`, and
+// every chunk's id and source in `chunk_models` — never a joined string.
+const SOURCE_RANK = Object.freeze({ response_proven: 0, configured_fallback: 1, legacy_unproven: 2 });
+const callProvenance = (result, config) => (result?.cached_model_source
+  ? { model: result.served_model || null, model_source: result.cached_model_source }
+  : classifyModelProvenance({ responseModel: result?.served_model, requestedModel: config.model }));
+const provenanceOfResults = (results, config, pages = []) => {
+  const calls = results.map((result, index) => ({ ...callProvenance(result, config), ...(pages[index] || {}) }));
+  const counts = new Map();
+  for (const call of calls) if (call.model) counts.set(call.model, (counts.get(call.model) || 0) + 1);
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const model = ranked[0]?.[0] || config.model;
+  const modelSource = calls.reduce((worst, call) => ((SOURCE_RANK[call.model_source] ?? 2) > (SOURCE_RANK[worst] ?? 2) ? call.model_source : worst), 'response_proven');
+  return { model, model_source: calls.length ? modelSource : 'configured_fallback', ...(counts.size > 1 ? { chunk_models: calls } : {}) };
 };
 
 // Anthropic's request limit is on the encoded request (32 MB). A chunk that
@@ -912,6 +933,8 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
       transactions: cached.transactions,
       statement_summary: cached.statement_summary || null,
       model: cached.model || config.model,
+      model_source: cached.model ? (cached.model_source || 'legacy_unproven') : 'configured_fallback',
+      ...(cached.chunk_models ? { chunk_models: cached.chunk_models } : {}),
       provider: cached.provider || null,
       cache_hit: true,
       cache_sha: sha
@@ -941,10 +964,11 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
 
   if (!chunks || chunks.length <= 1) {
     const single = await extractStructuredFromOpenAiVision({ base64: clean, filename, mimeType });
-    const model = servedModelOfResults([single], config);
+    const { model, model_source } = provenanceOfResults([single], config);
     await writeVisionCache(config.cache, sha, {
       cached_at: new Date().toISOString(),
       model,
+      model_source,
       provider: single.provider,
       filename,
       transactions: single.transactions,
@@ -954,6 +978,7 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
       transactions: single.transactions,
       statement_summary: single.statement_summary,
       model,
+      model_source,
       provider: single.provider,
       cache_hit: false,
       cache_sha: sha
@@ -987,6 +1012,7 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
         transactions: Array.isArray(cachedChunk.transactions) ? cachedChunk.transactions : [],
         statement_summary: cachedChunk.statement_summary || null,
         served_model: cachedChunk.model || null,
+        cached_model_source: cachedChunk.model ? (cachedChunk.model_source || 'legacy_unproven') : 'configured_fallback',
         provider: cachedChunk.provider || null
       };
     }
@@ -1005,9 +1031,11 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
     // Write-through. A failed write degrades silently — the chunk
     // still flows through to the merge; the worst case is one extra
     // OpenAI call on the next retry.
+    const freshProvenance = callProvenance(fresh, config);
     await writeChunkVisionCache(config.cache, chunkSha, {
       cached_at: new Date().toISOString(),
-      model: fresh.served_model || config.model,
+      model: freshProvenance.model,
+      model_source: freshProvenance.model_source,
       provider: fresh.provider,
       filename,
       page_start: chunk.pageStart,
@@ -1033,11 +1061,14 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
     elapsed_ms: Date.now() - startedAt
   });
 
-  const model = servedModelOfResults(results, config);
+  const { model, model_source, chunk_models } = provenanceOfResults(results, config,
+    chunks.map((chunk) => ({ page_start: chunk.pageStart, page_end: chunk.pageEnd })));
   const provider = results.find((result) => result?.provider)?.provider || config.provider;
   await writeVisionCache(config.cache, sha, {
     cached_at: new Date().toISOString(),
     model,
+    model_source,
+    ...(chunk_models ? { chunk_models } : {}),
     provider,
     filename,
     transactions: merged,
@@ -1048,6 +1079,8 @@ export const extractStructuredFromOpenAiVisionPaginated = async ({
     transactions: merged,
     statement_summary: summary,
     model,
+    model_source,
+    ...(chunk_models ? { chunk_models } : {}),
     provider,
     cache_hit: false,
     cache_sha: sha
@@ -1199,6 +1232,8 @@ export const extractStructuredFromStatementText = async ({
       transactions: cached.transactions,
       statement_summary: cached.statement_summary || null,
       model: cached.model || config.model,
+      model_source: cached.model ? (cached.model_source || 'legacy_unproven') : 'configured_fallback',
+      ...(cached.chunk_models ? { chunk_models: cached.chunk_models } : {}),
       provider: cached.provider || null,
       cache_hit: true
     };
@@ -1222,7 +1257,7 @@ export const extractStructuredFromStatementText = async ({
   merged.sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const summary = mergeSummaryHints(results.map((result) => result?.statement_summary));
 
-  const model = servedModelOfResults(results, config);
+  const { model, model_source, chunk_models } = provenanceOfResults(results, config, chunks.map((_, index) => ({ chunk: index })));
   const provider = results.find((result) => result?.provider)?.provider || config.provider;
   console.log('[bankStatementVision] structured text extraction complete', {
     provider,
@@ -1241,6 +1276,8 @@ export const extractStructuredFromStatementText = async ({
     {
       cached_at: new Date().toISOString(),
       model,
+      model_source,
+      ...(chunk_models ? { chunk_models } : {}),
       provider,
       filename,
       transactions: merged,
@@ -1253,6 +1290,8 @@ export const extractStructuredFromStatementText = async ({
     transactions: merged,
     statement_summary: summary,
     model,
+    model_source,
+    ...(chunk_models ? { chunk_models } : {}),
     provider,
     cache_hit: false
   };
