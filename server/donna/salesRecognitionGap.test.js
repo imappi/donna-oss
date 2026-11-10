@@ -2,7 +2,7 @@
 // posted ledger does not recognise in the period, and why.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyRecognitionGap, recognitionStatement, recognitionDraftReason, buildSalesRecognitionQuestion, buildSupplierBillSettlementQuestion,
+import { classifyRecognitionGap, recognitionStatement, recognitionDraftReason, buildSalesRecognitionQuestion, buildSupplierBillSettlementQuestion, buildSupplierCreditNoteQuestion, toCents,
   noSettlementAskStillOpen, NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS, SALES_RECOGNITION_ASK_LANE, SUPPLIER_BILL_SETTLEMENT_ASK_LANE } from './salesRecognitionGap.js';
 
 const FEB = { starts_on: '2025-02-01', ends_on: '2025-02-28' };
@@ -199,4 +199,116 @@ test('both no-settlement questions end the same way in each language, and both l
   }
   assert.equal(noSettlementAskStillOpen('owner_reply_clarification'), null);
   assert.equal(noSettlementAskStillOpen(undefined), null);
+});
+
+// Part-paid documents: an instalment posted inside the period recognises only
+// itself. The unpaid remainder is an item, named with its amount, computed in
+// cents from the stored decimals.
+const posted = (id, docId, amount, journalDate, extra = {}) => ({
+  match: { id: `m-${id}`, bank_transaction_id: id, matched_object_id: docId, status: 'confirmed', match_amount: amount, payload: {}, ...extra },
+  journal: journalDate ? { source_id: id, journal_date: journalDate } : null
+});
+const book = (rows) => ({ matches: rows.map((r) => r.match), transactionJournals: rows.map((r) => r.journal).filter(Boolean) });
+
+test('money is read as cents from the stored decimal text', () => {
+  assert.deepEqual(['1004.00', '0.10', '-62.00', '183.6', 903.6, 0.1 + 0.2, '12.345', '7', null, '', 'abc'].map(toCents),
+    [100400, 10, -6200, 18360, 90360, 30, 1235, 700, null, null, null]);
+});
+
+test('part-paid: a sales invoice and a supplier bill with one instalment in the period name their unpaid remainder', () => {
+  const salesRows = [posted('tx-1', 'osa', '502.00', '2025-02-20'), posted('tx-2', 'osa', '502.00', '2025-03-20'),
+    posted('tx-3', 'full', '125.50', '2025-02-10'), posted('tx-4', 'full', '125.50', '2025-02-24')];
+  const sales = classifyRecognitionGap({ basis: 'accrual', period: FEB, ...book(salesRows),
+    documents: [doc('osa', { total_amount: '1004.00', tax_amount: '204.00' }), doc('full', { total_amount: '251.00', tax_amount: '51.00' })] });
+  assert.deepEqual(sales.items.map((i) => [i.document_id, i.rests, i.gross, i.net, i.tax]), [['osa', 'part_settled_in_period', 502, 400, 102]]);
+  assert.deepEqual(sales.items[0].remainder, { document_gross: 1004, settled_in_period: 502, remaining_gross: 502, remaining_tax: 102 });
+  assert.deepEqual(sales.items[0].settlement, { transaction_ids: ['tx-1', 'tx-2'], journal_dates: ['2025-02-20', '2025-03-20'] });
+  assert.deepEqual(sales.represented, [{ document_id: 'full', by: 'settlement_journal' }]);
+  assert.equal(recognitionStatement(sales), '1 uploaded sales document is not fully recognised in this period\'s posted ledger; the unrecognised part is excluded '
+    + 'from these figures: 400.00 EUR net + 102.00 tax. 1 of them is paid only in part in this period; only its unpaid remainder is counted here.');
+  const purchase = classifyRecognitionGap({ side: 'purchase', basis: 'accrual', period: FEB,
+    ...book([posted('tx-b', 'bill-osa', '248.00', '2025-02-17'), posted('tx-b2', 'bill-osa', '248.00', null)]),
+    documents: [sbill('bill-osa', { total_amount: '496.00', tax_amount: '96.00' })] });
+  // The second instalment is decided but not posted: still only the first is in the ledger.
+  assert.deepEqual(purchase.items.map((i) => [i.document_id, i.rests, i.gross, i.net, i.tax]), [['bill-osa', 'part_settled_in_period', 248, 200, 48]]);
+  assert.match(recognitionStatement(purchase), /: 200\.00 EUR expense \+ 48\.00 input tax\. 1 of them is paid only in part/);
+});
+
+test('part-paid: the remainder tax is the stated tax less the settled share, rounded half up in cents', () => {
+  const gap = classifyRecognitionGap({ basis: 'accrual', period: FEB, ...book([posted('tx', 'odd', '33.33', '2025-02-15')]),
+    documents: [doc('odd', { total_amount: '100.00', tax_amount: '20.32' })] });
+  // settled share of tax: 20.32 × 33.33 / 100 = 6.772… → 6.77; remainder 13.55 of 66.67.
+  assert.deepEqual(gap.items.map((i) => [i.gross, i.tax, i.net]), [[66.67, 13.55, 53.12]]);
+  const noTax = classifyRecognitionGap({ basis: 'accrual', period: FEB, ...book([posted('tx', 'nt', '10.00', '2025-02-15')]),
+    documents: [doc('nt', { total_amount: '30.00', tax_amount: null })] });
+  assert.deepEqual(noTax.items.map((i) => [i.gross, i.tax, i.net, i.remainder.remaining_tax]), [[20, null, null, null]]);
+});
+
+test('part-paid: a 1-cent shortfall is paid (the payment_status epsilon); an unstated or foreign-currency line amount keeps the document represented', () => {
+  const gap = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents: [doc('cent'), doc('unstated'), doc('fx')],
+    ...book([posted('tx-c', 'cent', '903.59', '2025-02-15'), posted('tx-u', 'unstated', null, '2025-02-15'),
+      posted('tx-f', 'fx', '400.00', '2025-02-15', { bank_currency: 'SEK' })]) });
+  assert.deepEqual(gap.items, []);
+  assert.deepEqual(gap.represented.map((r) => r.document_id), ['cent', 'unstated', 'fx']);
+});
+
+test('part-paid: credit applied to an invoice on its posted line counts toward it, and the credit note itself is netted', () => {
+  const applications = [{ credit_document_id: 'aroma-cn', invoice_document_id: 'aroma', amount: '376.50', settlement_match_id: 'm-tx-aroma', counterpart_date: '2025-02-03' }];
+  const documents = [doc('aroma', { total_amount: '2008.00', tax_amount: '408.00' }), doc('aroma-cn', { total_amount: '-376.50', tax_amount: '-76.50', payment_status: 'credit_note' })];
+  const full = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents, applications, ...book([posted('tx-aroma', 'aroma', '1631.50', '2025-02-20')]) });
+  assert.deepEqual([full.items, full.represented.map((r) => r.document_id)], [[], ['aroma', 'aroma-cn']]);
+  // Half the credit-adjusted balance paid in February: the invoice names what is left.
+  const half = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents, applications, ...book([posted('tx-aroma', 'aroma', '815.75', '2025-02-20')]) });
+  assert.deepEqual(half.items.map((i) => [i.document_id, i.gross]), [['aroma', 815.75]]);
+  assert.deepEqual(half.represented.map((r) => r.document_id), ['aroma-cn']);
+});
+
+test('netted supplier credit note: without a record of the deduction both the bill remainder and the credit are named; with one, both are represented', () => {
+  const documents = [sbill('bill-net'), sbill('bill-net-cn', { total_amount: '-62.00', tax_amount: '-12.00', payment_status: 'credit_note' })];
+  const line = book([posted('tx-net', 'bill-net', '186.00', '2025-02-15')]);
+  // Amounts that add up (248 − 62 = 186) are not a record: nothing is inferred.
+  const unlinked = classifyRecognitionGap({ side: 'purchase', basis: 'accrual', period: FEB, documents, ...line });
+  assert.deepEqual(unlinked.items.map((i) => [i.document_id, i.kind, i.rests, i.gross, i.tax]),
+    [['bill-net', 'invoice', 'part_settled_in_period', 62, 12], ['bill-net-cn', 'credit_note', 'no_settlement', -62, -12]]);
+  assert.deepEqual(unlinked.totals, [{ currency: 'EUR', count: 2, gross: 0, net: 0, tax: 0, tax_unknown_count: 0 }]);
+  // The record that would settle it: the credit applied to the bill on the bill's posted line.
+  const linked = classifyRecognitionGap({ side: 'purchase', basis: 'accrual', period: FEB, documents, ...line,
+    applications: [{ credit_document_id: 'bill-net-cn', invoice_document_id: 'bill-net', amount: '62.00', settlement_match_id: 'm-tx-net', counterpart_date: '2025-02-05' }] });
+  assert.deepEqual([linked.items, linked.represented], [[], [{ document_id: 'bill-net', by: 'settlement_journal' }, { document_id: 'bill-net-cn', by: 'settlement_journal' }]]);
+});
+
+test('the draft statement in Finnish, with and without a part-paid document', () => {
+  const plain = classifyRecognitionGap({ basis: 'accrual', period: FEB, documents: [doc('lumikki')] });
+  assert.equal(recognitionStatement(plain, { language: 'fi' }),
+    '1 ladattu myyntiasiakirja ei ole kirjattu tämän kauden kirjanpitoon, ja se on jätetty pois näistä luvuista: 720,00 EUR nettomyyntiä + 183,60 ALV.');
+  const parts = classifyRecognitionGap({ side: 'purchase', basis: 'accrual', period: FEB, documents: [sbill('a', { total_amount: '496.00', tax_amount: '96.00' }), sbill('b')],
+    ...book([posted('tx-a', 'a', '248.00', '2025-02-17')]) });
+  assert.equal(recognitionStatement(parts, { language: 'fi' }),
+    '2 ladattua ostoasiakirjaa ei ole kirjattu kokonaan tämän kauden kirjanpitoon; kirjaamaton osa on jätetty pois näistä luvuista: 400,00 EUR kuluja + 96,00 vähennettävää ALV:tä. '
+    + 'Niistä 1 on maksettu tällä kaudella vain osittain; mukana on vain maksamaton loppuosa.');
+  assert.equal(recognitionDraftReason(parts, { language: 'fi' }).detail, recognitionStatement(parts, { language: 'fi' }));
+  assert.equal(recognitionDraftReason(parts).detail, recognitionStatement(parts));
+});
+
+const creditNote = doc('tukku-cn', { document_type: 'supplier_bill', customer_name: null, vendor_name: 'Tukku Oy', total_amount: '-62.00', tax_amount: '-12.00',
+  payment_status: 'credit_note', document_date: '2025-02-09', parse_summary: { references: [{ type: 'invoice_number', value: 'HL-30' }] } });
+test('the supplier credit-note question asks deducted, refunded or still open, in English and Finnish', () => {
+  assert.equal(buildSupplierCreditNoteQuestion({ document: creditNote }),
+    'Supplier credit note HL-30 from Tukku Oy (62.00 EUR, dated 2025-02-09) has no refund on the bank statements Donna holds, '
+    + 'and nothing Donna holds shows it deducted from a payment of a bill. Donna does not yet record an open supplier credit note in the books, '
+    + 'so it is missing from that period\'s expenses and VAT. Was it deducted from a payment to the supplier, or refunded to you? '
+    + 'If it was deducted, reply which bill\'s payment it was deducted from and when that payment was made. If it was refunded, reply when and into which account. '
+    + 'If it is still open, reply "still open".');
+  assert.equal(buildSupplierCreditNoteQuestion({ document: creditNote, language: 'fi' }),
+    'Ostohyvityslasku HL-30 (Tukku Oy, 62,00 EUR, päivätty 9.2.2025): Donnalla olevissa tiliotteissa ei näy tälle hyvitykselle palautusta, '
+    + 'eikä Donnalla ole tietoa siitä, että se olisi vähennetty jonkin laskun maksusta. Donna ei vielä kirjaa avointa ostohyvityslaskua kirjanpitoon, '
+    + 'joten se puuttuu sen kauden kuluista ja arvonlisäverosta. Onko hyvitys vähennetty toimittajalle maksetusta laskusta, vai onko se palautettu sinulle? '
+    + 'Jos se on vähennetty, kerro minkä laskun maksusta ja milloin maksu tehtiin. Jos se on palautettu, kerro milloin ja mille tilille. '
+    + 'Jos hyvitys on vielä käyttämättä, vastaa "vielä avoin".');
+  const credit = noSettlementAskStillOpen(SUPPLIER_BILL_SETTLEMENT_ASK_LANE, 'unrecorded_uploaded_supplier_credit_note');
+  assert.match(credit.meaning, /credit note .* still open/);
+  assert.equal(noSettlementAskStillOpen(SUPPLIER_BILL_SETTLEMENT_ASK_LANE, 'unrecorded_uploaded_supplier_bill').meaning,
+    noSettlementAskStillOpen(SUPPLIER_BILL_SETTLEMENT_ASK_LANE).meaning);
+  // The sales lane has no credit-note question: customer credits are settled by their application.
+  assert.equal(noSettlementAskStillOpen(SALES_RECOGNITION_ASK_LANE, 'unrecorded_uploaded_supplier_credit_note'), noSettlementAskStillOpen(SALES_RECOGNITION_ASK_LANE));
 });
