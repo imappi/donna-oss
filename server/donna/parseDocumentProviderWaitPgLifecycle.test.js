@@ -27,7 +27,8 @@
 //   (f) upgrade: a receipt the previous release rested `failed` on a missing
 //       key, with its dead job (which kept Host A refusing every upload), is
 //       re-admitted by migration 186 — new run, dead job settled — and read
-//       once the key is there.
+//       once the key is there. (The dead job no longer gates the host: its
+//       document's recorded outcome accounts for it.)
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -325,10 +326,18 @@ test(
         code: 'DOCUMENT_EXTRACTION_REJECTED', reason: 'openai_400', provider: 'openai', retryable: false
       });
 
+      // The old release's Host A read this dead job as lost work and refused
+      // every upload (work_queue_needs_recovery). Its document already records
+      // the run's final outcome (failed, typed error), so the work-queue rule
+      // now accounts for it by that outcome — the host certifies before the
+      // migration runs (parseDocumentDeadJobPgLifecycle.test.js is the proof);
+      // the job stays dead, visibly, until the re-admission settles it.
       await appliance.runtime.hostReadiness.renewNow();
-      const blocked = await appliance.read.host();
-      assert.equal(blocked.status, 'FAIL', 'the dead parse job gates the host (the old release)');
-      assert.equal(blocked.reason_code, 'work_queue_needs_recovery');
+      const before = await appliance.read.host();
+      assert.equal(before.status, 'PASS', JSON.stringify({ reason: before.reason_code }));
+      const beforeQueue = before.certificate.checks.find((entry) => entry.id === 'database_schema').detail.queue;
+      assert.equal(beforeQueue.dead, 1);
+      assert.equal(beforeQueue.dead_accounted_by_document, 1);
 
       // The upgrade: migration 186, as the boot applies it.
       const migration = readFileSync(path.join(REPO_ROOT, 'db', 'migrations', '186_parse_provider_wait_readmission.sql'), 'utf8');

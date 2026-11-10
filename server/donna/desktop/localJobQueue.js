@@ -292,6 +292,39 @@ export const retireUndeclaredLocalFunctions = async ({ client, declaredFunctionI
   };
 };
 
+// Settle a document's superseded dead parse jobs (the appliance's queue),
+// inside the caller's transaction: the writer that mints the document's NEW
+// parse run (parseDocumentsDb.__retryParseRunsWithClient, the manual retry)
+// calls this with the new run id, and names the returned ids on its own
+// `document.parse.retry` receipt — the same settlement migration 186 applies
+// to its re-admissions, in SQL. A dead job of a run the document no longer
+// carries is the receipt of that run's spent budget; once a new run owns the
+// document it rests `cancelled`, its last_error kept. Only dead jobs of THIS
+// document's OTHER runs move; the new run's own job, and every other
+// function's jobs, are untouched. On a host whose queue holds no such row
+// (the cloud: Inngest owns parse retries), or has no local_jobs table at
+// all, this settles nothing and never fails the retry.
+// 'parse-document' is desktop/parseDocumentJob.js PARSE_DOCUMENT_FUNCTION_ID
+// (equality pinned in localJobQueue.test.js; importing it here would cycle).
+export const settleSupersededDeadParseJobsWithClient = async ({ client, firmId, documentId, currentRunId } = {}) => {
+  if (!client || !firmId || !documentId || !currentRunId) return [];
+  const present = await client.query("select to_regclass('public.local_jobs') as table_name");
+  if (!present.rows?.[0]?.table_name) return [];
+  const result = await client.query(
+    `update local_jobs
+        set status = 'cancelled', cancelled_at = now(),
+            locked_by = null, locked_at = null, lease_expires_at = null
+      where function_id = 'parse-document'
+        and status = 'dead'
+        and payload->>'firm_id' = $1
+        and payload->>'document_id' = $2
+        and payload->>'parse_run_id' is distinct from $3
+      returning id`,
+    [firmId, documentId, String(currentRunId)]
+  );
+  return (result.rows || []).map((row) => Number(row.id)).sort((a, b) => a - b);
+};
+
 export const listLocalCronState = async ({ client } = {}) => {
   if (!client) return [];
   const result = await client.query(
