@@ -1724,6 +1724,21 @@ export const stampProfileProvenance = (patch, { actorId = null, now = new Date()
   return out;
 };
 
+// Profile keys deriveClientIdentityColumns reads for clients.legal_names.
+const LEGAL_NAME_PROFILE_KEYS = Object.freeze(['companyName', 'name', 'legalName', 'legalNames']);
+
+// The audit actor_type of a profile write: the authenticated principal's type
+// (firm_member, firm_collaborator for an owner or a staff seat, access_token,
+// …) whenever the recorded actorId is that principal — the convention other
+// writers follow (actor_type = principal.principalType, actor_id =
+// principal.principalId). 'system' only when no person is named.
+const profileAuditActorType = ({ actorId, principal, nativeRegistrationReceipt }) => {
+  const type = typeof principal?.principalType === 'string' ? principal.principalType.trim() : '';
+  const names = [principal?.principalId, principal?.userId, principal?.email].filter(Boolean);
+  if (type && actorId && actorId !== 'system' && names.includes(actorId)) return type;
+  return nativeRegistrationReceipt?.actor_type || 'system';
+};
+
 // Shallow JSONB merge into clients.profile for a single (firm, client).
 // `profilePatch` is an object of top-level keys to overwrite via the
 // jsonb `||` operator (right side wins, no deep merge). Used by the
@@ -1733,7 +1748,10 @@ export const stampProfileProvenance = (patch, { actorId = null, now = new Date()
 //
 // `actorId` is the authenticated principal id (the route derives it via
 // access.principal); it's recorded on the audit_events row and stamped
-// into server-owned provenance keys via stampProfileProvenance.
+// into server-owned provenance keys via stampProfileProvenance. `principal`
+// gives the row its actor_type (profileAuditActorType); the row's metadata
+// also carries previous_values (what each written key held before) and, when
+// a name key moved clients.legal_names, legal_names { before, after }.
 //
 // `dbClient` mirrors the escape hatch on updateClientRuleStatusInDb —
 // inject a mock for unit tests.
@@ -1956,6 +1974,17 @@ export const updateClientProfileInDb = async ({
       // THIS patch carries a gb OBJECT; `gb: null` still clears the whole key
       // through the shallow branch (the validator's null-clears contract).
       for (const key of preservedIntakeKeys) delete stampedPatch[key];
+      // What each written key held before this write, read under the row lock,
+      // so the audit row alone can undo a wrong change. A key absent from
+      // previous_values did not exist on the profile (its undo is removal).
+      const priorRow = (await client.query(
+        'select profile, legal_names, company_name from clients where firm_id = $1 and id = $2 for update',
+        [firmId, clientId]
+      )).rows[0] || null;
+      const priorProfile = priorRow?.profile || {};
+      const previousValues = Object.fromEntries(Object.keys(stampedPatch)
+        .filter((key) => Object.prototype.hasOwnProperty.call(priorProfile, key))
+        .map((key) => [key, priorProfile[key]]));
       const deepMergeGb = !jurisdictionChanged && Boolean(stampedPatch.gb) && typeof stampedPatch.gb === 'object' && !Array.isArray(stampedPatch.gb);
       const updated = await client.query(
         `update clients
@@ -1965,7 +1994,7 @@ export const updateClientProfileInDb = async ({
                 end,
                 updated_at = now()
           where firm_id = $1 and id = $2
-        returning id`,
+        returning id, profile`,
         [firmId, clientId, JSON.stringify(stampedPatch), deepMergeGb]
       );
 
@@ -2037,10 +2066,37 @@ export const updateClientProfileInDb = async ({
         );
       }
 
+      // Same column-sync for the names the document router and extraction use
+      // to tell "us" from "them" (clients.legal_names). Re-derived with the
+      // create path's own derivation over the merged profile whenever a name
+      // key is written, so a confirmed or corrected legal name reaches the
+      // anchor. The company_name column stands in for a profile that never
+      // carried a name (rows backfilled by migration 020).
+      let legalNamesChange = null;
+      if (LEGAL_NAME_PROFILE_KEYS.some((key) => Object.prototype.hasOwnProperty.call(stampedPatch, key))) {
+        const mergedProfile = updated.rows[0].profile || {};
+        const { legalNames } = deriveClientIdentityColumns({
+          ...mergedProfile,
+          companyName: mergedProfile.companyName || mergedProfile.name || priorRow?.company_name || null
+        });
+        const before = Array.isArray(priorRow?.legal_names) ? priorRow.legal_names : [];
+        if (JSON.stringify(before) !== JSON.stringify(legalNames)) {
+          await client.query(
+            `update clients
+                set legal_names = $3::text[],
+                    updated_at = now()
+              where firm_id = $1 and id = $2`,
+            [firmId, clientId, legalNames]
+          );
+          legalNamesChange = { before, after: legalNames };
+        }
+      }
+
       await client.query(
         `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
          values ($1, $2, $5, $3, 'client.profile.update', 'client', $2, $4::jsonb)`,
-        [firmId, clientId, actorId, JSON.stringify({ keys: Object.keys(stampedPatch), ...(nativeRegistrationReceipt ? { native_registration: nativeRegistrationReceipt } : {}), ...(countryFactsInvalidated ? { country_facts_invalidated: countryFactsInvalidated } : {}), ...(accountingProfileReceipt ? { accounting_profile: accountingProfileReceipt } : {}), ...(fiIntakeFirstFill ? { fi_intake_first_fill: fiIntakeFirstFill } : {}) }), nativeRegistrationReceipt?.actor_type || 'system']
+        [firmId, clientId, actorId, JSON.stringify({ keys: Object.keys(stampedPatch), previous_values: previousValues,
+          ...(legalNamesChange ? { legal_names: legalNamesChange } : {}), ...(nativeRegistrationReceipt ? { native_registration: nativeRegistrationReceipt } : {}), ...(countryFactsInvalidated ? { country_facts_invalidated: countryFactsInvalidated } : {}), ...(accountingProfileReceipt ? { accounting_profile: accountingProfileReceipt } : {}), ...(fiIntakeFirstFill ? { fi_intake_first_fill: fiIntakeFirstFill } : {}) }), profileAuditActorType({ actorId, principal, nativeRegistrationReceipt })]
       );
 
       await client.query(manageTransaction ? 'commit' : 'release savepoint client_profile_update');

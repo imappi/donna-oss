@@ -53,6 +53,28 @@ const KNOWN_JURISDICTIONS = new Set([
 
 const ACCOUNTING_SYSTEMS = new Set(['xero', 'qbo', 'procountor', 'none']);
 
+// The phone business register's vocabulary. mobile/mobileBusinessSetup.js
+// owns the contract (LEGAL_FORMS, BUSINESS_STAGES); the schema keeps its own
+// copy so this module does not import the phone adapter, and
+// clientProfileSchema.test.js pins the two equal.
+const BUSINESS_REGISTER_LEGAL_FORMS = Object.freeze(['sole_trader', 'limited_company', 'other']);
+const BUSINESS_REGISTER_SOURCES = Object.freeze(['prh_ytj', 'owner']);
+const BUSINESS_SETUP_STAGES = Object.freeze(['new', 'existing']);
+const BUSINESS_REGISTER_KEYS = Object.freeze(['business_id', 'legal_form', 'legal_form_code', 'registered_address', 'source',
+  'fetched_at', 'authority_verified', 'confirmed_by', 'confirmed_at', 'terminal']);
+const BUSINESS_SETUP_KEYS = Object.freeze(['business_stage', 'suggestion_dismissed']);
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
+
+// A plain object carrying exactly `keys` (all present, nothing else).
+const exactObject = (value, label, keys) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throwBadRequest(`${label} must be an object.`);
+  const extra = Object.keys(value).filter((key) => !keys.includes(key));
+  if (extra.length) throwBadRequest(`${label} may not carry ${extra.map((key) => JSON.stringify(key)).join(', ')}.`);
+  const missing = keys.filter((key) => !Object.prototype.hasOwnProperty.call(value, key));
+  if (missing.length) throwBadRequest(`${label} is missing ${missing.join(', ')}.`);
+  return value;
+};
+
 // Keys the validator KNOWS about. Each carries a normaliser that
 // either returns the cleaned value, returns undefined to drop the
 // key, or throws a 400 with a useful message.
@@ -194,6 +216,77 @@ const KNOWN_KEYS = {
     return trimmed;
   },
 
+  // The phone's business register (mobile/mobileBusinessSetup.js
+  // setupPatchFor) writes these three keys. Validated to exactly the shape it
+  // writes, so a malformed value is refused instead of preserved as an unknown
+  // key. `legalName` also feeds clients.legal_names (the document router's
+  // "us" anchor) through deriveClientIdentityColumns, so it is held to the
+  // phone's own bound (1–1000 characters after trimming). null clears.
+  legalName: (value) => {
+    if (value === null) return null;
+    if (typeof value !== 'string') throwBadRequest('legalName must be a string.');
+    const trimmed = value.trim();
+    if (!trimmed) throwBadRequest('legalName must not be empty.');
+    if (trimmed.length > 1000) throwBadRequest('legalName must be 1000 characters or fewer.');
+    return trimmed;
+  },
+  // What was confirmed, by whom and from which source. authority_verified is
+  // always false: confirming details on this surface never verifies ownership.
+  business_register: (value) => {
+    if (value === null) return null;
+    const record = exactObject(value, 'business_register', BUSINESS_REGISTER_KEYS);
+    const text = (key, max, { allowEmpty = false, nullable = false } = {}) => {
+      const field = record[key];
+      if (field === null && nullable) return null;
+      if (typeof field !== 'string') throwBadRequest(`business_register.${key} must be a string${nullable ? ' or null' : ''}.`);
+      const trimmed = field.trim();
+      if (!trimmed && !allowEmpty) throwBadRequest(`business_register.${key} must not be empty.`);
+      if (trimmed.length > max) throwBadRequest(`business_register.${key} must be ${max} characters or fewer.`);
+      return trimmed;
+    };
+    const instant = (key, { nullable = false } = {}) => {
+      const field = record[key];
+      if (field === null && nullable) return null;
+      if (typeof field !== 'string' || !ISO_INSTANT.test(field) || Number.isNaN(Date.parse(field))) {
+        throwBadRequest(`business_register.${key} must be an ISO 8601 timestamp${nullable ? ' or null' : ''}.`);
+      }
+      return field;
+    };
+    if (!BUSINESS_REGISTER_LEGAL_FORMS.includes(record.legal_form)) {
+      throwBadRequest(`business_register.legal_form must be one of ${BUSINESS_REGISTER_LEGAL_FORMS.join(', ')}.`);
+    }
+    if (!BUSINESS_REGISTER_SOURCES.includes(record.source)) {
+      throwBadRequest(`business_register.source must be one of ${BUSINESS_REGISTER_SOURCES.join(', ')}.`);
+    }
+    if (record.authority_verified !== false) throwBadRequest('business_register.authority_verified must be false.');
+    if (typeof record.terminal !== 'string' || !/^[a-z_]{1,40}$/.test(record.terminal)) {
+      throwBadRequest('business_register.terminal must be a short lowercase surface name.');
+    }
+    return {
+      business_id: text('business_id', 40),
+      legal_form: record.legal_form,
+      legal_form_code: text('legal_form_code', 40, { nullable: true }),
+      registered_address: text('registered_address', 1000, { allowEmpty: true }),
+      source: record.source,
+      fetched_at: instant('fetched_at', { nullable: true }),
+      authority_verified: false,
+      confirmed_by: text('confirmed_by', 200, { nullable: true }),
+      confirmed_at: instant('confirmed_at'),
+      terminal: record.terminal
+    };
+  },
+  // The owner's setup answers: business stage and whether they put the
+  // suggestion off.
+  business_setup: (value) => {
+    if (value === null) return null;
+    const setup = exactObject(value, 'business_setup', BUSINESS_SETUP_KEYS);
+    if (setup.business_stage !== null && !BUSINESS_SETUP_STAGES.includes(setup.business_stage)) {
+      throwBadRequest(`business_setup.business_stage must be one of ${BUSINESS_SETUP_STAGES.join(', ')} or null.`);
+    }
+    if (typeof setup.suggestion_dismissed !== 'boolean') throwBadRequest('business_setup.suggestion_dismissed must be a boolean.');
+    return { business_stage: setup.business_stage, suggestion_dismissed: setup.suggestion_dismissed };
+  },
+
   // Provenance (services_engaged_set_by/_at, accounting_system_set_by/_at,
   // jurisdiction_confirmed_by/_at) is NOT operator-writable — it's
   // server-stamped from the authenticated principal in
@@ -279,5 +372,8 @@ export const __SCHEMA__ = {
   ACCOUNTING_SYSTEMS: [...ACCOUNTING_SYSTEMS],
   KNOWN_JURISDICTIONS: [...KNOWN_JURISDICTIONS],
   JURISDICTION_ALIAS: { ...JURISDICTION_ALIAS },
-  SERVER_OWNED_KEYS: [...SERVER_OWNED_KEYS]
+  SERVER_OWNED_KEYS: [...SERVER_OWNED_KEYS],
+  BUSINESS_REGISTER_LEGAL_FORMS: [...BUSINESS_REGISTER_LEGAL_FORMS],
+  BUSINESS_REGISTER_SOURCES: [...BUSINESS_REGISTER_SOURCES],
+  BUSINESS_SETUP_STAGES: [...BUSINESS_SETUP_STAGES]
 };
