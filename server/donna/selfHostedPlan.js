@@ -62,11 +62,19 @@ export const cloudPlacementFor = (lane, env = process.env) => {
 };
 
 // `seatedLanes` = the lane ids seated (or to be seated) for the company.
-export const buildSelfHostedLanePlan = ({ seatedLanes = [], env = process.env, lanes = MODEL_LANES } = {}) => {
+// `jevOn` — the company's Typesafe lane (JEV_RECONCILIATION) acts: it then
+// decides bank-line and document disposition FIRST and those sweeps do not read
+// the seat; a Jev hand-off reasons on the cloud provider (bankLineDispositionLlm,
+// documentDispositionLlm). null = not read.
+const JEV_FIRST_LANES = Object.freeze(['bank_line_disposition', 'reconciliation_reasoning']);
+export const buildSelfHostedLanePlan = ({ seatedLanes = [], env = process.env, lanes = MODEL_LANES, jevOn = null } = {}) => {
   const seated = new Set(seatedLanes);
   const rows = lanes.map((lane) => {
     if (seated.has(lane.id) && lane.selfHosted) {
-      return { lane: lane.id, title: lane.title, where: 'self_hosted', covers: [...lane.selfHosted.covers], reason: null };
+      const warning = jevOn === true && JEV_FIRST_LANES.includes(lane.id)
+        ? `the Typesafe lane (JEV_RECONCILIATION) is on for this company: it decides ${lane.id === 'bank_line_disposition' ? 'bank-line' : 'document'} disposition first and that sweep does not use this seat; a Jev hand-off reasons on ${cloudPlacementFor(lane, env)}. Switch it off (CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION) for the seat to decide.`
+        : null;
+      return { lane: lane.id, title: lane.title, where: 'self_hosted', covers: [...lane.selfHosted.covers], reason: null, warning };
     }
     const where = lane.id === 'host_provider_probe' ? 'operator_only' : cloudPlacementFor(lane, env);
     const reason = lane.selfHosted

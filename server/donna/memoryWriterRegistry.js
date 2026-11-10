@@ -477,7 +477,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/billReconciliation.js", "Existing runtime SQL boundary in server/donna/billReconciliation.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, payload->>'bank_line_disposition_ …
-    ["runBillReconciliationForDocument", "dynamic_sql", "56a35f10db2595489e5bab6598cd38160edabef3ec7bd1215246c6cf41ff6d53", 1, []],
+    // Re-pinned 2026-11-10 (run on a local model): the SELECT, targets and count are unchanged; the enclosing body now hands the lane's policy row to the reverse-shadow hook builder, which builds no hook for a self-hosted, unqualified seat. No memory target.
+    ["runBillReconciliationForDocument", "dynamic_sql", "be723ef2fb02f5d7e7e5a62fa401b88b2f47cb24351573bd8af8499984643d56", 1, []],
   ]),
   ...group("server/donna/caseManager.js", "Existing runtime SQL boundary in server/donna/caseManager.js.", [
     // select id, case_type, status, title, primary_object_type, primary_object_id, last_activity_at, created_at from bookkeeping_cases where __DYNAMIC_SQL__ order by last_activity_at desc limit $__DYNAMIC_SQL__
@@ -934,7 +935,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/paymentAccountStatementReconciliation.js", "Existing runtime SQL boundary in server/donna/paymentAccountStatementReconciliation.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, payload->>'bank_line_disposition_ …
-    ["runPaymentAccountStatementReconciliationForDocument", "dynamic_sql", "92e18917c8bbcace83ec701e1a930c3c68047e5b56f40336ef316e48123da2b6", 1, []],
+    // Re-pinned 2026-11-10 (run on a local model): the SELECT, targets and count are unchanged; the enclosing body now hands the lane's policy row to the reverse-shadow hook builder, which builds no hook for a self-hosted, unqualified seat. No memory target.
+    ["runPaymentAccountStatementReconciliationForDocument", "dynamic_sql", "76595c0b1679d5d184b2778d58de651ed1cd4a3c1001ff1fe00e00c09c230257", 1, []],
   ]),
   ...group("server/donna/paymentAccountStatementReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/paymentAccountStatementReconciliationLlm.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
@@ -942,7 +944,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/paymentConfirmationReconciliation.js", "Existing runtime SQL boundary in server/donna/paymentConfirmationReconciliation.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, payload->>'bank_line_disposition_ …
-    ["runPaymentConfirmationReconciliationForDocument", "dynamic_sql", "0e88d86feb979e0c89c1c6f9137fe63a3e7a97625067b216aa83892cb7a3fe58", 1, []],
+    // Re-pinned 2026-11-10 (run on a local model): the SELECT, targets and count are unchanged; the enclosing body now hands the lane's policy row to the reverse-shadow hook builder, which builds no hook for a self-hosted, unqualified seat. No memory target.
+    ["runPaymentConfirmationReconciliationForDocument", "dynamic_sql", "f8a7e98260e68d4a7e1269c3810df306ee58c113741eac3cb3d04f735deef36f", 1, []],
   ]),
   ...group("server/donna/paymentConfirmationReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/paymentConfirmationReconciliationLlm.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
@@ -964,7 +967,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/receiptReconciliation.js", "Existing runtime SQL boundary in server/donna/receiptReconciliation.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, payload->>'bank_line_disposition_explained' …
-    ["runReceiptReconciliationForDocument", "dynamic_sql", "a68f53aeb42bd3bd42366d59d7c03ba8f31be06be193b9e9792108acac0dc7fb", 1, []],
+    // Re-pinned 2026-11-10 (run on a local model): the SELECT, targets and count are unchanged; the enclosing body now hands the lane's policy row to the reverse-shadow hook builder, which builds no hook for a self-hosted, unqualified seat. No memory target.
+    ["runReceiptReconciliationForDocument", "dynamic_sql", "1f9a1cb5736f00647b7edbc91e19c255cb5abd6b7645a15e5caf0775696dbf1c", 1, []],
   ]),
   ...group("server/donna/receiptReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/receiptReconciliationLlm.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
@@ -1032,7 +1036,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/salesInvoiceReconciliation.js", "Existing runtime SQL boundary in server/donna/salesInvoiceReconciliation.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, payload->>'bank_line_disposition_ …
-    ["runSalesInvoiceReconciliationForDocument", "dynamic_sql", "fb605a275e9ab3fb7bc7bda3582ca82f16f9d83f43bb05b2e0aa57bacb1e8bec", 1, []],
+    // Re-pinned 2026-11-10 (run on a local model): the SELECT, targets and count are unchanged; the enclosing body now hands the lane's policy row to the reverse-shadow hook builder, which builds no hook for a self-hosted, unqualified seat. No memory target.
+    ["runSalesInvoiceReconciliationForDocument", "dynamic_sql", "5be99ee8f43e92f72b030f14734ffad2fcea6fbefccf0997538777820d40aded", 1, []],
   ]),
   ...group("server/donna/salesInvoiceReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/salesInvoiceReconciliationLlm.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …

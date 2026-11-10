@@ -50,6 +50,7 @@ import {
 import { SELF_HOSTED_BASIS, getLane, isQualifiedAnywhere, selfHostedLanes } from '../server/donna/modelLanes.js';
 import { inferProviderFromModel, resolveOpenAiCompatibleEndpoint } from '../server/donna/providerEndpoints.js';
 import { buildSelfHostedLanePlan } from '../server/donna/selfHostedPlan.js';
+import { jevDispositionEnabled } from '../server/donna/jevDisposition.js';
 
 export const parseArgv = (argv = process.argv.slice(2)) => {
   const out = { apply: false, clear: false, all: false, lanes: [], firmId: null, clientId: null, memberId: null, model: null, reason: null };
@@ -119,7 +120,10 @@ export const formatPlan = (plan) => {
   const lines = [];
   lines.push('THE PLAN for this company:');
   for (const row of plan.rows) {
-    if (row.where === 'self_hosted') lines.push(`  SEATED (UNQUALIFIED, your endpoint)  ${row.lane} — ${row.covers.join('; ')}`);
+    if (row.where === 'self_hosted') {
+      lines.push(`  SEATED (UNQUALIFIED, your endpoint)  ${row.lane} — ${row.covers.join('; ')}`);
+      if (row.warning) lines.push(`    NOTE: ${row.warning}`);
+    }
   }
   for (const row of plan.rows) {
     if (row.where.startsWith('cloud:')) lines.push(`  stays on ${row.where.slice(6).padEnd(9)} ${row.lane} — ${row.reason}`);
@@ -142,7 +146,14 @@ export const run = async (opts, { env = process.env, fetchImpl = fetch, withClie
     return { applied: false, refused: request.errors };
   }
   const seatedAfter = opts.clear ? [] : request.lanes;
-  const plan = buildSelfHostedLanePlan({ seatedLanes: seatedAfter, env });
+  // Read-only: whether the company's Typesafe lane acts (it decides
+  // disposition before any seat). Unknown when the read fails.
+  let jevOn = null;
+  try {
+    jevOn = await withClient((client) => jevDispositionEnabled(client, opts.firmId, opts.clientId));
+  } catch { jevOn = null; }
+  const plan = buildSelfHostedLanePlan({ seatedLanes: seatedAfter, env, jevOn });
+  if (jevOn === null) log('NOTE: could not read whether the Typesafe lane (JEV_RECONCILIATION) is on for this company; if it is, it decides disposition before the seat.');
   log(`firm=${opts.firmId} company=${opts.clientId} ${opts.clear ? 'CLEAR self-hosted seats' : `model=${opts.model} basis=${SELF_HOSTED_BASIS}`}`);
   console.log(formatPlan(plan));
 

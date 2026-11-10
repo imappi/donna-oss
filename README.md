@@ -108,6 +108,143 @@ books are sent to that provider. At start the runtime prints a
 `model lanes:` line marking OpenAI and Anthropic `LIT` or `DARK`; the
 Typesafe lane is not on it.
 
+### Run on a local model
+
+You can have one company decided by a model you run yourself, on a server
+that speaks the OpenAI-compatible chat/completions protocol (llama.cpp's
+`llama-server`, Ollama, vLLM and others). It is an explicit opt-in for one
+named company at a time, and never the default.
+
+**The model is unqualified.** Donna has not measured it. Every decision it
+makes carries `policy_basis: self_hosted_unqualified` and the model id your
+server answered with. The `model lanes:` banner, Host Certificate A's
+`model_routes` detail and the AI settings screen all say that an
+unqualified model decides. It never counts as a qualified model and never
+counts as evidence for promoting one. Setting the variables below changes
+nothing on its own: only the seat command does.
+
+What does not change is everything after the model answers. The same
+instructions, the same schema check after parsing, the same arithmetic,
+materiality ceilings, authority grants, evidence rules, period locks and
+posting writers apply. Low confidence still stays a proposal. Today a local
+model gets exactly the unattended authority a qualified model has on these
+lanes, no more and no less. Read "What it may do on its own" below before
+you seat one on a real book.
+
+**Which lanes it covers.** Four lanes, all text only:
+- `transaction_coding`: coding bank lines, single and batch.
+- `reconciliation_reasoning`: matching documents to bank lines (supplier
+  bill, sales invoice, receipt, payment confirmation, payout, payment-account
+  statement), document disposition, the settlement entry, and owner-reply
+  redisposition.
+- `bank_line_disposition`: bare bank lines.
+- `ask_drafting`: the question put to the owner.
+
+Every other lane stays where it is. It runs on your cloud provider if you
+have a key for it, or it is dark if you don't. The command prints the full
+list. Reading documents (PDF and images), routing them, PDF statements and
+interpreting the owner's reply all stay on a cloud provider. So do chat, the
+QA reviewer, merchant lookup and the marketing drafters. Without a cloud key
+they don't run. CSV statements need no model. The coder also fetches a
+merchant's own website when a bank line names one. That is not a model call,
+but it does leave the machine.
+
+**How.**
+
+1. Start your server and note the model id it serves (`GET /v1/models`).
+2. Point Donna at it in `.env`:
+
+   ```bash
+   OPENAI_COMPATIBLE_BASE_URL=http://127.0.0.1:8080/v1
+   # OPENAI_COMPATIBLE_API_KEY=...   only if your server checks one
+   ```
+
+   A server on this machine's loopback address (`localhost`, `127.0.0.1`,
+   `::1`) needs no key, and no `Authorization` header is sent to it. Any other
+   host needs `OPENAI_COMPATIBLE_API_KEY`. If your server doesn't check
+   keys, any value works.
+3. Seat it for one company. This is a dry run by default: it prints the plan
+   and what your server serves, and writes nothing.
+
+   ```bash
+   node scripts/seat_local_model.js --firm <firm id> --client <company id> \
+     --member <your firm member id> --model <id your server serves> \
+     --all --reason "own llama-server on this laptop"
+   # then the same with --apply
+   ```
+
+   `--lanes transaction_coding,ask_drafting` seats only some lanes. The
+   command refuses in these cases:
+   - the server does not list that model id;
+   - the id is a qualified id, or names a cloud model family (`claude-*`,
+     `gpt-*`);
+   - a lane cannot take a local model;
+   - there is no named company, no active member, or no reason.
+
+   Each seat is written through the policy writer with an audit receipt.
+4. Undo it with the same command and `--clear --apply`. That closes only the
+   company's self-hosted seats, each with its own receipt.
+
+If the company has the Typesafe lane on (`JEV_RECONCILIATION`, the local-book
+default), Typesafe decides bank-line and document disposition first, and those
+steps do not use the seat. The plan says so. Switch it off with
+`CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION` if you want the seat to
+decide them.
+
+**Failure modes to expect.** A small local model fails more often than a
+cloud one. Each failure is a typed failure, the same ones the cloud paths
+use. Donna never switches to another model:
+- an answer cut off at the server's length limit is `PROVIDER_OUTPUT_LIMIT`;
+- prose instead of JSON, or JSON that breaks the lane's schema, is
+  `PROVIDER_INVALID_OUTPUT`;
+- an HTTP error is typed by its status;
+- no answer within the deadline (`PROVIDER_REQUEST_TIMEOUT_MS`, default 90
+  s; CPU inference is slow) is a timeout;
+- a server that answers as another model than the seat names is
+  `POLICY_MODEL_MISMATCH`.
+
+What follows from a failure depends on the lane:
+- the coder records nothing as a verdict and retries later;
+- matching and disposition persist no verdict, and the next sweep retries;
+- the asker drafts nothing;
+- an unreadable disposition falls to a person.
+
+A server whose context window is smaller than the prompt answers with an
+error, and the lane records it the same way. Ask the server for a large
+context. Nothing else is called instead: no other model, no reverse shadow,
+no challenger.
+
+**What it may do on its own.** These are the existing gates, unchanged. They
+apply to a local model exactly as to a qualified one:
+- **Coding.** The batch coder applies a medium or high confidence coding
+  within its amount limits. On a Donna-ledger company it posts that coding.
+  The coding auto-post sweep (`CODING_AUTO_POST`) posts the cases its rules
+  allow.
+- **Bank-line disposition.** It can mark an immaterial line under the
+  materiality ceiling as explained. It drafts an owner question otherwise.
+- **Matching.** It can auto-match only where the auto-match policy is on,
+  confidence is at least 0.9 and under the ceiling. Above the ceiling it
+  needs a delegated-authority grant.
+- **Asks.** Drafted asks are drafts. Sending them needs a person, or the
+  firm's own auto-send setting.
+
+**Measure it before you trust it with books.** Run the Finnish fixture month
+with your model seated, and compare the score with the default model's:
+
+```bash
+TZ=UTC DONNA_PG_TEST_URL=... OPENAI_COMPATIBLE_BASE_URL=http://127.0.0.1:8080/v1 \
+  node scripts/fi_month_two_stage_run.js --work=/tmp/local-month \
+  --facts=scripts/fixtures/fi_kultalanka_month_facts.json --seat-local-model=<id>
+```
+
+`--seat-local-model` seats your model on the run's company before any source
+is uploaded. The run's network guard passes loopback only, besides the cloud
+providers. The lanes that stay on a cloud provider use your keys as usual.
+The run scores the book with `scripts/fi_kultalanka_eval.js`, line by line
+against the answer key. Run it once without the option for the default
+model's score. A score from that run is your own measurement. It does not
+qualify the model.
+
 ### Steps
 
 **1. Get the code and build the web app.**

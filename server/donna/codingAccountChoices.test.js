@@ -18,6 +18,13 @@ const transaction = { id: 'test-transaction', date: '2026-09-01', description: '
 const choice = code => menu.choices.find(row => row.code === code);
 const raw = code => ({ proposed_account: choice(code).handle, posting_requirement: 'single_account', document_allocations: [],
   tax_treatment: 'No GST', confidence: 'high', evidence_required: false, reasoning: 'Supported by supplied evidence.', alternatives: [] });
+// 2026-11-10: the compatible seam holds the answer to the lane's FULL schema
+// after parsing (strict mode would have supplied every required key), so the
+// compatible fixture answers with every required key.
+const compatibleRaw = code => ({ ...raw(code), contact: '', processor_fee_tax_treatment: '', source_business_use_resolution: '',
+  source_identity_resolution: '', historical_rate_basis: '', support_note: '', ask_client_question: '', remember_candidate: false,
+  merchant_pattern: '', missing_account_name: '', missing_account_type: '', missing_account_reason: '', auto_explain_limit: 0,
+  materiality: 'normal', warnings: [] });
 const transport = { provider: 'openai_compatible', endpoint: { url: 'http://fixture.invalid/v1/chat/completions', headers: { authorization: 'Bearer fixture-key' } }, model: 'fixture-provider' };
 
 test('native batch and feed registration projections use each operation date and keep source identity private', () => {
@@ -83,7 +90,7 @@ test('actual compatible single/batch schemas use the same handles and decode exa
   const fetchImpl = async (_url, options) => {
     const body = JSON.parse(options.body); requests.push(body);
     const batch = body.messages[0].content.includes('transaction_coding_batch_suggestion');
-    const result = batch ? { suggestions: [{ transaction_id: transaction.id, ...raw('3100') }], group_summary: [] } : raw('7000');
+    const result = batch ? { suggestions: [{ transaction_id: transaction.id, ...compatibleRaw('3100') }], group_summary: [] } : compatibleRaw('7000');
     return new Response(JSON.stringify({ model: 'fixture-provider', choices: [{ message: { content: JSON.stringify(result) } }] }), { status: 200 });
   };
   const single = await suggestTransactionCoding({ clientProfile: profile, transaction, transport, fetchImpl });

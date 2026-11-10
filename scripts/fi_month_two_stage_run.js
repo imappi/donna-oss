@@ -27,7 +27,17 @@
 // 30 s otherwise answers 502); --no-stream-relay turns that off.
 //
 // Usage (TZ=UTC, DONNA_PG_TEST_URL, NODE_USE_ENV_PROXY=1 behind a proxy, provider keys in the environment):
-//   node scripts/fi_month_two_stage_run.js --work=DIR --facts=scripts/fixtures/fi_kultalanka_month_facts.json [--sources=a.pdf,b.pdf] [--cap-usd=40] [--stop-after=stage1] [--jev=on]
+//   node scripts/fi_month_two_stage_run.js --work=DIR --facts=scripts/fixtures/fi_kultalanka_month_facts.json [--sources=a.pdf,b.pdf] [--cap-usd=40] [--stop-after=stage1] [--jev=on] [--seat-local-model=ID]
+//
+// --seat-local-model=ID (2026-11-10, modelLanes.js SELF_HOSTED_DECISION): seat
+// the model your OpenAI-compatible server serves (OPENAI_COMPATIBLE_BASE_URL,
+// and OPENAI_COMPATIBLE_API_KEY for a non-loopback host) on every lane that
+// can take one, for the run's company, before any source is uploaded —
+// through the policy writer, basis self_hosted_unqualified, the harness
+// operator as the member. This run's network guard passes loopback and the
+// known cloud providers only, so the server must listen on loopback. The
+// other lanes use the provider keys as usual. The
+// score is your own measurement of an unqualified model; it qualifies nothing.
 // FACTS.json: { profile: {...}, alv_registration: {...}, prices: { <model>: { input_per_million, output_per_million } } }
 // The runner writes DIR/stage1.json, DIR/asks-<n>.json, waits for DIR/answers-<n>.json
 // ({ answers: [{ id, reply }] } or { done: true }), then DIR/stage2.json; it
@@ -126,7 +136,8 @@ const app = await bootApplianceForTest({ runToken, now: new Date(), providers: {
   // (TYPESAFE_API_KEY / TYPESAFE_MODEL), and without it every bank line hangs on
   // jev_model_not_configured (jevTrialProvider.js readJevDecisionPolicy).
   env: { DATABASE_POOL_MAX: '4', INNGEST_PARSE_CONCURRENCY: '1', ...(args.jev === 'on' ? { CLIENT_CONFIG_FORCE_DISABLE: '' } : {}),
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY } });
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    ...(args['seat-local-model'] ? { OPENAI_COMPATIBLE_BASE_URL: process.env.OPENAI_COMPATIBLE_BASE_URL, OPENAI_COMPATIBLE_API_KEY: process.env.OPENAI_COMPATIBLE_API_KEY } : {}) } });
 log('booted', runToken, app.databaseUrl.replace(/\/\/[^@]*@/, '//***@'));
 save('book.json', { run_token: runToken, firm_id: app.firmId, database: app.databaseUrl.split('/').pop() });
 const ids = () => [app.firmId, clientId];
@@ -155,6 +166,16 @@ try {
     for (const [k, stage] of Object.entries(PILOT_ALIGNED_EXTENSIONS))
       await setClientFlagStage(client, { firmId: app.firmId, clientId, flagKey: k, stage, source: 'manual', reason: 'fi_hosted_pilot_aligned_extension', actorType: 'firm_member', actorId: app.memberId });
   });
+  if (args['seat-local-model']) {
+    const { setLaneDecidingPolicy } = await import('../server/donna/modelLanePolicy.js');
+    const { SELF_HOSTED_BASIS, selfHostedLanes } = await import('../server/donna/modelLanes.js');
+    await withFirmDbClient(async client => {
+      for (const lane of selfHostedLanes())
+        await setLaneDecidingPolicy({ client, firmId: app.firmId, clientId, laneId: lane.id, decidingModel: args['seat-local-model'], basis: SELF_HOSTED_BASIS,
+          reason: 'fixture-month measurement of a self-hosted model', actorType: 'firm_member', actorId: app.memberId });
+    });
+    log('seated (UNQUALIFIED)', args['seat-local-model'], 'on', selfHostedLanes().map(lane => lane.id).join(','));
+  }
   const flags = (await app.query('select flag_key, stage, source, reason from client_capability_config where firm_id=$1 and client_id=$2 and valid_to is null order by flag_key', ids())).rows;
   const clientRow = (await app.query('select company_name, jurisdiction, entity_type, profile from clients where firm_id=$1 and id=$2', ids())).rows[0];
   save('setup.json', { client_id: clientId, client: clientRow, flags, pilot_receipt: pilotReceipt, env_force_disable: process.env.CLIENT_CONFIG_FORCE_DISABLE ?? null });
