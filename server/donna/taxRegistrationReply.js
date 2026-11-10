@@ -84,11 +84,17 @@ const sameRecord = (left, right) => ['status', 'registered_from', 'registered_un
   .every((key) => (left?.[key] ?? null) === (right?.[key] ?? null));
 
 // The days a normalised record covers: [registered_from, registered_until]
-// (open-ended without an end) for a dated registered/deregistered record;
-// nothing for not_registered or a record that cannot be placed on a timeline.
+// (open-ended without an end) for a dated registered/deregistered record.
+// A deregistered record with an end and no start (both normalisers allow it)
+// is read as covering every day up to its end (from: null, an open start), so
+// no answer replaces it unless it too has an open start, which an owner's
+// answer never produces. Nothing for not_registered or an undated record.
 // Both countries' normalisers share these keys and statuses.
-const coveredDays = (record) => record && ['registered', 'deregistered'].includes(record.status) && record.registered_from
-  ? { from: record.registered_from, until: record.registered_until || null } : null;
+const coveredDays = (record) => {
+  if (!record || !['registered', 'deregistered'].includes(record.status)) return null;
+  if (record.registered_from) return { from: record.registered_from, until: record.registered_until || null };
+  return record.status === 'deregistered' && record.registered_until ? { from: null, until: record.registered_until } : null;
+};
 // An owner's answer never removes a registered day the record already holds:
 // the question was asked because the record does not say registered on the
 // line's date, so an answer may only extend what the record covers. Returns
@@ -100,7 +106,8 @@ export const registrationAnswerEffect = ({ before = null, record, checked }) => 
   const held = coveredDays(before);
   if (!held) return 'write';
   const next = coveredDays(record);
-  const keeps = next && next.from <= held.from && (next.until === null || (held.until !== null && next.until >= held.until));
+  const keeps = next && (held.from === null ? next.from === null : next.from !== null && next.from <= held.from)
+    && (next.until === null || (held.until !== null && next.until >= held.until));
   return keeps ? 'write' : 'conflict';
 };
 

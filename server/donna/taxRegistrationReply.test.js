@@ -90,4 +90,9 @@ test('an answer never removes a registered day the record holds', () => {
   assert.equal(effect(reg('2026-03-01'), reg('2026-03-01', '2026-06-30'), yes('2026-03-01', '2026-06-30')), 'conflict', 'a new end');
   assert.equal(effect(reg('2025-01-01', '2026-03-31'), reg('2025-01-01', '2025-12-31'), yes('2025-01-01', '2025-12-31')), 'conflict', 'an earlier end');
   assert.equal(effect(reg('2025-01-01', '2026-03-31'), reg('2025-06-01', '2026-03-31'), { registered: false, registeredFrom: '2025-06-01', registeredUntil: '2026-03-31' }), 'conflict');
+  // A deregistered record with only an end covers every day up to it (an open start).
+  const endOnly = { status: 'deregistered', registered_from: null, registered_until: '2026-03-31' };
+  assert.equal(effect(endOnly, reg('2026-06-01'), yes('2026-06-01')), 'conflict', 'yes since a later date');
+  assert.equal(effect(endOnly, reg('2020-01-01'), yes('2020-01-01')), 'conflict', 'any dated start drops the open start');
+  assert.equal(effect(endOnly, { status: 'not_registered' }, no), 'confirm', 'a plain no');
 });
