@@ -192,3 +192,30 @@ export const projectSeat = ({ source, row, clientIds = [] } = {}) => {
     invite_email_at: row.invite_email_at || null
   };
 };
+
+// ── Client-owner invite (consumed by clientOwnerInvitesDb + its routes) ──────
+//
+// The firm-to-owner portal invite binds the person as the SAME owner principal
+// shape described at the top of this file (a collaborator row WITHOUT
+// seat_role, role 'owner', one capability assignment per client). It is not a
+// seat and carries no seat role; the one owner-side role stays 'owner'.
+export const CLIENT_OWNER_ROLE = 'owner';
+export const CLIENT_OWNER_INVITE_LANGUAGES = Object.freeze(['fi', 'en']);
+// Firm-side owner state on one client, in the vocabulary the screen renders.
+export const CLIENT_OWNER_STATES = Object.freeze(['not_invited', 'invited', 'active', 'access_removed']);
+
+export const validateClientOwnerInvite = ({ name, email, language = null } = {}) => {
+  const problem = (code, message) => ({ ok: false, code, message });
+  if (!String(name || '').trim()) return problem('name_required', "The owner's name is required.");
+  if (!EMAIL_SHAPE.test(String(email || '').trim())) {
+    return problem('email_invalid', 'A valid email address is required.');
+  }
+  const lang = language == null || language === '' ? null : String(language).trim().toLowerCase();
+  if (lang !== null && !CLIENT_OWNER_INVITE_LANGUAGES.includes(lang)) {
+    return problem('language_invalid', `Language must be one of: ${CLIENT_OWNER_INVITE_LANGUAGES.join(', ')}.`);
+  }
+  return {
+    ok: true,
+    normalized: { name: String(name).trim().slice(0, 200), email: String(email).trim().toLowerCase(), language: lang }
+  };
+};

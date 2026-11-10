@@ -172,6 +172,22 @@ test('getDefaultFirmId: a configured DONNA_DEFAULT_FIRM_ID wins over the live bi
   }
 });
 
+test('a sole owner principal in a non-default firm resolves to that firm; default-firm and ambiguous owners keep the default', async () => {
+  const prior = process.env.DONNA_DEFAULT_FIRM_ID;
+  process.env.DONNA_DEFAULT_FIRM_ID = 'deployment-firm';
+  try {
+    const auth = { type: 'supabase_user', staff: false, userId: 'u', email: 'owner@example.test' };
+    const owners = (rows) => async (sql) => ({ rows: sql.includes('firm_collaborators') ? rows : [] });
+    assert.deepEqual(await resolveAuthenticatedMemberFirm({ auth, queryFn: owners([{ firm_id: 'firm-x', owner: true }]) }), { firmId: 'firm-x', ambiguous: false });
+    assert.deepEqual(await resolveAuthenticatedMemberFirm({ auth, queryFn: owners([{ firm_id: 'deployment-firm', owner: true }]) }), { firmId: null, ambiguous: false });
+    assert.deepEqual(await resolveAuthenticatedMemberFirm({ auth, queryFn: owners([{ firm_id: 'firm-x', owner: true }, { firm_id: 'firm-y', owner: true }]) }), { firmId: null, ambiguous: false });
+    assert.deepEqual(await resolveAuthenticatedMemberFirm({ auth, queryFn: owners([{ firm_id: 'firm-x', owner: true }, { firm_id: 'firm-s', owner: false }]) }), { firmId: 'firm-s', ambiguous: false },
+      'a seat keeps its prior resolution');
+  } finally {
+    restoreEnv('DONNA_DEFAULT_FIRM_ID', prior);
+  }
+});
+
 test('member firm selection is database membership, refuses ambiguous membership, and falls back to a sole collaborator firm', async () => {
   let calls = 0;
   const queryFn = async (_sql, params) => { calls++; assert.deepEqual(params, ['u', 'member@example.test']); return { rows: [{firm_id:'a'}] }; };

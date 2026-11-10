@@ -14,6 +14,7 @@ import { hasStoredAuth } from '../lib/accessToken.js';
 import { rememberOwnerClientId } from '../lib/ownerPersona.js';
 import { provisionWorkspace } from '../lib/selfProvision.js';
 import { fetchFirmSnapshot } from '../lib/firmApi.js';
+import { readPendingOffer } from '../lib/pendingOffer.js';
 import ExistingOwnerRevalidation from './ExistingOwnerRevalidation.jsx';
 
 // Where to send a visitor who reached /start with no session (e.g. a Google
@@ -70,6 +71,15 @@ function StandardWorkspaceProvisioner({ oauthRedirect } = {}) {
       if (cancelled) return {};
       if (snapshot?.source === 'database' && snapshot.workspaceAccess?.surface === 'firm' && snapshot.firm?.id) {
         return { firm: true };
+      }
+      // An owner principal the authorized snapshot already proves (e.g. one a
+      // firm invited into its client portal, possibly in a firm other than the
+      // deployment default) opens that portal; provisioning would look in the
+      // default firm only and could mint an unrelated workspace. A funnel
+      // signup with a stashed offer still provisions as before.
+      const ownerClientIds = snapshot?.workspaceAccess?.surface === 'owner' ? snapshot.workspaceAccess.clientIds : null;
+      if (snapshot?.source === 'database' && Array.isArray(ownerClientIds) && ownerClientIds.length > 0 && !readPendingOffer()) {
+        return { clientId: ownerClientIds[0] };
       }
       return provisionWorkspace({ signal: controller.signal });
     };

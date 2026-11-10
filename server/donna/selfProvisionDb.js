@@ -307,66 +307,79 @@ export const assertOwnerPrincipalBindable = async ({ firmId, email, userId } = {
 // together so a workspace is never half-bound. Converges on retry — but only
 // ever onto THIS owner's own principal (ownerRowIsAdoptable); a conflicting
 // row is refused, never rewritten.
-const bindOwnerPrincipal = async ({ firmId, email, userId, clientId, displayName } = {}) => {
+// The binder body, on a caller's open transaction. Exported for the firm
+// owner-invite acceptance (clientOwnerInvitesDb.js), which must consume its
+// invite and bind the owner in ONE transaction; self-signup keeps calling
+// bindOwnerPrincipal below, byte-identical. `assignmentId` defaults to the
+// self-signup id; an invite passes a per-client id so one owner principal can
+// hold assignments on several of the same firm's clients.
+export const bindOwnerPrincipalWithClient = async (client, {
+  firmId, email, userId, clientId, displayName, assignmentId = null
+} = {}) => {
   const collaboratorId = idFor('collab-owner', firmId, email);
-  await withFirmDbClient(async (client) => {
-    await client.query('begin');
-    try {
-      // `for update` closes the check-then-write window: a concurrent
-      // provision for the same (firm, email) serializes behind this lock
-      // instead of both passing the adoptability check.
-      const locked = await client.query(
+  // `for update` closes the check-then-write window: a concurrent
+  // provision for the same (firm, email) serializes behind this lock
+  // instead of both passing the adoptability check.
+  const locked = await client.query(
+    `select ${OWNER_ROW_COLUMNS} from firm_collaborators
+      where firm_id = $1 and lower(email) = $2 limit 1 for update`,
+    [firmId, email]
+  );
+  let existingRow = locked.rows[0] || null;
+  if (!ownerRowIsAdoptable(existingRow, { userId })) {
+    throw new ProvisionPrincipalConflictError(email);
+  }
+
+  let realCollaboratorId = existingRow?.id || collaboratorId;
+  if (existingRow) {
+    // Adoption is deliberately NARROW: fill in a missing user_id and
+    // nothing else. role / status / access_level are never rewritten —
+    // that rewrite WAS the vulnerability.
+    await client.query(
+      `update firm_collaborators
+          set user_id = coalesce(user_id, $2), updated_at = now()
+        where id = $1`,
+      [existingRow.id, userId || null]
+    );
+  } else {
+    const inserted = await client.query(
+      `insert into firm_collaborators (id, firm_id, user_id, email, name, role, status, access_level)
+       values ($1, $2, $3, $4, $5, $6, 'active', 'client_scoped')
+       on conflict (firm_id, email) do nothing
+       returning id`,
+      [collaboratorId, firmId, userId || null, email, displayName, OWNER_ROLE]
+    );
+    if (inserted.rows[0]) {
+      realCollaboratorId = inserted.rows[0].id;
+    } else {
+      // Lost an insert race (the row appeared between the locked read and
+      // the insert). Re-read and re-check — never blind-adopt the winner.
+      const raced = await client.query(
         `select ${OWNER_ROW_COLUMNS} from firm_collaborators
           where firm_id = $1 and lower(email) = $2 limit 1 for update`,
         [firmId, email]
       );
-      let existingRow = locked.rows[0] || null;
+      existingRow = raced.rows[0] || null;
       if (!ownerRowIsAdoptable(existingRow, { userId })) {
         throw new ProvisionPrincipalConflictError(email);
       }
+      realCollaboratorId = existingRow?.id || collaboratorId;
+    }
+  }
+  await client.query(
+    `insert into client_assignments (id, firm_id, client_id, principal_type, principal_id, role, access_level)
+     values ($1, $2, $3, 'firm_collaborator', $4, $5, 'client_scoped')
+     on conflict (client_id, principal_type, principal_id) where assignment_kind = 'capability' do nothing`,
+    [assignmentId || idFor('assign-owner', firmId, email), firmId, clientId, realCollaboratorId, OWNER_ROLE]
+  );
+  return { collaboratorId: realCollaboratorId };
+};
 
-      let realCollaboratorId = existingRow?.id || collaboratorId;
-      if (existingRow) {
-        // Adoption is deliberately NARROW: fill in a missing user_id and
-        // nothing else. role / status / access_level are never rewritten —
-        // that rewrite WAS the vulnerability.
-        await client.query(
-          `update firm_collaborators
-              set user_id = coalesce(user_id, $2), updated_at = now()
-            where id = $1`,
-          [existingRow.id, userId || null]
-        );
-      } else {
-        const inserted = await client.query(
-          `insert into firm_collaborators (id, firm_id, user_id, email, name, role, status, access_level)
-           values ($1, $2, $3, $4, $5, $6, 'active', 'client_scoped')
-           on conflict (firm_id, email) do nothing
-           returning id`,
-          [collaboratorId, firmId, userId || null, email, displayName, OWNER_ROLE]
-        );
-        if (inserted.rows[0]) {
-          realCollaboratorId = inserted.rows[0].id;
-        } else {
-          // Lost an insert race (the row appeared between the locked read and
-          // the insert). Re-read and re-check — never blind-adopt the winner.
-          const raced = await client.query(
-            `select ${OWNER_ROW_COLUMNS} from firm_collaborators
-              where firm_id = $1 and lower(email) = $2 limit 1 for update`,
-            [firmId, email]
-          );
-          existingRow = raced.rows[0] || null;
-          if (!ownerRowIsAdoptable(existingRow, { userId })) {
-            throw new ProvisionPrincipalConflictError(email);
-          }
-          realCollaboratorId = existingRow?.id || collaboratorId;
-        }
-      }
-      await client.query(
-        `insert into client_assignments (id, firm_id, client_id, principal_type, principal_id, role, access_level)
-         values ($1, $2, $3, 'firm_collaborator', $4, $5, 'client_scoped')
-         on conflict (client_id, principal_type, principal_id) where assignment_kind = 'capability' do nothing`,
-        [idFor('assign-owner', firmId, email), firmId, clientId, realCollaboratorId, OWNER_ROLE]
-      );
+const bindOwnerPrincipal = async ({ firmId, email, userId, clientId, displayName } = {}) => {
+  await withFirmDbClient(async (client) => {
+    await client.query('begin');
+    try {
+      await bindOwnerPrincipalWithClient(client, { firmId, email, userId, clientId, displayName });
       await client.query('commit');
     } catch (error) {
       await client.query('rollback');
