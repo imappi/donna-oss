@@ -653,7 +653,7 @@ export const extractPayoutStatementFromBase64 = async ({
         status: err.status,
         elapsed_ms: Date.now() - startedAt
       });
-      return { ...extractionFailureForStatus(Number(err.status || 0)), model: config.model };
+      return { ...extractionFailureForStatus(Number(err.status || 0), { providerError: err.providerError || null }), model: config.model };
     }
     if (err?.code === 'PAYOUT_STRUCTURED_BAD_JSON') {
       console.error('[payout-statement] structured response was not valid JSON', {

@@ -21,7 +21,7 @@ import { resolve as resolvePath } from 'node:path';
 import { buildLineageForGenericProjection } from './decisionLineage.js';
 import { calibrate } from './confidenceCalibration.js';
 import { buildResponsesDocumentPart } from './responsesInputPart.js';
-import { extractionFailureForStatus } from './inngest/parseErrors.js';
+import { extractionFailureForStatus, readProviderError } from './inngest/parseErrors.js';
 
 // Generic extraction is a load-bearing call — its output is persisted
 // and reasoned about downstream, and these are the HARDEST documents
@@ -584,12 +584,15 @@ export const extractGenericDocumentFromBase64 = async ({
 
   if (!response?.ok) {
     const status = Number(response?.status || 0);
+    // The provider's error body tells an empty account from a rate limit or a
+    // rejection of this file (parseErrors.providerFaultOfResponse).
+    const providerError = await readProviderError(response);
     console.error('[genericDocument] OpenAI returned non-OK', {
       correlation_id: correlationId,
       status,
       elapsed_ms: Date.now() - startedAt
     });
-    return extractionFailureForStatus(status);
+    return extractionFailureForStatus(status, { providerError });
   }
 
   let payload;

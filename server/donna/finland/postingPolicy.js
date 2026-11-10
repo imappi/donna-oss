@@ -162,6 +162,13 @@ const FI_TAX_REGISTRATION = Object.freeze({
     needsRegistration: ({ taxType = '', taxTreatment = '', direction = '' } = {}) =>
       alvCodeNeedsRegistration(resolveAlvCode({ taxType, taxTreatment, direction }))
   }),
+  // The ALV return filed over a date (statutoryDb.js keeps alv_returns; a
+  // filed return stays filed), read when a posted line's registration basis
+  // changed (db/taxRegistrationChange.js): nothing is adjusted into it. The
+  // caller passes its own query function; this module holds no connection.
+  filedReturnOn: async ({ query, firmId, clientId, onDate }) => (await query(
+    `select id, period_key from alv_returns where firm_id = $1 and client_id = $2 and status = 'filed'
+      and starts_on <= $3::date and ends_on >= $3::date order by starts_on, id limit 1`, [firmId, clientId, onDate])).rows[0] || null,
   // A sale whose own sales invoice or receipt shows ALV, on a date the record
   // says the business is not in the register (taxSourceEvidence.js
   // assertSalesSourceTaxRegistration refuses it with refusalCode). The owner is

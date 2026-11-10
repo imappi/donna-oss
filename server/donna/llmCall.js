@@ -57,18 +57,6 @@ import { assembleAnthropicEventStream, statusForStreamError } from './anthropicE
 
 const nowMs = (now) => (typeof now === 'function' ? now() : Date.now());
 
-// The provider's own error classification (type/code strings, never the
-// body) rides on the thrown error so the caller's status classification
-// (providerTransport.js classifyProviderStatus) can name the cause — an
-// exhausted credit balance, a bad key — the way it does for its own fetches.
-const providerErrorFields = (payload) => {
-  const error = payload?.error;
-  if (!error || typeof error !== 'object') return null;
-  const pick = (value) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 80) : null);
-  const fields = { type: pick(error.type), code: pick(error.code) };
-  return fields.type || fields.code ? fields : null;
-};
-
 // A streamed request (`body.stream === true`) is read to its end and the
 // server-sent events reassembled into the one Message a non-streamed call
 // returns (anthropicEventStream.js); a JSON body (an error answered before
@@ -244,12 +232,14 @@ export const llmCall = async ({
       if (response.ok && !streamError) { lastError = null; break; }
       lastError = Object.assign(
         new Error(payload?.error?.message || `${provider || 'provider'} returned ${response.status}`),
+        // `providerError`: the provider's own error object, so a caller can tell
+        // an empty account from a rate limit or a rejected request. A
+        // mid-stream error event after a 200 carries its own error object and
+        // the status its type stands for (an overload mid-stream is a 529).
         {
           code: 'LLM_CALL_PROVIDER_ERROR',
-          // A mid-stream error event after a 200 carries the status its
-          // type stands for (an overload mid-stream is a 529, not a 200).
           status: streamError ? statusForStreamError(streamError.type) : response.status,
-          provider_error: providerErrorFields(payload)
+          providerError: payload?.error && typeof payload.error === 'object' ? payload.error : null
         }
       );
     } catch (error) {

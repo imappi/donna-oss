@@ -1,5 +1,5 @@
 import { monthKeyLabel, snapshotDayString, snapshotMonthKey } from '../components/shared/snapshot-dates.js';
-import { noLineDispositionFor, hasScopedNoSettlementAssessment } from './documentsInbox.js';
+import { noLineDispositionFor, hasScopedNoSettlementAssessment, providerWaitOf } from './documentsInbox.js';
 
 const rowIdentity = (row, fallback) =>
   String(
@@ -95,6 +95,14 @@ export const expireProcessingActivity = (rows, asOf, { awaitingRefresh = false }
 // ordinary work — never a fabricated violation claim (render the persisted
 // verdict, not an inference).
 export const streamEntryState = (lane, row = {}) => {
+  // A document waiting on its model provider (the persisted parse_hold the
+  // worker writes when this installation has no key, or the provider is
+  // unreachable) rests on the operator, not in Donna's hands: it outranks a
+  // stale "queued" receipt and never reads as Processing. The row's status
+  // line names the stored reason.
+  if (lane === 'document' && (row?.materialSourceState === 'waiting_provider' || providerWaitOf(row?.document || row))) {
+    return 'stalled';
+  }
   const activity = row.processing_activity || row.document?.processing_activity;
   if (activity?.state === 'failed') return 'stalled';
   // A persisted terminal outranks in-flight work (2026-09-23): the projection

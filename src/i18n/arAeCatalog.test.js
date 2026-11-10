@@ -100,9 +100,9 @@ const intentionalCanonicalValues = new Set([
 // Re-pin deliberately, in the same change as the keys.
 test('AR-3A plus AR-3B install one immutable 2,621-message Alpha catalog for AR-3C activation', () => {
   assert.equal(AR_AE_CATALOG_VERSION, '2026-09-28.sg-native-intake.1');
-  assert.equal(Object.keys(en).length, 2868);
-  assert.equal(Object.keys(arAE).length, 2868);
-  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2868);
+  assert.equal(Object.keys(en).length, 2872);
+  assert.equal(Object.keys(arAE).length, 2872);
+  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2872);
   assert.equal(AR_AE_CATALOG_METADATA.maturity, 'alpha');
   assert.equal(AR_AE_CATALOG_METADATA.displayLabel, 'العربية · إصدار تجريبي');
   assert.equal(AR_AE_CATALOG_METADATA.authorship, 'machine-authored');
@@ -203,6 +203,9 @@ test('the frozen glossary preserves official versus proposed terminology status'
 // and owner-access messages of the follow-up to #49.
 // 2026-11-10: re-pinned for `portal.answered.title`, the heading of the
 // portal's answered questions (what Donna did with the owner's answers).
+// 2026-11-10: mounted source re-pinned for the two firm-view lines that name a
+// document's stored provider wait (`mounted.financial.waitingProviderKey`,
+// `mounted.financial.waitingProvider`, and the refused-key and no-credit lines `mounted.financial.waitingProviderKeyRefused`, `mounted.financial.waitingProviderCredit`).
 test('the pre-AR-3B English catalog semantics are pinned and the mounted source is pinned', () => {
   const remainingSource = readFileSync(new URL('./catalogs/remainingSurfaces.en.js', import.meta.url));
   const mountedSource = readFileSync(new URL('./catalogs/mountedSurfaces.en.js', import.meta.url));
@@ -210,7 +213,7 @@ test('the pre-AR-3B English catalog semantics are pinned and the mounted source 
     Object.entries(en).filter(([key]) => !key.startsWith('mounted.'))
   );
   assert.equal(hash(remainingSource), '327d38f3bac59683faa61e2fc4dc7d127339bf9f1b954f567f02116ef931b488');
-  assert.equal(hash(mountedSource), '8771a26c8a529ccd4c0de626fdaa1c9224d4a1cf9cdd52dbc192c8f3a24b2ad0');
+  assert.equal(hash(mountedSource), 'c7e959ffba18368f7e3d6fca93652e8b571b0b98ba5aea8dda75fa8f86d856c1');
   assert.equal(hash(JSON.stringify(preAr3bEn)), '0262e7da2a8812f88961ab199f15555775c7b30b59d0115dfadf147b0baec4ef');
 });
 

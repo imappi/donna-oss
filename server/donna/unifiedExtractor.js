@@ -1116,7 +1116,7 @@ export const extractUnified = async ({
     const elapsed = Date.now() - startedAt;
     if (error?.code === 'LLM_CALL_PROVIDER_ERROR') {
       const status = Number(error.status || 0);
-      const failure = extractionFailureForStatus(status, { provider: resolved.provider });
+      const failure = extractionFailureForStatus(status, { provider: resolved.provider, providerError: error.providerError || null });
       console.error('[unifiedExtractor] provider returned non-OK', {
         correlation_id: correlationId, provider: resolved.provider, status, elapsed_ms: elapsed
       });

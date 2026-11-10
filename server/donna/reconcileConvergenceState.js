@@ -346,12 +346,21 @@ export const deriveConvergenceState = ({
     return result('hanging', 'seat_answered_processing');
   }
 
+  // A posted line whose correction case is open is not finished: firm-side
+  // work (the correction consumer or a person in transaction chat), hanging.
+  // A case opened because the VAT/ALV registration record changed after
+  // posting (codingEvidence.js changedTaxRegistration, the case's
+  // tax_registration) names that cause in its key, with or without a recorded
+  // consumer refusal, so the books never show it as an anonymous evidence
+  // change: posted_tax_registration_changed, or
+  // posted_tax_registration_correction_<blocked|failed>:<code>.
   if (codingCorrectionRequired?.status === 'pending') {
     const recovery = codingCorrectionRequired.recovery;
+    const prefix = codingCorrectionRequired.tax_registration ? 'posted_tax_registration' : 'posted_evidence';
     if (recovery?.code && ['blocked', 'failed'].includes(recovery.state)) {
-      return result('hanging', `posted_evidence_correction_${recovery.state}:${recovery.code}`);
+      return result('hanging', `${prefix}_correction_${recovery.state}:${recovery.code}`);
     }
-    return result('hanging', 'posted_evidence_reconsideration_required');
+    return result('hanging', codingCorrectionRequired.tax_registration ? 'posted_tax_registration_changed' : 'posted_evidence_reconsideration_required');
   }
 
   // 3a. RT-23 — an APPLIED coding the ledger refused to post is not settled:

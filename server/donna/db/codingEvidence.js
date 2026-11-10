@@ -20,6 +20,7 @@ import { codingRevenueEvidenceGap } from '../codingRevenueEvidence.js';
 import { codingChoiceFailure, nativeAccountChoices } from '../codingAccountChoices.js';
 import { readClientCodingContextWithClient, isFenceContention, nativeSourceFenceBusy } from './codingPolicyContext.js';
 import { toIsoDay } from '../dates.js';
+import { taxRegistrationRuleFor, taxRegistrationRecheckActsWithClient, taxRegistrationChangeFor, readPostedLineTaxTypes, taxRegistrationPeriodState } from './taxRegistrationChange.js';
 import { codingSourceBusinessUseConflict, sourceBusinessUseQuestion, sourceBusinessUseFact } from '../sourceBusinessUse.js';
 import { hasJevResolvedCoding } from '../jevDecisionReceipt.js';
 import { CODING_EVIDENCE_RECONSIDERED_REFUSALS, UNRESOLVED_TREATMENT_REFUSALS, CODING_CONFLICT_MAX_RECONSIDERATIONS, CODING_RECONSIDERATION_CONTRACT, codingReconsiderationAttempts, codingReconsiderationsLeft, notRegisteredReconsiderationAttempts, refusedWhileNotRegistered, NOT_REGISTERED_MAX_RECONSIDERATIONS, unsettledTreatmentOnClearSource, refusedCrossWindowGroup, REFUSED_CROSS_WINDOW_GROUP_SQL, CROSS_WINDOW_GROUP_REFUSAL, recordCodingPolicyFailure, recordCodingPolicyRecovery, CODING_POLICY_FAILED_ACTION } from '../codingPolicyRecovery.js';
@@ -500,6 +501,40 @@ const changedNativeRegistration = async ({ client, firmId, clientId, row }) => {
   return { previous, current, digest: hash({ previous, current }) };
 };
 
+// The same law for a country's own registration record (the posting policy's
+// taxRegistration declaration: Finland's alv_registration, the UK's
+// vat_registration). A posted line whose status on its governing date is now
+// the opposite of the status it was posted under (db/taxRegistrationChange.js
+// says how that status is known) opens this same correction case with the old
+// and new status. The journal and the decision stay as they are. Singapore's
+// native registration above is untouched; a country without the declaration
+// reads null. Off unless the client's TAX_REGISTRATION_POSTED_RECHECK acts.
+const taxRegistrationContext = async ({ client, firmId, clientId }) => {
+  const company = (await client.query('select jurisdiction, profile from clients where firm_id=$1 and id=$2', [firmId, clientId])).rows[0];
+  const rule = taxRegistrationRuleFor(company?.jurisdiction || company?.profile?.jurisdiction);
+  if (!rule?.withoutTax || !await taxRegistrationRecheckActsWithClient({ client, firmId, clientId })) return null;
+  return { rule, profile: company.profile || {} };
+};
+const changedTaxRegistration = async ({ client, firmId, clientId, row, lines = null, context = undefined }) => {
+  const resolved = context === undefined ? await taxRegistrationContext({ client, firmId, clientId }) : context;
+  if (!resolved) return null;
+  const posted = lines ?? (await readPostedLineTaxTypes({ client, firmId, clientId, transactionIds: [row.id] }))[0]?.lines ?? [];
+  const change = taxRegistrationChangeFor({ rule: resolved.rule, profile: resolved.profile, row, lines: posted });
+  if (!change) return null;
+  return { ...change, period: await taxRegistrationPeriodState({ client, firmId, clientId, rule: resolved.rule, onDate: change.on_date }) };
+};
+const taxRegistrationMessage = (change) => {
+  const posted = change.posted.status === 'registered'
+    ? `posted as registered, with ${change.posted.vat_codes?.join(', ') || 'a VAT code'}`
+    : 'posted as not registered, with no VAT charged or deducted';
+  const now = change.current.status === 'registered' ? 'registered' : 'not registered';
+  const closed = change.period?.return_filed ? 'Its VAT return for that date is filed'
+    : change.period?.locked ? 'Its close period is locked' : null;
+  return `The VAT registration record changed after posting: on ${change.on_date} it now says the business was ${now}, and this line was ${posted}. The original journal and decision remain unchanged. `
+    + (closed ? `${closed}, so nothing is posted into it and Donna posts no adjustment; a person must decide how the filed or locked period is corrected.`
+      : 'Reconsider the VAT treatment in transaction chat; if the accounting changes, apply a ledger adjustment.');
+};
+
 // Only an existing, current human correction followed by the named adjustment
 // writer may close changed-source work. A journal's mere presence is not proof.
 export async function completeCodingEvidenceCorrectionWithClient({client,firmId,clientId,transactionId,originalJournalId,correctionJournalIds,actorId}) {
@@ -630,9 +665,11 @@ export async function hasPendingCodingReconsiderationWithClient(client, firmId, 
   if (row.payload.ledger_journal_id) {
     const digest = codingEvidenceDigest(current.matchedDocument);
     const registration = await changedNativeRegistration({ client, firmId, clientId, row });
+    const taxRegistration = await changedTaxRegistration({ client, firmId, clientId, row });
     return (codingEvidenceChanged(row.payload.ai_suggestion, current.matchedDocument)
       && row.payload.coding_correction_required?.current_evidence_digest !== digest)
-      || Boolean(registration && row.payload.coding_correction_required?.native_registration?.digest !== registration.digest);
+      || Boolean(registration && row.payload.coding_correction_required?.native_registration?.digest !== registration.digest)
+      || Boolean(taxRegistration && row.payload.coding_correction_required?.tax_registration?.digest !== taxRegistration.digest);
   }
   const plan = reconsiderationFor(row, current);
   const priorDigest = row.payload.ai_suggestion?.case_evidence_digest || row.payload.coding_evidence_reconsideration?.digest;
@@ -747,6 +784,10 @@ export const recoverChangedCodingEvidenceInDb = async ({ firmId, limit = 50, run
       };
       const pendingEvidence = (await client.query(`select 1 from documents where firm_id=$1 and client_id=$2 and parse_status in ('pending','processing') limit 1`,[firmId,clientId])).rows.length > 0;
       const groupConflicts = new Map();
+      // One read of the client's registration rule, record and gate per tick.
+      let registrationContext;
+      const registrationContextOnce = async () => (registrationContext === undefined
+        ? (registrationContext = await taxRegistrationContext({ client, firmId, clientId })) : registrationContext);
       for (const row of rows) {
         if (!['REFUND_GROUP_CODING_CONFLICT','REFUND_GROUP_CODING_PENDING'].includes(row.payload?.ledger_post_refusal?.code)) continue;
         const groupIds=row.payload.jev_refund_group?.transaction_ids || [];
@@ -811,7 +852,8 @@ export const recoverChangedCodingEvidenceInDb = async ({ firmId, limit = 50, run
           const relationshipDigest=hash(conflicts);
           const allocationDigest=hash(allocationConflicts);
           const registration = await changedNativeRegistration({ client, firmId, clientId, row });
-          const changed = Boolean(registration) || codingEvidenceChanged(row.payload.ai_suggestion,document) || conflicts.length>0 || allocationConflicts.length>0 || sourceUseConflicts.length>0 || revenueSourceGap || statutorySourceGap;
+          const taxRegistration = await changedTaxRegistration({ client, firmId, clientId, row, lines: original.lines, context: await registrationContextOnce() });
+          const changed = Boolean(registration) || Boolean(taxRegistration) || codingEvidenceChanged(row.payload.ai_suggestion,document) || conflicts.length>0 || allocationConflicts.length>0 || sourceUseConflicts.length>0 || revenueSourceGap || statutorySourceGap;
           if (previous?.status === 'corrected' && !changed && previous.current_evidence_digest === currentDigest) {
             correctionCases.push({client_id:clientId,transaction_id:row.id,correction_required:false,requirement:previous});
             continue;
@@ -823,6 +865,7 @@ export const recoverChangedCodingEvidenceInDb = async ({ firmId, limit = 50, run
             && (previous.allocation_account_digest || hash([])) === allocationDigest
             && (previous.source_business_use_digest || hash([])) === sourceUseDigest
             && (previous.native_registration?.digest || null) === (registration?.digest || null)
+            && (previous.tax_registration?.digest || null) === (taxRegistration?.digest || null)
             && Boolean(previous.revenue_source_required) === revenueSourceGap
             && Boolean(previous.statutory_source_required) === statutorySourceGap) {
             correctionCases.push({client_id:clientId,transaction_id:row.id,correction_required:previous.status==='pending',requirement:previous});
@@ -845,6 +888,12 @@ export const recoverChangedCodingEvidenceInDb = async ({ firmId, limit = 50, run
             native_registration: registration, reason: 'posted_registration_evidence_changed',
             message: 'The dated registration evidence changed after posting. The original journal and decision remain unchanged. Registration-driven tax correction is not yet qualified; this case requires the existing review workflow.',
             authority_basis: 'autonomous_posting_registration_evidence_changed'
+          });
+          if (taxRegistration) Object.assign(requirement, {
+            tax_registration: taxRegistration, reason: 'posted_tax_registration_changed',
+            message: taxRegistrationMessage(taxRegistration),
+            authority_basis: 'autonomous_posting_tax_registration_changed',
+            ...(taxRegistration.period.locked || taxRegistration.period.return_filed ? { next_action: 'person_corrects_closed_period' } : {})
           });
           await beforeWrite();
           await client.query("update transactions set payload=jsonb_set(payload,'{coding_correction_required}',$4::jsonb),updated_at=now() where firm_id=$1 and client_id=$2 and id=$3",[firmId,clientId,row.id,JSON.stringify(requirement)]);

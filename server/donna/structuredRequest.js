@@ -476,7 +476,9 @@ export const typedLlmCallFailure = (provider, error) => {
     return classifyProviderStatus({
       provider,
       status: error.status,
-      payload: { error: { message: error.message, ...(error.provider_error || {}) } },
+      // llmCall's `providerError` (the provider's own error object): its
+      // type/code name the cause (no credit, a bad key, a rate limit).
+      payload: { error: { ...(error.providerError || {}), message: error.providerError?.message || error.message } },
       attempts: error.telemetry?.attempt_count || 1
     });
   }
