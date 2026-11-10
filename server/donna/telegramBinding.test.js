@@ -146,7 +146,7 @@ test('deliverTelegramEvidenceAsksAfterSend gates off, then sends and receipts th
       deliverOwnerMessage: async (args) => { sent.push(args); return { ok: true, id: '9001', body: { ok: true } }; }
     }
   });
-  assert.deepEqual(result, { sent: 1 });
+  assert.deepEqual(result, { sent: 1, delivered: ['ask-1'] });
   assert.equal(sent[0].channel, 'telegram');
   assert.equal(sent[0].recipient.phone_e164, CHAT_ID);
   assert.match(sent[0].template.bodyParameters.join(' '), /June 2026/);
@@ -260,7 +260,7 @@ test('a single ask is byte-identical to the pre-digest path, so tapped-reply anc
       deliverOwnerMessage: async (args) => { sends.push(args); return { ok: true, id: '9101', body: { ok: true } }; }
     }
   });
-  assert.deepEqual(result, { sent: 1 });
+  assert.deepEqual(result, { sent: 1, delivered: ['ask-1'] });
   assert.equal(sends[0].template.name, 'donna_evidence_ask_v1');
   const row = await __getTelegramDeliveryByMessageIdWithClient({ client: db, messageId: '9101' });
   assert.ok(row, 'the bare send id is still the ledger key for a single ask');
