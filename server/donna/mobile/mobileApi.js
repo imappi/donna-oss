@@ -339,6 +339,18 @@ const flagFyi = async (ctx, found, note) => {
   };
 };
 
+// A note is the owner's words beside a decision that has a home for them: a
+// decline's reason and a "this was wrong" correction, each kept on that
+// decision's own audit row. An approval writer records none (the action goes
+// ahead as held, so a note could not change it), and an answer's words are
+// answer.text, which is what Donna reads. A note there would be stored where
+// nothing reads it, or dropped, so it is refused by name instead (GAPS.md).
+const refuseNote = (body) => {
+  if (ownerNote(body.note)) {
+    throw badRequest(`A note is not accepted on '${body.type}'.${body.type === 'answer' ? ' Put it in the answer text.' : ''}`, 'OWNER_NOTE_NOT_ACCEPTED');
+  }
+};
+
 const decide = async (ctx, rawCardId, body) => {
   validateDecision(body);
   const found = await findCard(ctx, rawCardId);
@@ -349,10 +361,12 @@ const decide = async (ctx, rawCardId, body) => {
     const text = String(body.answer?.text || '').trim();
     const documentIds = [...new Set(body.answer?.document_ids || [])];
     if (!text && !documentIds.length) throw badRequest('An answer needs text or at least one document.', 'ANSWER_EMPTY');
+    refuseNote(body);
     return answerAsk(ctx, found, { text, documentIds });
   }
   if (card.class === 'approval') {
     if (body.type !== 'approve' && body.type !== 'reject') throw wrongClass(card, body.type);
+    if (body.type === 'approve') refuseNote(body);
     return decideApproval(ctx, found, body.type, ownerNote(body.note));
   }
   if (body.type !== 'veto_flag') throw wrongClass(card, body.type);

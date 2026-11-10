@@ -232,7 +232,7 @@ import { isDesktopHostEnv, seedDesktopFirmMetadataWithClient } from './desktop/h
 import { mintFirstRunFirm, normalizeFirstRunInput } from './desktop/firstRunFirmMint.js';
 import { runtimeLivenessProbe } from './desktop/runtimeLiveness.js';
 import { runCanonicalRoleResolutionForClient, runCanonicalRoleResolutionSweep } from './canonicalRoleResolutionDb.js';
-import { assessEvidenceTopicTurn, buildEvidenceTopicState, ownerLanguageForBindings } from './channels/inboundCore.js';
+import { assessEvidenceTopicTurn, buildEvidenceTopicState, ownerLanguageForBindings, redeemOwnerChannelCode } from './channels/inboundCore.js';
 import { getClientOwnerLanguageInDb } from './firmDb.js';
 import { resolveStructuredOwnerReplyAdapter, supportsStructuredOwnerReply } from './statutoryRegistry.js';
 import { runEvidenceTopicReminderSweep } from './channels/evidenceTopicReminders.js';
@@ -284,7 +284,7 @@ import { sendTelegramText, telegramEnvAllowsClient } from './channels/telegram.j
 import { processWhatsAppInboundMessage, handleWhatsAppComplianceCommand, whatsappWebhookText } from './channels/whatsappInbound.js';
 import { ownerChannelAllowsClient, prefetchOwnerChannelGateContext } from './channels/ownerChannelConfig.js';
 import { whatsappEnvAllowsClient } from './channels/whatsappWebhookCore.js';
-import { processSmsInboundMessage, handleSmsComplianceCommand, SMS_INBOUND_COPY, smsConnectedText } from './channels/smsInbound.js';
+import { processSmsInboundMessage, handleSmsComplianceCommand, SMS_INBOUND_COPY, smsConnectedText, smsNotConnectedText } from './channels/smsInbound.js';
 import { processTelegramInboundMessage, handleTelegramComplianceCommand, TELEGRAM_INBOUND_COPY, telegramWebhookText } from './channels/telegramInbound.js';
 import { runOwnerMediaTerminalSummarySweep } from './channels/ownerMediaParseSummary.js';
 import {
@@ -4391,14 +4391,16 @@ const donnaFirmsApiHandler = async (req, res) => {
       // Render-the-persisted-verdict: the lifecycle row (pending/filed/cancelled
       // with its receipts) rides along so the surface shows the return's actual
       // state, never a client-side inference. Soft-fails to null pre-migration.
-      const lifecycle = await getAlvReturnForPeriodInDb({
+      // covered_by: the client's other live returns whose dates overlap this
+      // period (a filed 2026-Q3 covers 2026-09), by the writer's overlap rule.
+      const { lifecycle, covered_by: coveredBy } = await getAlvReturnForPeriodInDb({
         firmId,
         clientId,
         periodKey: envelope.period?.key
-      }).catch(() => null);
+      }).catch(() => ({ lifecycle: null, covered_by: [] }));
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ ...envelope, lifecycle }));
+      res.end(JSON.stringify({ ...envelope, lifecycle, covered_by: coveredBy }));
       return;
     }
 
@@ -5750,7 +5752,8 @@ const donnaFirmsApiHandler = async (req, res) => {
         clientId,
         profilePatch: body?.profile_patch,
         actorId,
-        principal: profilePrincipal || access.principal
+        principal: profilePrincipal || access.principal,
+        channel: ownerWriterChannel(req)
       });
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
@@ -6034,7 +6037,8 @@ const donnaFirmsApiHandler = async (req, res) => {
           const registration = await registerDocumentInDb({
             firmId,
             document: doc,
-            uploadPrincipal: access.principal
+            uploadPrincipal: access.principal,
+            channel: ownerWriterChannel(req)
           });
           if (registration.created && registration.parse_run_id) {
             try {
@@ -13062,7 +13066,9 @@ const donnaFirmsApiHandler = async (req, res) => {
           ask: evidenceRequest,
           turn: { ...portalTurn, text: replyText },
           now: new Date().toISOString(),
-          channel: 'portal',
+          // The phone adapter's in-process request says 'mobile'; any other
+          // caller of this route is the portal.
+          channel: ownerWriterChannel(req) || 'portal',
           actorId,
           inboundMessageId: body?.message_id || body?.messageId || null,
           documentIds
@@ -13073,7 +13079,8 @@ const donnaFirmsApiHandler = async (req, res) => {
           evidenceRequestId,
           topicState,
           actorId,
-          actorType: 'client'
+          actorType: 'client',
+          channel: ownerWriterChannel(req)
         });
         const updatedSnapshot = await getFirmSnapshotFromDb({ firmId });
         res.statusCode = 200;
@@ -13694,8 +13701,10 @@ const handleWhatsAppWebhook = async (req, res, requestUrl) => {
         const text = message.text?.body || '';
         const token = extractBindingToken(text);
         if (token) {
-          const redeemed = await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(token), phoneE164: from, actorId: 'whatsapp:webhook' }).catch(() => null);
-          await sendWhatsAppText({ to: from, text: whatsappWebhookText('connected', await webhookOwnerLanguage(redeemed ? [redeemed] : [])) });
+          const redeem = await redeemOwnerChannelCode({ redeem: redeemWhatsAppBindTokenInDb, args: { tokenHash: hashWhatsAppToken(token), phoneE164: from, actorId: 'whatsapp:webhook' }, channel: 'whatsapp' });
+          await sendWhatsAppText({ to: from, text: redeem.status === 'connected'
+            ? whatsappWebhookText('connected', await webhookOwnerLanguage([redeem.binding]))
+            : whatsappWebhookText(redeem.status === 'invalid_code' ? 'connectInvalid' : 'connectFailed') });
           continue;
         }
         const phoneHash = hashPhoneE164(from);
@@ -13775,8 +13784,10 @@ const handleSmsWebhook = async (req, res, requestUrl) => {
     const body = params.Body || '';
     const token = extractBindingToken(body);
     if (token) {
-      const redeemed = await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(token), phoneE164: from, actorId: 'sms:webhook', channel: 'sms' }).catch(() => null);
-      await sendSmsText({ to: from, text: smsConnectedText(await webhookOwnerLanguage(redeemed ? [redeemed] : [])) });
+      const redeem = await redeemOwnerChannelCode({ redeem: redeemWhatsAppBindTokenInDb, args: { tokenHash: hashWhatsAppToken(token), phoneE164: from, actorId: 'sms:webhook', channel: 'sms' }, channel: 'sms' });
+      await sendSmsText({ to: from, text: redeem.status === 'connected'
+        ? smsConnectedText(await webhookOwnerLanguage([redeem.binding]))
+        : smsNotConnectedText(redeem.status) });
       smsJson(res, 200, { received: true }); return;
     }
 
@@ -13870,18 +13881,22 @@ const handleTelegramWebhook = async (req, res) => {
     // Deep-link binding hop: t.me/<bot>?start=<token> → "/start <token>".
     const startToken = extractTelegramStartToken(text);
     if (startToken) {
-      const redeemed = await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(startToken), phoneE164: from, actorId: 'telegram:webhook', channel: 'telegram' }).catch(() => null);
-      await sendTelegramText({ to: from, text: telegramWebhookText('connected', await webhookOwnerLanguage(redeemed ? [redeemed] : [])) });
-      telegramJson(res, 200, { received: true }); return;
-    }
-    if (isBareTelegramStart(text)) {
-      await sendTelegramText({ to: from, text: telegramWebhookText('started') });
+      const redeem = await redeemOwnerChannelCode({ redeem: redeemWhatsAppBindTokenInDb, args: { tokenHash: hashWhatsAppToken(startToken), phoneE164: from, actorId: 'telegram:webhook', channel: 'telegram' }, channel: 'telegram' });
+      await sendTelegramText({ to: from, text: redeem.status === 'connected'
+        ? telegramWebhookText('connected', await webhookOwnerLanguage([redeem.binding]))
+        : telegramWebhookText(redeem.status === 'invalid_code' ? 'connectInvalid' : 'connectFailed') });
       telegramJson(res, 200, { received: true }); return;
     }
 
     const phoneHash = hashPhoneE164(from);
     const bindings = await getActiveTelegramBindingsByPhoneHashInDb({ phoneHash });
     knownBindings = bindings;
+    // A bare /start: a chat already connected to a client is answered as that
+    // owner, in their language; an unknown chat gets the bilingual line.
+    if (isBareTelegramStart(text)) {
+      await sendTelegramText({ to: from, text: telegramWebhookText('started', await webhookOwnerLanguage(bindings)) });
+      telegramJson(res, 200, { received: true }); return;
+    }
     if (!bindings.length) { await sendTelegramText({ to: from, text: TELEGRAM_INBOUND_COPY.unbound }); telegramJson(res, 200, { received: true }); return; }
 
     const compliance = await handleTelegramComplianceCommand({ body: text, from, firmId: DEFAULT_FIRM_ID, bindings });

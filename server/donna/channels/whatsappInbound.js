@@ -47,6 +47,7 @@ import {
   finlandAlvFilingWhatsAppFlagActsInDb,
   getAlvReturnByIdInDb,
   getActiveSuomifiMandateInDb,
+  assertAlvReturnFileableInDb,
   markAlvReturnFiledInDb,
   cancelAlvReturnInDb,
   singaporeGstFilingFlagActsInDb,
@@ -126,11 +127,24 @@ const whatsappInboundCopyFor = (language) => (language === 'fi' ? WHATSAPP_INBOU
 // owner language once a binding names a client (ownerLanguageForBindings); null
 // means no client is known, and the text is bilingual, Finnish first. English
 // is the historical copy, unchanged.
-//   connected:    after a binding token is redeemed
-//   connectFirst: a number with no binding (the webhook's own nudge)
+//   connected:      after a binding token is redeemed
+//   connectInvalid: the token did not redeem (expired, used, unknown); nothing
+//                   was connected, and no client is known (bilingual)
+//   connectFailed:  the redeem failed for another reason; nothing was connected
+//   connectFirst:   a number with no binding (the webhook's own nudge)
 const WHATSAPP_WEBHOOK_COPY = Object.freeze({
-  en: Object.freeze({ connected: 'Got it. WhatsApp is connected.', connectFirst: 'Please connect WhatsApp from your Donna portal first.' }),
-  fi: Object.freeze({ connected: 'Selvä, WhatsApp on nyt yhdistetty.', connectFirst: 'Yhdistä WhatsApp ensin Donna-portaalistasi.' })
+  en: Object.freeze({
+    connected: 'Got it. WhatsApp is connected.',
+    connectInvalid: 'WhatsApp is not connected: that connection code has expired or was already used. Get a new code from your Donna portal.',
+    connectFailed: 'WhatsApp is not connected: something went wrong on my side. Please try again in a moment.',
+    connectFirst: 'Please connect WhatsApp from your Donna portal first.'
+  }),
+  fi: Object.freeze({
+    connected: 'Selvä, WhatsApp on nyt yhdistetty.',
+    connectInvalid: 'WhatsAppia ei yhdistetty: yhdistämiskoodi on vanhentunut tai jo käytetty. Hae uusi koodi Donna-portaalistasi.',
+    connectFailed: 'WhatsAppia ei yhdistetty, koska yhdistäminen epäonnistui minun päässäni. Yritä hetken päästä uudelleen.',
+    connectFirst: 'Yhdistä WhatsApp ensin Donna-portaalistasi.'
+  })
 });
 export const whatsappWebhookText = (key, language = null) => (language
   ? WHATSAPP_WEBHOOK_COPY[language === 'fi' ? 'fi' : 'en'][key]
@@ -323,6 +337,8 @@ const defaultDeps = (deps = {}) => ({
   // G-3: the Suomi.fi mandate (veroasioiden hoito) the transmit gate requires —
   // no valid recorded mandate, no filing (ALV_FILING_MANDATE_REQUIRED).
   getSuomifiMandate: deps.getSuomifiMandate || getActiveSuomifiMandateInDb,
+  // Before anything is transmitted: no other live return may cover these dates.
+  assertAlvReturnFileable: deps.assertAlvReturnFileable || assertAlvReturnFileableInDb,
   markAlvReturnFiled: deps.markAlvReturnFiled || markAlvReturnFiledInDb,
   cancelAlvReturn: deps.cancelAlvReturn || cancelAlvReturnInDb,
   submitAlvReturn: deps.submitAlvReturn || createIlmoitinSubmitAlvReturn({

@@ -107,12 +107,27 @@ const telegramInboundCopyFor = (language) => (language === 'fi' ? TELEGRAM_INBOU
 // owner language once a binding names a client (ownerLanguageForBindings); null
 // means no client is known, and the text is bilingual, Finnish first. English
 // is the historical copy, unchanged.
-//   connected:   after a /start <token> binding is redeemed
-//   started:     a bare /start (sent before any binding lookup, so bilingual)
-//   mediaFailed: a photo whose processing threw in the webhook
-const TELEGRAM_CONNECTED = Object.freeze({ en: 'Got it. Telegram is connected.', fi: 'Selvä, Telegram on nyt yhdistetty.' });
+//   connected:      after a /start <token> binding is redeemed
+//   connectInvalid: the /start token did not redeem (expired, used, unknown);
+//                   nothing was connected, and no client is known (bilingual)
+//   connectFailed:  the redeem failed for another reason; nothing was connected
+//   started:        a bare /start: in the owner language when the chat is
+//                   already connected to a client, bilingual otherwise
+//   mediaFailed:    a photo whose processing threw in the webhook
+const TELEGRAM_WEBHOOK_LINES = Object.freeze({
+  en: Object.freeze({
+    connected: 'Got it. Telegram is connected.',
+    connectInvalid: 'Telegram is not connected: that connection link has expired or was already used. Get a new link from your Donna portal.',
+    connectFailed: 'Telegram is not connected: something went wrong on my side. Please try again in a moment.'
+  }),
+  fi: Object.freeze({
+    connected: 'Selvä, Telegram on nyt yhdistetty.',
+    connectInvalid: 'Telegramia ei yhdistetty: yhdistämislinkki on vanhentunut tai jo käytetty. Hae uusi linkki Donna-portaalistasi.',
+    connectFailed: 'Telegramia ei yhdistetty, koska yhdistäminen epäonnistui minun päässäni. Yritä hetken päästä uudelleen.'
+  })
+});
 export const telegramWebhookText = (key, language = null) => {
-  const lineFor = (lang) => (key === 'connected' ? TELEGRAM_CONNECTED[lang] : telegramInboundCopyFor(lang)[key]);
+  const lineFor = (lang) => TELEGRAM_WEBHOOK_LINES[lang][key] ?? telegramInboundCopyFor(lang)[key];
   return language ? lineFor(language === 'fi' ? 'fi' : 'en') : bilingualOwnerText(lineFor('fi'), lineFor('en'));
 };
 

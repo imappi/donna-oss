@@ -12,6 +12,7 @@ import { registerDocumentInDb, markParseEventSentInDb } from '../parseDocumentsD
 // WhatsApp document gets the same queue-owned parse as a firm upload.
 import { requestParseRun } from '../desktop/parseDocumentJob.js';
 import { extractAskRef, hashPhoneE164 } from './whatsappWebhookCore.js';
+import { normalizeOwnerReplyText, ownerReplyKeywords } from './ownerReplyText.js';
 import { resolveCountryInboundReply, resolveCountryOpeningBinding, startInvoiceIssuance, sniffEInvoiceXml } from '../inboundCountryRegistry.js';
 import { assembleClientPortalTurn, persistClientPortalTurnMessage } from '../clientPortalTurn.js';
 import { findClientPortalReportRequest, generateClientPortalChatReply, generateClientPortalReportNarration, newClientPortalChatMessageId } from '../clientPortalChat.js';
@@ -70,6 +71,27 @@ export const ownerLanguageForBindings = async ({ firmId, bindings = [], deps = {
   const named = (Array.isArray(bindings) ? bindings : []).filter((binding) => binding?.client_id);
   if (!named.length || typeof deps.getOwnerLanguage !== 'function') return null;
   return resolveInboundOwnerLanguage({ firmId, bindings: named, deps });
+};
+
+// A connection code (Telegram "/start <token>", SMS and WhatsApp "connect
+// <token>") redeemed for an owner channel. The webhook confirms "connected"
+// only for `status: 'connected'`, which carries the binding the redeem wrote.
+// The redeem is one transaction, so a refused or failed redeem has written no
+// binding: `invalid_code` (expired, used or unknown) or `failed` (anything
+// else, logged with the channel and error code, never the number or token).
+export const redeemOwnerChannelCode = async ({ redeem, args = {}, channel } = {}) => {
+  try {
+    const binding = await redeem(args);
+    if (binding?.client_id) return { status: 'connected', binding };
+    console.warn(`[${channel}-webhook] connection code redeem failed`, { channel, reason: 'no_binding_returned' });
+    return { status: 'failed', binding: null };
+  } catch (error) {
+    const invalid = error?.code === 'WHATSAPP_BIND_TOKEN_INVALID';
+    console.warn(`[${channel}-webhook] connection code redeem failed`, {
+      channel, reason: invalid ? 'invalid_code' : 'redeem_error', error_code: error?.code || null, error_message: invalid ? null : (error?.message || null)
+    });
+    return { status: invalid ? 'invalid_code' : 'failed', binding: null };
+  }
 };
 
 // The core's own owner-facing lines, per language. English is the historical
@@ -291,12 +313,12 @@ export const storeInboundMediaAsEvidence = async ({
 const cleanReplyExcerpt = (text = '', max = 240) => String(text || '').replace(/\s+/g, ' ').trim().slice(0, max);
 const askCurrentNeed = (ask = {}) => String(ask.question || ask.request_payload?.question || ask.request_payload?.current_need || ask.evidence_type || 'requested evidence').trim();
 
-// Owner-reply keyword lists match whole words and phrases only. A letter is any
-// Unicode letter or digit (\p{L}\p{N}), so Finnish ä, ö and å count as letters:
-// JavaScript's \b does not, and a plain substring match reads "kohta" inside
-// "henkilökohtainen" or "later" inside "collateral". Entries are regex sources.
-const ownerReplyKeywords = (...entries) =>
-  new RegExp(`(?<![\\p{L}\\p{N}])(?:${entries.join('|')})(?![\\p{L}\\p{N}])`, 'iu');
+// Owner-reply keyword lists match whole words and phrases only, with Finnish
+// ä, ö and å counted as letters (ownerReplyText.js), so a plain substring match
+// no longer reads "kohta" inside "henkilökohtainen" or "later" inside
+// "collateral". Entries are regex sources with a straight apostrophe; the reply
+// is normalised once (normalizeOwnerReplyText) before the tests below, so the
+// curly apostrophe and non-breaking space a phone types read the same.
 const CLARIFICATION_KEYWORDS = ownerReplyKeywords('which', 'what', 'who', 'where', 'when', 'why', 'how', 'mikä', 'mitä', 'kumpi', 'which receipt', 'tarkoitat');
 const DEFER_KEYWORDS = ownerReplyKeywords('tomorrow', 'later', 'tonight', 'next week', 'send it', 'send this', "i'll send", 'i will send', 'palaan', 'huomenna', 'myöhemmin', 'kohta');
 // 'not sure' / 'en ole varma' are the keywords the ask templates invite.
@@ -307,7 +329,7 @@ export const assessEvidenceTopicTurn = ({ ask = {}, text = '', descriptor = null
   if (descriptor && !descriptor.deferred) {
     return { outcome: 'answered_with_media', terminal: true, can_resolve: true, still_missing: [], reason: 'owner_sent_media_evidence' };
   }
-  const reply = String(text || '').trim();
+  const reply = normalizeOwnerReplyText(text).trim();
   if (!reply) return { outcome: 'unsupported', terminal: false, can_resolve: false, still_missing: [askCurrentNeed(ask)], reason: 'empty_or_unsupported_owner_turn' };
   const lower = reply.toLowerCase();
   if (/\?\s*$/.test(reply) || CLARIFICATION_KEYWORDS.test(reply)) {
@@ -996,7 +1018,25 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
   return { status: 'general_chat', clientId, actionApplied: Boolean(resolved || mileage?.status === 'booked' || portalLink?.status === 'sent'), resolved, mileage, portalLink, report: reportRequest ? { request: reportRequest } : null };
 };
 
+// The one point every owner reply on this path is sent through. A reply is
+// text: an empty or non-string value (a missing field read as `undefined`) is
+// never sent to the owner; it is a fault, logged with the message identity
+// (never the text or the number), and the send reports it was refused.
+export const guardOwnerReplySend = ({ sendText, channel = null, messageId = null } = {}) => async (outbound = {}) => {
+  const text = outbound?.text;
+  if (typeof text !== 'string' || !text.trim()) {
+    console.error('[inboundCore] fault: refused to send an empty or non-string owner reply', {
+      channel, message_id: messageId, text_type: text === null ? 'null' : typeof text
+    });
+    return { sent: false, reason: 'empty_owner_reply' };
+  }
+  return sendText(outbound);
+};
+
 export const processAnchoredInboundMessage = async ({ message, from, firmId, env = process.env, deps = {}, config = {} } = {}) => {
+  if (typeof deps.sendText === 'function') {
+    deps = { ...deps, sendText: guardOwnerReplySend({ sendText: deps.sendText, channel: config.channel, messageId: message?.id ?? null }) };
+  }
   let sendText = deps.sendText;
   const text = config.extractText(message) || '';
   const descriptor = config.mediaDescriptor(message);
