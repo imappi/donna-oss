@@ -49,7 +49,7 @@ test('doc reply → proposal → request_confirmation with mapped lines and tota
   assert.match(result.ask.summary, /1910 Pankkitili/);
   assert.match(result.ask.summary, /2050 Oma pääoma/);
   assert.match(result.ask.summary, /Total: 4200\.00 EUR/);
-  assert.match(sent[0], /Vahvista/);
+  assert.match(sent[0], /Confirm by replying “yes”/);
 });
 
 // The webhook wiring passes ANTHROPIC_API_KEY down; without this forward the
@@ -336,4 +336,44 @@ test('classifyOpeningIntake words every escalation in the owner language; Englis
     assert.deepEqual(fi.details, en.details);
     assert.equal(fi.question, finnish, `Finnish for ${reason}`);
   }
+});
+
+// A Finnish company whose owner chose English: the lane is the Finnish one, the
+// owner's language is English (the one resolver decides it; inboundCore passes
+// it). Before, the confirm tail and the posted line were Finnish for every owner.
+test('opening-balance lane: a Finnish company whose owner chose English gets the confirm tail and the posted line in English', async () => {
+  const sent = [];
+  const proposal = await resolveOpeningBalanceInbound(baseArgs({
+    language: 'en',
+    entityType: 'oy',
+    runTrialBalanceIntakeImpl: async () => proposalVerdict,
+    sendText: async ({ text }) => sent.push(text)
+  }));
+  assert.equal(sent[0], `${proposal.ask.summary}\n\nConfirm by replying “yes” and I will post the opening balance.`);
+  assert.doesNotMatch(sent[0], /Vahvista|kyllä/);
+
+  // The invited word is one the route reads: "yes" posts.
+  const posted = [];
+  const posts = [];
+  const confirmed = await resolveOpeningBalanceInbound(baseArgs({
+    language: 'en',
+    ask: baseAsk({ phase: 'confirm_request', verdict: proposalVerdict }),
+    replyText: 'yes',
+    confirmOpeningBalanceIntakeImpl: async (args) => { posts.push(args); return { ok: true }; },
+    sendText: async ({ text }) => posted.push(text)
+  }));
+  assert.equal(confirmed.action, 'confirm_and_post');
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posted, ['Opening balance posted.']);
+
+  // A Finnish owner keeps the Finnish lines.
+  const postedFi = [];
+  await resolveOpeningBalanceInbound(baseArgs({
+    language: 'fi',
+    ask: baseAsk({ phase: 'confirm_request', verdict: proposalVerdict }),
+    replyText: 'kyllä',
+    confirmOpeningBalanceIntakeImpl: async () => ({ ok: true }),
+    sendText: async ({ text }) => postedFi.push(text)
+  }));
+  assert.deepEqual(postedFi, ['Avaava tase kirjattu.']);
 });

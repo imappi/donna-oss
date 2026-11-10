@@ -69,6 +69,9 @@ test('the in-band channel reply does not repeat a clarification the fan-out alre
     recode: { needsClarification: true, follow_up_delivery: { delivered } }
   });
   assert.equal(buildResolvedReplyText({ resolved: resolved(['ask-1']), fallback: 'x' }), 'Thanks. I sent you a follow-up question.');
+  assert.equal(buildResolvedReplyText({ resolved: resolved(['ask-1']), fallback: 'x', language: 'en' }), 'Thanks. I sent you a follow-up question.');
+  // A Finnish owner gets the acknowledgement in Finnish.
+  assert.equal(buildResolvedReplyText({ resolved: resolved(['ask-1']), fallback: 'x', language: 'fi' }), 'Kiitos. Lähetin sinulle vielä tarkentavan kysymyksen.');
   assert.equal(buildResolvedReplyText({ resolved: resolved([]), fallback: 'x' }), 'Which month was this for?');
 });
 

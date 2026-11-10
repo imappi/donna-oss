@@ -73,3 +73,23 @@ test('an explicit profile language beats the jurisdiction default in the draftin
   assert.equal(input.client.jurisdiction, 'FI');
   assert.equal(buildAskDraftInput({ clientProfile: { jurisdiction: 'GB', language: 'fi' } }).client.language, 'fi');
 });
+
+// The drafter is told the client's country by the same rule the resolver uses
+// (one helper, ownerLanguage.js ownerClientCountry): the jurisdiction column is
+// authoritative, the profile value is read only when the column is empty, and
+// no country when the two disagree. Before, the profile won (`profile || column`).
+test('the drafting input names the client country by the resolver\'s rule, never the profile over the column', () => {
+  const country = (profileJurisdiction, column) => buildAskDraftInput({
+    clientProfile: { companyName: 'Esimerkki Oy', jurisdiction: profileJurisdiction, persisted_identity: { jurisdiction: column } }
+  }).client;
+  // Disagreement: the column and the profile name different countries.
+  assert.equal(country('GB', 'FI').jurisdiction, '');
+  assert.equal(country('GB', 'FI').language, preferredOwnerTemplateLanguage({ jurisdiction: 'GB' }, { jurisdiction: 'FI' }));
+  // Column only, profile only, both agreeing: the stored value as before.
+  assert.equal(country('', 'FI').jurisdiction, 'FI');
+  assert.equal(country('FI', null).jurisdiction, 'FI');
+  assert.equal(country('FI', 'FI').jurisdiction, 'FI');
+  assert.equal(country('uk', 'GB').jurisdiction, 'GB', 'uk and GB are one country; the column is the value shown');
+  // No persisted identity at all (a caller with the profile only): unchanged.
+  assert.equal(buildAskDraftInput({ clientProfile: { jurisdiction: 'FI' } }).client.jurisdiction, 'FI');
+});

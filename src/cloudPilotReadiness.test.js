@@ -79,7 +79,8 @@ test('mounted processing review requires scoped confirmation and validates apply
  responder=async()=>response({...review(),entity_state:'INCOMPLETE',configuration_staged:true});
  await click('Apply reviewed processing settings');
  assert.deepEqual(JSON.parse(calls.find(c=>c.method==='POST').body),{firm_id:'f',review_digest:'review-a',confirmed:true});
- assert.match(panel().textContent,/Entity readiness: INCOMPLETE/);
+ // The stored state reads as a label (interfaceValueLabels.pilotEntityStateLabel).
+ assert.match(panel().textContent,/Entity readiness: incomplete/);
  assert.equal(button('Apply reviewed processing settings'),undefined);
 });
 test('switching client aborts pending review and never mounts its late result',async()=>{

@@ -339,6 +339,14 @@ export const SENSITIVE_ASK_NOTICE_VERSION = 'sensitive-ask-notice.v1';
 // a Meta template parameter.
 export const SENSITIVE_ASK_WA_TEMPLATE = 'donna_secure_upload_v1';
 export const SENSITIVE_ASK_WA_ITEM_PARAM = 'my next question for you';
+// {{1}} follows the language of the template actually sent (as the ask
+// template's period does): a Finnish template carries the Finnish phrase, an
+// English one (including the English retry) the English phrase, unchanged.
+const SENSITIVE_ASK_WA_ITEM_PARAMS = Object.freeze({
+  en: SENSITIVE_ASK_WA_ITEM_PARAM,
+  fi: 'seuraava kysymykseni sinulle'
+});
+export const sensitiveAskWaItemParam = (language = 'en') => SENSITIVE_ASK_WA_ITEM_PARAMS[language] || SENSITIVE_ASK_WA_ITEM_PARAMS.en;
 
 // SMS/Telegram render code-side, so the notice text below is what the owner
 // reads there (the ledger records it under this template name).
