@@ -36,6 +36,22 @@
 // same hook puts an unpaid bill on the owner through its own lane
 // (supplier_bill_settlement), sharing the ask primitive and the never-twice check.
 //
+// A document paid in part inside the period (one instalment in, the rest
+// later or never) is recognised only as far as its posted lines go: the
+// census sums the decided matches' match_amount on lines posted in the period
+// (with the credit applications riding them), in cents from the stored
+// decimals, and names the unpaid remainder with its gross, net and tax
+// (rests part_settled_in_period). Same sum, same 1-cent epsilon as the
+// sum-based payment_status (db/documents.js).
+//
+// A supplier credit note has no persisted link to the bill it was deducted
+// from (document_credit_applications is written for customer credit notes
+// only). When a bill is paid net of such a credit, the census names the bill's
+// unpaid remainder and the credit note side by side and never infers the
+// deduction from amounts that happen to add up; the owner is asked about the
+// credit note on the supplier lane with its own question (deducted, refunded
+// or still open). Once an application row links the two, both are represented.
+//
 // Both questions are written in the owner's language (preferredOwnerTemplateLanguage)
 // and invite the same two kinds of answer: how it was paid, or that it is
 // still unpaid. "Still unpaid" is a real answer on both lanes: the owner-reply
@@ -61,8 +77,11 @@ export const SUPPLIER_BILL_SETTLEMENT_ASK_LANE = 'supplier_bill_settlement';
 export const SALES_RECOGNITION_ASK_EVIDENCE_TYPE = 'payment_method';
 export const SALES_RECOGNITION_BLOCKER = 'unrecognized_sales_documents';
 export const PURCHASE_RECOGNITION_BLOCKER = 'unrecognized_purchase_documents';
+// part_settled_in_period: one or more instalments are posted inside the
+// period but they do not cover the document; the item carries only the unpaid
+// remainder (remainder below), never the whole document and never nothing.
 export const SALES_RECOGNITION_RESTS = Object.freeze([
-  'no_settlement', 'settlement_proposed', 'settlement_unposted', 'settled_outside_period'
+  'no_settlement', 'settlement_proposed', 'settlement_unposted', 'settled_outside_period', 'part_settled_in_period'
 ]);
 
 const DECIDED = new Set(['auto_matched', 'confirmed']);
@@ -72,6 +91,28 @@ const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const strip = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 const day = (v) => (v ? toIsoDay(v) : null);
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+// Money as integer cents, read from the stored decimal text (numeric(14,2)
+// arrives from pg as a string) — never through a floating-point product.
+// A third decimal, if any, rounds half away from zero.
+export const toCents = (v) => {
+  if (v == null || v === '') return null;
+  const m = /^\s*([+-])?(\d+)(?:\.(\d*))?\s*$/.exec(String(v));
+  if (!m) return null;
+  const frac = `${m[3] || ''}000`;
+  const cents = Number(m[2]) * 100 + Number(frac.slice(0, 2)) + (Number(frac[2]) >= 5 ? 1 : 0);
+  return m[1] === '-' ? -cents : cents;
+};
+const fromCents = (c) => c / 100;
+// The tax share of a settled part, in cents: round half up of tax × part / gross.
+// BigInt keeps the product exact at any amount.
+const taxShareCents = (taxCents, partCents, grossCents) => {
+  if (!grossCents) return 0;
+  const n = 2n * BigInt(taxCents) * BigInt(partCents) + BigInt(grossCents);
+  return Number(n / (2n * BigInt(grossCents)));
+};
+// The same 1-cent epsilon the sum-based payment_status uses
+// (db/documents.js computeSumBasedPaymentStatus): settled + 1 cent >= total is paid.
+const PAID_EPSILON_CENTS = 1;
 
 const basisOf = (clientRow) => {
   try {
@@ -92,14 +133,55 @@ const basisOf = (clientRow) => {
 //   - noun / amounts: the draft sentence.
 const RECOGNITION_SIDES = Object.freeze({
   sales: { documentType: 'sales_invoice', counterparty: 'customer_name', itemKey: 'customer', blocker: SALES_RECOGNITION_BLOCKER,
-    issuedJournalType: 'sales_invoice', noun: 'sales document', amounts: (net, tax, ccy) => `${net} ${ccy} net + ${tax} tax` },
+    issuedJournalType: 'sales_invoice', noun: 'sales document', amounts: (net, tax, ccy) => `${net} ${ccy} net + ${tax} tax`,
+    fi: { noun: ['myyntiasiakirja', 'myyntiasiakirjaa'], amounts: (net, tax, ccy) => `${net} ${ccy} nettomyyntiä + ${tax} ALV` } },
   purchase: { documentType: 'supplier_bill', counterparty: 'vendor_name', itemKey: 'vendor', blocker: PURCHASE_RECOGNITION_BLOCKER,
-    issuedJournalType: null, noun: 'supplier document', amounts: (net, tax, ccy) => `${net} ${ccy} expense + ${tax} input tax` }
+    issuedJournalType: null, noun: 'supplier document', amounts: (net, tax, ccy) => `${net} ${ccy} expense + ${tax} input tax`,
+    fi: { noun: ['ostoasiakirja', 'ostoasiakirjaa'], amounts: (net, tax, ccy) => `${net} ${ccy} kuluja + ${tax} vähennettävää ALV:tä` } }
 });
 const sideOf = (side) => {
   const known = RECOGNITION_SIDES[side];
   if (!known) throw Object.assign(new Error(`Unknown recognition census side: ${side}`), { code: 'RECOGNITION_SIDE_INVALID' });
   return known;
+};
+
+// The part of a document the period's posted bank lines and credit
+// applications settle, in cents, or null when they settle it all (or when an
+// amount is not stated in the document's currency, so a part cannot be told
+// from the whole). Pure; read only from persisted amounts.
+const partSettledInPeriod = ({ doc, kind, decided, applications, inPeriod, journalsByTx }) => {
+  const grossCents = Math.abs(toCents(doc.total_amount) ?? 0);
+  if (!grossCents) return null;
+  const currency = String(doc.currency || '').trim().toUpperCase();
+  const postedInPeriod = (m) => (journalsByTx.get(m.bank_transaction_id) || []).some(inPeriod);
+  let settledCents = 0;
+  const postedMatchIds = new Set();
+  for (const m of decided) {
+    if (!postedInPeriod(m)) continue;
+    postedMatchIds.add(m.id);
+    // A line reached only through a credit application settles the other
+    // document; the credit's own amount is counted from the application below.
+    const reminder = obj(obj(m.payload).reminder_obligation);
+    const own = m.matched_object_id === doc.id;
+    if (!own && !(kind === 'invoice' && reminder.status === 'applied' && reminder.invoice_document_id === doc.id)) continue;
+    const bankCurrency = String(m.bank_currency || '').trim().toUpperCase();
+    if (bankCurrency && currency && bankCurrency !== currency) return null;
+    const amount = toCents(own ? m.match_amount : reminder.principal_amount);
+    if (amount == null) return null;
+    settledCents += Math.abs(amount);
+  }
+  for (const a of applications) {
+    if ((kind === 'credit_note' ? a.credit_document_id : a.invoice_document_id) !== doc.id) continue;
+    const rides = a.settlement_match_id ? postedMatchIds.has(a.settlement_match_id) : inPeriod(day(a.counterpart_date));
+    if (!rides) continue;
+    const amount = toCents(a.amount);
+    if (amount == null) return null;
+    settledCents += Math.abs(amount);
+  }
+  if (settledCents + PAID_EPSILON_CENTS >= grossCents) return null;
+  const taxCents = doc.tax_amount != null ? Math.abs(toCents(doc.tax_amount) ?? 0) : 0;
+  const remainingCents = grossCents - settledCents;
+  return { grossCents, settledCents, remainingCents, remainingTaxCents: taxCents - taxShareCents(taxCents, settledCents, grossCents) };
 };
 
 // classifyRecognitionGap — pure. Every in-scope uploaded document of the side
@@ -170,7 +252,18 @@ export const classifyRecognitionGap = ({
     // A bill paid in instalments is one document: every settling line's journal
     // counts toward the same entry, never one entry per instalment.
     const journalDates = [...txIds.flatMap((id) => journalsByTx.get(id) || []), ...(journalsByDoc.get(doc.id) || [])].filter(Boolean).sort();
-    if (date && journalDates.some(inPeriod)) {
+    // How much of the document the period's posted ledger carries. The
+    // owner-funds journal (document_settlement) settles the whole document; a
+    // bank line carries its match_amount (a reminder line its principal), plus
+    // the credit applications that ride a posted line (or, with no line, a
+    // credit note dated inside the period). The same sum and the same 1-cent
+    // epsilon as the sum-based payment_status. When any posted line's amount
+    // is not stated in the document's currency the census cannot tell a part
+    // from the whole and keeps the whole document represented, as before.
+    const partial = date && journalDates.some(inPeriod) && !(journalsByDoc.get(doc.id) || []).some(inPeriod)
+      ? partSettledInPeriod({ doc, kind, decided, applications, inPeriod, journalsByTx })
+      : null;
+    if (date && journalDates.some(inPeriod) && !partial) {
       represented.push({ document_id: doc.id, by: 'settlement_journal' });
       continue;
     }
@@ -185,7 +278,8 @@ export const classifyRecognitionGap = ({
     }
 
     let rests = 'no_settlement';
-    if (journalDates.length) rests = 'settled_outside_period';
+    if (partial) rests = 'part_settled_in_period';
+    else if (journalDates.length) rests = 'settled_outside_period';
     else if (decided.length) rests = 'settlement_unposted';
     else if (settling.some((m) => LIVE.has(m.status))) rests = 'settlement_proposed';
 
@@ -194,9 +288,10 @@ export const classifyRecognitionGap = ({
       .map((a) => ({ id: a.id, status: a.status, evidence_type: a.evidence_type, audience: a.audience || 'client',
         anchor: obj(a.request_payload).document_id === doc.id ? 'document' : 'transaction' }));
     const sign = kind === 'credit_note' ? -1 : 1;
-    const gross = round2(sign * Math.abs(Number(doc.total_amount)));
     const taxKnown = doc.tax_amount != null && Number.isFinite(Number(doc.tax_amount));
-    const tax = taxKnown ? round2(sign * Math.abs(Number(doc.tax_amount))) : null;
+    // A part-settled document is named by its unpaid remainder only.
+    const gross = partial ? fromCents(sign * partial.remainingCents) : round2(sign * Math.abs(Number(doc.total_amount)));
+    const tax = !taxKnown ? null : partial ? fromCents(sign * partial.remainingTaxCents) : round2(sign * Math.abs(Number(doc.tax_amount)));
     const counterparty = doc[spec.counterparty] || null;
     items.push({
       document_id: doc.id,
@@ -214,6 +309,8 @@ export const classifyRecognitionGap = ({
       net: taxKnown ? round2(gross - tax) : null,
       tax,
       rests,
+      ...(partial ? { remainder: { document_gross: fromCents(sign * partial.grossCents), settled_in_period: fromCents(sign * partial.settledCents),
+        remaining_gross: gross, remaining_tax: tax } } : {}),
       settlement: { transaction_ids: txIds, journal_dates: journalDates },
       held_by: heldBy,
       on_nobody: heldBy.length === 0
@@ -233,23 +330,37 @@ export const classifyRecognitionGap = ({
   return { ...base, status: items.length ? 'excluded' : 'none', items, totals: [...byCurrency.values()], represented };
 };
 
-// The one honest sentence a draft carries when a side of the census is non-empty.
-export const recognitionStatement = (gap) => {
+// The one honest sentence a draft carries when a side of the census is non-empty,
+// in English (the default) or Finnish. A part-paid document counts by its
+// unpaid remainder, and the sentence says so.
+export const recognitionStatement = (gap, { language = 'en' } = {}) => {
   if (!gap?.items?.length) return null;
   const spec = sideOf(gap.side || 'sales');
   const n = gap.items.length;
+  const parts = gap.items.filter((i) => i.rests === 'part_settled_in_period').length;
+  const money = (v) => amountText(v, null, language);
+  if (language === 'fi') {
+    const amounts = gap.totals.map((t) => `${spec.fi.amounts(money(t.net), money(t.tax), t.currency || '').replace(/\s+/g, ' ')}`
+      + `${t.tax_unknown_count ? ` (${t.tax_unknown_count} ilman ilmoitettua veron määrää)` : ''}`).join('; ');
+    const noun = `${n} ladattu${n === 1 ? '' : 'a'} ${spec.fi.noun[n === 1 ? 0 : 1]}`;
+    if (!parts) return `${noun} ei ole kirjattu tämän kauden kirjanpitoon, ja ${n === 1 ? 'se on' : 'ne on'} jätetty pois näistä luvuista: ${amounts}.`;
+    return `${noun} ei ole kirjattu kokonaan tämän kauden kirjanpitoon; kirjaamaton osa on jätetty pois näistä luvuista: ${amounts}. `
+      + `${n === 1 ? 'Se on' : `Niistä ${parts} on`} maksettu tällä kaudella vain osittain; mukana on vain maksamaton loppuosa.`;
+  }
   const amounts = gap.totals.map((t) => `${spec.amounts(t.net.toFixed(2), t.tax.toFixed(2), t.currency || '').replace(/\s+/g, ' ')}`
     + `${t.tax_unknown_count ? ` (${t.tax_unknown_count} without a stated tax amount)` : ''}`).join('; ');
-  return `${n} uploaded ${spec.noun}${n === 1 ? ' is' : 's are'} not recognised in this period's posted ledger and ${n === 1 ? 'is' : 'are'} excluded from these figures: ${amounts}.`;
+  if (!parts) return `${n} uploaded ${spec.noun}${n === 1 ? ' is' : 's are'} not recognised in this period's posted ledger and ${n === 1 ? 'is' : 'are'} excluded from these figures: ${amounts}.`;
+  return `${n} uploaded ${spec.noun}${n === 1 ? ' is' : 's are'} not fully recognised in this period's posted ledger; the unrecognised part is excluded from these figures: ${amounts}. `
+    + `${parts} of them ${parts === 1 ? 'is' : 'are'} paid only in part in this period; only ${parts === 1 ? 'its' : 'their'} unpaid remainder is counted here.`;
 };
 
 // The financial-statement draft reason (ledgerReadModel.buildReportDraftState),
 // one per side, each under its own code.
-export const recognitionDraftReason = (gap) => {
+export const recognitionDraftReason = (gap, { language = 'en' } = {}) => {
   if (!gap?.items?.length) return null;
   return {
     code: sideOf(gap.side || 'sales').blocker,
-    detail: recognitionStatement(gap),
+    detail: recognitionStatement(gap, { language }),
     count: gap.items.length,
     totals: gap.totals,
     document_ids: gap.items.map((i) => i.document_id)
@@ -271,7 +382,7 @@ export const readRecognitionGapWithClient = async ({ client, firmId, clientId, p
   });
   if (basis === 'cash') return both();
   const documents = (await client.query(
-    `select id, filename, document_type, document_date, total_amount, tax_amount, currency, customer_name, vendor_name,
+    `select id, filename, document_type, document_date, total_amount::text as total_amount, tax_amount::text as tax_amount, currency, customer_name, vendor_name,
             payment_status, reference_number, structured_reference, parse_summary, payload
        from documents
       where firm_id = $1 and client_id = $2
@@ -285,10 +396,12 @@ export const readRecognitionGapWithClient = async ({ client, firmId, clientId, p
   )).rows;
   if (!documents.length) return both();
   const docIds = documents.map((d) => d.id);
-  // Credit applications are a sales-side writer (creditNoteApplications.js);
-  // they never name a supplier bill, so the purchase side reads none.
+  // Credit applications are a sales-side writer today (creditNoteApplications.js);
+  // they never name a supplier bill, so the purchase side reads none. The read
+  // is not filtered by side: a supplier application, once written, nets the
+  // credit into its bill's posted line here without further change.
   const applications = (await client.query(
-    `select a.credit_document_id, a.invoice_document_id, a.amount, a.settlement_match_id,
+    `select a.credit_document_id, a.invoice_document_id, a.amount::text as amount, a.settlement_match_id,
             case when a.credit_document_id = any($3::text[]) then inv.document_date else cr.document_date end as counterpart_date
        from document_credit_applications a
        join documents inv on inv.id = a.invoice_document_id
@@ -297,13 +410,17 @@ export const readRecognitionGapWithClient = async ({ client, firmId, clientId, p
         and (a.credit_document_id = any($3::text[]) or a.invoice_document_id = any($3::text[]))`,
     [firmId, clientId, docIds]
   )).rows;
+  // match_amount and the bank line's currency: how much of a document each
+  // posted line carries (a part-paid document names its unpaid remainder).
   const matches = (await client.query(
-    `select id, bank_transaction_id, matched_object_id, status, payload
-       from reconciliation_matches
-      where firm_id = $1 and client_id = $2 and status in ('suggested', 'auto_matched', 'confirmed')
-        and (matched_object_id = any($3::text[])
-          or payload->'reminder_obligation'->>'invoice_document_id' = any($3::text[])
-          or id = any($4::text[]))`,
+    `select m.id, m.bank_transaction_id, m.matched_object_id, m.status, m.match_amount::text as match_amount, m.payload,
+            t.currency as bank_currency
+       from reconciliation_matches m
+       left join transactions t on t.firm_id = m.firm_id and t.id = m.bank_transaction_id
+      where m.firm_id = $1 and m.client_id = $2 and m.status in ('suggested', 'auto_matched', 'confirmed')
+        and (m.matched_object_id = any($3::text[])
+          or m.payload->'reminder_obligation'->>'invoice_document_id' = any($3::text[])
+          or m.id = any($4::text[]))`,
     [firmId, clientId, docIds, applications.map((a) => a.settlement_match_id).filter(Boolean)]
   )).rows;
   const txIds = [...new Set(matches.map((m) => m.bank_transaction_id).filter(Boolean))];
@@ -394,6 +511,35 @@ export const buildSupplierBillSettlementQuestion = ({ document = {}, language = 
     + 'If it is still unpaid, reply "still unpaid".';
 };
 
+// The purchase-side question for a supplier credit note the books do not
+// recognise. Donna keeps no record that ties a supplier credit note to the
+// bill it was deducted from (document_credit_applications is written for
+// customer credit notes only), so a bill paid net of a credit looks, to the
+// census, like a part-paid bill and an unused credit. Donna does not infer
+// the deduction from amounts that happen to add up: the owner is asked, on
+// the supplier lane, whether the credit was deducted from a payment, refunded,
+// or is still open. "Still open" is the lane's stillOpen answer for a credit.
+export const buildSupplierCreditNoteQuestion = ({ document = {}, language = 'en' } = {}) => {
+  const credit = { ...document, total_amount: Math.abs(Number(document.total_amount)) };
+  if (language === 'fi') {
+    return `${finnishHeader({ label: 'Ostohyvityslasku', document: credit, counterparty: document.vendor_name })}: `
+      + 'Donnalla olevissa tiliotteissa ei näy tälle hyvitykselle palautusta, eikä Donnalla ole tietoa siitä, että se olisi vähennetty jonkin laskun maksusta. '
+      + 'Donna ei vielä kirjaa avointa ostohyvityslaskua kirjanpitoon, joten se puuttuu sen kauden kuluista ja arvonlisäverosta. '
+      + 'Onko hyvitys vähennetty toimittajalle maksetusta laskusta, vai onko se palautettu sinulle? '
+      + 'Jos se on vähennetty, kerro minkä laskun maksusta ja milloin maksu tehtiin. Jos se on palautettu, kerro milloin ja mille tilille. '
+      + 'Jos hyvitys on vielä käyttämättä, vastaa "vielä avoin".';
+  }
+  const number = printedInvoiceNumber(document) ? ` ${printedInvoiceNumber(document)}` : '';
+  const vendor = document.vendor_name ? ` from ${document.vendor_name}` : '';
+  const date = day(document.document_date);
+  return `Supplier credit note${number}${vendor} (${amountText(credit.total_amount, document.currency)}${date ? `, dated ${date}` : ''}) `
+    + 'has no refund on the bank statements Donna holds, and nothing Donna holds shows it deducted from a payment of a bill. '
+    + 'Donna does not yet record an open supplier credit note in the books, so it is missing from that period\'s expenses and VAT. '
+    + 'Was it deducted from a payment to the supplier, or refunded to you? '
+    + 'If it was deducted, reply which bill\'s payment it was deducted from and when that payment was made. If it was refunded, reply when and into which account. '
+    + 'If it is still open, reply "still open".';
+};
+
 // How long an ask the owner answered "still unpaid" rests before the re-ask
 // clock asks again (its due_at). A month: the next monthly statement normally
 // arrives in that time, and a payment posted against the document closes the
@@ -414,13 +560,22 @@ const NO_SETTLEMENT_ASK_LANES = Object.freeze({
   supplier_bill: { lane: SUPPLIER_BILL_SETTLEMENT_ASK_LANE, statsKey: 'supplier_bill_settlement_ask', buildQuestion: buildSupplierBillSettlementQuestion,
     recognition: 'unrecorded_uploaded_supplier_bill', refusal: 'not_an_uploaded_supplier_bill',
     stillOpen: Object.freeze({ meaning: 'the business has not paid this supplier bill yet; the payable is still open',
-      recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }) }
+      recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }),
+    // A supplier credit note rides the same lane with its own question and
+    // its own meaning of "still open" (request_payload.recognition tells them apart).
+    creditNote: Object.freeze({ buildQuestion: buildSupplierCreditNoteQuestion, recognition: 'unrecorded_uploaded_supplier_credit_note',
+      stillOpen: Object.freeze({ meaning: 'the supplier has neither refunded this credit note nor had it deducted from a payment yet; the credit is still open',
+        recheckDays: NO_SETTLEMENT_STILL_OPEN_RECHECK_DAYS }) }) }
 });
 export const noSettlementAskStatsKey = (documentType) => NO_SETTLEMENT_ASK_LANES[documentType]?.statsKey || null;
 // The "still unpaid" answer an ask's lane (request_payload.lane) accepts, or
-// null for every other lane.
-export const noSettlementAskStillOpen = (askLane) => Object.values(NO_SETTLEMENT_ASK_LANES)
-  .find((l) => l.lane === askLane)?.stillOpen || null;
+// null for every other lane. A credit-note ask (request_payload.recognition)
+// accepts "still open" in the credit note's sense.
+export const noSettlementAskStillOpen = (askLane, recognition = null) => {
+  const lane = Object.values(NO_SETTLEMENT_ASK_LANES).find((l) => l.lane === askLane);
+  if (!lane) return null;
+  return lane.creditNote && recognition === lane.creditNote.recognition ? lane.creditNote.stillOpen : lane.stillOpen;
+};
 
 // The ask hook. Called where the runtime concludes that no supplied payment
 // settles an uploaded sales invoice or supplier bill (jevReconciliation's
@@ -444,8 +599,13 @@ export const ensureNoSettlementAskWithClient = async ({ client, firmId, clientId
        from documents where firm_id = $1 and client_id = $2 and id = $3`,
     [firmId, clientId, documentId]
   )).rows[0];
+  const isCreditNote = String(document?.payment_status || '').toLowerCase() === 'credit_note';
+  // A customer credit note is settled through its persisted application
+  // (creditNoteApplications.js), never asked here; a supplier credit note has
+  // no such record, so it is asked on the supplier lane with its own question.
+  const asking = isCreditNote ? lane.creditNote : lane;
   if (!document || document.document_type !== documentType || document.parse_status !== 'completed'
-    || document.duplicate_of || String(document.payment_status || '').toLowerCase() === 'credit_note') {
+    || document.duplicate_of || !asking) {
     return { minted: false, reason: lane.refusal };
   }
   const prior = (await client.query(
@@ -459,11 +619,11 @@ export const ensureNoSettlementAskWithClient = async ({ client, firmId, clientId
   const mintOutcome = {};
   const request = await __createClientEvidenceRequestWithClient({
     client, firmId, clientId, documentId,
-    question: lane.buildQuestion({ document, language: preferredOwnerTemplateLanguage(clientRow.profile) }),
+    question: asking.buildQuestion({ document, language: preferredOwnerTemplateLanguage(clientRow.profile) }),
     evidenceType: SALES_RECOGNITION_ASK_EVIDENCE_TYPE,
     actorId,
     markTransactionNeedsClient: false,
-    requestContext: { lane: lane.lane, reason, recognition: lane.recognition },
+    requestContext: { lane: lane.lane, reason, recognition: asking.recognition },
     mintOutcome
   });
   return { minted: mintOutcome.minted ?? Boolean(request), reason, evidence_request_id: request?.id || null };
