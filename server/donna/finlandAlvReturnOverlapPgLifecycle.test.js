@@ -86,13 +86,92 @@ test('real PG: a PENDING return blocks overlapping drafts; a cancelled one frees
   assert.deepEqual(statuses, ['2026-08:cancelled', '2026-Q3:draft_pending_confirmation']);
 });
 
-test('real PG: two overlapping drafts started at the same moment — exactly one is created', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+// The quarter overlaps both months; the two months do not overlap each other.
+// The writer and the trigger serialise a client's drafts on one advisory lock,
+// so the outcome is decided by who takes the lock first: the quarter alone, or
+// both months (the quarter refused). The rule, whatever the order: no two
+// created returns share a date, and every refused draft names the created
+// returns it overlaps.
+const RACE_KEYS = ['2026-Q3', '2026-09', '2026-07'];
+const overlaps = (a, b) => a.starts_on <= b.ends_on && a.ends_on >= b.starts_on;
+const expectedFor = (order) => {
+  const created = [];
+  const refused = {};
+  for (const key of order) {
+    const period = resolveAlvPeriod(key);
+    const covering = created.filter(c => overlaps(c, period)).sort((a, b) => a.starts_on.localeCompare(b.starts_on) || a.key.localeCompare(b.key));
+    if (covering.length) refused[key] = covering.map(c => `${c.key}:draft_pending_confirmation`);
+    else created.push(period);
+  }
+  return { created: created.map(c => c.key).sort(), refused };
+};
+const assertRaceRule = async (pool, results, clientKey) => {
+  const outcome = Object.fromEntries(RACE_KEYS.map((key, i) => [key, results[i]]));
+  const created = RACE_KEYS.filter(key => outcome[key].status === 'fulfilled').sort();
+  assert.ok([['2026-Q3'], ['2026-07', '2026-09']].some(valid => JSON.stringify(valid) === JSON.stringify(created)),
+    `either the quarter alone or both months: ${JSON.stringify(created)}`);
+  // A refusal names what was live when it ran: created returns it overlaps
+  // (a month created after the quarter was refused is not named by it).
+  for (const key of RACE_KEYS.filter(k => outcome[k].status === 'rejected')) {
+    const error = outcome[key].reason;
+    assert.equal(error.code, 'ALV_RETURN_PERIOD_OVERLAP', `${key}: ${error.message}`);
+    const named = error.details.overlapping.map(r => r.period_key);
+    assert.ok(named.length, `${key} was refused without naming what covers it`);
+    for (const c of named) {
+      assert.ok(created.includes(c) && overlaps(resolveAlvPeriod(c), resolveAlvPeriod(key)), `${key} names ${c}, which is not a created return over its dates`);
+    }
+  }
+  const live = (await pool.query("select period_key, starts_on::text, ends_on::text from alv_returns where client_id = $1 and status in ('draft_pending_confirmation','filed') order by starts_on", [clientKey])).rows;
+  assert.deepEqual(live.map(r => r.period_key).sort(), created, 'the rows are exactly the created returns');
+  for (let i = 0; i < live.length; i += 1) for (let j = i + 1; j < live.length; j += 1) {
+    assert.ok(!overlaps(live[i], live[j]), `two created returns share dates: ${JSON.stringify([live[i], live[j]])}`);
+  }
+  return created;
+};
+
+test('real PG: overlapping drafts started at the same moment — no two created returns share a date', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
   const { pool } = await freshBook(t, 'race');
-  const results = await Promise.allSettled([draft('2026-Q3'), draft('2026-09'), draft('2026-07')]);
-  const created = results.filter(r => r.status === 'fulfilled');
-  assert.equal(created.length, 1, JSON.stringify(results.map(r => r.reason?.code || r.value?.period_key)));
-  for (const r of results.filter(r => r.status === 'rejected')) assert.equal(r.reason.code, 'ALV_RETURN_PERIOD_OVERLAP');
-  assert.equal((await pool.query('select count(*)::int as n from alv_returns')).rows[0].n, 1);
+  const results = await Promise.allSettled(RACE_KEYS.map(key => draft(key)));
+  t.diagnostic(`created: ${JSON.stringify(await assertRaceRule(pool, results, clientId))}`);
+});
+
+test('real PG: every order of three contending drafts, forced through the writer’s own lock', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
+  const { pool } = await freshBook(t, 'order');
+  const orders = [];
+  const permute = (rest, prefix = []) => rest.length ? rest.forEach((k, i) => permute([...rest.slice(0, i), ...rest.slice(i + 1)], [...prefix, k])) : orders.push(prefix);
+  permute(RACE_KEYS);
+  assert.equal(orders.length, 6);
+  const waiting = async () => (await pool.query(
+    "select count(*)::int as n from pg_locks where locktype = 'advisory' and not granted and database = (select oid from pg_database where datname = current_database())")).rows[0].n;
+  for (const [n, order] of orders.entries()) {
+    const orderClient = `fi-overlap-order-${n}`;
+    await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,$3,'FI','fi-oy','{}')", [orderClient, firmId, `Synthetic Order ${n} Oy`]);
+    // Hold the client's period lock, queue the drafts on it one at a time in
+    // this order (PostgreSQL grants queued conflicting requests in arrival
+    // order), then let them through.
+    const holder = await pool.connect();
+    const pending = {};
+    try {
+      await holder.query('begin');
+      await holder.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [`alv-return-periods:${firmId}:${orderClient}`]);
+      for (const [i, key] of order.entries()) {
+        pending[key] = draft(key, orderClient).then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason }));
+        let queued = false;
+        for (let attempt = 0; attempt < 250 && !queued; attempt += 1) {
+          queued = (await waiting()) === i + 1;
+          if (!queued) await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        assert.ok(queued, `order ${order}: ${key} did not queue on the period lock`);
+      }
+      await holder.query('commit');
+    } finally { holder.release(); }
+    const results = await Promise.all(RACE_KEYS.map(key => pending[key]));
+    const expected = expectedFor(order);
+    const created = await assertRaceRule(pool, results, orderClient);
+    assert.deepEqual(created, expected.created, `order ${order.join(' → ')}`);
+    for (const [key, covering] of Object.entries(expected.refused)) overlapRefusal(covering)(results[RACE_KEYS.indexOf(key)].reason);
+    t.diagnostic(`${order.join(' → ')}: created ${JSON.stringify(created)}`);
+  }
 });
 
 test('real PG: the database refuses an overlapping live row even outside the writer', { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
