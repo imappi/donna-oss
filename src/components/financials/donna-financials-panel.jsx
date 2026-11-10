@@ -2976,7 +2976,7 @@ function DocFeedRow({ row, active = false, deleting = false, onOpen, onContextMe
   const providerWait = providerWaitOf(row.document || row);
   const providerWaitLabel = providerWait
     ? (providerWait.reason_code === 'provider_not_configured' && providerWait.key_name
-      ? intl.formatMessage({ id: 'mounted.financial.waitingProviderKey' }, { key: providerWait.key_name })
+      ? intl.formatMessage({ id: 'mounted.financial.waitingProviderKey' }, { code: providerWait.key_name })
       : intl.formatMessage({ id: 'mounted.financial.waitingProvider' }, { provider: PROVIDER_DISPLAY_NAMES[providerWait.provider] || providerWait.provider || 'the model provider' }))
     : null;
   const statusLabel = providerWaitLabel || intl.formatMessage({
@@ -3049,7 +3049,7 @@ function DocFeedRow({ row, active = false, deleting = false, onOpen, onContextMe
           {scopedNoSettlement && <span style={{ display: 'block', fontSize: 11, color: T.muted }}>
             {intl.formatMessage({ id: 'lifecycle.accountingIncomplete' })}
           </span>}
-          {providerWaitLabel && <span data-testid="doc-provider-wait" style={{ display: 'block', fontSize: 11, color: T.muted, whiteSpace: 'normal' }}>
+          {providerWaitLabel && <span data-testid="doc-provider-wait" title={providerWaitLabel} style={{ display: 'block', fontSize: 11, color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             <BidiText direction="auto">{providerWaitLabel}</BidiText>
           </span>}
         </span>

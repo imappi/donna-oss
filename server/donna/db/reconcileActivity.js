@@ -110,6 +110,14 @@ export const projectReconcileActivity = ({ transactions, documents, jobs, clock,
       if (job?.status === 'dead' || (doc.parse_status === 'failed' && doc.parse_error?.retryable !== true)) {
         failures.set(`document:${doc.id}`,{code:'source_processing_failed',receipt_id:job?.id || doc.id});
       }
+      // A source waiting on its model provider (the persisted provider hold:
+      // no key on this installation, or the provider unreachable) is not being
+      // read. Its stored reason is the named cause; never "Reading".
+      const hold = doc.payload?.parse_hold || doc.parse_hold;
+      if (doc.parse_status === 'pending' && hold?.boundary === 'parse_extract'
+        && ['provider_not_configured','provider_unreachable'].includes(hold.reason_code)) {
+        failures.set(`document:${doc.id}`,{code:hold.reason_code,receipt_id:doc.id});
+      }
       const matched = matches.some(match=>match.matched_object_id===doc.id
         && ['suggested','confirmed','auto_matched'].includes(match.status));
       const question = ownerQuestions.some(ask => ask.document_id===doc.id && ['draft','open'].includes(ask.status));
@@ -187,7 +195,7 @@ export const projectReconcileActivity = ({ transactions, documents, jobs, clock,
     // flash Stalled. Settled rows and owner questions are never stamped; the
     // batch speaks for its owed rows in one summary they all carry.
     if (pending && now>=started && now<deadline) {
-      const reading = sources.filter(doc=>owed.get(`document:${doc.id}`)==='reading').map(doc=>doc.filename || doc.id);
+      const reading = sources.filter(doc=>owed.get(`document:${doc.id}`)==='reading' && !failures.has(`document:${doc.id}`)).map(doc=>doc.filename || doc.id);
       const summary = { batch_id:batch.key, reading,
         done:batch.transactions.filter(tx=>tx.convergence_state==='auto_reconciled').length,
         on_owner:batch.transactions.filter(tx=>tx.convergence_state==='on_owner').length,
