@@ -27,6 +27,7 @@ import { rowToTransactionPayload } from './transactions.js';
 import { executePostingPolicyOperation, PostingPolicyError } from '../postingPolicy.js';
 import { postLedgerJournalForTransaction, authoritativeTaxCoding, assertPostableTaxCoding, receiptPostingFailure } from './ledger.js';
 import { getFirmSnapshotFromDb } from './snapshot.js';
+import { assertCurrentCodingEvidence } from './codingEvidence.js';
 
 export const rowToXeroConnectionPayload = (row = {}) => ({
   ...(row.payload || {}),
@@ -1378,13 +1379,13 @@ const exportXeroMirrorRetryTransactionInDb = async ({
 const xeroConnectorTaxCoding = (bankTransaction = {}) => ({ provider: 'xero',
   lineAmountTypes: bankTransaction.LineAmountTypes,
   taxTypes: (bankTransaction.LineItems || []).map(line => line.TaxType || '') });
-const xeroPostingCoding = ({ transaction, preview, postingContext }) => {
+const xeroPostingCoding = ({ transaction, preview, postingContext, matchedDocument }) => {
   const { policy, taxCodingEnabled } = postingContext;
   const input = { coding: preview.coding || codingInputFromTransaction(transaction),
     sourceCoding: authoritativeTaxCoding(transaction), transaction, taxCodingEnabled, profile: postingContext.profile };
   const coding = policy.capabilities.enrichCoding
     ? executePostingPolicyOperation(policy, 'enrichCoding', input) : input.coding;
-  assertPostableTaxCoding(policy, { ...input, coding });
+  assertPostableTaxCoding(policy, { ...input, coding, matchedDocument });
   for (const line of preview.bank_transaction?.LineItems || []) {
     const code = String(line.TaxType || '').trim().toUpperCase();
     if (code && policy.nativeTaxCodeOwnership.some(({ prefixes, codes }) =>
@@ -1394,7 +1395,7 @@ const xeroPostingCoding = ({ transaction, preview, postingContext }) => {
       });
     }
   }
-  if (preview.bank_transaction) assertPostableTaxCoding(policy, { ...input, coding,
+  if (preview.bank_transaction) assertPostableTaxCoding(policy, { ...input, coding, matchedDocument,
     connectorTaxCoding: xeroConnectorTaxCoding(preview.bank_transaction) });
   return coding;
 };
@@ -1438,6 +1439,9 @@ export const writebackXeroTransactionInDb = async ({
     }
     const transaction = rowToTransactionPayload(transactionRow);
     const sourceReceipt = postingSourceReceipt(transaction);
+    // The same evidence gate as native ledger preparation; its matched
+    // document is the evidence the posting policy judges the tax code by.
+    const matchedDocument = await assertCurrentCodingEvidence({ client, firmId, clientId, transaction });
     const persistedSuggestion = transaction.ai_suggestion;
     const acceptedPolicy = transaction.accepted_coding_policy;
     const reviewResult = await client.query(
@@ -1478,7 +1482,7 @@ export const writebackXeroTransactionInDb = async ({
       jurisdiction: postingContext.policy.jurisdiction,
       proposeProvisionOnUnmatched: dryRun
     });
-    const postingCoding = xeroPostingCoding({ transaction, preview, postingContext });
+    const postingCoding = xeroPostingCoding({ transaction, preview, postingContext, matchedDocument });
     const connection = await getFreshXeroConnectionForSync({ client, firmId, clientId, connectionId });
     requireXeroBankTransactionScope(connection);
     return { connection, transaction, preview, postingCoding, postingContext, sourceReceipt };
@@ -1579,6 +1583,8 @@ export const writebackXeroTransactionInDb = async ({
           businessDate: transaction.date, lockContext: true });
         assertPostingContextReceipt(postingContext, prepared.postingContext.receipt);
         assertPostingSuggestionLineage(postingContext, transaction);
+        // Re-asserted on the locked row before any provider write, as native commit does.
+        const matchedDocument = await assertCurrentCodingEvidence({ client, firmId, clientId, transaction, lock: true });
         // Chart defaults are part of the provider request, so refresh and hold
         // their rows too. A changed provider request needs a fresh preparation.
         const xeroAccounts = (await client.query(
@@ -1587,7 +1593,7 @@ export const writebackXeroTransactionInDb = async ({
         const xeroContacts = await getXeroContactsForClient({ client, firmId, clientId });
         const preview = buildXeroBankTransactionWriteback({ transaction, xeroAccounts, xeroContacts,
           jurisdiction: postingContext.policy.jurisdiction });
-        xeroPostingCoding({ transaction, preview, postingContext });
+        xeroPostingCoding({ transaction, preview, postingContext, matchedDocument });
         if (JSON.stringify(preview.bank_transaction) !== JSON.stringify(prepared.preview.bank_transaction)
           || JSON.stringify(preview.coding) !== JSON.stringify(prepared.preview.coding)) {
           throw new PostingPolicyError('posting_connector_context_changed', {
@@ -1596,7 +1602,7 @@ export const writebackXeroTransactionInDb = async ({
         }
         if (existingTransactions.length) {
           assertPostableTaxCoding(postingContext.policy, { transaction, coding: prepared.postingCoding,
-            taxCodingEnabled: postingContext.taxCodingEnabled, profile: postingContext.profile,
+            taxCodingEnabled: postingContext.taxCodingEnabled, profile: postingContext.profile, matchedDocument,
             connectorTaxCoding: xeroConnectorTaxCoding(existingTransactions[0]) });
           xeroResponse = {
             Id: existingByReference?.Id || null,
@@ -1634,7 +1640,7 @@ export const writebackXeroTransactionInDb = async ({
             });
             if (recoveredMatches.length !== 1) throw createError;
             assertPostableTaxCoding(postingContext.policy, { transaction, coding: prepared.postingCoding,
-              taxCodingEnabled: postingContext.taxCodingEnabled, profile: postingContext.profile,
+              taxCodingEnabled: postingContext.taxCodingEnabled, profile: postingContext.profile, matchedDocument,
               connectorTaxCoding: xeroConnectorTaxCoding(recoveredMatches[0]) });
             xeroResponse = {
               Id: recovered?.Id || null,

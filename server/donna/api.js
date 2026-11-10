@@ -232,7 +232,8 @@ import { isDesktopHostEnv, seedDesktopFirmMetadataWithClient } from './desktop/h
 import { mintFirstRunFirm, normalizeFirstRunInput } from './desktop/firstRunFirmMint.js';
 import { runtimeLivenessProbe } from './desktop/runtimeLiveness.js';
 import { runCanonicalRoleResolutionForClient, runCanonicalRoleResolutionSweep } from './canonicalRoleResolutionDb.js';
-import { assessEvidenceTopicTurn, buildEvidenceTopicState } from './channels/inboundCore.js';
+import { assessEvidenceTopicTurn, buildEvidenceTopicState, ownerLanguageForBindings } from './channels/inboundCore.js';
+import { getClientOwnerLanguageInDb } from './firmDb.js';
 import { resolveStructuredOwnerReplyAdapter, supportsStructuredOwnerReply } from './statutoryRegistry.js';
 import { runEvidenceTopicReminderSweep } from './channels/evidenceTopicReminders.js';
 import { recordConvergenceMetricsSnapshot, computeAskClockMetrics } from './convergenceMetricSnapshots.js';
@@ -280,11 +281,11 @@ import { getClientBillingContext, assertClientEntitled } from './clientSubscript
 import { sendWhatsAppText } from './channels/whatsapp.js';
 import { sendSmsText } from './channels/sms.js';
 import { sendTelegramText, telegramEnvAllowsClient } from './channels/telegram.js';
-import { processWhatsAppInboundMessage, handleWhatsAppComplianceCommand } from './channels/whatsappInbound.js';
+import { processWhatsAppInboundMessage, handleWhatsAppComplianceCommand, whatsappWebhookText } from './channels/whatsappInbound.js';
 import { ownerChannelAllowsClient, prefetchOwnerChannelGateContext } from './channels/ownerChannelConfig.js';
 import { whatsappEnvAllowsClient } from './channels/whatsappWebhookCore.js';
-import { processSmsInboundMessage, handleSmsComplianceCommand, SMS_INBOUND_COPY } from './channels/smsInbound.js';
-import { processTelegramInboundMessage, handleTelegramComplianceCommand, TELEGRAM_INBOUND_COPY } from './channels/telegramInbound.js';
+import { processSmsInboundMessage, handleSmsComplianceCommand, SMS_INBOUND_COPY, smsConnectedText } from './channels/smsInbound.js';
+import { processTelegramInboundMessage, handleTelegramComplianceCommand, TELEGRAM_INBOUND_COPY, telegramWebhookText } from './channels/telegramInbound.js';
 import { runOwnerMediaTerminalSummarySweep } from './channels/ownerMediaParseSummary.js';
 import {
   extractBindingToken,
@@ -2399,11 +2400,11 @@ const donnaFirmsApiHandler = async (req, res) => {
     // #5 Slice 6 — the §14 delegated-authority metrics the canary rollout is
     // GATED on (docs/proposal-2026-06-23-delegated-authority-material-matches.md
     // §14/§15). Pure observability: it reads only persisted state (grants 040,
-    // authorization requests 041, the delegated-accept receipt on matches) and
-    // adds NO inference (trust-the-strong-LLM). The model id rides FROM THE DATA
+    // the held-match and delegated-accept receipts on matches) and adds NO
+    // inference (trust-the-strong-LLM). The model id rides FROM THE DATA
     // in `models` (CLAUDE.md "the model id is the receipt"). Firm-governance read,
     // gated like /firm-facts (requireMember); optional ?client_id narrows every
-    // aggregate. In V1 (canary off) every counter is expected to read ZERO.
+    // aggregate. In V1 (canary off) the grant counters read ZERO; held is live.
     if (requestUrl.pathname === '/delegated-authority-metrics' && req.method === 'GET') {
       if (!isFirmDatabaseConfigured()) {
         res.statusCode = 503;
@@ -13615,6 +13616,13 @@ const handleWaitlist = async (req, res) => {
 // present our access token) and reads the RAW body itself (readJsonBody would
 // JSON-parse it and break signature verification).
 
+// The owner language for a webhook text sent outside the anchored path: the one
+// resolver over the client(s) the binding rows name, or null when none is named
+// (the text is then bilingual). Never guessed from the message; never throws.
+const webhookOwnerLanguage = (bindings = []) => ownerLanguageForBindings({
+  firmId: DEFAULT_FIRM_ID, bindings, deps: { getOwnerLanguage: getClientOwnerLanguageInDb }
+}).catch(() => null);
+
 const handleWhatsAppWebhook = async (req, res, requestUrl) => {
   if (req.method === 'GET') {
     const mode = requestUrl.searchParams.get('hub.mode');
@@ -13660,13 +13668,13 @@ const handleWhatsAppWebhook = async (req, res, requestUrl) => {
         const text = message.text?.body || '';
         const token = extractBindingToken(text);
         if (token) {
-          await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(token), phoneE164: from, actorId: 'whatsapp:webhook' }).catch(() => null);
-          await sendWhatsAppText({ to: from, text: 'Got it. WhatsApp is connected.' });
+          const redeemed = await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(token), phoneE164: from, actorId: 'whatsapp:webhook' }).catch(() => null);
+          await sendWhatsAppText({ to: from, text: whatsappWebhookText('connected', await webhookOwnerLanguage(redeemed ? [redeemed] : [])) });
           continue;
         }
         const phoneHash = hashPhoneE164(from);
         const bindings = await getActiveWhatsAppBindingsByPhoneHashInDb({ phoneHash });
-        if (!bindings.length) { await sendWhatsAppText({ to: from, text: 'Please connect WhatsApp from your Donna portal first.' }); continue; }
+        if (!bindings.length) { await sendWhatsAppText({ to: from, text: whatsappWebhookText('connectFirst') }); continue; }
         // G-9 (D-G9-5): the SMS compliance slot's WhatsApp mirror — LOPETA/STOP
         // and APUA/HELP resolve here, before anchored processing.
         const compliance = await handleWhatsAppComplianceCommand({ body: text, from, firmId: DEFAULT_FIRM_ID, bindings });
@@ -13741,8 +13749,8 @@ const handleSmsWebhook = async (req, res, requestUrl) => {
     const body = params.Body || '';
     const token = extractBindingToken(body);
     if (token) {
-      await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(token), phoneE164: from, actorId: 'sms:webhook', channel: 'sms' }).catch(() => null);
-      await sendSmsText({ to: from, text: 'Got it. SMS is connected.' });
+      const redeemed = await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(token), phoneE164: from, actorId: 'sms:webhook', channel: 'sms' }).catch(() => null);
+      await sendSmsText({ to: from, text: smsConnectedText(await webhookOwnerLanguage(redeemed ? [redeemed] : [])) });
       smsJson(res, 200, { received: true }); return;
     }
 
@@ -13829,21 +13837,25 @@ const handleTelegramWebhook = async (req, res) => {
   // docs/donna-telegram-receipt-silence-diagnostic.md). Catch, log the stage
   // with the update identity, and 200 — redelivery cannot repair a
   // deterministic failure, it only destroys the evidence.
+  // The chat's bindings once read, so the catch below can answer in the owner's
+  // language when a client is known (and bilingually when not).
+  let knownBindings = [];
   try {
     // Deep-link binding hop: t.me/<bot>?start=<token> → "/start <token>".
     const startToken = extractTelegramStartToken(text);
     if (startToken) {
-      await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(startToken), phoneE164: from, actorId: 'telegram:webhook', channel: 'telegram' }).catch(() => null);
-      await sendTelegramText({ to: from, text: 'Got it. Telegram is connected.' });
+      const redeemed = await redeemWhatsAppBindTokenInDb({ tokenHash: hashWhatsAppToken(startToken), phoneE164: from, actorId: 'telegram:webhook', channel: 'telegram' }).catch(() => null);
+      await sendTelegramText({ to: from, text: telegramWebhookText('connected', await webhookOwnerLanguage(redeemed ? [redeemed] : [])) });
       telegramJson(res, 200, { received: true }); return;
     }
     if (isBareTelegramStart(text)) {
-      await sendTelegramText({ to: from, text: TELEGRAM_INBOUND_COPY.started });
+      await sendTelegramText({ to: from, text: telegramWebhookText('started') });
       telegramJson(res, 200, { received: true }); return;
     }
 
     const phoneHash = hashPhoneE164(from);
     const bindings = await getActiveTelegramBindingsByPhoneHashInDb({ phoneHash });
+    knownBindings = bindings;
     if (!bindings.length) { await sendTelegramText({ to: from, text: TELEGRAM_INBOUND_COPY.unbound }); telegramJson(res, 200, { received: true }); return; }
 
     const compliance = await handleTelegramComplianceCommand({ body: text, from, firmId: DEFAULT_FIRM_ID, bindings });
@@ -13874,7 +13886,7 @@ const handleTelegramWebhook = async (req, res) => {
     // Best-effort: a failure to send the failure notice must not escape.
     if (message.photo || message.document) {
       try {
-        await sendTelegramText({ to: from, text: TELEGRAM_INBOUND_COPY.mediaFailed });
+        await sendTelegramText({ to: from, text: telegramWebhookText('mediaFailed', await webhookOwnerLanguage(knownBindings)) });
       } catch {
         // the error log above already carries the update identity
       }

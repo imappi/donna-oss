@@ -29,6 +29,7 @@ import { validateClientOwnerInvite, CLIENT_OWNER_ROLE } from './seatModel.js';
 import { preferredOwnerTemplateLanguage } from './ownerLanguage.js';
 import { sendEmail } from './email/resendClient.js';
 import { publicAppOrigin } from './publicAppOrigin.js';
+import { endPushRegistrationsWithoutCurrentAccess } from './mobile/mobilePushRegistrationAccess.js';
 
 export const CLIENT_OWNER_INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 export const CLIENT_OWNER_INVITE_PATH = '/owner-invite';
@@ -85,8 +86,8 @@ const tx = async (db, fn) => {
 
 const loadClientRow = async (db, { firmId, clientId, lock = false }) => {
   const row = (await db.query(lock
-    ? 'select id, firm_id, company_name, profile from clients where firm_id = $1 and id = $2 for update'
-    : 'select id, firm_id, company_name, profile from clients where firm_id = $1 and id = $2',
+    ? 'select id, firm_id, company_name, jurisdiction, profile from clients where firm_id = $1 and id = $2 for update'
+    : 'select id, firm_id, company_name, jurisdiction, profile from clients where firm_id = $1 and id = $2',
   [firmId, clientId])).rows[0];
   if (!row) throw httpError(404, 'CLIENT_NOT_FOUND', 'Client not found.');
   return row;
@@ -241,7 +242,7 @@ export const inviteClientOwnerInDb = async ({ firmId, clientId, actorPrincipal, 
       token,
       emailContext: {
         companyName: client.company_name || client.profile?.companyName || '',
-        language: preferredOwnerTemplateLanguage({ ...(client.profile || {}), ...(language ? { locale: language } : {}) })
+        language: preferredOwnerTemplateLanguage({ ...(client.profile || {}), ...(language ? { locale: language } : {}) }, client)
       }
     };
   }));
@@ -275,7 +276,7 @@ export const resendClientOwnerInviteInDb = async ({ firmId, clientId, actorPrinc
       token,
       emailContext: {
         companyName: client.company_name || client.profile?.companyName || '',
-        language: preferredOwnerTemplateLanguage(client.profile || {})
+        language: preferredOwnerTemplateLanguage(client.profile || {}, client)
       }
     };
   }));
@@ -329,12 +330,16 @@ export const removeClientOwnerAccessInDb = async ({ firmId, clientId, actorPrinc
         where firm_id = $1 and client_id = $2 and status = 'accepted' returning id`,
       [firmId, clientId, actor.id]
     )).rows;
+    // An owner left with no current assignment in this firm keeps no phone
+    // registration (migration 170): ended here, receipted on this event.
+    const pushRegistrationsEnded = await endPushRegistrationsWithoutCurrentAccess(db, { firmId });
     await audit(db, {
       firmId, clientId, actorType: actor.type, actorId: actor.id, action: 'client_owner.access_removed',
       resourceId: invites[0]?.id || ended[0].assignment_id,
       metadata: {
         ended_assignments: ended.map((row) => ({ assignment_id: row.assignment_id, collaborator_id: row.collaborator_id, email: row.email })),
-        invite_ids: invites.map((row) => row.id)
+        invite_ids: invites.map((row) => row.id),
+        ...(pushRegistrationsEnded.length ? { push_registrations_ended: pushRegistrationsEnded } : {})
       }
     });
     return readOwnerAccess(db, { firmId, clientId });

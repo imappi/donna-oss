@@ -408,8 +408,9 @@ const createClientEvidenceRequestWithClient = async ({
   }
 
   const now = new Date().toISOString();
-  const fallbackLanguage = cleanQuestion ? null : (language || preferredOwnerTemplateLanguage(
-    (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, cleanClientId])).rows?.[0]?.profile));
+  const fallbackClientRow = cleanQuestion || language ? null
+    : (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, cleanClientId])).rows?.[0];
+  const fallbackLanguage = cleanQuestion ? null : (language || preferredOwnerTemplateLanguage(fallbackClientRow?.profile, fallbackClientRow));
   const documentParts = document ? [document.vendor_name || document.customer_name || '', document.filename || ''].filter(Boolean) : [];
   const documentLabel = documentParts.join(' — ');
   // Finnish names the document and the bank text after a colon or in
@@ -969,8 +970,9 @@ export const __createHeldMatchPortalAsksWithClient = async ({client, firmId, cli
         .sort((a,b) => a.document_id.localeCompare(b.document_id));
       if (!files.length) throw Object.assign(new Error('Held match has no identifiable document.'), {code:'HELD_MATCH_EVIDENCE_NOT_READY'});
       const amount = Math.abs(Number(tx.money_out) || Number(tx.money_in)).toFixed(2);
-      const language = preferredOwnerTemplateLanguage((await client.query(
-        'select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows[0]?.profile);
+      const ownerRow = (await client.query(
+        'select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, clientId])).rows[0];
+      const language = preferredOwnerTemplateLanguage(ownerRow?.profile, ownerRow);
       // One held document is a confirmation, not a choice between documents.
       const confirmation = language === 'fi'
         ? (files.length === 1
@@ -2578,8 +2580,8 @@ export const rejectClientEvidenceRequestInDb = async ({
       ].filter(Boolean)));
       let nextQuestion = cleanFollowUpQuestion || row.question || row.request_payload?.evidence_request?.question || '';
       if (!nextQuestion) {
-        const profile = (await client.query('select profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, row.client_id])).rows[0]?.profile;
-        nextQuestion = REJECT_FOLLOW_UP_FALLBACK_QUESTION[preferredOwnerTemplateLanguage(profile)]
+        const ownerRow = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2 limit 1', [firmId, row.client_id])).rows[0];
+        nextQuestion = REJECT_FOLLOW_UP_FALLBACK_QUESTION[preferredOwnerTemplateLanguage(ownerRow?.profile, ownerRow)]
           || REJECT_FOLLOW_UP_FALLBACK_QUESTION.en;
       }
       // The envelope keeps its own (genuine) send stamps; the next ones are the
@@ -3928,7 +3930,11 @@ export const __draftClientAskBatchWithClient = async ({
     ...(clientResult.rows[0].profile || {}),
     id: clientResult.rows[0].id,
     companyName: clientResult.rows[0].profile?.companyName || clientResult.rows[0].company_name,
-    jurisdiction: clientResult.rows[0].profile?.jurisdiction || clientResult.rows[0].jurisdiction || ''
+    jurisdiction: clientResult.rows[0].profile?.jurisdiction || clientResult.rows[0].jurisdiction || '',
+    // Both persisted homes of the client's country, as the firm snapshot
+    // carries them, so the drafter's owner language (askPipeline.js) reads the
+    // authoritative column through the one resolver.
+    persisted_identity: { jurisdiction: clientResult.rows[0].jurisdiction ?? null }
   };
 
   const cleanPeriodStart = periodStart ? toIsoDay(periodStart) : null;
@@ -4417,7 +4423,7 @@ export const __draftClientAskBatchWithClient = async ({
   if (retractedRequests.length) {
     // Owner-facing, so in the language the drafted message above it was
     // written in (the drafter's receipt; the one resolver when it reports none).
-    const sectionLanguage = draftLanguage || preferredOwnerTemplateLanguage(clientProfile);
+    const sectionLanguage = draftLanguage || preferredOwnerTemplateLanguage(clientResult.rows[0].profile, clientResult.rows[0]);
     const finnish = sectionLanguage === 'fi';
     const renderLine = (r) => {
       const amount = r.amount

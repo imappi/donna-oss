@@ -59,6 +59,19 @@ export const resolveInboundOwnerLanguage = async ({ firmId, bindings = [], deps 
   return languages.size === 1 ? [...languages][0] : 'en';
 };
 
+// Before a client is known there is no owner language to resolve, and the
+// language is never guessed from the message: such a text is bilingual,
+// Finnish first, the way WhatsApp help/stopped already are. Once a binding names
+// a client, ownerLanguageForBindings gives the one resolver's answer over those
+// clients; with no named client it gives null, which means "send bilingual".
+export const bilingualOwnerText = (fi, en) => `${fi} / ${en}`;
+
+export const ownerLanguageForBindings = async ({ firmId, bindings = [], deps = {} } = {}) => {
+  const named = (Array.isArray(bindings) ? bindings : []).filter((binding) => binding?.client_id);
+  if (!named.length || typeof deps.getOwnerLanguage !== 'function') return null;
+  return resolveInboundOwnerLanguage({ firmId, bindings: named, deps });
+};
+
 // The core's own owner-facing lines, per language. English is the historical
 // copy, unchanged. Channel copy (config.copy) still wins where a channel
 // defines the same line.
@@ -914,7 +927,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
     resolved = await deps.resolveEvidenceRequest({ firmId, evidenceRequestId: action.evidence_request_id, reply: action.reply_text, actorId, actorType: 'client' });
   } else if (action?.type === 'record_mileage') {
     const recordMileage = deps.recordOwnerMileageExpense || recordOwnerMileageExpenseInDb;
-    mileage = await recordMileage({ firmId, clientId, action, actorId, sourceMessageId: message.id, model: reply.model });
+    mileage = await recordMileage({ firmId, clientId, action, actorId, sourceMessageId: message.id, model: reply.model, language: config.language || 'en' });
   } else if (action?.type === 'share_portal_link') {
     // The deep link is resolved DETERMINISTICALLY (never model-typed); an unset
     // base URL degrades to a named instruction (the ownerDigest posture). The
@@ -945,7 +958,7 @@ const maybeAnswerGeneralOwnerChat = async ({ message, from, firmId, env = proces
     : mileage?.status === 'booked'
       ? mileage.consequence
       : portalLink
-        ? composePortalLinkReply({ text: finalReply.text, link: portalLink })
+        ? composePortalLinkReply({ text: finalReply.text, link: portalLink, language: config.language })
         : finalReply.text;
   const assistantMessage = await (deps.appendClientPortalChatMessage || persistClientPortalTurnMessage)({
     firmId,
@@ -1123,7 +1136,8 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
         confirmOpeningBalanceIntakeImpl: deps.confirmOpeningBalanceIntake,
         runTrialBalanceIntakeImpl: deps.runTrialBalanceIntake,
         classifyOpeningIntakeImpl: deps.classifyOpeningIntake,
-        postImpl: deps[openingBinding.postKey]
+        postImpl: deps[openingBinding.postKey],
+        language: config.language || 'en'
       });
       await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: anchor.askId, provider_payload: { inbound: { type: 'text', anchor: anchor.source, opening_balance: result.action } } } });
       return { status: 'opening_balance', askId: anchor.askId, result };
@@ -1171,7 +1185,8 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
       confirmOpeningBalanceIntakeImpl: deps.confirmOpeningBalanceIntake,
       runTrialBalanceIntakeImpl: deps.runTrialBalanceIntake,
       classifyOpeningIntakeImpl: deps.classifyOpeningIntake,
-      postImpl: deps[openingBinding.postKey]
+      postImpl: deps[openingBinding.postKey],
+      language: config.language || 'en'
     });
     await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: anchor.askId, provider_payload: { inbound: { type: descriptor.kind, media_id: descriptor.id, document_id: documentId, anchor: anchor.source, opening_balance: result.action } } } });
     return { status: 'opening_balance', askId: anchor.askId, documentId, result };

@@ -281,21 +281,38 @@ export const resolveOwnerPortalLink = ({ clientId, env = process.env } = {}) => 
 
 // Owner-facing copy (voice rule: no em or en dashes; comma, colon, or a new
 // sentence instead — pinned by test like the channel copy strings).
-export const portalLinkUnavailableText = () =>
-  "I can't send a working link right now: the portal web address isn't configured on my side yet. "
-  + 'Open your Donna portal and go to the section called What I still need from you. '
-  + 'Your open questions and missing documents are all listed there.';
+//
+// `language` is the owner's (preferredOwnerTemplateLanguage); anything but 'fi'
+// gets the English copy, unchanged. The portal section is named by its title
+// as the portal shows it, the same as the sensitive-ask notice below.
+const PORTAL_LINK_COPY = Object.freeze({
+  en: Object.freeze({
+    unavailable: "I can't send a working link right now: the portal web address isn't configured on my side yet. "
+      + 'Open your Donna portal and go to the section called What I still need from you. '
+      + 'Your open questions and missing documents are all listed there.',
+    lead: 'Here is your portal link. Your open questions and missing documents are under What I still need from you.'
+  }),
+  fi: Object.freeze({
+    unavailable: 'En pysty lähettämään toimivaa linkkiä juuri nyt, koska portaalin verkko-osoitetta ei ole vielä asetettu minun päässäni. '
+      + 'Avaa Donna-portaalisi ja mene kohtaan What I still need from you. '
+      + 'Kaikki avoimet kysymyksesi ja puuttuvat asiakirjat löytyvät sieltä.',
+    lead: 'Tässä on portaalilinkkisi. Avoimet kysymyksesi ja puuttuvat asiakirjat löytyvät kohdasta What I still need from you.'
+  })
+});
+const portalLinkCopyFor = (language) => PORTAL_LINK_COPY[language] || PORTAL_LINK_COPY.en;
 
-export const portalLinkDefaultText = () =>
-  'Here is your portal link. Your open questions and missing documents are under What I still need from you.';
+export const portalLinkUnavailableText = (language = 'en') => portalLinkCopyFor(language).unavailable;
+
+export const portalLinkDefaultText = (language = 'en') => portalLinkCopyFor(language).lead;
 
 // The deterministic outbound text for a share_portal_link turn: the model's own
 // short text plus the REAL resolved link on its own line, or the honest named
 // degrade copy. The model never types a URL (render the persisted verdict; a
-// fabricated link is the failure mode this lineage exists to kill).
-export const composePortalLinkReply = ({ text = '', link = null } = {}) => {
-  if (!link || link.status !== 'sent' || !link.url) return portalLinkUnavailableText();
-  const lead = String(text || '').trim() || portalLinkDefaultText();
+// fabricated link is the failure mode this lineage exists to kill). The model's
+// own text is kept as written; only the deterministic lines follow `language`.
+export const composePortalLinkReply = ({ text = '', link = null, language = 'en' } = {}) => {
+  if (!link || link.status !== 'sent' || !link.url) return portalLinkUnavailableText(language);
+  const lead = String(text || '').trim() || portalLinkDefaultText(language);
   return `${lead}\n${link.url}`;
 };
 

@@ -14,7 +14,7 @@ import {
   withFirmDbClient
 } from '../firmDb.js';
 import { readClientConfigSnapshot } from '../clientConfig.js';
-import { processAnchoredInboundMessage, resolveInboundOwnerLanguage } from './inboundCore.js';
+import { bilingualOwnerText, processAnchoredInboundMessage, resolveInboundOwnerLanguage } from './inboundCore.js';
 import { smsEnvAllowsClient, sendSmsText } from './sms.js';
 import { resolveAssistantName } from '../assistantIdentity.js';
 import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
@@ -26,7 +26,12 @@ import { ownerChannelAllowsClient } from './ownerChannelConfig.js';
 //
 // `language` is the owner's (preferredOwnerTemplateLanguage); anything but 'fi'
 // gets the English copy, unchanged. The Finnish help text invites LOPETA, which
-// isSmsStop accepts.
+// isSmsStop accepts. `unbound` is sent before any client is known for the
+// number, so it is bilingual and identical in both (bilingualOwnerText).
+const SMS_UNBOUND = bilingualOwnerText(
+  'Yhdistä tekstiviestit ensin Donna-portaalistasi, niin hoidan tämän.',
+  "Connect SMS from your Donna portal first, then I'll pick this up."
+);
 export const buildSmsInboundCopy = ({ assistantName, language = 'en' } = {}) => {
   const name = resolveAssistantName({ assistant_name: assistantName });
   if (language === 'fi') {
@@ -35,7 +40,7 @@ export const buildSmsInboundCopy = ({ assistantName, language = 'en' } = {}) => 
       mediaSaved: 'Selvä, tallennettu.',
       topicOpen: 'Selvä, pidän tämän kysymyksen avoimena.',
       unanchored: 'Vastaa suoraan siihen kysymykseen, johon vastaat, tai lisää viestiin sen Ref, niin yhdistän sen oikein.',
-      unbound: 'Yhdistä tekstiviestit ensin Donna-portaalistasi, niin hoidan tämän.',
+      unbound: SMS_UNBOUND,
       voiceDeferred: 'En osaa vielä kuunnella ääniviestejä. Kirjoita vastaus tai lähetä kuva, niin hoidan sen.',
       help: `Täällä ${name}. Tämä numero on nopeita kirjanpitokysymyksiä ja kuitteja varten. Vastaa LOPETA, niin katkaisen yhteyden.`,
       stopped: 'Yhteys katkaistu. En lähetä enää viestejä tähän numeroon, ellet yhdistä uudelleen portaalistasi.'
@@ -46,7 +51,7 @@ export const buildSmsInboundCopy = ({ assistantName, language = 'en' } = {}) => 
     mediaSaved: "Got it, that's saved.",
     topicOpen: "Got it — I’ll keep this question open.",
     unanchored: "Reply right on the question you're answering, or add its Ref and I'll match it.",
-    unbound: "Connect SMS from your Donna portal first, then I'll pick this up.",
+    unbound: SMS_UNBOUND,
     voiceDeferred: "I can't do voice notes yet. Type your answer or send a photo and I'll take it.",
     help: `It's ${name}. This line is for quick bookkeeping questions and receipts. Reply STOP to disconnect.`,
     stopped: "You're disconnected. I won't text this number again unless you reconnect from your portal."
@@ -56,6 +61,15 @@ export const buildSmsInboundCopy = ({ assistantName, language = 'en' } = {}) => 
 export const SMS_INBOUND_COPY = buildSmsInboundCopy();
 const SMS_INBOUND_COPY_FI = buildSmsInboundCopy({ language: 'fi' });
 const smsInboundCopyFor = (language) => (language === 'fi' ? SMS_INBOUND_COPY_FI : SMS_INBOUND_COPY);
+
+// The webhook's confirmation after a binding token is redeemed. The redeemed
+// binding names the client, so the owner language picks one line; with no
+// client (the redeem failed) there is no owner language and the line is
+// bilingual. English is the historical line, unchanged.
+const SMS_CONNECTED = Object.freeze({ en: 'Got it. SMS is connected.', fi: 'Selvä, tekstiviestit on nyt yhdistetty.' });
+export const smsConnectedText = (language = null) => (language
+  ? (language === 'fi' ? SMS_CONNECTED.fi : SMS_CONNECTED.en)
+  : bilingualOwnerText(SMS_CONNECTED.fi, SMS_CONNECTED.en));
 
 const sha256Hex = (bytes) => createHash('sha256').update(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || '')).digest('hex');
 

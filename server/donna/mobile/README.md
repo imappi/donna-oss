@@ -57,5 +57,33 @@ fails until every operation is routed or listed as `NOT_IMPLEMENTED`.
   close verdicts, sign-out, kill switch, and the staff / foreign-entity /
   expired-token / admin-token refusals; every response validated against the
   contract.
+- `mobileSettings.test.js` / `mobileSettingsPgLifecycle.test.js` — the
+  Settings resource (`mobileSettings.js`, `mobileSettingsDb.js`): VAT period
+  through the client-profile writer with its history guard, persisted fiscal
+  years, the owner's notification switches (migration 167) and phone number,
+  and the refusals.
+
+- `mobileBusinessSetup.test.js` / `mobileBusinessSetupPgLifecycle.test.js` —
+  the business register: parsing, projection and patches; then on PostgreSQL
+  the manual confirm, stage and defer through the firm profile route, and the
+  no-token / staff / foreign-entity / stale-candidate / replaced-ID (including
+  a race) / non-Finnish / lookup refusals.
+
+- `mobilePushRegistrations.test.js` / `mobilePushRegistrationsPgLifecycle.test.js`
+  — device registrations (migration 170): validation, idempotency, a token
+  moving to another owner, removal, the not-yours 404, and registrations
+  ending with the owner's access (removal, client delete, collaborator row).
+
+- `mobileBusinessProfile.test.js` / `mobileBusinessProfilePgLifecycle.test.js`
+  — the Business page's facts (`PUT …/onboarding/profile`): server-side request
+  rules, the receipt with previous values, `business_profile` on `/me` and
+  refresh, the business-name refusal, and the owner-only / foreign-entity /
+  no-token refusals.
+
+- `mobileDeletionRequest.test.js` / `mobileDeletionRequestPgLifecycle.test.js` —
+  `POST /me/deletion-request`: the server-written message in both languages,
+  one request per owner identity with its per-firm audit row, the repeat and
+  concurrent repeat, the refusals, and that no book, document, principal or
+  assignment changed.
 
 `GAPS.md` lists what the contract asks for that Donna cannot say yet.

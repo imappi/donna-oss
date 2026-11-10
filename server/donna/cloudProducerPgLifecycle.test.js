@@ -949,8 +949,16 @@ for (const adopted of [false,true]) test(`real PostgreSQL and authenticated SDK:
     createUpload:createEvidenceSignedUploadUrl,read:fetchEvidenceObjectBytes,
     list:async({bucket,prefix})=>[...files.keys()].filter(k=>k.startsWith(bucket+'/'+prefix)).map(k=>({name:k.slice(bucket.length+1)})),
     delete:async({bucket,keys})=>({deleted:keys.filter(k=>files.delete(bucket+'/'+k)).length,errors:[]})}});
-  if (Math.floor(Number((await pool.query("show server_version_num")).rows[0].server_version_num)/10000)!==17) {
-    assert.equal(certificate.status,'INCOMPLETE');assert.equal(certificate.checks.find(c=>c.id==='database_schema').detail.reason,'cloud_postgresql_17_compatibility_required');return;
+  // The cloud host certificate passes only on PostgreSQL 17, the hosted
+  // database's major version (CLOUD_POSTGRES_MAJOR in cloudHostCertificateA.js;
+  // restored-schema parity is qualified against 17). Everything below needs a
+  // PASS certificate, so on any other major (CI and the desktop pin 16) it
+  // cannot run. Prove the refusal, then skip visibly instead of passing silently.
+  const serverMajor=Math.floor(Number((await pool.query("show server_version_num")).rows[0].server_version_num)/10000);
+  if (serverMajor!==17) {
+    assert.equal(certificate.status,'INCOMPLETE');assert.equal(certificate.checks.find(c=>c.id==='database_schema').detail.reason,'cloud_postgresql_17_compatibility_required');
+    t.skip(`PostgreSQL ${serverMajor}: the post-certificate proofs (host PASS, pilot enablement, held-match portal reply, held rows confirmed together, deployment readiness v7) need PostgreSQL 17; set DONNA_SCHEMA_PROOF_PG17_URL to run them`);
+    return;
   }
   assert.equal(certificate.status,'PASS',JSON.stringify(certificate.checks.filter(c=>c.status!=='PASS')));
   assert.equal(hostReadinessIsMutationReady({certificate}),true);
