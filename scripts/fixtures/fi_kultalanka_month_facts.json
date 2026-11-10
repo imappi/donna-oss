@@ -1,0 +1,12 @@
+{
+  "_note": "Company facts for scripts/fi_month_two_stage_run.js on data/evals/fixtures/fi-kultalanka-2025-02. The pack states no ALV registration date: registered_from is the earliest period its documents evidence (ALV for Q4/2024 paid 12.2.2025); tax_period month from 'ALV-tilitys 2/2025, eräpäivä 12.4.2025'. Prices are for the spend meter only: Anthropic list prices; the gpt-5.4 rate is an assumption, not a published figure.",
+  "profile": {},
+  "alv_registration": { "status": "registered", "registered_from": "2024-10-01", "tax_period": "month",
+    "note": "Pack: ALV-tunnus FI32244558 on the company's own invoices; output ALV charged 2/2025; ALV for Q4/2024 paid 12.2.2025; the 2/2025 return due 12.4.2025 (monthly). No registration date is stated; the earliest period the pack evidences is Q4/2024." },
+  "prices": {
+    "claude-opus-4-8": { "input_per_million": 5, "output_per_million": 25 },
+    "claude-": { "input_per_million": 5, "output_per_million": 25 },
+    "gpt-5.4": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1 },
+    "gpt-": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1 }
+  }
+}
