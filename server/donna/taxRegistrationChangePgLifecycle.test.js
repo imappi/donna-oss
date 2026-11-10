@@ -87,12 +87,14 @@ const mockCoder = (t, country) => {
   });
 };
 
-const addLine = async (pool, clientId, country, id, date, { sale = false } = {}) => {
+// tax: the VAT the document itself shows. An unregistered business's own
+// sales invoice shows none (#68 refuses one that does).
+const addLine = async (pool, clientId, country, id, date, { sale = false, tax = country.tax } = {}) => {
   const family = sale ? 'sales_invoice' : 'receipt';
   await pool.query("insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,payload) values($1,$2,$3,$4,$5,$6,$7,$8,'needs_review','{}')",
     [id, firmId, clientId, date, `Synthetic ${sale ? 'customer payment' : 'office supplies'}`, sale ? country.gross : 0, sale ? 0 : country.gross, country.currency]);
   await pool.query("insert into documents(id,firm_id,client_id,filename,document_type,parse_status,total_amount,tax_amount,currency,document_date,payload) values($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,'{}')",
-    [`doc-${id}`, firmId, clientId, sale ? 'Synthetic sales invoice.pdf' : 'Synthetic receipt.pdf', family, country.gross, country.tax, country.currency, date]);
+    [`doc-${id}`, firmId, clientId, sale ? 'Synthetic sales invoice.pdf' : 'Synthetic receipt.pdf', family, country.gross, tax, country.currency, date]);
   await pool.query("insert into reconciliation_matches(id,firm_id,client_id,bank_transaction_id,matched_object_type,matched_object_id,match_amount,match_confidence,status,created_by,payload) values($1,$2,$3,$4,$5,$6,$7,.98,'auto_matched','fixture','{}')",
     [`match-${id}`, firmId, clientId, id, family, `doc-${id}`, country.gross]);
 };
@@ -151,7 +153,7 @@ for (const country of [FI, GB]) {
       mockCoder(t, country);
       const purchase = `${clientId}-purchase`, sale = `${clientId}-sale`, earlier = `${clientId}-2025`;
       await addLine(pool, clientId, country, purchase, '2026-06-02');
-      await addLine(pool, clientId, country, sale, '2026-06-02', { sale: true });
+      await addLine(pool, clientId, country, sale, '2026-06-02', { sale: true, tax: 0 });
       await addLine(pool, clientId, country, earlier, '2025-11-03');
       await postAll(pool, clientId, [purchase, sale, earlier]);
       const before = await ledgerOf(pool, [purchase, sale, earlier]);
