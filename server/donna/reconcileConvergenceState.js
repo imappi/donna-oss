@@ -66,7 +66,10 @@
 // it from the line's own reconciliation_matches (collectHeldPendingAuthorityMatches)
 // and feeds hasCoveringAuthorityGrant from the grant surface's read-only coverage
 // check, so a coded line whose match is held reads hanging, never finished;
-// migration 174 marks a client's held lines whenever its grants change.
+// migration 174 marks a client's held lines whenever its grants change, and
+// migration 175 whenever the switch or the readiness admission that coverage
+// reads changes; the clock (a grant's review / expiry date) is re-checked by the
+// scheduled coding-convergence tick (settleCoveredHeldMatchLines below).
 
 import { assertVerdictTransactionBudgetActive, clearVerdictTransactionBudget } from './executionBudget.js';
 import { bindConvergenceConnection, unbindConvergenceConnection, withConvergenceTransaction, isConvergencePool, convergenceConnectionRecord } from './convergenceConnection.js';
@@ -126,6 +129,8 @@ const HANGING_CODING = new Set(HANGING_CODING_STATES);
 // transactions.reconciliation_status values that mean the line is settled in
 // the books (mirrors bankLineAutoExplain RESOLVED_TX_STATUSES).
 const SETTLED_RECON_STATUSES = new Set(['reconciled', 'posted', 'auto_reconciled']);
+// Vocabulary only, for the convergence invariant test's policy table.
+export const SETTLED_RECON_STATUSES_LOCKSTEP = Object.freeze([...SETTLED_RECON_STATUSES]);
 
 // bank_line_disposition verdicts (reconciliation_evaluations.payload->>'disposition',
 // bankLineDispositionLlm.js). 'auto_explain' is the ONLY one that SETTLES the line
@@ -155,6 +160,7 @@ const SETTLED_RECON_STATUSES = new Set(['reconciled', 'posted', 'auto_reconciled
 // and the post follows. The status stamp normally lands 'explained' (step 5);
 // this is the verdict-only read when that best-effort stamp did not.
 const SETTLING_DISPOSITIONS = new Set(['auto_explain', 'statutory_payment']);
+export const SETTLING_DISPOSITIONS_LOCKSTEP = Object.freeze([...SETTLING_DISPOSITIONS]);
 
 // M1.3's last 10% (docs/donna-kernel-audit/cascade-convergence-design.md).
 // #1131 made an auto-match's cascade outcome PERSISTED on
@@ -179,6 +185,7 @@ const SETTLING_DISPOSITIONS = new Set(['auto_explain', 'statutory_payment']);
 // Distinct reason keys so hanging_by_reason tells them apart — and so the day
 // the heal gets its own clock, the metric shows the shift instead of hiding it.
 const CASCADE_APPLIED = 'applied';
+export const CASCADE_APPLIED_STATE = CASCADE_APPLIED;
 
 const norm = (v) => (v == null ? '' : String(v).trim().toLowerCase());
 
@@ -2214,6 +2221,52 @@ export const settleCommittedConvergenceMarks = async (client, { logger = console
     logger?.warn?.('[reconcileConvergenceState] post-commit settle failed — marks left for the next sweep', { error: error?.message || String(error) });
     return { claimed: 0, error: error?.message || String(error) };
   }
+};
+
+// The clock half of held-match coverage freshness. A covered held match is
+// covered only RIGHT NOW (readHeldMatchGrantCoverage reads the grant's
+// review_after / expires_at and the host certificate's validity against the
+// current time), and time passing changes no row, so no trigger can mark it.
+// The scheduled coding-convergence tick (every five minutes, cloud and desktop;
+// codingConvergence.js) calls this: it re-derives, through the one gather and
+// derivation, every line of the firm that carries a live held match and is not
+// already resting on `matched_pending_authority_no_grant` (migration 175's
+// convergence_covered_held_lines — the same candidate set its row triggers
+// mark). A line whose cover has lapsed moves to hanging; every other line
+// re-derives to the verdict it already has and writes nothing. One client's
+// failure is isolated (receipted in the result, its lines left for the next
+// tick). Lines are taken in random order under `limit`, so a capped firm still
+// reaches every line over successive ticks.
+export const HELD_COVERAGE_SWEEP_LIMIT = 1000;
+export const settleCoveredHeldMatchLines = async (client, { firmId, limit = HELD_COVERAGE_SWEEP_LIMIT } = {}) => {
+  if (!client || !firmId) return { candidates: 0, changed: [], capped: false, errors: [] };
+  let rows;
+  try {
+    rows = (await client.query(
+      `select client_id, transaction_id from convergence_covered_held_lines($1, null) order by random() limit $2`,
+      [firmId, limit + 1]
+    )).rows || [];
+  } catch (error) {
+    // A pre-175 database: no candidate function yet, nothing to settle.
+    if (error?.code === '42883' || error?.code === '42P01') return { candidates: 0, changed: [], capped: false, errors: [], skipped: 'pre_175' };
+    throw error;
+  }
+  const capped = rows.length > limit;
+  const byClient = new Map();
+  for (const row of rows.slice(0, limit)) {
+    if (!byClient.has(row.client_id)) byClient.set(row.client_id, []);
+    byClient.get(row.client_id).push(row.transaction_id);
+  }
+  const changed = [];
+  const errors = [];
+  for (const [clientId, transactionIds] of byClient) {
+    try {
+      changed.push(...(await applyConvergenceState(client, { firmId, transactionIds })).changed);
+    } catch (error) {
+      errors.push({ client_id: clientId, lines: transactionIds.length, error: error?.message || String(error) });
+    }
+  }
+  return { candidates: Math.min(rows.length, limit), changed, capped, errors };
 };
 
 // The nightly recompute: derive every row again and REPORT where the column
