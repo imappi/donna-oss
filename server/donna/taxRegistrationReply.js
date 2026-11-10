@@ -204,10 +204,11 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
   const changed = effect === 'write';
   let locked = effect === 'conflict' ? { code: 'conflicts_with_recorded_registration',
     message: 'The answer would remove registered days the record already holds; nothing was recorded.' } : null;
+  let written = null;
   if (changed) {
     const { updateClientProfileInDb } = await import('./db/clients.js');
     try {
-      await updateClientProfileInDb({ firmId, clientId, profilePatch: { [rule.profileField]: record }, actorId,
+      written = await updateClientProfileInDb({ firmId, clientId, profilePatch: { [rule.profileField]: record }, actorId,
         principal: { principalType: actorType, principalId: actorId }, dbClient: client, manageTransaction: false });
     } catch (error) {
       if (!rule.recordLockedCodes.includes(error?.code)) throw error;
@@ -255,7 +256,10 @@ export const applyTaxRegistrationAnswer = async ({ client, firmId, request, acto
     profile_field: rule.profileField, before, after, changed, outcome: changed ? 'recorded' : 'confirmed_record', reading, owner_notice: ownerNotice, language,
     // The undo: write the prior record back through the same profile writer.
     undo: { profile_patch: { [rule.profileField]: before } },
-    line_ids: lines.map((line) => line.id) })])).rows[0].id;
+    line_ids: lines.map((line) => line.id),
+    // The posted lines this answer contradicts (the profile writer's
+    // receipt carries the same list); each opens the existing correction case.
+    ...(written?.tax_registration_change ? { posted_lines_affected: written.tax_registration_change } : {}) })])).rows[0].id;
   const receiptId = String(receipt);
   // One answer settles every live registration question of this client.
   const closedIds = [];

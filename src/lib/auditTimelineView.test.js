@@ -29,8 +29,9 @@ test('terminal views: the three states map to their tones; hanging stays a viola
 });
 
 test('posted correction blockers name the recovery code in the visible terminal headline', () => {
-  for (const [state,code] of [['blocked','CODING_CORRECTION_AUTHORITY_REQUIRED'],['failed','TRANSACTION_ALV_CODING_SOURCE_CONFLICT']]) {
-    const reason = `posted_evidence_correction_${state}:${code}`;
+  for (const [prefix,state,code] of [['posted_evidence','blocked','CODING_CORRECTION_AUTHORITY_REQUIRED'],['posted_evidence','failed','TRANSACTION_ALV_CODING_SOURCE_CONFLICT'],
+    ['posted_tax_registration','blocked','CODING_CORRECTION_TAX_PERIOD_CLOSED']]) {
+    const reason = `${prefix}_correction_${state}:${code}`;
     const view = buildTerminalView({ present: true, state: 'hanging', reason });
     assert.equal(view.tone, 'violation');
     assert.match(view.headline, new RegExp(code));

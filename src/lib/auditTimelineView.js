@@ -54,7 +54,7 @@ export const buildTerminalView = (terminal, formatMessage = null) => {
       reason: terminal?.reason || null
     };
   }
-  const correctionFailure = /^posted_evidence_correction_(blocked|failed):(.+)$/.exec(terminal.reason || '');
+  const correctionFailure = /^posted_(?:evidence|tax_registration)_correction_(blocked|failed):(.+)$/.exec(terminal.reason || '');
   if (terminal.state === 'hanging' && correctionFailure) {
     const code = correctionFailure[2];
     const hanging = TERMINAL_VIEWS.hanging;
