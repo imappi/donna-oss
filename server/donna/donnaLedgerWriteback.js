@@ -1,6 +1,7 @@
 import { normalizeIntelText } from './transactionIntel.js';
 import { enrichCodingWithXeroAccount } from './xeroAccountMatcher.js';
 import { codingInputFromTransaction } from './xeroWriteback.js';
+import { resolveMarketPostingAccounts } from './provisioningPolicyRegistry.js';
 
 // Donna-ledger-native posting preview for clients with NO external accounting
 // system (accounting_system = 'none'). Sibling of buildXeroBankTransactionWriteback
@@ -18,10 +19,15 @@ import { codingInputFromTransaction } from './xeroWriteback.js';
 //     land on the same row. The local ledger auto-creates its chart at posting
 //     time; a "matched code required" gate is Xero-writeback scaffolding that
 //     has no correctness role here.
-//   - A chart with no bank-like row falls back to a synthesized default bank
+//   - A chart with no bank-like row falls back to the bank account the
+//     client's market declares (provisioningPolicyRegistry
+//     .resolveMarketPostingAccounts — FI: tilikartta 1910 Pankkitili), and
+//     only for a market that declares none to a synthesized default bank
 //     account (defaultDonnaBankAccount). The first successful post mints it
 //     into ledger_accounts (type 'bank'), so resolution self-heals — no manual
-//     provisioning step per Donna-ledger client.
+//     provisioning step per Donna-ledger client. Under a declaration the bank
+//     leg never lands on a row of another currency (that currency mints its
+//     own declared row) nor on the declared cash account.
 
 const trim = (value = '') => String(value || '').trim();
 
@@ -82,12 +88,29 @@ export const isDonnaBankLikeAccount = (account = {}) =>
   isAssetSide(account) &&
   (isBankTyped(account) || BANK_NAME_CUE.test(normalizeIntelText(accountName(account))));
 
-export const findDonnaLedgerBankAccount = ({ transaction = {}, ledgerAccounts = [] } = {}) => {
-  const candidates = ledgerAccounts.filter((account) => isActive(account) && isDonnaBankLikeAccount(account));
+const sameDeclaredAccount = (account = {}, declared = null) => {
+  if (!declared) return false;
+  const code = accountCode(account);
+  return code && declared.code ? code === declared.code
+    : !code && !declared.code && normalizeIntelText(accountName(account)) === normalizeIntelText(declared.name);
+};
+
+// `postingAccounts` is the market's declaration (null: today's behaviour,
+// byte-identical). With one, the declared cash account is never a bank leg,
+// and a row denominated in another currency is never this line's bank leg.
+export const findDonnaLedgerBankAccount = ({ transaction = {}, ledgerAccounts = [], postingAccounts = null } = {}) => {
+  const currency = transactionCurrency(transaction);
+  const cash = postingAccounts?.cashAccount?.() || null;
+  const candidates = ledgerAccounts.filter((account) => isActive(account) && isDonnaBankLikeAccount(account)
+    && !(postingAccounts && (sameDeclaredAccount(account, cash)
+      || (currency && accountCurrency(account) && accountCurrency(account) !== currency))));
   if (!candidates.length) return null;
 
   const keys = explicitBankKeys(transaction).map(normalizeIntelText).filter(Boolean);
-  const currency = transactionCurrency(transaction);
+  // The market's own bank row for this currency outranks an engine default
+  // that a book posted to before the market declared one (the FI opening
+  // balance already lands on 1910); a statement's explicit hint still wins.
+  const declaredBank = postingAccounts?.bankAccount?.({ currency }) || null;
   const scored = candidates.map((account) => {
     const code = accountCode(account);
     const name = accountName(account);
@@ -99,6 +122,7 @@ export const findDonnaLedgerBankAccount = ({ transaction = {}, ledgerAccounts = 
     if (isBankTyped(account)) score += 30;
     if (/(?:^|\s)(?:bank|checking|chequing|operating)(?:\s|$)/.test(normalizeIntelText(name))) score += 8;
     if (code) score += 3;
+    if (sameDeclaredAccount(account, declaredBank)) score += 50;
     return { account, score };
   });
 
@@ -125,8 +149,29 @@ export const defaultDonnaBankAccount = (transaction = {}) => {
   };
 };
 
+// The bank account the market declares for this line's currency, shaped like
+// a chart row, for a chart that has no bank row for it yet. The mint carries
+// the declared type, role and statutory group (ledger.js ledgerAccountFromBank
+// → upsertLedgerAccountForJournal), so it lands where the market's statements
+// expect it.
+export const declaredDonnaBankAccount = (postingAccounts, transaction = {}) => {
+  const declared = postingAccounts?.bankAccount?.({ currency: transactionCurrency(transaction) });
+  if (!declared) return null;
+  return {
+    code: declared.code || '',
+    name: declared.name,
+    type: declared.account_type,
+    currency: declared.currency || transactionCurrency(transaction) || null,
+    account_label: accountLabel(declared),
+    declared_account: declared,
+    source: 'market_declared_bank'
+  };
+};
+
 // buildLedgerJournalForTransaction reads bankAccount.currency (the journal
-// currency fallback), so unlike the Xero summary this one keeps it.
+// currency fallback), so unlike the Xero summary this one keeps it. A
+// market-declared account also carries its declaration (only then: every
+// other summary is unchanged).
 const donnaBankAccountSummary = (bankAccount = {}) => ({
   id: bankAccount.id || null,
   code: accountCode(bankAccount) || null,
@@ -134,8 +179,16 @@ const donnaBankAccountSummary = (bankAccount = {}) => ({
   currency: accountCurrency(bankAccount) || null,
   tax_type: trim(bankAccount.tax_type) || null,
   account_label: bankAccount.account_label || accountLabel(bankAccount),
-  source: bankAccount.source || 'native_ledger'
+  source: bankAccount.source || 'native_ledger',
+  ...(bankAccount.declared_account ? { declared_account: bankAccount.declared_account } : {})
 });
+
+// A chart row that IS a declared account (minted earlier, or seeded by another
+// writer on the same code — the FI opening balance posts 1910) still carries
+// the declaration, so the mint's coalesce-fill completes a row that was
+// minted without its role or statutory group.
+const withDeclaration = (account, declared) =>
+  account && declared && sameDeclaredAccount(account, declared) ? { ...account, declared_account: declared } : account;
 
 export const buildDonnaLedgerWriteback = ({ transaction = {}, ledgerAccounts = [], jurisdiction = null } = {}) => {
   // The matcher machinery is shape-agnostic ({ code, name, type, status }), so
@@ -152,20 +205,34 @@ export const buildDonnaLedgerWriteback = ({ transaction = {}, ledgerAccounts = [
     substitute: false
   });
   const rawCode = trim(coding.xero_account_code || coding.account_code);
-  const lineName = trim(coding.xero_account_name || coding.account_name || coding.proposed_account);
+  const rawLineName = trim(coding.xero_account_name || coding.account_name || coding.proposed_account);
   // Mint-by-name: both codingInputFromTransaction (unmatched) and xeroFieldsFor
   // (matched to a CODE-LESS chart row: `account_code: match.code || match.name`)
   // fall back to the account NAME for account_code. A name must never persist
   // into the chart code slot — it renders "Insurance · Insurance" and welds the
   // name into `code` on the upsert — so blank it whenever code === name and let
   // the name key the row. A real chart code survives (it differs from the name).
-  const lineCode = rawCode && normalizeIntelText(rawCode) === normalizeIntelText(lineName) ? '' : rawCode;
+  let lineCode = rawCode && normalizeIntelText(rawCode) === normalizeIntelText(rawLineName) ? '' : rawCode;
+  let lineName = rawLineName;
   if (!lineCode && !lineName) {
     throw validationError('A coded account (code or name) is required before ledger posting.');
   }
 
-  const bankAccount =
-    findDonnaLedgerBankAccount({ transaction, ledgerAccounts }) || defaultDonnaBankAccount(transaction);
+  const postingAccounts = resolveMarketPostingAccounts(jurisdiction);
+  // The coder booked the line to the market's declared cash account (by its
+  // code or its chart name): post it there with the declared shape, whether
+  // or not the row has been minted yet — never a code-less mint by name.
+  const cash = postingAccounts?.cashAccount?.() || null;
+  const cashLine = cash && (lineCode ? lineCode === cash.code : normalizeIntelText(lineName) === normalizeIntelText(cash.name));
+  if (cashLine) {
+    lineCode = cash.code;
+    lineName = cash.name;
+  }
+
+  const bankAccount = postingAccounts
+    ? withDeclaration(findDonnaLedgerBankAccount({ transaction, ledgerAccounts, postingAccounts }),
+      postingAccounts.bankAccount({ currency: transactionCurrency(transaction) })) || declaredDonnaBankAccount(postingAccounts, transaction)
+    : findDonnaLedgerBankAccount({ transaction, ledgerAccounts }) || defaultDonnaBankAccount(transaction);
   const bankCode = accountCode(bankAccount);
   const sameAsBank = lineCode && bankCode
     ? lineCode === bankCode
@@ -180,7 +247,8 @@ export const buildDonnaLedgerWriteback = ({ transaction = {}, ledgerAccounts = [
       ...coding,
       account_code: lineCode,
       account_name: lineName,
-      account_label: coding.account_label || accountLabel({ code: lineCode, name: lineName })
+      account_label: cashLine ? accountLabel(cash) : coding.account_label || accountLabel({ code: lineCode, name: lineName }),
+      ...(cashLine ? { xero_account_code: cash.code, xero_account_name: cash.name, declared_account: cash } : {})
     },
     bank_account: donnaBankAccountSummary(bankAccount)
   };

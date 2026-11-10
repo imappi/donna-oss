@@ -1,7 +1,8 @@
 import { readRetainedProcessingScopeInDb } from './runtimeReadinessAdmission.js';
 import { isDeepStrictEqual } from 'node:util';
 import { readJevCase, codingCaseRevision } from './jevPreview.js';
-import { __createClientEvidenceRequestWithClient } from './db/asks.js';
+import { __createClientEvidenceRequestWithClient, restOnUnavailableDocumentInDb } from './db/asks.js';
+import { documentUnavailableOf, isDocumentRequestEvidenceType } from './ownerDocumentUnavailable.js';
 import { codingStatutoryEvidenceGap } from './codingStatutoryEvidence.js';
 import { codingRevenueEvidenceGap } from './codingRevenueEvidence.js';
 import { hasJevResolvedCoding, JEV_DOCUMENT_ASK_SELECTIONS } from './jevDecisionReceipt.js';
@@ -783,6 +784,8 @@ export const CODING_AUTO_POST_CANDIDATES_SQL = `
          t.money_out                               as line_money_out,
          t.currency                                as line_currency,
          t.payload->'ai_suggestion'                as ai_suggestion,
+         -- The owner said the document does not exist (ownerDocumentUnavailable.js).
+         t.payload->'owner_document_unavailable'   as owner_document_unavailable,
          (select json_build_object('document_type',d.document_type,'match_status',m.status)
             from reconciliation_matches m join documents d on d.id=m.matched_object_id and d.firm_id=m.firm_id and d.client_id=m.client_id
            where m.firm_id=t.firm_id and m.client_id=t.client_id and m.bank_transaction_id=t.id
@@ -974,6 +977,7 @@ export const sweepCodingAutoPost = async ({
   ensureReviewItemFn = ensureTransactionReviewItemInDb,
   updateReviewItemFn = updateTransactionReviewItemInDb,
   createEvidenceRequestFn = createClientEvidenceRequestInDb,
+  restOnUnavailableDocumentFn = restOnUnavailableDocumentInDb,
   loadLocalEvidenceFn = null,
   postLedgerFn = postLedgerTransactionInDb,
   getAccountingSystemFn = getClientAccountingSystemFromDb,
@@ -1285,6 +1289,16 @@ export const sweepCodingAutoPost = async ({
         // fact per client: one live question per client, later refused lines
         // join it (mintTaxRegistrationQuestionInDb), and its answer is read by
         // the registration lane (taxRegistrationReply.js).
+        // The owner already said this line's document does not exist: never
+        // ask for a document again, in any wording. The line rests on the one
+        // request that says what cannot be booked without it.
+        if (!isScopeDriftDemotion && isDocumentRequestEvidenceType(ownerAsk?.evidence_type)
+          && documentUnavailableOf({ owner_document_unavailable: row.owner_document_unavailable })) {
+          const rested = await restOnUnavailableDocumentFn({ firmId, clientId, transactionId: row.transaction_id, actorId: 'coding_auto_post' });
+          stats.skipped += 1;
+          bump(rested?.changed ? 'owner_has_no_such_document_rested' : 'owner_has_no_such_document');
+          continue;
+        }
         const registrationGuard = !isScopeDriftDemotion && suggestion.tax_unresolved_guard?.constraint === 'tax_registration_unrecorded'
           && suggestion.tax_unresolved_guard.owner_answered !== true ? suggestion.tax_unresolved_guard : null;
         if (registrationGuard && createEvidenceRequestFn === createClientEvidenceRequestInDb) {

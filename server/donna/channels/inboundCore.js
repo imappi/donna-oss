@@ -24,6 +24,7 @@ import { resolveOwnerPortalLink, composePortalLinkReply, recordOwnerPortalLinkSh
 import { prefetchOwnerChannelGateContext } from './ownerChannelConfig.js';
 import { clientFlagActs } from '../clientConfig.js';
 import { supportsStructuredOwnerReply } from '../statutoryRegistry.js';
+import { asksOwnerForDocument } from '../ownerDocumentUnavailable.js';
 import { CORRECTION_NOT_CORRECTABLE_CODE, closedQuestionNotice } from '../ownerReplyCorrection.js';
 import { readEvidenceCorrectionReaderInDb } from '../db/asks.js';
 import {
@@ -1266,7 +1267,9 @@ export const processAnchoredInboundMessage = async ({ message, from, firmId, env
       return { status: 'opening_balance', askId: anchor.askId, result };
     }
     const turn = assessEvidenceTopicTurn({ ask, text, descriptor: null });
-    if (!closedQuestion && !supportsStructuredOwnerReply(ask) && !turn.terminal && typeof deps.recordEvidenceTopicTurn === 'function') {
+    // A question that asked for a document is read by its strong reader
+    // (ownerDocumentUnavailable.js), never held by the keyword assessment.
+    if (!closedQuestion && !supportsStructuredOwnerReply(ask) && !asksOwnerForDocument(ask) && !turn.terminal && typeof deps.recordEvidenceTopicTurn === 'function') {
       const topicState = buildEvidenceTopicState({ ask, turn: { ...turn, text }, now: deps.now?.() || new Date().toISOString(), channel: config.channel, actorId, inboundMessageId: message.id, documentIds: [] });
       const recorded = await deps.recordEvidenceTopicTurn({ firmId, evidenceRequestId: anchor.askId, topicState, actorId, actorType: 'client' });
       await recordLedger({ entry: { message_id: message.id, provider: config.provider, channel: config.channel, ask_id: anchor.askId, client_id: anchor.clientId, recipient_phone_hash: anchor.phoneHash, inbound_reply_id: message.id, resolved_request_id: null, provider_payload: { inbound: { type: 'text', anchor: anchor.source, evidence_topic: { outcome: turn.outcome, status: 'open' } } } } });

@@ -30,7 +30,7 @@ import { FI_PROFILE, FI_SOURCES, fiSource, fiDocumentBytes, fiBankCsv, fiRouting
 const CODING = 'parse-cron:coding_convergence';
 const LOOPS = 'parse-cron:loops_inbox';
 const PARSE = 'parse-document';
-const RECEIPT_JOURNAL = [[fiBornAccount('Meals and entertainment').name, 29.34, 0, 'ALV_13_5_INPUT'], ['Vähennettävä arvonlisävero', 3.96, 0, 'NONE'], ['Business Checking · EUR', 0, 33.30, 'NONE']];
+const RECEIPT_JOURNAL = [[fiBornAccount('Meals and entertainment').name, 29.34, 0, 'ALV_13_5_INPUT'], ['Vähennettävä arvonlisävero', 3.96, 0, 'NONE'], ['Pankkitili', 0, 33.30, 'NONE']];
 
 const bootFi = (runToken) => bootApplianceForTest({ runToken, firm: { jurisdiction: 'FI', currency: 'EUR' }, env: { DATABASE_POOL_MAX: '3' } });
 const scriptSteadyLanes = (app) => {
