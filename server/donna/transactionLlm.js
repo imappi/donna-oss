@@ -20,10 +20,12 @@ import {
   classifyProviderStatus,
   classifyProviderThrow,
   providerFailureReceipt,
+  providerBudgetReserveMs,
   providerFetchWithDeadline,
   providerInvalidOutput,
   providerKeyMissing
 } from './providerTransport.js';
+import { remainingExecutionBudgetMs } from './executionBudget.js';
 import { extractJson } from './extractJson.js';
 import { canonicalMerchantPattern, conversionDetailFor, normalizeIntelText } from './transactionIntel.js';
 import { requireCodingPolicyForClient, codingPolicyReceipt, CodingPolicyError } from './codingPolicy.js';
@@ -111,6 +113,13 @@ const CODING_PROVIDERS = getLane('transaction_coding').providers;
 // deadline than the default; the instructions are the cached prefix.
 const CODING_ANTHROPIC_EFFORT = 'high';
 const CODING_ANTHROPIC_TIMEOUT_MS = 300_000;
+// The least job budget a Claude batch call is started with. A 10-line batch
+// took 81–82 s on the appliance harness (2026-11-10, effort high, streamed);
+// a call started with less is cut by the budget before it can answer, and
+// billed for nothing. Below this the batch is not sent: the round stops with
+// the same typed PROVIDER_TIMEOUT (execution_budget_exhausted) a cut call
+// would have left, and the next job, with a fresh budget, codes the rest.
+export const CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS = 120_000;
 
 let dotEnvCache = null;
 const merchantContextCache = new Map();
@@ -139,6 +148,22 @@ const readDotEnv = () => {
 const getOpenAiConfig = () => {
   const resolved = resolveTextLaneProvider({ providers: CODING_PROVIDERS, openAiDefaultModel: DEFAULT_MODEL, dotEnv: readDotEnv() });
   return { ...resolved, apiKey: resolved.ok ? resolved.apiKey : '', model: resolved.model || DEFAULT_MODEL };
+};
+
+// Lines per batch request, by the transport that decides. A chunk is one
+// call, and a coding round runs its chunks one after another inside ONE job
+// (the parse-document leg, or a coding re-drive), whose budget is 300 s on
+// the appliance and 285 s per Inngest invocation. Measured on the
+// appliance harness (2026-11-10, Finnish statement, claude-opus-5-5 at
+// effort high, streamed): 25 lines took 164 s and 19.5k output tokens, about
+// 6.6 s and 780 output tokens a line, so one 25-line chunk filled what the
+// parse job had left and the round's next chunk was cut by the budget. Ten
+// lines (about 70 s) leave room for more than one chunk in a job and cost
+// little when the budget cuts one. OpenAI and the compatible rung keep 25.
+export const CODING_BATCH_LINES = Object.freeze({ anthropic: 10, default: 25 });
+export const codingBatchLinesFor = (transport = null) => {
+  if (transport?.provider === 'openai_compatible') return CODING_BATCH_LINES.default;
+  return getOpenAiConfig().provider === 'anthropic' ? CODING_BATCH_LINES.anthropic : CODING_BATCH_LINES.default;
 };
 
 // The key-missing receipt names the provider the resolution was for (the
@@ -506,8 +531,13 @@ const openAiCodingCall = async ({ config, body, fetchImpl }) => {
 // response id) or `{ provider_failure }` — a refusal, an output cut at
 // max_tokens, no credit, a bad key, a rate limit, a timeout and an
 // unreadable or schema-breaking body all come back typed, never as a coding.
-const anthropicCodingCall = async ({ config, instructions: callInstructions, input, schema, executionId, maxTokens, fetchImpl }) => {
+const anthropicCodingCall = async ({ config, instructions: callInstructions, input, schema, executionId, maxTokens, minBudgetMs = 0, fetchImpl }) => {
   if (!config.apiKey) return { provider_failure: codingKeyMissing(config) };
+  const remaining = remainingExecutionBudgetMs();
+  if (minBudgetMs > 0 && remaining !== null && remaining - providerBudgetReserveMs() < minBudgetMs) {
+    const error = classifyProviderThrow({ provider: 'anthropic', error: null, timedOut: true, reason: 'execution_budget_exhausted' });
+    return { provider_failure: error.receipt() };
+  }
   try {
     const { result } = await llmCall(anthropicStructuredRequest({
       apiKey: config.apiKey,
@@ -1470,6 +1500,7 @@ export const suggestTransactionCodingBatch = async ({
       schema: batchSchema,
       executionId: cleanTransactions[0]?.id || 'batch',
       maxTokens: 64000,
+      minBudgetMs: CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS,
       fetchImpl
     }) : await openAiCodingCall({
       config,

@@ -22,14 +22,16 @@ import {
 import {
   anthropicStructuredRequest,
   anthropicWireSchema,
+  openAiStructuredRequest,
   readAnthropicStructured,
   typedLlmCallFailure,
   validateLaneSchema
 } from './structuredRequest.js';
 import { assembleAnthropicEventStream } from './anthropicEventStream.js';
+import { createExecutionBudget, runWithExecutionBudget } from './executionBudget.js';
 import { classifyProviderStatus, PROVIDER_FAILURE_CODES } from './providerTransport.js';
 import { getLane } from './modelLanes.js';
-import { suggestTransactionCoding, suggestTransactionCodingBatch } from './transactionLlm.js';
+import { suggestTransactionCoding, suggestTransactionCodingBatch, CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS } from './transactionLlm.js';
 import { resolveCodingPolicy } from './codingPolicy.js';
 import { draftClientAskMessage, buildAskMessageSchema } from './askPipeline.js';
 import { distillFirmFactsFromEvent } from './firmFacts.js';
@@ -602,4 +604,109 @@ test('one delivery rule: within the grammar limits output_config.format, over th
   const options = anthropicStructuredRequest({ apiKey: 'k', model: 'claude-opus-5-5', system: 's', user: 'Extract.', schema: SCHEMA, effort: 'low',
     content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'JVBERi0=' } }], execution: { root: { type: 't', id: 'doc' } } });
   assert.deepEqual(options.body.messages[0].content.map((block) => block.type), ['document', 'text']);
+});
+
+// ── the lane's wall inside a worker ───────────────────────────────────────
+// Inside a worker llmCall wraps the fetch in the deadline transport itself;
+// the lane's wall must reach it, or every call is cut at the transport
+// default (90 s) — the batch coder that never finished inside a job. The
+// default is shrunk through its env knob so these run in milliseconds; the
+// arithmetic is the same for the real 90 s default and the lanes' walls.
+const sseOf = (message) => {
+  const { content, stop_reason: stopReason, usage, ...head } = message;
+  const events = [{ type: 'message_start', message: { ...head, content: [], stop_reason: null, usage: { ...usage, output_tokens: 0 } } }];
+  content.forEach((block, index) => {
+    if (block.type === 'text') {
+      events.push({ type: 'content_block_start', index, content_block: { type: 'text', text: '' } });
+      events.push({ type: 'content_block_delta', index, delta: { type: 'text_delta', text: block.text } });
+    } else {
+      events.push({ type: 'content_block_start', index, content_block: { type: block.type, thinking: '', signature: '' } });
+      events.push({ type: 'content_block_delta', index, delta: { type: 'signature_delta', signature: block.signature || '' } });
+    }
+    events.push({ type: 'content_block_stop', index });
+  });
+  events.push({ type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: usage.output_tokens } });
+  events.push({ type: 'message_stop' });
+  return events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('');
+};
+
+// Headers at once; the events after `delayMs`. The body sent is kept.
+const slowStream = (delayMs, answer, sent = []) => async (_url, init) => {
+  const body = JSON.parse(init.body);
+  sent.push(body);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      const timer = setTimeout(() => { controller.enqueue(encoder.encode(sseOf(claudeMessage(answer(body))))); controller.close(); }, delayMs);
+      init?.signal?.addEventListener('abort', () => { clearTimeout(timer); controller.error(Object.assign(new Error('aborted'), { name: 'AbortError' })); }, { once: true });
+    }
+  });
+  return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+};
+
+const inWorker = (budgetMs, fn) => runWithExecutionBudget(createExecutionBudget({ timeoutMs: budgetMs, label: 'parse-document#test' }), fn);
+
+test('inside a worker the batch coder lives past the transport default to its own wall; with too little budget left it sends nothing', async (t) => {
+  claudeOnly(t);
+  setEnv(t, { PROVIDER_REQUEST_TIMEOUT_MS: '60', PROVIDER_BUDGET_RESERVE_MS: '0' });
+  const realFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = realFetch; });
+  const sent = [];
+  // A reply three times slower than the transport default: read, because the
+  // coder's own wall (300 s) is the deadline, not the default.
+  globalThis.fetch = slowStream(200, codingAnswer, sent);
+  const batch = await inWorker(300_000, () => suggestTransactionCodingBatch({ clientProfile: { jurisdiction: 'fi' }, transactions: [TX, TX2] }));
+  assert.equal(batch.provider_failure, undefined, JSON.stringify(batch.provider_failure));
+  assert.deepEqual(batch.suggestions.map((suggestion) => suggestion.source), ['anthropic_batch', 'anthropic_batch']);
+  assert.equal(sent[0].stream, true, 'the coder request that leaves is streamed');
+  // A job with less budget left than a batch needs: no request is sent (a
+  // started call would be cut and billed for nothing); the round stops with
+  // the typed receipt a cut call would have left.
+  const before = sent.length;
+  const short = await inWorker(CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS - 1_000, () => suggestTransactionCodingBatch({ clientProfile: { jurisdiction: 'fi' }, transactions: [TX, TX2] }));
+  assert.equal(short.provider_failure?.code, 'PROVIDER_TIMEOUT');
+  assert.equal(short.provider_failure?.reason, 'execution_budget_exhausted');
+  assert.equal(sent.length, before, 'nothing was sent');
+  // The single-line coder (one line, seconds) is not held to the batch floor.
+  const single = await inWorker(CODING_ANTHROPIC_BATCH_MIN_BUDGET_MS - 1_000, () => suggestTransactionCoding({ clientProfile: { jurisdiction: 'fi' }, transaction: TX }));
+  assert.equal(single.provider_failure, undefined);
+  assert.equal(single.source, 'anthropic');
+});
+
+test('the lane\'s wall is the one deadline on both providers, inside a worker and outside one', async (t) => {
+  setEnv(t, { PROVIDER_REQUEST_TIMEOUT_MS: '60', PROVIDER_BUDGET_RESERVE_MS: '0' });
+  const execution = { root: { type: 'transaction_coding', id: 'wall' } };
+  const answer = () => ({ a: 'late' });
+  const wallSchema = { type: 'object', additionalProperties: false, required: ['a'], properties: { a: { type: 'string' } } };
+  const claude = (delayMs, timeoutMs) => llmCall(anthropicStructuredRequest({
+    apiKey: 'k', model: 'claude-opus-5-5', system: 's', user: 'u', schema: wallSchema, effort: 'high', stream: true, execution, timeoutMs,
+    fetchImpl: slowStream(delayMs, answer)
+  }));
+  // The OpenAI Responses body, answered after `delayMs`.
+  const slowJson = (delayMs) => async (_url, init) => {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, delayMs);
+      init?.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); }, { once: true });
+    });
+    return new Response(JSON.stringify({ id: 'resp_wall', model: 'gpt-5.4', output_text: '{"a":"late"}' }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const openAi = (delayMs, timeoutMs) => llmCall(openAiStructuredRequest({
+    apiKey: 'k', model: 'gpt-5.4', instructions: 's', input: 'u', schemaName: 'wall', schema: wallSchema, execution, timeoutMs, fetchImpl: slowJson(delayMs)
+  }));
+  for (const [name, call] of [['anthropic', claude], ['openai', openAi]]) {
+    for (const [where, run] of [['in a worker', (fn) => inWorker(120_000, fn)], ['outside a worker', (fn) => fn()]]) {
+      const { result } = await run(() => call(150, 400));
+      assert.deepEqual(result.parsed, { a: 'late' }, `${name} ${where}: slower than the default, inside the wall`);
+      await assert.rejects(() => run(() => call(600, 250)),
+        (error) => error.code === 'PROVIDER_TIMEOUT' && error.reason === 'request_timeout', `${name} ${where}: past the wall, a typed timeout`);
+    }
+    // A budget shorter than the wall wins: the call is cut at the budget.
+    await assert.rejects(() => inWorker(300, () => call(600, 400)),
+      (error) => error.code === 'PROVIDER_TIMEOUT' && error.reason === 'execution_budget_exhausted', `${name}: the budget, not the wall`);
+    // In a worker, a lane that names no wall keeps the transport default.
+    await assert.rejects(() => inWorker(120_000, () => call(150, null)), (error) => error.code === 'PROVIDER_TIMEOUT', `${name}: no wall, the default`);
+  }
+  // The builders hand the wall to the envelope.
+  assert.equal(anthropicStructuredRequest({ apiKey: 'k', model: 'm', system: 's', user: 'u', schema: wallSchema, effort: 'low', execution, timeoutMs: 1234 }).timeoutMs, 1234);
+  assert.equal(openAiStructuredRequest({ apiKey: 'k', model: 'm', instructions: 's', input: 'u', schemaName: 'w', schema: wallSchema, execution, timeoutMs: 1234 }).timeoutMs, 1234);
 });
