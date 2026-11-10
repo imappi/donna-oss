@@ -137,7 +137,7 @@ test(
 );
 
 test(
-  'real PG (RT-12 b): an Anthropic-only host — the same bill through the unified lane on the Anthropic transport (the router is dark; the unified model confirms the declared type)',
+  'real PG (RT-12 b): an Anthropic-only host — the same bill routed and read on Anthropic (2026-11-10: the router no longer goes dark without an OpenAI key)',
   { skip: applianceHarnessSkipReason({ dark: ['openai', 'typesafe'] }) },
   async () => {
     const appliance = await bootApplianceForTest({ keys: { openai: false, anthropic: true, typesafe: false }, now: new Date('2026-08-31T09:00:00.000Z') });
@@ -147,19 +147,25 @@ test(
       const modelRoutes = host.certificate.checks.find(({ id }) => id === 'model_routes');
       assert.deepEqual(modelRoutes.detail.dark_providers, ['openai', 'typesafe']);
       assert.ok(modelRoutes.detail.dark_lanes.includes('jev_reconciliation'));
-      assert.ok(modelRoutes.detail.dark_lanes.includes('document_routing'), 'the router is dark on an Anthropic-only host');
+      // The owner's decision of 2026-11-10: every document lane resolves
+      // Anthropic first, so an Anthropic-only host routes and reads.
+      assert.ok(!modelRoutes.detail.dark_lanes.includes('document_routing'), 'the router is lit on an Anthropic-only host');
       assert.ok(!modelRoutes.detail.dark_lanes.includes('unified_extraction'));
 
       const { clientId } = await appliance.createClient();
+      appliance.providers.script('document_routing', ['document_routing/ochre-supplier-bill-anthropic']);
       appliance.providers.script('unified_extraction', ['unified_extraction/ochre-discount-line']);
       // The doc-first terminal drain (Anthropic) reaches a bill the matcher left bare.
       appliance.providers.script('document_disposition', ['document_disposition/ochre-bill-uncovered-account']);
       const bill = await appliance.uploadDocument({ clientId, fixture: 'supplier_bill_discount' });
       await appliance.tick();
       const document = await assertBillLanded(appliance, { clientId, bill, provider: 'anthropic', recording: 'unified_extraction/ochre-discount-line' });
-      assert.equal(appliance.providers.callsFor('document_routing').length, 0, 'no router call without an OpenAI key');
-      assert.equal(document.parse_summary.classification.fallback_used, true, 'the router receipt says it did not run');
-      assert.equal(document.parse_summary.classification.final_type_source, 'unified_extractor_agreed');
+      const routing = appliance.providers.callsFor('document_routing');
+      assert.deepEqual(routing.map((call) => [call.endpoint_class, call.model_requested, call.model_served]),
+        [['anthropic', 'claude-opus-5-5', 'claude-opus-5-5']], 'the router ran on Anthropic');
+      assert.equal(document.parse_summary.classification.source, 'router_v1');
+      assert.equal(document.parse_summary.classification.model, 'claude-opus-5-5', 'the routing receipt names the served model');
+      assert.equal(document.parse_summary.classification.final_type, 'supplier_bill');
     } finally {
       await appliance.stop();
     }

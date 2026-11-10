@@ -201,7 +201,7 @@ export const llmCall = async ({
       // payload, status OK". Any other body-read error stays what it was:
       // an empty payload the status decides.
       let streamError = null;
-      if (stream === 'anthropic_sse') {
+      if (stream === 'anthropic_sse' && typeof response.text === 'function') {
         const raw = await response.text().catch((error) => {
           if (error?.providerFailure === true) throw error;
           return '';

@@ -35,7 +35,8 @@ test('real PG: explicit settlement tax clauses survive extraction, the named par
   calls++;const request=JSON.parse(init.body);
   assert.match(request.system,/SOURCE TAX NOTES/);assert.match(request.system,/demand charge, permit surcharge/);
   assert.match(request.system,/net rows are not tax bases/);
-  return {ok:true,status:200,json:async()=>({id:'fixture',model:'fixture-extractor',content:[{type:'text',text:JSON.stringify(raw)}],usage:{input_tokens:1,output_tokens:1}})};
+  // The unified schema rides the structured-result tool (past the structured-output limits, 2026-11-10); the reply is its call.
+  return {ok:true,status:200,json:async()=>({id:'fixture',model:'fixture-extractor',stop_reason:'tool_use',content:[{type:'tool_use',id:'toolu_fixture',name:request.tools[0].name,input:raw}],usage:{input_tokens:1,output_tokens:1}})};
  }});
  assert.equal(calls,1);assert.equal(extracted.kind,'completed_header',JSON.stringify(extracted));
  assert.equal(extracted.prompt_version,UNIFIED_EXTRACTOR_PROMPT_VERSION);

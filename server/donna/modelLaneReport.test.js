@@ -28,10 +28,13 @@ await test('missing table → every registry lane with zero stats, table_present
   // qualified set; ungoverned lanes carry null (never []).
   assert.deepEqual(pilot.qualified, [...getLane('bank_line_disposition').qualified]);
   // RT-12: the unified extraction lane joined the feed (its two providers'
-  // strong defaults); bank_statement_vision is still ungoverned.
-  const ungoverned = report.lanes.find((lane) => lane.id === 'bank_statement_vision');
+  // strong defaults; claude-opus-5-5 since 2026-11-10, when the document
+  // lanes, bank_statement_vision among them, joined too). document_chat is
+  // still ungoverned.
+  const ungoverned = report.lanes.find((lane) => lane.id === 'document_chat');
   assert.equal(ungoverned.qualified, null);
-  assert.deepEqual(report.lanes.find((lane) => lane.id === 'unified_extraction').qualified, ['claude-opus-4-8', 'gpt-5.4']);
+  assert.deepEqual(report.lanes.find((lane) => lane.id === 'bank_statement_vision').qualified, ['claude-opus-5-5', 'gpt-5.4']);
+  assert.deepEqual(report.lanes.find((lane) => lane.id === 'unified_extraction').qualified, ['claude-opus-5-5', 'gpt-5.4']);
 });
 
 await test('aggregates fold per outcome; model ids ride from the receipts', async () => {

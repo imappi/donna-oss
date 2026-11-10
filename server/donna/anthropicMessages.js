@@ -59,7 +59,10 @@ export const anthropicFileBlock = ({ base64, mimeType = '', filename = '' } = {}
   const mt = String(mimeType || '').toLowerCase();
   const isPdf = mt === 'application/pdf' || mt === 'application/x-pdf' || looksLikePdfBase64(data)
     || /\.pdf$/i.test(String(filename || '').trim());
-  if (isPdf) return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } };
+  // The file name rides as the document's title: the OpenAI input_file part
+  // carries it, so the model sees the same input on either provider.
+  const title = String(filename || '').trim();
+  if (isPdf) return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, ...(title ? { title: title.slice(0, 500) } : {}) };
   const imageType = mt === 'image/jpg' ? 'image/jpeg' : mt;
   return { type: 'image', source: { type: 'base64', media_type: IMAGE_TYPES.includes(imageType) ? imageType : 'image/png', data } };
 };

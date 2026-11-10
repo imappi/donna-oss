@@ -112,7 +112,8 @@ test(
       assert.equal(rereadA.attempted, true);
       assert.equal(rereadA.outcome, 'still_off');
       assert.equal(rereadA.extractor, 'unified', 'the document\'s own extractor — the unified lane since RT-12');
-      assert.equal(rereadA.model, 'claude-opus-4-8', 'the model id is part of the receipt');
+      // The recording answers as the lane's Anthropic default (claude-opus-5-5 since 2026-11-10).
+      assert.equal(rereadA.model, 'claude-opus-5-5', 'the model id is part of the receipt');
       assert.equal(rereadA.parse_run_id, docA.parse_run_id);
       assert.equal(docA.parse_summary.totals_validation.drift, 50);
       // The review row exists, and rests on the OWNER: lane owner_ask + the ask.

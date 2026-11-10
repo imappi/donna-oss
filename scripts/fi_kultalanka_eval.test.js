@@ -416,11 +416,15 @@ const SETTLE_FAST = { advance_ms: 300_000, quiet_rounds: 2, max_rounds: 14 };
 
 test('real PG: the whole month runs on a disposable book under the shared ledger, and its replay reproduces the score with no network', { ...PG, timeout: 1_800_000 }, async () => {
   const plan = { ...buildMonthPlan({ runToken: `kl-month-${process.pid}`, clockStart: '2025-03-03T08:00:00Z', settle: SETTLE_FAST }) };
-  // An unpriced model stops the run before its first paid dispatch.
-  const refused = await runDecisionPlane(plan, { mode: 'live', lane: makeMonthLane({ offline: true }), budget: fixtureBudget([]), fetchImpl: fixtureProvider().fetchImpl });
-  assert.equal(refused.completion, 'incomplete');
-  assert.match(refused.month_failure.error, /^unpriced_model:openai:/);
-  assert.equal(refused.records.filter(r => r.provider === 'openai').length, 0);
+  // An unpriced model stops the run before its first paid dispatch — but
+  // since 2026-11-10 every paid call this month makes is a document lane on
+  // Anthropic (Claude-first), and the budget rail always prices Anthropic at
+  // the provider rate. So a budget that prices no OpenAI model now runs the
+  // whole month, with no OpenAI dispatch at all.
+  const noOpenAiPrice = await runDecisionPlane(plan, { mode: 'live', lane: makeMonthLane({ offline: true }), budget: fixtureBudget([]), fetchImpl: fixtureProvider().fetchImpl });
+  assert.equal(noOpenAiPrice.month_failure, undefined, JSON.stringify(noOpenAiPrice.month_failure));
+  assert.equal(noOpenAiPrice.records.filter(r => r.provider === 'openai').length, 0);
+  assert.ok(noOpenAiPrice.records.filter(r => r.provider === 'anthropic').length > 0);
 
   // The output ceiling is enforced on the wire: a budget that cannot hold one
   // capped answer refuses before any provider sees a request.
@@ -441,10 +445,17 @@ test('real PG: the whole month runs on a disposable book under the shared ledger
   assert.equal(live.budget.ledger.calls, live.records.length);
   assert.ok(Object.keys(live.month.provider_lanes).length > 1);
   // Every OpenAI body that reached the provider carried the frozen ceiling, and
-  // the reservation was made against that same request.
+  // the reservation was made against that same request. Since 2026-11-10 the
+  // month's paid calls are Anthropic document lanes, which set their own
+  // max_tokens: every Anthropic body carried one, and the reservations are
+  // exactly those ceilings.
   const openaiCalls = provider.calls.filter(c => c.provider === 'openai');
-  assert.ok(openaiCalls.length > 0 && openaiCalls.every(c => c.max_output_tokens === plan.max_output_tokens), JSON.stringify(openaiCalls.slice(0, 3)));
+  assert.ok(openaiCalls.every(c => c.max_output_tokens === plan.max_output_tokens), JSON.stringify(openaiCalls.slice(0, 3)));
   assert.ok(live.records.filter(r => r.provider === 'openai').every(r => r.budget.estimate.output_tokens === plan.max_output_tokens));
+  const anthropicCalls = provider.calls.filter(c => c.provider === 'anthropic');
+  assert.ok(anthropicCalls.length > 0 && anthropicCalls.every(c => Number.isSafeInteger(c.max_tokens)), JSON.stringify(anthropicCalls.slice(0, 3)));
+  assert.deepEqual(live.records.filter(r => r.provider === 'anthropic').map(r => r.budget.estimate.output_tokens).sort((a, b) => a - b),
+    anthropicCalls.map(c => c.max_tokens).sort((a, b) => a - b));
   assert.equal(live.summary.cases, 37);
   assert.equal(live.summary.material_wrong_autonomous_actions, 0, JSON.stringify(live.lane_outcomes.month.report.lines.filter(l => l.material?.length)));
   assert.ok(Array.isArray(live.month.economics.checks));

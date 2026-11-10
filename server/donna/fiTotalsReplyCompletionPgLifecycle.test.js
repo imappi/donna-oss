@@ -115,6 +115,9 @@ const reviewRow = async (ctx) => (await ctx.app.read.reviewQueue(ctx.clientId)).
 const interpretation = (input) => {
   const body = structuredClone(loadRecording('unified_extraction/ochre-discount-line').body);
   body.content = [{ type: 'tool_use', id: 'synthetic-tool', name: 'interpret_owner_reply', input }]; body.stop_reason = 'tool_use';
+  // The owner-reply lane's own model; the borrowed extraction recording now
+  // answers as the document lanes' claude-opus-5-5 (2026-11-10).
+  body.model = 'claude-opus-4-8';
   return { status: 200, body };
 };
 const clarification = (question) => interpretation({ answer: null, confidence: 0.4, clarification: question });
