@@ -4,6 +4,7 @@ import { resolveStructuredOwnerReplyAdapter } from './statutoryRegistry.js';
 import { interpretOwnerReply } from './ownerReplyInterpreter.js';
 import { recordEvidenceTopicTurnInDb, loadReplyDocumentsWithContent } from './db/asks.js';
 import { recordOwnerReplyProcessingReceipt } from './ownerReplyProcessingReceipt.js';
+import { ownerNoticeFromOutcome, recordOwnerNoticeWithClient } from './ownerReplyNotice.js';
 const refuse = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const canonicalCountry = row => {
   const country = normalizeJurisdictionKey(row?.jurisdiction);
@@ -19,13 +20,13 @@ const askContext = request => ({ transaction_id: request.transaction_id, audienc
 // No SQL transaction is held over provider I/O. Exact source and jurisdiction are
 // checked again under row locks before the named writer and receipt co-commit.
 export const processStructuredOwnerReplyWithClient = async ({ client, firmId, request, expectedReplyKey,
-  attempts = 0, env = process.env, fetchImpl = globalThis.fetch }) => {
+  attempts = 0, env = process.env, fetchImpl = globalThis.fetch, resolveAdapter = resolveStructuredOwnerReplyAdapter }) => {
   // A line-anchored ask reaches this worker only through a lane adapter that
   // declares it (transactionAnchored: the question is minted on a line but is
   // about the business, e.g. taxRegistrationReply.js); every other line ask
   // belongs to the coder's reply writer.
   const anchoredAllowed = row => !row?.transaction_id
-    || resolveStructuredOwnerReplyAdapter({ request: row })?.transactionAnchored === true;
+    || resolveAdapter({ request: row })?.transactionAnchored === true;
   if (!request || request.firm_id !== firmId || !anchoredAllowed(request) || request.audience !== 'client') {
     refuse('OWNER_REPLY_SOURCE_INVALID', 'The registered reply requires its own client-scoped ask.');
   }
@@ -39,7 +40,7 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
   }
   request = persisted;
   const profile = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
-  const adapter = resolveStructuredOwnerReplyAdapter({ jurisdiction: canonicalCountry(profile), evidenceType: request.evidence_type, request });
+  const adapter = resolveAdapter({ jurisdiction: canonicalCountry(profile), evidenceType: request.evidence_type, request });
   if (!adapter) refuse('OWNER_REPLY_KIND_UNSUPPORTED', 'No factual reply resolver is registered for this client and question.');
   // Read the authenticated source receipt, not the worker/retry principal.
   const actor = (await client.query(`select actor_id, actor_type from audit_events
@@ -126,6 +127,9 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
       if (outcome?.needsClarification) outcome = await boundedClarify(outcome.clarification);
     }
     const clarified = Boolean(outcome?.needsClarification);
+    // The line the lane wrote for the owner about this answer, kept on the
+    // answered question with the outcome (ownerReplyNotice.js).
+    if (!clarified) await recordOwnerNoticeWithClient({ client, firmId, clientId, evidenceRequestId: request.id, notice: ownerNoticeFromOutcome(outcome, { replyKey: expectedReplyKey }) });
     const processing = { reply_key: expectedReplyKey, state: clarified ? 'needs_clarification' : 'completed',
       attempts: attempts + 1, model: interpretation.model, prompt_version: interpretation.promptVersion,
       structured_answer: interpretation.answer, confidence: interpretation.confidence,

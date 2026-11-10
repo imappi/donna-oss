@@ -43,9 +43,9 @@ test('AR-2 remaining surfaces retain their exact source contract under the curre
       Object.entries(REMAINING_SURFACE_CATALOG_GROUPS)
         .map(([group, messages]) => [group, Object.keys(messages).length])
     ),
-    { report: 74, operatorAction: 255, portalDetail: 407 }
+    { report: 74, operatorAction: 255, portalDetail: 408 } // portalDetail +1: portal.answered.title
   );
-  assert.equal(Object.keys(remainingSurfacesEn).length, 736);
+  assert.equal(Object.keys(remainingSurfacesEn).length, 737);
   assert.equal(
     Object.values(REMAINING_SURFACE_CATALOG_GROUPS)
       .reduce((sum, messages) => sum + Object.keys(messages).length, 0),
@@ -76,7 +76,7 @@ test('every reserved English message is valid ICU and reaches both runtime catal
     assert.equal(en[key], remainingSurfacesEn[key], `English catalog omitted ${key}`);
     assert.equal(typeof INTERFACE_CATALOGS['ar-XB'][key], 'string', `pseudo catalog omitted ${key}`);
   }
-  assert.equal(Object.keys(en).length, 1810 + Object.keys(mountedSurfacesEn).length); // includes 83 reconciliation-authority messages, 129 interface-value labels (tray document types, ask-client phrases and owner-language previews, journal and chat-action statuses, team grant/seat/invite-email labels, hosted-pilot check labels, portal-chat intent labels, audit-load errors), 35 owner-portal-access messages, 15 FI-05 customer-failure messages less 6 retired raw-reason tray labels, 40 pilot setup, 29 provider-failure receipt, 3 scoped-assessment, 3 refused-upload tray, 1 FI first-fill 15 working-phase/batch-summary and 8 direct processing-review messages
+  assert.equal(Object.keys(en).length, 1811 + Object.keys(mountedSurfacesEn).length); // includes 1 answered-questions heading, 83 reconciliation-authority messages, 129 interface-value labels (tray document types, ask-client phrases and owner-language previews, journal and chat-action statuses, team grant/seat/invite-email labels, hosted-pilot check labels, portal-chat intent labels, audit-load errors), 35 owner-portal-access messages, 15 FI-05 customer-failure messages less 6 retired raw-reason tray labels, 40 pilot setup, 29 provider-failure receipt, 3 scoped-assessment, 3 refused-upload tray, 1 FI first-fill 15 working-phase/batch-summary and 8 direct processing-review messages
   assert.equal(
     Object.keys(getInterfaceCatalog('ar-AE')).length,
     Object.keys(en).length,

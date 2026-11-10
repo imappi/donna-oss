@@ -61,12 +61,31 @@ test('each country builds its record through its own normaliser and words the fo
     'We recorded that the business has been VAT-registered since 2026-01-01. Reply here if that is not right.');
   assert.equal(fi.recordedNotice({ language: 'fi', record: { status: 'not_registered' } }),
     'Kirjasimme, että yritys ei ole arvonlisäverorekisterissä. Vastaa tähän, jos tieto ei ole oikein.');
+  // The statement a surface without a reply shows: the same line, no invitation.
+  assert.equal(gb.recordedNotice({ language: 'en', record: { status: 'registered', registered_from: '2026-01-01' }, replyInvitation: false }),
+    'We recorded that the business has been VAT-registered since 2026-01-01.');
+  assert.equal(fi.recordedNotice({ language: 'fi', record: { status: 'not_registered' }, replyInvitation: false }),
+    'Kirjasimme, että yritys ei ole arvonlisäverorekisterissä.');
+  for (const rule of [fi, gb]) for (const language of ['fi', 'en']) for (const record of [{ status: 'not_registered' },
+    { status: 'registered', registered_from: '2026-01-01' }, { status: 'deregistered', registered_from: '2025-01-01', registered_until: '2026-03-31' }]) {
+    const line = rule.recordedNotice({ language, record });
+    const statement = rule.recordedNotice({ language, record, replyInvitation: false });
+    assert.ok(line.startsWith(statement) && line.length > statement.length, `${language} ${record.status}`);
+    assert.doesNotMatch(statement, /Reply here|Vastaa tähän/);
+  }
+  // Nothing recorded: a fixed line in the owner's language that never says it was recorded.
+  for (const rule of [fi, gb]) {
+    assert.notEqual(rule.notRecordedNotice({ language: 'fi' }), rule.notRecordedNotice({ language: 'en' }));
+    for (const language of ['fi', 'en']) assert.doesNotMatch(rule.notRecordedNotice({ language }), /recorded that|Kirjasimme|Reply here|Vastaa tähän/);
+  }
+  assert.equal(gb.notRecordedNotice({ language: 'en' }),
+    'Your answer is saved, but we did not change the VAT registration details we hold for the business. Your accountant needs to check it before the record is changed.');
 });
 
 test('a registration declaration without its answer contract is refused, never a silent no-op', async () => {
   const { POSTING_POLICY_REGISTRY } = await import('./postingPolicyRegistry.js');
   const fi = POSTING_POLICY_REGISTRY.fi;
-  for (const omit of ['profileField', 'recordLockedCodes', 'recordFromAnswer', 'answerQuestion', 'recordedNotice']) {
+  for (const omit of ['profileField', 'recordLockedCodes', 'recordFromAnswer', 'answerQuestion', 'recordedNotice', 'notRecordedNotice']) {
     const { [omit]: _dropped, ...taxRegistration } = fi.taxRegistration;
     assert.throws(() => resolvePostingPolicy({ jurisdiction: 'fi', registry: { fi: { ...fi, taxRegistration } } }),
       (error) => error.code === 'posting_policy_invalid', omit);

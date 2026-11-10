@@ -43,8 +43,10 @@ const stringList = (value) => Array.isArray(value) && value.every(nonemptyString
 // (taxRegistrationReply.js): the profile key of the one record, the country's
 // own normaliser behind recordFromAnswer, the profile-writer refusal codes
 // that mean "this recorded fact is locked" (recordLockedCodes, may be empty),
-// and the owner-facing wording of the follow-up (answerQuestion) and of the
-// one-line notice of what was recorded (recordedNotice).
+// and the owner-facing wording of the follow-up (answerQuestion), of the
+// one-line notice of what was recorded (recordedNotice, with or without its
+// invitation to reply) and of the line that says nothing was recorded
+// (notRecordedNotice).
 // On a date the record says the business is not registered, the country's
 // no-VAT treatment (withoutTax): the coder treatment for a purchase and for a
 // sale that posts with no VAT leg and no deduction, the coder-facing sentence
@@ -56,7 +58,7 @@ const validWithoutTax = (rule) => Boolean(rule) && typeof rule === 'object' && B
   && ['instruction', 'needsRegistration'].every((key) => typeof rule[key] === 'function');
 const validTaxRegistration = (rule) => Boolean(rule) && typeof rule === 'object' && stringList(rule.refusalCodes)
   && nonemptyString(rule.profileField) && stringList(rule.recordLockedCodes) && validWithoutTax(rule.withoutTax)
-  && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice'].every((key) => typeof rule[key] === 'function');
+  && ['onDate', 'ownerQuestion', 'recordFromAnswer', 'answerQuestion', 'recordedNotice', 'notRecordedNotice'].every((key) => typeof rule[key] === 'function');
 
 // The country's no-VAT treatment labels (withoutTax.treatments), for the
 // policy-vocabulary checks: a coder may propose one only on a line whose

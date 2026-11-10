@@ -107,13 +107,19 @@ const GB_TAX_REGISTRATION = Object.freeze({
     needsRegistration: ({ taxType = '', taxTreatment = '', direction = '' } = {}) =>
       Boolean(resolveGbVatCode(resolveGbVatCodeForCoding({ taxType, taxTreatment, direction })))
   }),
-  recordedNotice: ({ language = 'en', record = null } = {}) => {
+  // replyInvitation: false drops the closing invitation (the FI twin).
+  recordedNotice: ({ language = 'en', record = null, replyInvitation = true } = {}) => {
     const from = record?.registered_from || '', until = record?.registered_until || '';
     if (language === 'fi') return `${record?.status === 'not_registered' ? 'Kirjasimme, että yritys ei ole rekisteröity arvonlisäverovelvolliseksi (VAT).'
-      : until ? `Kirjasimme, että yrityksen VAT-rekisteröinti oli voimassa ${from ? `${from} – ` : ''}${until}.` : `Kirjasimme, että yrityksen VAT-rekisteröinti on voimassa ${from} alkaen.`} Vastaa tähän, jos tieto ei ole oikein.`;
+      : until ? `Kirjasimme, että yrityksen VAT-rekisteröinti oli voimassa ${from ? `${from} – ` : ''}${until}.` : `Kirjasimme, että yrityksen VAT-rekisteröinti on voimassa ${from} alkaen.`}${replyInvitation ? ' Vastaa tähän, jos tieto ei ole oikein.' : ''}`;
     return `${record?.status === 'not_registered' ? 'We recorded that the business is not VAT-registered.'
-      : until ? `We recorded that the business was VAT-registered ${from ? `from ${from} ` : ''}until ${until}.` : `We recorded that the business has been VAT-registered since ${from}.`} Reply here if that is not right.`;
-  }
+      : until ? `We recorded that the business was VAT-registered ${from ? `from ${from} ` : ''}until ${until}.` : `We recorded that the business has been VAT-registered since ${from}.`}${replyInvitation ? ' Reply here if that is not right.' : ''}`;
+  },
+  // The answer was saved but not recorded (the FI twin; no UK guard locks the
+  // record today, so this is the conflict outcome).
+  notRecordedNotice: ({ language = 'en' } = {}) => (language === 'fi'
+    ? 'Vastauksesi on tallennettu, mutta emme muuttaneet yrityksen VAT-rekisteröinnistä olevaa tietoa. Kirjanpitäjän on tarkistettava asia ennen kuin tietoa muutetaan.'
+    : 'Your answer is saved, but we did not change the VAT registration details we hold for the business. Your accountant needs to check it before the record is changed.')
 });
 
 // The Finnish evidence rule as UK law and practice allow it (owner decision
