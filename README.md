@@ -44,13 +44,77 @@ calls go to OpenAI, Anthropic and Typesafe.
 ## Run Donna locally
 
 This runs Donna on one machine with no outside services: its own
-PostgreSQL in a folder under your home directory, documents stored on
-disk, background jobs in the same process, and a sign-in key you choose.
-It is the headless form of the desktop appliance (`scripts/desktop-boot.mjs`).
-The demo company is synthetic: Kampaamo Kultalanka Oy, a Finnish
-hairdresser, from the test pack in `data/evals/fixtures/fi-kultalanka-2025-02`.
+PostgreSQL, documents stored on disk, background jobs in the same process,
+and a sign-in key you choose. It is the headless form of the desktop
+appliance (`scripts/desktop-boot.mjs`). The demo company is synthetic:
+Kampaamo Kultalanka Oy, a Finnish hairdresser, from the test pack in
+`data/evals/fixtures/fi-kultalanka-2025-02`. There are two ways to start
+it: with Docker (one command, any operating system), or on the host.
 
-### What you need
+### Start with Docker
+
+You need git and Docker with Compose 2.24 or later: Docker Desktop on
+macOS or Windows, Docker Engine on Linux. Node.js and PostgreSQL are not
+installed on your machine; PostgreSQL 16 runs in a container of its own.
+
+```bash
+git clone https://github.com/imappi/donna-oss.git
+cd donna-oss
+cp .env.example .env    # Windows: copy .env.example .env
+docker compose up
+```
+
+Before `docker compose up`, put a long random string after
+`DONNA_ACCESS_TOKEN=` in `.env`: it is your sign-in key (on Linux and
+macOS, the `sed` line in step 2 below writes one). Provider keys go in
+the same file (see "What needs a model provider key"); the image never
+contains a key or a `.env`. Without a `.env`, Donna still starts and
+prints a sign-in key in its log (`access token: …`) that changes on every
+start.
+
+The first start builds the image and applies every migration, in a few
+minutes. It is ready when it prints:
+
+```text
+web-1  | [local-web] Donna web app on http://127.0.0.1:5173/firms (API forwarded to 127.0.0.1:8787; listening on 0.0.0.0:5173)
+```
+
+Open <http://127.0.0.1:5173/firms> and sign in with the key. The web app
+is published on this machine's loopback only; set `DONNA_LOCAL_WEB_PORT`
+in `.env` for another port. To load the demo company (step 5 below), in a
+second terminal:
+
+```bash
+docker compose exec runtime node scripts/load_finnish_demo.mjs
+```
+
+It prints the same `[demo]` lines as step 5; add `--all-documents` for the
+whole month. Without a `.env`, pass the printed key:
+`docker compose exec -e DONNA_ACCESS_TOKEN=<key> runtime node scripts/load_finnish_demo.mjs`.
+Steps 6 to 8 then apply as written.
+
+Where the books live, and what keeps them:
+
+- The database is in the Docker volume `donna_donna-db`; uploaded
+  documents and backup packages are in `donna_donna-data`.
+- Ctrl-C, `docker compose stop` and `docker compose down` stop Donna and
+  keep both volumes. `docker compose down --volumes` deletes them, and
+  with them the books; nothing else does.
+- After `git pull`, `docker compose up` rebuilds the image. If the new
+  version brings migrations, the runtime first writes a verified backup
+  package into `donna_donna-data`, then applies them, as on the host;
+  nothing is deleted.
+- After changing `.env`, run `docker compose up` again; it restarts the
+  runtime with the new values.
+- Logs: `docker compose logs runtime` (and `db`, `web`).
+
+The containers run as an unprivileged user, so the root-user error below
+cannot occur. The image is built from your checkout: uncommitted changes
+to the runtime's code (for example under `server/` or `db/migrations/`)
+are reported by the readiness check as a changed build and pause the
+background jobs, as they do on the host.
+
+### What you need on the host
 
 - Linux or macOS. The local database listens on a Unix socket only.
 - A normal user account. PostgreSQL refuses to initialise as root.
@@ -96,7 +160,7 @@ books are sent to that provider. At start the runtime prints a
 `model lanes:` line marking OpenAI and Anthropic `LIT` or `DARK`; the
 Typesafe lane is not on it.
 
-### Steps
+### Steps on the host
 
 **1. Get the code and build the web app.**
 
@@ -218,7 +282,10 @@ rm -rf ~/.donna-desktop
 
 ### Troubleshooting
 
-- **`initdb: cannot be run as root`**: run as a normal user.
+- **`initdb: cannot be run as root`**: run as a normal user, or use the
+  Docker start.
+- **`port is already allocated` from `docker compose up`**: another program
+  has port 5173. Set `DONNA_LOCAL_WEB_PORT` in `.env`.
 - **`Postgres 16 binaries not found`**: install them (above), or set
   `PG_BIN` in `.env`. A `PG_BIN` that points at another major version is
   refused.

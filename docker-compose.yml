@@ -79,10 +79,13 @@ services:
         - node
         - -e
         - "fetch('http://127.0.0.1:8787/api/donna/firms/health').then((r) => r.json()).then((b) => process.exit(b.database_configured === true ? 0 : 1)).catch(() => process.exit(1))"
-      interval: 5s
+      # Polled every 2s while starting (first start: under a minute), then
+      # every 30s, so the runtime's request log stays readable.
+      start_period: 300s
+      start_interval: 2s
+      interval: 30s
       timeout: 5s
-      retries: 6
-      start_period: 180s
+      retries: 3
     stop_grace_period: 30s
 
   web:

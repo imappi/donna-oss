@@ -15,6 +15,7 @@
 # release. Their shared libraries come along; the final stage keeps only the
 # ones its own base lacks.
 FROM postgres:16.15-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825 AS pgclient
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eu; \
     mkdir -p /opt/pg16/bin /opt/pg16/lib; \
     for tool in psql pg_dump pg_restore; do cp "/usr/lib/postgresql/16/bin/$tool" /opt/pg16/bin/; done; \
@@ -44,16 +45,19 @@ RUN npm run build \
  && rm -rf .git
 
 FROM node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY --from=pgclient /opt/pg16 /opt/pg16
 # Keep only the libraries this base does not already have, then register them.
 RUN set -eu; \
+    ldconfig -p > /tmp/base-libs; \
     for lib in /opt/pg16/lib/*; do \
-      if ldconfig -p | grep -q "^[[:space:]]$(basename "$lib") "; then rm "$lib"; fi; \
+      if grep -q "^[[:space:]]$(basename "$lib") " /tmp/base-libs; then rm "$lib"; fi; \
     done; \
+    rm /tmp/base-libs; \
     echo /opt/pg16/lib > /etc/ld.so.conf.d/zz-donna-pg16.conf; \
     ldconfig; \
-    /opt/pg16/bin/pg_dump --version | grep -q '(PostgreSQL) 16\.'; \
-    /opt/pg16/bin/psql --version | grep -q '(PostgreSQL) 16\.'; \
+    [[ "$(/opt/pg16/bin/pg_dump --version)" == *"(PostgreSQL) 16."* ]]; \
+    [[ "$(/opt/pg16/bin/psql --version)" == *"(PostgreSQL) 16."* ]]; \
     mkdir /data; \
     chown node:node /data
 # The application files are root's and read-only to the app user; the book
