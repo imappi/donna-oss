@@ -14,11 +14,11 @@
 // Env (all optional):
 //   DONNA_LOCAL_WEB_PORT  web port (default 5173)
 //   DONNA_DESKTOP_PORT    runtime port to forward /api/ to (default 8787)
-//   DONNA_API_HOST        listen address (default 127.0.0.1, loopback only),
-//                         the same setting the runtime binds; the compose
-//                         start sets 0.0.0.0 inside its container and
-//                         publishes the port on the host's loopback only.
-//                         /api/ is always forwarded to 127.0.0.1.
+//   DONNA_LOCAL_WEB_HOST  web listen address (default 127.0.0.1, loopback
+//                         only). docker-compose.yml sets 0.0.0.0 inside the
+//                         web container and publishes the port on the host's
+//                         loopback only. /api/ is always forwarded to
+//                         127.0.0.1, where the runtime listens.
 
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
@@ -149,7 +149,7 @@ if (isDirectRun) {
   }
   const webPort = Number(process.env.DONNA_LOCAL_WEB_PORT || 5173);
   const runtimePort = Number(process.env.DONNA_DESKTOP_PORT || 8787);
-  const listenHost = process.env.DONNA_API_HOST || '127.0.0.1';
+  const listenHost = process.env.DONNA_LOCAL_WEB_HOST || '127.0.0.1';
   const server = createLocalWebServer({ distDir, runtimePort });
   server.on('error', (error) => {
     console.error(`[local-web] could not listen on ${listenHost}:${webPort}: ${error.message}`);

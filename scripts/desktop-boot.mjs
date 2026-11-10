@@ -17,14 +17,13 @@
 // Env (all optional):
 //   DONNA_DESKTOP_DATA_DIR  data root   (default: ~/.donna-desktop; the real
 //                           app uses ~/Library/Application Support/Donna)
-//   DONNA_DESKTOP_PORT      API port    (default 8787)
-//   DONNA_API_HOST          API listen address (default 127.0.0.1, loopback
-//                           only; the same setting server/index.js reads).
-//                           The compose start sets 0.0.0.0 inside its
-//                           container and publishes on the host's loopback.
-//   DATABASE_URL            a PostgreSQL 16 on a Unix socket to use instead
-//                           of supervising one (the compose start's database
-//                           service); unset, Postgres is supervised as before
+//   DONNA_DESKTOP_PORT      API port    (default 8787, loopback only)
+//   DONNA_DESKTOP_DATABASE_URL
+//                           a PostgreSQL 16 on a Unix socket to use instead
+//                           of supervising one (set by docker-compose.yml for
+//                           its database service). Unset, Postgres is
+//                           supervised; an inherited DATABASE_URL is ignored
+//                           and overwritten, as it always was.
 //   DONNA_DESKTOP_PG_PORT   socket name suffix (default 5433)
 //   PG_BIN                  Postgres bin dir (autodetected if unset)
 //   DONNA_ACCESS_TOKEN      runtime token (generated per boot if unset)
@@ -36,20 +35,22 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import { attachGivenPostgres, ensureLocalPostgres } from '../server/donna/desktop/pgSupervisor.js';
+import {
+  attachGivenPostgres, ensureLocalPostgres, resolveDesktopPostgresSource
+} from '../server/donna/desktop/pgSupervisor.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const SEED = process.argv.includes('--seed');
 
 const DATA_DIR = process.env.DONNA_DESKTOP_DATA_DIR || path.join(os.homedir(), '.donna-desktop');
 const API_PORT = Number(process.env.DONNA_DESKTOP_PORT || 8787);
-const API_HOST = process.env.DONNA_API_HOST || '127.0.0.1';
 
 const log = (line) => console.log(`[desktop-boot] ${line}`);
 
 const pgLogger = { log, error: (l) => console.error(l) };
-const pg = process.env.DATABASE_URL
-  ? attachGivenPostgres({ databaseUrl: process.env.DATABASE_URL, logger: pgLogger })
+const pgSource = resolveDesktopPostgresSource(process.env);
+const pg = pgSource.mode === 'given'
+  ? attachGivenPostgres({ databaseUrl: pgSource.databaseUrl, logger: pgLogger })
   : ensureLocalPostgres({ dataDir: DATA_DIR, logger: pgLogger });
 
 try {
@@ -97,10 +98,10 @@ try {
 
   const { createDonnaRuntimeServer } = await import('../server/donna/desktop/runtimeServer.js');
   const runtime = await createDonnaRuntimeServer({
-    listen: { host: API_HOST, port: API_PORT },
+    listen: { host: '127.0.0.1', port: API_PORT },
     logger: console
   });
-  log(`router listening on http://${API_HOST}:${API_PORT}/api/donna/…`);
+  log(`router listening on http://127.0.0.1:${API_PORT}/api/donna/…`);
   if (runtime.schedulerRunning?.()) {
     const kinds = runtime.manifest.reduce((acc, entry) => ({ ...acc, [entry.kind]: (acc[entry.kind] || 0) + 1 }), {});
     log(`scheduler running ${runtime.manifest.length} handlers (${Object.entries(kinds).map(([kind, n]) => `${n} ${kind}`).join(' + ')})`);

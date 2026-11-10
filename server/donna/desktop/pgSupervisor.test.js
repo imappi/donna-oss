@@ -9,7 +9,9 @@ import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { PG_MAJOR, attachGivenPostgres, findPgBin, pgBinCandidates } from './pgSupervisor.js';
+import {
+  PG_MAJOR, attachGivenPostgres, findPgBin, pgBinCandidates, resolveDesktopPostgresSource
+} from './pgSupervisor.js';
 
 // A bin dir whose pg_ctl reports the given version, the way the real probe
 // reads it.
@@ -235,6 +237,30 @@ test('default reclaim still stops a running server and restarts it (the orphan p
   const starts = fx.calls().split('\n').filter((l) => l.includes('start')).length;
   assert.equal(starts, 2, 'failed start, reclaim, then a clean start');
   assert.ok(!existsSync(fx.marker), 'the orphan was stopped');
+});
+
+// resolveDesktopPostgresSource — attaching is chosen only by the dedicated
+// setting; an inherited DATABASE_URL (README "Running the tests" exports one)
+// leaves the host start on its supervised book, as on main.
+test('DATABASE_URL set, DONNA_DESKTOP_DATABASE_URL unset: supervised path, as before', () => {
+  assert.deepEqual(
+    resolveDesktopPostgresSource({ DATABASE_URL: 'postgresql://donna:donna_ci@127.0.0.1:5432/donna_ci' }),
+    { mode: 'supervised' }
+  );
+  assert.deepEqual(
+    resolveDesktopPostgresSource({ DATABASE_URL: 'postgresql://other@localhost/other?host=%2Ftmp&port=5432' }),
+    { mode: 'supervised' }
+  );
+  assert.deepEqual(resolveDesktopPostgresSource({}), { mode: 'supervised' });
+  assert.deepEqual(resolveDesktopPostgresSource({ DONNA_DESKTOP_DATABASE_URL: '  ' }), { mode: 'supervised' });
+});
+
+test('DONNA_DESKTOP_DATABASE_URL set: the given database, whatever DATABASE_URL says', () => {
+  const url = 'postgresql://donna@localhost/donna_local?host=%2Frun%2Fdonna-pg&port=5432';
+  assert.deepEqual(
+    resolveDesktopPostgresSource({ DONNA_DESKTOP_DATABASE_URL: url, DATABASE_URL: 'postgresql://x@127.0.0.1/y' }),
+    { mode: 'given', databaseUrl: url }
+  );
 });
 
 // attachGivenPostgres — the compose start's database (docker-compose.yml).

@@ -272,7 +272,17 @@ export const ensureLocalPostgres = ({
   };
 };
 
-// A PostgreSQL 16 this process was GIVEN (DATABASE_URL) instead of one it
+// Which PostgreSQL scripts/desktop-boot.mjs uses. Attaching is an explicit
+// choice made by one dedicated setting, DONNA_DESKTOP_DATABASE_URL (set by
+// docker-compose.yml). DATABASE_URL is deliberately NOT read here: a shell
+// that exported it for the test suite, or for some other database, must
+// still get the supervised book, and desktop-boot overwrites it as before.
+export const resolveDesktopPostgresSource = (env = process.env) => {
+  const given = String(env.DONNA_DESKTOP_DATABASE_URL ?? '').trim();
+  return given ? { mode: 'given', databaseUrl: given } : { mode: 'supervised' };
+};
+
+// A PostgreSQL 16 this process was GIVEN (DONNA_DESKTOP_DATABASE_URL) instead of one it
 // supervises: the compose start (docker-compose.yml) runs PostgreSQL in its
 // own container and shares only its Unix socket with the runtime. Nothing is
 // initialised, started or stopped here — the database belongs to whoever
@@ -288,7 +298,7 @@ export const attachGivenPostgres = ({ databaseUrl, logger = console } = {}) => {
     db = parseLocalDatabaseUrl(databaseUrl);
   } catch {
     throw new Error(
-      'DATABASE_URL must name a PostgreSQL Unix socket (postgresql://user@localhost/db?host=<socket dir>&port=<n>); the local runtime\'s backups run over that socket.'
+      'DONNA_DESKTOP_DATABASE_URL must name a PostgreSQL Unix socket (postgresql://user@localhost/db?host=<socket dir>&port=<n>); the local runtime\'s backups run over that socket.'
     );
   }
   const pgBin = findPgBin();

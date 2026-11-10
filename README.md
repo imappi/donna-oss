@@ -46,13 +46,17 @@ and a sign-in key you choose. It is the headless form of the desktop
 appliance (`scripts/desktop-boot.mjs`). The demo company is synthetic:
 Kampaamo Kultalanka Oy, a Finnish hairdresser, from the test pack in
 `data/evals/fixtures/fi-kultalanka-2025-02`. There are two ways to start
-it: with Docker (one command, any operating system), or on the host.
+it: with Docker (one command), or on the host.
 
 ### Start with Docker
 
 You need git and Docker with Compose 2.24 or later: Docker Desktop on
 macOS or Windows, Docker Engine on Linux. Node.js and PostgreSQL are not
 installed on your machine; PostgreSQL 16 runs in a container of its own.
+This start has been run on Linux (x86_64) with Docker Engine. Docker
+Desktop on macOS and Windows, and arm64 machines such as Apple-silicon
+Macs, have not been run yet; the images it uses are published for both
+amd64 and arm64.
 
 ```bash
 git clone https://github.com/imappi/donna-oss.git

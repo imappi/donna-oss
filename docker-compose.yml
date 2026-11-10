@@ -51,21 +51,21 @@ services:
       - path: .env
         required: false
     # Set here, after .env, so a host path or port in .env cannot point the
-    # container somewhere that does not exist in it. All are existing settings.
+    # container somewhere that does not exist in it. The runtime listens on
+    # 127.0.0.1 inside its container only (scripts/desktop-boot.mjs).
     environment:
-      DATABASE_URL: postgresql://donna@localhost/donna_local?host=/run/donna-pg&port=5432
+      DONNA_DESKTOP_DATABASE_URL: postgresql://donna@localhost/donna_local?host=/run/donna-pg&port=5432
       PG_BIN: /opt/pg16/bin
       DONNA_DESKTOP_DATA_DIR: /data
       DONNA_DESKTOP_BLOB_DIR: /data/documents
       DONNA_DESKTOP_BACKUP_DIR: /data/backups
       DONNA_DESKTOP_PORT: "8787"
-      DONNA_API_HOST: 0.0.0.0
     volumes:
       - donna-data:/data
       - donna-pg-socket:/run/donna-pg
     # The web service shares this network namespace; its port is published
-    # here, on the host's loopback only. The runtime's own port is not
-    # published.
+    # here, on the host's loopback only. The runtime's own port is neither
+    # published nor listening outside this namespace's loopback.
     ports:
       - "127.0.0.1:${DONNA_LOCAL_WEB_PORT:-5173}:${DONNA_LOCAL_WEB_PORT:-5173}"
     depends_on:
@@ -100,7 +100,7 @@ services:
     environment:
       DONNA_LOCAL_WEB_PORT: ${DONNA_LOCAL_WEB_PORT:-5173}
       DONNA_DESKTOP_PORT: "8787"
-      DONNA_API_HOST: 0.0.0.0
+      DONNA_LOCAL_WEB_HOST: 0.0.0.0
     depends_on:
       runtime:
         condition: service_healthy
