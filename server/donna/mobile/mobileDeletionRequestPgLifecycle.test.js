@@ -122,7 +122,8 @@ test('real PG: an owner records an account-deletion request; nothing is deleted 
   // The second book is Finnish and its owner chose Finnish (the profile
   // fields ownerLanguage.js reads; the jurisdiction the retention rule reads).
   await appliance.query(
-    `update clients set jurisdiction = 'FI', profile = profile || '{"locale": "fi-FI", "jurisdiction": "FI"}'::jsonb
+    `update clients set jurisdiction = 'FI', entity_type = 'fi-oy',
+            profile = profile || '{"locale": "fi-FI", "jurisdiction": "FI", "entity_type": "fi-oy", "entityType": "fi-oy"}'::jsonb
       where firm_id = $1 and id = $2`,
     [firmId, finnClientId]
   );

@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { resolveClosePolicy } from '../closePolicyRegistry.js';
 import { responseSchemaFor, validateAgainst } from './contractSchema.js';
 import { mobileRouteState, NOT_IMPLEMENTED } from './mobileApi.js';
 import {
@@ -15,6 +16,9 @@ import {
 
 const AT = new Date('2026-11-10T14:03:27.000Z');
 const schema = responseSchemaFor('/me/deletion-request', 'POST', 200);
+// A Finnish book's statement, through the same registry the writer uses.
+const fiPolicy = resolveClosePolicy({ jurisdiction: 'FI', entity_type: 'fi-oy' });
+const fiStatement = (language) => fiPolicy.ownerRetentionStatement(language);
 
 test('the endpoint is routed, not a 501', () => {
   assert.equal(mobileRouteState('POST', '/me/deletion-request'), 'implemented');
@@ -29,7 +33,7 @@ test('one request per owner identity: the provider user id, else the email', () 
 });
 
 test('English message: what was recorded and when, who handles it, the retention rule — and that the firm was NOT told', () => {
-  const message = buildDeletionRequestMessage({ language: 'en', requestedAt: AT, firms: ['Fixture Ledger Oy'], businesses: ['Kestrel Print Studio Oy'], finnish: true });
+  const message = buildDeletionRequestMessage({ language: 'en', requestedAt: AT, firms: ['Fixture Ledger Oy'], businesses: ['Kestrel Print Studio Oy'], retentionStatements: [fiStatement('en')] });
   assert.match(message, /recorded on 10 November 2026 at 14:03 UTC/);
   assert.match(message, /books of Kestrel Print Studio Oy/);
   assert.match(message, /Nothing has been deleted/);
@@ -44,7 +48,7 @@ test('English message: what was recorded and when, who handles it, the retention
 });
 
 test('Finnish message uses sinä and says the same things', () => {
-  const message = buildDeletionRequestMessage({ language: 'fi', requestedAt: AT, firms: ['Fixture Ledger Oy'], businesses: ['Kestrel Print Studio Oy'], finnish: true });
+  const message = buildDeletionRequestMessage({ language: 'fi', requestedAt: AT, firms: ['Fixture Ledger Oy'], businesses: ['Kestrel Print Studio Oy'], retentionStatements: [fiStatement('fi'), fiStatement('fi')] });
   assert.match(message, /^Pyyntösi poistaa Donna-tilisi kirjattiin 10\.11\.2026 klo 14\.03 \(UTC\)\./);
   assert.match(message, /yrityksen Kestrel Print Studio Oy kirjanpitoa/);
   assert.match(message, /Mitään ei ole poistettu/);
@@ -52,11 +56,20 @@ test('Finnish message uses sinä and says the same things', () => {
   assert.match(message, /Donna ei ole välittänyt pyyntöä tilitoimistolle automaattisesti, joten ota siihen yhteyttä myös itse\./);
   assert.match(message, /ei voi poistaa ennen kuin säilytysaika on päättynyt/);
   assert.match(message, /10 vuotta tilikauden päättymisestä ja tositteet 6 vuotta/);
+  assert.equal(message.split('Suomessa').length, 2, 'two Finnish books state the periods once');
   assert.doesNotMatch(message, /\b(te|teidän|teille|Teidän)\b/, 'no formal you');
 });
 
-test('the KPL periods are stated only for Finnish books; several firms read in the plural', () => {
-  const uk = buildDeletionRequestMessage({ language: 'en', requestedAt: AT, firms: ['North Ledger Ltd', 'South Ledger Ltd'], businesses: ['A Ltd', 'B Ltd'], finnish: false });
+test('only a policy that states periods adds them: Finland does, the other registered markets do not', () => {
+  assert.equal(typeof fiPolicy.ownerRetentionStatement, 'function');
+  assert.match(fiStatement('en'), /^In Finland, the books must be kept for 10 years/);
+  for (const row of [{ jurisdiction: 'GB', entity_type: 'gb-ltd' }, { jurisdiction: 'ZZ' }]) {
+    assert.equal(resolveClosePolicy(row)?.ownerRetentionStatement, undefined, JSON.stringify(row));
+  }
+});
+
+test('no statement, no periods; several firms read in the plural', () => {
+  const uk = buildDeletionRequestMessage({ language: 'en', requestedAt: AT, firms: ['North Ledger Ltd', 'South Ledger Ltd'], businesses: ['A Ltd', 'B Ltd'] });
   assert.doesNotMatch(uk, /In Finland/);
   assert.match(uk, /Your accounting firms, North Ledger Ltd and South Ledger Ltd, handle the request\./);
   assert.match(uk, /books of A Ltd and B Ltd/);
@@ -78,6 +91,11 @@ const owner = {
 const entities = { 'firm-a': [{ id: 'c-a1', company_name: 'Alder Oy', jurisdiction: 'FI' }],
   'firm-b': [{ id: 'c-b1', company_name: 'Birch Ltd', jurisdiction: 'GB' }, { id: 'c-b2', company_name: 'Cedar Ltd', jurisdiction: null, firm_jurisdiction: 'GB' }] };
 
+const CLIENT_ROWS = {
+  'c-a1': { jurisdiction: 'FI', entity_type: 'fi-oy', profile: {} },
+  'c-b1': { jurisdiction: 'GB', entity_type: 'gb-ltd', profile: {} },
+  'c-b2': { jurisdiction: null, entity_type: null, profile: {} }
+};
 const scriptedDb = ({ existing = null, raceWinner = null } = {}) => {
   const calls = [];
   let stored = existing;
@@ -85,6 +103,9 @@ const scriptedDb = ({ existing = null, raceWinner = null } = {}) => {
     query: async (sql, params = []) => {
       calls.push({ sql: sql.replace(/\s+/g, ' ').trim(), params });
       if (/^select id, status, requested_at, message from owner_deletion_requests/.test(sql)) return { rows: stored ? [stored] : [] };
+      if (/^select jurisdiction, entity_type, incorporation_date, profile from clients/.test(sql)) {
+        return { rows: [CLIENT_ROWS[params[1]]].filter(Boolean) };
+      }
       if (/from firms/.test(sql)) return { rows: [{ id: 'firm-a', name: 'Alder Books Oy' }, { id: 'firm-b', name: 'Birch Accounts Ltd' }] };
       if (/insert into owner_deletion_requests/.test(sql)) {
         if (raceWinner) { stored = raceWinner; return { rows: [] }; }

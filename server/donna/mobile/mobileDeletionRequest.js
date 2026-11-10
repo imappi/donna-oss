@@ -34,11 +34,15 @@
 //
 // The message is written here, in the owner's language as ownerLanguage.js
 // resolves it for the owner's default business (getClientOwnerLanguageInDb,
-// the one reader), Finnish in the informal sinä form.
+// the one reader), Finnish in the informal sinä form. A country's statutory
+// retention periods come from that country's close policy, resolved per book
+// through the market-neutral registry (closePolicyRegistry.js), never by a
+// direct import of a country directory: a book whose policy states no periods
+// (today every market but Finland) gets the general sentence only.
 import { randomUUID } from 'node:crypto';
 
 import { getClientOwnerLanguageInDb, withFirmDbClient } from '../firmDb.js';
-import { RETENTION_YEARS } from '../finland/retention.js';
+import { readClosePolicyWithClient } from '../closePolicyRegistry.js';
 import { mobileError } from './mobileAuth.js';
 import { readEntities } from './mobileReads.js';
 
@@ -83,13 +87,16 @@ const joinNames = (names, language) => {
 
 // Pure: the owner-facing statement for a recorded request. `firms` are the
 // firms' names (firms.name), `businesses` the covered books' names, and
-// `finnish` whether any covered business is a Finnish book (KPL 2:10 applies).
-export const buildDeletionRequestMessage = ({ language, requestedAt, firms = [], businesses = [], finnish = false }) => {
+// `retentionStatements` the covered books' countries' own statements of their
+// retention periods (close policy ownerRetentionStatement), already in
+// `language`.
+export const buildDeletionRequestMessage = ({ language, requestedAt, firms = [], businesses = [], retentionStatements = [] }) => {
   const fi = language === 'fi';
   const when = formatInstant(requestedAt, language);
   const firmNames = firms.map((name) => String(name || '').trim()).filter(Boolean);
   const businessNames = businesses.map((name) => String(name || '').trim()).filter(Boolean);
   const plural = firmNames.length > 1;
+  const statements = [...new Set(retentionStatements.map((text) => String(text || '').trim()).filter(Boolean))];
   const sentences = fi
     ? [
       `Pyyntösi poistaa Donna-tilisi kirjattiin ${when}.`,
@@ -102,9 +109,7 @@ export const buildDeletionRequestMessage = ({ language, requestedAt, firms = [],
         : 'Pyynnön käsittelee tilitoimistosi.',
       `Donna ei ole välittänyt pyyntöä ${plural ? 'tilitoimistoille' : 'tilitoimistolle'} automaattisesti, joten ota ${plural ? 'niihin' : 'siihen'} yhteyttä myös itse.`,
       'Kirjanpitoaineistoa, joka lain mukaan on säilytettävä, ei voi poistaa ennen kuin säilytysaika on päättynyt.',
-      ...(finnish
-        ? [`Suomessa kirjanpitokirjat on säilytettävä ${RETENTION_YEARS.kirjanpitokirja} vuotta tilikauden päättymisestä ja tositteet ${RETENTION_YEARS.tosite} vuotta sen vuoden lopusta, jona tilikausi päättyi.`]
-        : [])
+      ...statements
     ]
     : [
       `Your request to delete your Donna account was recorded on ${when}.`,
@@ -117,9 +122,7 @@ export const buildDeletionRequestMessage = ({ language, requestedAt, firms = [],
         : 'Your accounting firm handles the request.',
       `Donna has not passed your request on to ${plural ? 'them' : 'the firm'} automatically, so please contact ${plural ? 'them' : 'the firm'} yourself as well.`,
       'Bookkeeping records that the law requires to be kept cannot be deleted before that period ends.',
-      ...(finnish
-        ? [`In Finland, the books must be kept for ${RETENTION_YEARS.kirjanpitokirja} years after the financial year ends, and receipts and other vouchers for ${RETENTION_YEARS.tosite} years after the end of the year in which the financial year ended.`]
-        : [])
+      ...statements
     ];
   return sentences.join(' ');
 };
@@ -182,12 +185,21 @@ export const requestOwnerDeletion = async ({
         }))
       }));
       const businesses = scope.flatMap((firm) => firm.businesses);
+      // Each covered book's own country's statement of its retention periods,
+      // through the jurisdiction-neutral close policy registry.
+      const retentionStatements = [];
+      for (const firm of scope) {
+        for (const row of firm.businesses) {
+          const { policy } = await readClosePolicyWithClient({ client: db, firmId: firm.firm_id, clientId: row.client_id });
+          if (typeof policy?.ownerRetentionStatement === 'function') retentionStatements.push(policy.ownerRetentionStatement(language));
+        }
+      }
       const message = buildDeletionRequestMessage({
         language,
         requestedAt,
         firms: scope.map((firm) => firm.firm_name),
         businesses: businesses.map((row) => row.name),
-        finnish: businesses.some((row) => String(row.jurisdiction || '').toUpperCase() === 'FI')
+        retentionStatements
       });
       const inserted = (await db.query(
         `insert into owner_deletion_requests
