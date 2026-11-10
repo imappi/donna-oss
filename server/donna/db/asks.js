@@ -57,13 +57,16 @@ import { DEFAULT_FIRM_ID, loadClientOwnBankAccounts } from './clients.js';
 import { amountForPayload, rowToTransactionPayload } from './transactions.js';
 import { __isTerminalCodingState, assertCodingSuggestionForPolicy, resolveClientCodingPolicyWithClient, resolveCodingTransport, shouldCloseReviewForState, withClientCodingPolicy } from './coding.js';
 import { linkReplyEvidenceMatchesInDb, loadMatchedDocumentsForTransactions } from './reconcile.js';
-import { postLedgerTransactionInDb } from './ledger.js';
+import { postLedgerTransactionInDb, __prepareLedgerTransactionPosting } from './ledger.js';
 import { getXeroAccountsForClient } from './xero.js';
 import { deliverEmailEvidenceAsksAfterSend, deliverSmsEvidenceAsksAfterSend, deliverTelegramEvidenceAsksAfterSend, deliverWhatsAppEvidenceAsksAfterSend } from './channels.js';
 import { preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
 import { CODER_FINISHED_CODING_STATES, CORRECTION_NOT_CORRECTABLE_CODE, CORRECTION_OUTCOMES, CORRECTION_READERS, correctionNotRecordedNotice, correctionOf } from '../ownerReplyCorrection.js';
 import { amountText, dayText } from '../salesRecognitionGap.js';
 import { getFirmSnapshotFromDb } from './snapshot.js';
+import { DOCUMENT_REPLY_OUTCOMES, DOCUMENT_UNAVAILABLE_ACTIONS, asksOwnerForDocument, cannotBookWithoutDocumentRequest,
+  documentUnavailableFact, documentUnavailableOf, isDocumentRequestEvidenceType, ownerLanguageFor, postedWithoutDocumentNotice,
+  readDocumentRequestReply } from '../ownerDocumentUnavailable.js';
 
 export const rowToClientEvidenceRequestPayload = (row = {}) => ({
   id: row.id,
@@ -354,6 +357,17 @@ const createClientEvidenceRequestWithClient = async ({
       [firmId, cleanClientId, resolvedTransactionId]
     );
     transaction = transactionResult.rows[0] ? rowToTransactionPayload(transactionResult.rows[0]) : null;
+  }
+  // The owner said this line's document does not exist
+  // (ownerDocumentUnavailable.js): no producer asks the owner for a document
+  // about it again. The line rests on the request that says so.
+  if (askAudience === 'client' && transaction && isDocumentRequestEvidenceType(cleanEvidenceType)) {
+    const unavailable = documentUnavailableOf(transaction);
+    if (unavailable) {
+      throw Object.assign(new Error('The owner has stated that this line\'s document does not exist; it is not asked for again.'),
+        { statusCode: 409, code: 'EVIDENCE_REQUEST_DOCUMENT_UNAVAILABLE',
+          details: { transaction_id: transaction.id, evidence_request_id: unavailable.evidence_request_id, stated_at: unavailable.stated_at } });
+    }
   }
   if (cleanEvidenceType === 'document_discrepancy') {
     const current=(await client.query('select * from transactions where firm_id=$1 and client_id=$2 and id=$3 for update',[firmId,cleanClientId,resolvedTransactionId])).rows[0];
@@ -1366,7 +1380,10 @@ const recodeTransactionAfterClientReplyWithClient = async ({
   suggestFn = suggestTransactionCoding,
   distillFactsFn = distillAndStageFirmFactCandidates,
   expectedReplyKey = null,
-  decideHeldRowScopeFn = null
+  decideHeldRowScopeFn = null,
+  // The document-request reader (ownerDocumentUnavailable.js): the strong
+  // interpreter's closed set for a question that asked for a document.
+  readDocumentReplyFn = readDocumentRequestReply
 } = {}) => {
   const txResult = await client.query(
     'select * from transactions where firm_id = $1 and client_id = $2 and id = $3 limit 1',
@@ -1445,6 +1462,35 @@ const recodeTransactionAfterClientReplyWithClient = async ({
       : null
   };
 
+  // A question that asked the owner for a document has one more truthful
+  // answer than "here it is": there is no such document. Its reader is the
+  // strong interpreter with a closed set of outcomes (ownerDocumentUnavailable.js),
+  // read before the coder so the coder decides with the fact in front of it.
+  // A reply that brings a document, a correction, and a reply with no
+  // attributable source are read by the coder alone, as before.
+  const readsDocumentReply = asksOwnerForDocument(evidenceRequest) && !correction && Boolean(expectedReplyKey)
+    && Boolean(String(reply || '').trim()) && !cleanReplyDocumentIds.length;
+  let documentReading = null;
+  let newlyUnavailable = null;
+  if (readsDocumentReply) {
+    documentReading = await readDocumentReplyFn({ request: evidenceRequest, line: transaction, heldDocument: transaction.matched_document });
+    if (documentReading?.outcome === DOCUMENT_REPLY_OUTCOMES.noSuchDocument) {
+      // Who said it: the authenticated source receipt of this exact answer.
+      const source = (await client.query(`select actor_id, actor_type from audit_events
+        where firm_id = $1 and client_id = $2 and resource_type = 'client_evidence_request' and resource_id = $3
+          and action = 'evidence_request.reply' and metadata->>'reply_key' = $4 order by id desc limit 1`,
+      [firmId, clientId, evidenceRequest.id, expectedReplyKey])).rows[0];
+      if (!source?.actor_id) throw Object.assign(new Error('The answer has no authenticated source actor.'), { code: 'OWNER_REPLY_ACTOR_UNAVAILABLE' });
+      newlyUnavailable = documentUnavailableFact({ request: evidenceRequest, replyKey: expectedReplyKey,
+        actorId: source.actor_id, actorType: source.actor_type, reading: documentReading });
+    }
+  }
+  // The fact the coder decides with: this answer's, or one the line already
+  // carries (a reply to the request it rests on). A reply that brings a
+  // document is read without it: the document is what was missing.
+  const documentUnavailable = newlyUnavailable || (cleanReplyDocumentIds.length ? null : documentUnavailableOf(txResult.rows[0].payload));
+  if (documentUnavailable) transaction.owner_document_unavailable = documentUnavailable;
+
   const suggestion = await suggestFn({
     clientProfile,
     transaction,
@@ -1477,7 +1523,12 @@ const recodeTransactionAfterClientReplyWithClient = async ({
     transaction,
     xeroAccounts
   });
-  const applies = __shouldApplyReplyRecode(suggestionPayload);
+  let applies = __shouldApplyReplyRecode(suggestionPayload);
+  // A posting made because the owner has no such document carries that basis.
+  if (applies && documentUnavailable) {
+    suggestionPayload.document_unavailable_basis = { basis: documentUnavailable.basis, evidence_request_id: documentUnavailable.evidence_request_id,
+      evidence_type: documentUnavailable.evidence_type, stated_by: documentUnavailable.stated_by, stated_at: documentUnavailable.stated_at };
+  }
   // A held-source reply can establish the factual settlement without minting
   // material approval. Bind this existing reply-consumer decision to the exact
   // cited source and answer. With JEV_HELD_PLAN_COMPLETION (HELMIKUU S7) the
@@ -1513,6 +1564,8 @@ const recodeTransactionAfterClientReplyWithClient = async ({
     || (reply ? `Client reply: ${reply.slice(0, 200)}` : '');
 
   let nativeFollowUp = null;
+  let documentEnd = null;
+  let documentReopen = null;
   await client.query('begin');
   try {
     const currentTransaction = (await client.query(
@@ -1549,6 +1602,11 @@ const recodeTransactionAfterClientReplyWithClient = async ({
     if (suggestionPayload.evidence_digest && suggestionPayload.evidence_digest !== codingEvidenceDigest(await currentCodingEvidence({client,firmId,clientId,transactionId}))) {
       throw Object.assign(new Error('The coding document changed while the reply was being considered.'), {code:'TRANSACTION_CODING_EVIDENCE_STALE',statusCode:409});
     }
+    // Without the document, the posting checks decide: the coding applies
+    // only if the existing posting writer would take it (its own dry run, in
+    // this transaction); otherwise nothing of the apply survives.
+    if (applies && documentUnavailable) await client.query('savepoint document_unavailable_apply');
+    let postingRefusal = null;
     if (applies) {
       // Merchant-rule learning deliberately stays off this path for
       // now — reply-confirmed lines are mostly one-offs (owner draws,
@@ -1701,6 +1759,28 @@ const recodeTransactionAfterClientReplyWithClient = async ({
           }
         }
       }
+      // The Donna ledger's own posting writer is the check (a connector book
+      // keeps the reply path's accept as before, with the basis on its coding).
+      const donnaLedger = String(clientResult.rows[0]?.profile?.accounting_system || 'none').trim().toLowerCase() === 'none';
+      if (documentUnavailable && donnaLedger) {
+        try {
+          await __prepareLedgerTransactionPosting({ client, firmId, clientId, transactionId, dryRun: true });
+        } catch (error) {
+          if (!(Number(error?.statusCode) === 409 || /^(TRANSACTION|LEDGER|POSTING)_/.test(String(error?.code || '')))) throw error;
+          postingRefusal = { code: error?.code || 'POSTING_REFUSED', message: String(error?.message || '').slice(0, 300) };
+          await client.query('rollback to savepoint document_unavailable_apply');
+          applies = false;
+          delete suggestionPayload.document_unavailable_basis;
+        }
+      }
+    }
+    if (!applies && documentUnavailable && !correction) {
+      // Nothing can be booked without the document: the line rests as one
+      // open request on the owner saying so (restOnUnavailableDocumentWithClient).
+      await client.query(`update transactions set payload = payload || $3::jsonb, updated_at = now() where firm_id = $1 and id = $2`,
+        [firmId, transactionId, JSON.stringify({ ai_suggestion: suggestionPayload, ...(currentPolicy.nativeMenu ? { review_scope: null } : {}) })]);
+    } else if (applies) {
+      // (applied above)
     } else if (correction) {
       // The coder could not settle the correction: the earlier coding stands.
       // Nothing on the line changes; the question goes back to its closed state.
@@ -1743,8 +1823,23 @@ const recodeTransactionAfterClientReplyWithClient = async ({
       );
     }
 
-    nativeFollowUp = correction && !applies ? null : await consumeNativeUnresolvedCodingWithClient({ client, firmId, clientId, transactionId, policy: currentPolicy,
+    nativeFollowUp = (correction || documentUnavailable) && !applies ? null : await consumeNativeUnresolvedCodingWithClient({ client, firmId, clientId, transactionId, policy: currentPolicy,
       suggestion: suggestionPayload, actorId, answeredRequestId: evidenceRequest.id });
+    // A document the owner sent later supersedes their earlier "there is none".
+    if (applies && documentUnavailableOf(txResult.rows[0].payload) && cleanReplyDocumentIds.length) {
+      await client.query(`update transactions set payload = payload - 'owner_document_unavailable' where firm_id = $1 and id = $2`, [firmId, transactionId]);
+    }
+    // The fact and the end it drives (booked with its one line, or the rest).
+    const replyActorType = evidenceRequest.response_payload?.reply_processing?.actor_type || 'client';
+    documentEnd = documentUnavailable && !correction ? await recordDocumentUnavailableWithClient({ client, firmId, clientId, transactionId,
+      evidenceRequestId: evidenceRequest.id, fact: documentUnavailable, newly: Boolean(newlyUnavailable), applied: applies,
+      suggestion: suggestionPayload, postingRefusal, actorId, clientRow: clientResult.rows[0], replyKey: expectedReplyKey }) : null;
+    // Nothing rests at 'replied' unread: a document question the coder could
+    // not settle goes back to the owner with one follow-up.
+    documentReopen = !applies && !documentEnd && !correction && !nativeFollowUp && readsDocumentReply
+      ? await reopenDocumentQuestionWithClient({ client, firmId, clientId, evidenceRequestId: evidenceRequest.id,
+        question: String(suggestionPayload.ask_client_question || '').trim() || documentReading?.clarification || evidenceRequest.question,
+        actorId, actorType: replyActorType, replyKey: expectedReplyKey }) : null;
     const correctionOutcome = correction ? { ...correction, outcome: applies ? CORRECTION_OUTCOMES.recorded : CORRECTION_OUTCOMES.notRecorded } : null;
     await client.query(
       `insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
@@ -1760,9 +1855,13 @@ const recodeTransactionAfterClientReplyWithClient = async ({
           proposed_account: suggestionPayload.proposed_account,
           confidence: suggestionPayload.confidence,
           evidence_required: suggestionPayload.evidence_required,
-          follow_up_question: applies ? null : suggestionPayload.ask_client_question || null,
+          follow_up_question: applies || documentEnd ? null : suggestionPayload.ask_client_question || null,
           model: suggestionPayload.model || null,
           ...(correctionOutcome ? { correction: correctionOutcome } : {}),
+          ...(documentReading ? { document_reading: documentReading } : {}),
+          ...(documentEnd ? { document_unavailable: { action: documentEnd.action, evidence_request_id: documentUnavailable.evidence_request_id,
+            stated_by: documentUnavailable.stated_by, stated_at: documentUnavailable.stated_at, posting_refusal: postingRefusal,
+            basis: suggestionPayload.document_unavailable_basis || null } } : {}),
           ...(heldRowScope ? { held_row_scope: heldRowScope,
             remaining_rows: (heldRowOutcome || []).map(({ transaction_id, match_id, skipped = null, reason = null, refusal = null }) =>
               ({ transaction_id, match_id, skipped, reason, refusal })) } : {})
@@ -1770,8 +1869,11 @@ const recodeTransactionAfterClientReplyWithClient = async ({
       ]
     );
     if (expectedReplyKey) {
-      const processing = { reply_key: expectedReplyKey, state: applies || correction ? 'completed' : 'needs_clarification', applied: applies,
-        ...(correctionOutcome ? { correction: correctionOutcome } : {}) };
+      const processing = { reply_key: expectedReplyKey, state: applies || correction || documentEnd ? 'completed' : 'needs_clarification', applied: applies,
+        ...(correctionOutcome ? { correction: correctionOutcome } : {}),
+        ...(documentReading ? { document_reading: { outcome: documentReading.outcome, model: documentReading.model,
+          prompt_version: documentReading.prompt_version, confidence: documentReading.confidence } } : {}),
+        ...(documentEnd ? { driven_action: documentEnd.action } : documentReopen ? { driven_action: 'owner_clarification', clarification: documentReopen.clarification } : {}) };
       const { recordOwnerReplyProcessingReceipt } = await import('../ownerReplyProcessingReceipt.js');
       await recordOwnerReplyProcessingReceipt({ client, firmId, clientId, actorId,
         evidenceRequestId: evidenceRequest.id, transactionId, processing,
@@ -1854,6 +1956,13 @@ const recodeTransactionAfterClientReplyWithClient = async ({
     // coding mints one); the owner-reply clock delivers it through the gated
     // fan-out (ownerReplyRecovery.js).
     ...(nativeFollowUp?.id ? { follow_up_request_id: nativeFollowUp.id } : {}),
+    // "There is no such document" (ownerDocumentUnavailable.js): the line was
+    // booked (with the one line to the owner), or rests as one open request
+    // on the owner, delivered once through the same gated fan-out.
+    ...(documentEnd ? { document_unavailable: { action: documentEnd.action } } : {}),
+    ...(documentEnd?.owner_notice ? { owner_notice: documentEnd.owner_notice, owner_notice_statement: documentEnd.owner_notice_statement } : {}),
+    ...(documentEnd?.changed && documentEnd.request_id ? { follow_up_request_id: documentEnd.request_id } : {}),
+    ...(documentReopen ? { needsClarification: true, clarification: documentReopen.clarification } : {}),
     // A correction says what came of it; one that changed nothing says so in
     // the owner's language (the in-band line and the statement are the same).
     ...(correction ? { correction: { outcome: applies ? CORRECTION_OUTCOMES.recorded : CORRECTION_OUTCOMES.notRecorded } } : {}),
@@ -1869,6 +1978,120 @@ const recodeTransactionAfterClientReplyWithClient = async ({
       candidates_posture: distilled?.posture || null
     }
   };
+};
+
+// ── "I have no such document" (ownerDocumentUnavailable.js) ──────────────────
+// The rest: nothing can be booked without the document, so the line rests as
+// ONE open request on the owner — the answered question itself, reworded to
+// say what cannot be booked and what would unblock it. Idempotent: a request
+// already resting with the same words is left as it is (nothing re-sent).
+// Called inside the caller's transaction (the reply writer, or the coding
+// sweep through restOnUnavailableDocumentInDb). Receipted in the same
+// transaction.
+export const restOnUnavailableDocumentWithClient = async ({ client, firmId, clientId, transactionId, fact, actorId = 'system',
+  reason = 'cannot_book_without_document', refusal = null }) => {
+  if (!fact?.evidence_request_id) return { changed: false, skipped: 'no_fact' };
+  const line = (await client.query('select * from transactions where firm_id = $1 and client_id = $2 and id = $3 for update',
+    [firmId, clientId, transactionId])).rows[0];
+  const request = (await client.query('select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3 for update',
+    [firmId, clientId, fact.evidence_request_id])).rows[0];
+  if (!line || !request || request.transaction_id !== transactionId) return { changed: false, skipped: 'rest_target_missing' };
+  if (['posted', 'synced', 'closed'].includes(line.coding_state)) return { changed: false, skipped: 'line_posted' };
+  const clientRow = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
+  const question = cannotBookWithoutDocumentRequest({ language: ownerLanguageFor({ profile: clientRow?.profile, client: clientRow }),
+    line: rowToTransactionPayload(line), evidenceType: fact.evidence_type });
+  const resting = request.request_payload?.document_unavailable_rest;
+  if (['draft', 'open'].includes(request.status) && resting?.question === question && request.question === question) {
+    return { changed: false, request_id: request.id, question };
+  }
+  const now = new Date().toISOString();
+  const rest = { kind: 'cannot_book_without_document', question, at: now, reason, prior_question: request.question,
+    ...(refusal ? { posting_refusal: refusal } : {}) };
+  await client.query(`update client_evidence_requests set status = 'open', question = $4, resolved_at = null, resolved_by = null,
+      request_payload = (case when request_payload ? 'evidence_request'
+        then jsonb_set(request_payload, '{evidence_request,status}', '"open"'::jsonb) else request_payload end)
+        || jsonb_build_object('document_unavailable', $5::jsonb, 'document_unavailable_rest', $6::jsonb),
+      response_payload = response_payload || jsonb_build_object('document_unavailable', $5::jsonb),
+      updated_at = now()
+    where firm_id = $1 and client_id = $2 and id = $3`,
+  [firmId, clientId, request.id, question, JSON.stringify(fact), JSON.stringify(rest)]);
+  await client.query(`update transactions set status = 'needs_review',
+      payload = payload || jsonb_build_object('owner_document_unavailable', $4::jsonb, 'status', 'needs_review'), updated_at = now()
+    where firm_id = $1 and client_id = $2 and id = $3`, [firmId, clientId, transactionId, JSON.stringify(fact)]);
+  await applyCodingTransitionIfAllowed(client, { firmId, clientId, transactionId, to: 'asked' });
+  await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+    values ($1, $2, 'system', $3, 'evidence_request.document_unavailable_rest', 'client_evidence_request', $4, $5::jsonb)`,
+  [firmId, clientId, actorId, request.id, JSON.stringify({ transaction_id: transactionId, fact, rest })]);
+  return { changed: true, request_id: request.id, question };
+};
+
+// The coding sweep's form (codingAutoPost.js): its own transaction, the line
+// and question locks in the reply writer's order (line, then question).
+export const restOnUnavailableDocumentInDb = async ({ firmId = DEFAULT_FIRM_ID, clientId, transactionId, actorId = 'coding_auto_post' } = {}) =>
+  withFirmDbClient(async (client) => {
+    await client.query('begin');
+    try {
+      const line = (await client.query('select payload from transactions where firm_id = $1 and client_id = $2 and id = $3 for update',
+        [firmId, clientId, transactionId])).rows[0];
+      const fact = documentUnavailableOf(line?.payload);
+      const result = fact ? await restOnUnavailableDocumentWithClient({ client, firmId, clientId, transactionId, fact, actorId, reason: 'recoded_without_document' })
+        : { changed: false, skipped: 'no_fact' };
+      await client.query('commit');
+      return result;
+    } catch (error) { await client.query('rollback'); throw error; }
+  });
+
+// The fact, on the question and on the line, in the reply writer's
+// transaction; and the end it drove: booked (with the owner's one line), or
+// the rest above.
+const recordDocumentUnavailableWithClient = async ({ client, firmId, clientId, transactionId, evidenceRequestId, fact, newly,
+  applied, suggestion, postingRefusal, actorId, clientRow, replyKey }) => {
+  if (newly) {
+    await client.query(`update client_evidence_requests set response_payload = response_payload || jsonb_build_object('document_unavailable', $4::jsonb)
+      where firm_id = $1 and client_id = $2 and id = $3`, [firmId, clientId, evidenceRequestId, JSON.stringify(fact)]);
+    await client.query(`update transactions set payload = payload || jsonb_build_object('owner_document_unavailable', $4::jsonb)
+      where firm_id = $1 and client_id = $2 and id = $3`, [firmId, clientId, transactionId, JSON.stringify(fact)]);
+    await client.query(`insert into audit_events (firm_id, client_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+      values ($1, $2, $3, $4, 'evidence_request.document_unavailable_recorded', 'client_evidence_request', $5, $6::jsonb)`,
+    [firmId, clientId, fact.stated_by_type || 'client', fact.stated_by, evidenceRequestId, JSON.stringify({ transaction_id: transactionId, ...fact })]);
+  }
+  if (applied) {
+    const line = rowToTransactionPayload((await client.query('select * from transactions where firm_id = $1 and client_id = $2 and id = $3',
+      [firmId, clientId, transactionId])).rows[0] || {});
+    const text = postedWithoutDocumentNotice({ language: ownerLanguageFor({ profile: clientRow?.profile, client: clientRow }), line,
+      account: suggestion.account_label || suggestion.account_name || suggestion.proposed_account || '', taxTreatment: suggestion.tax_treatment || '',
+      evidenceType: fact.evidence_type });
+    const { recordOwnerNoticeWithClient } = await import('../ownerReplyNotice.js');
+    const notice = await recordOwnerNoticeWithClient({ client, firmId, clientId, evidenceRequestId,
+      notice: { owner_notice: text, owner_notice_statement: text, owner_notice_reply_key: replyKey } });
+    return { action: DOCUMENT_UNAVAILABLE_ACTIONS.posted, owner_notice: notice.owner_notice, owner_notice_statement: notice.owner_notice_statement };
+  }
+  const rest = await restOnUnavailableDocumentWithClient({ client, firmId, clientId, transactionId, fact, actorId, refusal: postingRefusal,
+    reason: postingRefusal ? 'posting_checks_refused_without_document' : 'decider_requires_document' });
+  return { action: DOCUMENT_UNAVAILABLE_ACTIONS.rests, ...rest };
+};
+
+// A document question whose reply the coder could not settle (an unclear
+// answer, a fact instead of the document, a document still to come): the
+// question goes back to the owner with the coder's one follow-up, as a
+// structured reader's clarification does, instead of resting at 'replied'
+// with no reader.
+const reopenDocumentQuestionWithClient = async ({ client, firmId, clientId, evidenceRequestId, question, actorId, actorType, replyKey }) => {
+  const current = (await client.query('select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3 for update',
+    [firmId, clientId, evidenceRequestId])).rows[0];
+  const prior = current?.request_payload?.evidence_topic || {};
+  const now = new Date().toISOString();
+  const turn = { at: now, channel: prior.channel || 'owner_reply', actor_id: actorId, reply_key: replyKey, outcome: 'clarification_requested', terminal: false,
+    reply_excerpt: String(current?.response_payload?.reply || '').slice(0, 240), question, document_ids: [] };
+  await client.query(`update client_evidence_requests set status = 'open', resolved_at = null, resolved_by = null, question = $4,
+      request_payload = case when request_payload ? 'evidence_request'
+        then jsonb_set(request_payload, '{evidence_request,status}', '"open"'::jsonb) else request_payload end,
+      updated_at = now() where firm_id = $1 and client_id = $2 and id = $3`, [firmId, clientId, evidenceRequestId, question]);
+  await recordEvidenceTopicTurnInDb({ firmId, evidenceRequestId, actorId, actorType, withFirmDbClientFn: fn => fn(client),
+    topicState: { ...prior, version: 1, status: 'open', original_question: prior.original_question || current?.question, current_need: question,
+      last_assessment: { outcome: turn.outcome, can_resolve: false, still_missing: [question], reason: 'document_reply_not_settled' },
+      turns: [...(prior.turns || []), turn].slice(-10) } });
+  return { needsClarification: true, clarification: question };
 };
 
 
@@ -2450,7 +2673,7 @@ export const resolveClientEvidenceRequestInDb = async ({
           const { processOwnerReplyWithClient } = await import('../ownerReplyRecovery.js');
           recode = await processOwnerReplyWithClient({ client, firmId, clientId: row.client_id,
             evidenceRequestId: row.id, actorId });
-          if (recode?.applied || recode?.needsClarification) {
+          if (recode?.applied || recode?.needsClarification || recode?.document_unavailable) {
             const refreshed = await client.query(
               'select * from client_evidence_requests where firm_id = $1 and id = $2 limit 1',
               [firmId, cleanRequestId]
@@ -3923,6 +4146,10 @@ const ASK_BATCH_CANDIDATE_SQL = `
     -- assembler's citableRefreshDue once-guard decide whether the line is
     -- actually re-fed, so the 9×-re-send loop stays impossible.
     and not ${blockingOpenAskExistsSql({ firmColumn: 't.firm_id', transactionColumn: 't.id' })}
+    -- The owner said this line's document does not exist
+    -- (ownerDocumentUnavailable.js): Donna decides it from here (booked, or
+    -- resting on the one request that says so); no batch question about it.
+    and not (coalesce(t.payload, '{}'::jsonb) ? 'owner_document_unavailable')
     -- RT-11 (audit F-17): a line Donna already SETTLED — auto-explained by the
     -- disposition pass, explained by a human, reconciled or posted — is never
     -- asked about; a coded-but-explained line used to be gathered on its
