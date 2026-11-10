@@ -20,14 +20,20 @@ const askContext = request => ({ transaction_id: request.transaction_id, audienc
 // checked again under row locks before the named writer and receipt co-commit.
 export const processStructuredOwnerReplyWithClient = async ({ client, firmId, request, expectedReplyKey,
   attempts = 0, env = process.env, fetchImpl = globalThis.fetch }) => {
-  if (!request || request.firm_id !== firmId || request.transaction_id || request.audience !== 'client') {
+  // A line-anchored ask reaches this worker only through a lane adapter that
+  // declares it (transactionAnchored: the question is minted on a line but is
+  // about the business, e.g. taxRegistrationReply.js); every other line ask
+  // belongs to the coder's reply writer.
+  const anchoredAllowed = row => !row?.transaction_id
+    || resolveStructuredOwnerReplyAdapter({ request: row })?.transactionAnchored === true;
+  if (!request || request.firm_id !== firmId || !anchoredAllowed(request) || request.audience !== 'client') {
     refuse('OWNER_REPLY_SOURCE_INVALID', 'The registered reply requires its own client-scoped ask.');
   }
   assertCurrentOwnerReply(request, expectedReplyKey);
   const clientId = request.client_id;
   const persisted = (await client.query('select * from client_evidence_requests where firm_id = $1 and client_id = $2 and id = $3', [firmId, clientId, request.id])).rows[0];
   assertCurrentOwnerReply(persisted, expectedReplyKey);
-  if (persisted.transaction_id || persisted.audience !== 'client'
+  if (!anchoredAllowed(persisted) || (persisted.transaction_id || null) !== (request.transaction_id || null) || persisted.audience !== 'client'
     || JSON.stringify(askContext(persisted)) !== JSON.stringify(askContext(request))) {
     refuse('OWNER_REPLY_SUPERSEDED', 'The question source changed before interpretation.');
   }
@@ -54,7 +60,11 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
   // (no model call; the writer re-validates it under the commit locks), and
   // `maxClarifications` bounds the clarification turns — past the bound the
   // adapter's fixed `exhaustedQuestion` keeps the question on the owner and
-  // further text is not re-interpreted.
+  // further text is not re-interpreted — unless the adapter declares
+  // `readsAfterExhaustion` (a later reply may still carry the fact; any
+  // further clarification is the fixed request again, receipted once).
+  // Optional `clarificationQuestion` replaces the model's clarification text
+  // with the adapter's fixed wording in the owner's language.
   const priorClarifications = (request.request_payload?.evidence_topic?.turns || [])
     .filter(turn => ['clarification_requested', 'clarification_exhausted'].includes(turn?.outcome)).length;
   const bounded = Number.isInteger(adapter.maxClarifications);
@@ -62,7 +72,7 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
   const settled = adapter.settle ? await adapter.settle({ client, firmId, request }) : null;
   const interpretation = settled
     ? { answer: settled, confidence: 1, clarification: null, needsClarification: false, model: null, promptVersion: null, settledBy: 'evidence' }
-    : exhaustedAlready
+    : exhaustedAlready && !adapter.readsAfterExhaustion
       ? { answer: null, confidence: null, clarification: await adapter.exhaustedQuestion({ client, firmId, request }), needsClarification: true, model: null, promptVersion: null }
       : await interpretOwnerReply({ request, adapter, context, env, fetchImpl });
   await client.query('begin');
@@ -106,10 +116,12 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
       return clarify(await adapter.exhaustedQuestion({ client, firmId, request: current }), true);
     };
     if (interpretation.needsClarification) {
-      outcome = await boundedClarify(interpretation.clarification);
+      outcome = await boundedClarify(adapter.clarificationQuestion && interpretation.model
+        ? await adapter.clarificationQuestion({ client, firmId, request: current }) : interpretation.clarification);
     } else {
       outcome = await adapter.apply({ client, firmId, request: current, expectedReplyKey,
-        actorId: actor.actor_id, actorType: actor.actor_type, answer: interpretation.answer });
+        actorId: actor.actor_id, actorType: actor.actor_type, answer: interpretation.answer,
+        interpretation: { model: interpretation.model, promptVersion: interpretation.promptVersion, confidence: interpretation.confidence } });
       // A writer may find at commit that the answer cannot be applied as given.
       if (outcome?.needsClarification) outcome = await boundedClarify(outcome.clarification);
     }
@@ -117,7 +129,7 @@ export const processStructuredOwnerReplyWithClient = async ({ client, firmId, re
     const processing = { reply_key: expectedReplyKey, state: clarified ? 'needs_clarification' : 'completed',
       attempts: attempts + 1, model: interpretation.model, prompt_version: interpretation.promptVersion,
       structured_answer: interpretation.answer, confidence: interpretation.confidence,
-      driven_action: outcome?.clarificationExhausted ? 'owner_clarification_exhausted' : clarified ? 'owner_clarification' : outcome?.superseded ? 'owner_reply_superseded' : adapter.action,
+      driven_action: outcome?.clarificationExhausted ? 'owner_clarification_exhausted' : clarified ? 'owner_clarification' : outcome?.superseded ? 'owner_reply_superseded' : outcome?.drivenAction || adapter.action,
       clarification: clarified ? outcome.clarification : interpretation.clarification, actor_id: actor.actor_id, actor_type: actor.actor_type,
       ...(interpretation.settledBy ? { settled_by: interpretation.settledBy } : {}) };
     await recordOwnerReplyProcessingReceipt({ client, firmId, clientId, evidenceRequestId: request.id,

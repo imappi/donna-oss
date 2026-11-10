@@ -173,6 +173,7 @@ export {
   cancelClientEvidenceRequestInDb,
   CANCELLABLE_EVIDENCE_REQUEST_STATUSES,
   createClientEvidenceRequestInDb,
+  mintTaxRegistrationQuestionInDb,
   deliverEvidenceAsksOnAllChannels,
   DISPOSITION_DRIVEN_ASK_FLAG_KEY,
   draftClientAskBatchInDb,

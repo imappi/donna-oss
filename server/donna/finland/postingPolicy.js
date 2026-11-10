@@ -8,7 +8,7 @@ import { SALES_INVOICE_RECEIVABLE_ACCOUNT, SUPPLIER_BILL_PAYABLES_ACCOUNT, ledge
 import { documentSourceComponents } from '../documentAllocationComponents.js';
 import { planArSettlement } from './issuedInvoiceSettlement.js';
 import { assertTaxSourceEvidence } from '../taxSourceEvidence.js';
-import { ALV_REGISTRATION_STATUSES, resolveAlvRegistrationAsOf } from './alvRegistration.js';
+import { ALV_REGISTRATION_STATUSES, normalizeAlvRegistrationProfile, resolveAlvRegistrationAsOf } from './alvRegistration.js';
 import { isRegistrationRecord } from '../sellerRegistration.js';
 import { toIsoDay } from '../dates.js';
 
@@ -76,7 +76,7 @@ const taxPosting = Object.freeze({ outputCodeForRate: alvOutputCodeForRate, cont
 // for the fact only they know — whether, and from when, the business is in
 // the Finnish VAT register (arvonlisäverorekisteri). It asks no tax judgement.
 const FI_TAX_REGISTRATION = Object.freeze({
-  refusalCodes: Object.freeze(['TRANSACTION_ALV_REGISTRATION_REQUIRED']),
+  refusalCodes: Object.freeze(['TRANSACTION_ALV_REGISTRATION_REQUIRED', 'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED']),
   onDate: ({ profile = null, onDate = null } = {}) =>
     resolveFiAlvRegistrationOnDate({ registration: profile?.alv_registration ?? null, onDate }),
   ownerQuestion: ({ language = 'fi', lineLabel = '', onDate = null, registered = null } = {}) => {
@@ -88,6 +88,45 @@ const FI_TAX_REGISTRATION = Object.freeze({
     return registered === false
       ? `${line}our records say the business was not in the Finnish VAT register (arvonlisäverorekisteri) on ${at}. Has the business been entered in the register since then? If so, from what date?`
       : `${line}we have no record of whether the business is in the Finnish VAT register (arvonlisäverorekisteri). Is the business entered in the register? If so, from what date?`;
+  },
+  // Recording the owner's answer (taxRegistrationReply.js): the one record
+  // Finland keeps, written through the profile writer, whose Finnish intake
+  // guard (profileIntake.js) refuses a change to a fact pilot preparation bound.
+  profileField: 'alv_registration',
+  recordLockedCodes: Object.freeze(['FI_PROFILE_PILOT_PREPARED']),
+  // The checked answer as the record, through alvRegistration.js's own
+  // normaliser. A stated end makes it deregistered (registered within the
+  // window); a plain "no" is not_registered. The filing cadence and basis the
+  // firm recorded stay with a registered record; the owner did not speak to them.
+  // An owner answer is not primary verification, so verified_* are never set.
+  recordFromAnswer: ({ current = null, registered, registeredFrom = null, registeredUntil = null, source = '' } = {}) => {
+    const status = registeredUntil ? 'deregistered' : registered ? 'registered' : 'not_registered';
+    const kept = status !== 'not_registered' && current && typeof current === 'object' && !Array.isArray(current)
+      ? Object.fromEntries(['tax_period', 'registration_basis'].filter((key) => current[key] != null).map((key) => [key, current[key]])) : {};
+    return normalizeAlvRegistrationProfile({ ...kept, status, registered_from: registeredFrom, registered_until: registeredUntil,
+      ...(source ? { note: source } : {}) });
+  },
+  // The bounded follow-up: 'date' when the owner said yes without a usable
+  // date, 'unclear' when the reply did not settle yes or no, 'exhausted' once
+  // the follow-up was spent (the question stays on the owner).
+  answerQuestion: ({ language = 'fi', kind = 'unclear' } = {}) => {
+    if (language === 'fi') return kind === 'date'
+      ? 'Kiitos. Mistä päivästä alkaen yritys on ollut arvonlisäverorekisterissä? Kerro tarkka päivämäärä (esimerkiksi 1.3.2026) niin kuin se lukee Verohallinnon päätöksessä tai YTJ:ssä.'
+      : kind === 'exhausted'
+        ? 'Emme vielä pysty kirjaamaan arvonlisäverorekisteröintiä. Kerro rekisteröinnin tarkka alkamispäivä tai lähetä kopio Verohallinnon päätöksestä tai YTJ-otteesta.'
+        : 'Kiitos vastauksesta. Emme saaneet siitä varmaa tietoa: onko yritys arvonlisäverorekisterissä? Vastaa kyllä tai ei, ja jos kyllä, kerro rekisteröinnin alkamispäivä.';
+    return kind === 'date'
+      ? 'Thanks. From what date has the business been in the Finnish VAT register? Please give the exact date (for example 1 March 2026) as it appears on the Tax Administration decision or in the business register.'
+      : kind === 'exhausted'
+        ? 'We cannot record the VAT registration yet. Please tell us the exact date the registration started, or send a copy of the Tax Administration decision or a business register extract.'
+        : 'Thanks for your reply. We could not tell from it whether the business is in the Finnish VAT register. Please answer yes or no, and if yes, the date the registration started.';
+  },
+  recordedNotice: ({ language = 'fi', record = null } = {}) => {
+    const from = record?.registered_from || '', until = record?.registered_until || '';
+    if (language === 'fi') return `${record?.status === 'not_registered' ? 'Kirjasimme, että yritys ei ole arvonlisäverorekisterissä.'
+      : until ? `Kirjasimme, että yritys oli arvonlisäverorekisterissä ${from ? `${from} – ` : ''}${until}.` : `Kirjasimme, että yritys on arvonlisäverorekisterissä ${from} alkaen.`} Vastaa tähän, jos tieto ei ole oikein.`;
+    return `${record?.status === 'not_registered' ? 'We recorded that the business is not in the Finnish VAT register.'
+      : until ? `We recorded that the business was in the Finnish VAT register ${from ? `from ${from} ` : ''}until ${until}.` : `We recorded that the business has been in the Finnish VAT register since ${from}.`} Reply here if that is not right.`;
   }
 });
 

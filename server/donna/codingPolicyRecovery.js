@@ -16,9 +16,14 @@
 // refusal on posting_recovery; the coder's contract (transactionLlm.js) turns
 // it into the owner's registration question while the record still does not
 // say registered. Nothing here lets the line post: the policy still decides.
+// A supplier bill posts only as the AP leg of its bank line's post
+// (db/ledger.js), so a bill refused for registration on its own date refuses
+// that bank line with the bill's code: the same owner fact, the same question.
 export const TAX_REGISTRATION_REFUSALS = Object.freeze([
   'TRANSACTION_ALV_REGISTRATION_REQUIRED',
-  'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED'
+  'TRANSACTION_GB_VAT_REGISTRATION_REQUIRED',
+  'SUPPLIER_BILL_ALV_REGISTRATION_REQUIRED',
+  'SUPPLIER_BILL_GB_VAT_REGISTRATION_REQUIRED'
 ]);
 export const CODING_EVIDENCE_RECONSIDERED_REFUSALS = Object.freeze([
   ...TAX_REGISTRATION_REFUSALS,

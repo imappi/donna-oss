@@ -7,8 +7,9 @@ const input = { answer: { registered: false }, confidence: 0.99, clarification: 
 test('country registration owns its answer contract without a fallback country', () => {
   const evidenceTypes = ['vat_registration_status', 'ct_registration_status',
     'ct_registration_deadline', 'vat_return_period_intake', 'ae_vat_business_use'];
-  // The one market-neutral lane (FI-03) lists under its lane-qualified key.
-  assert.deepEqual(listStructuredOwnerReplyEvidenceTypes(), [...evidenceTypes, 'supporting_document#totals_mismatch']);
+  // The market-neutral lanes (FI-03 totals; the VAT/ALV registration
+  // question) list under their lane-qualified keys.
+  assert.deepEqual(listStructuredOwnerReplyEvidenceTypes(), [...evidenceTypes, 'supporting_document#totals_mismatch', 'business_purpose#tax_registration']);
   for (const evidenceType of evidenceTypes) {
     assert.ok(resolveStructuredOwnerReplyAdapter({ jurisdiction: 'ae', evidenceType }));
     assert.equal(resolveStructuredOwnerReplyAdapter({ evidenceType }), null);

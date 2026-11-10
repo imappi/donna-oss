@@ -88,6 +88,7 @@ import { hasJevResolvedCoding, JEV_DOCUMENT_ASK_SELECTIONS } from './jevDecision
 import {
   updateTransactionReviewItemInDb,
   createClientEvidenceRequestInDb,
+  mintTaxRegistrationQuestionInDb,
   ensureTransactionReviewItemInDb,
   markCodingAutoPostFyiPendingInDb
 } from './firmDb.js';
@@ -1280,6 +1281,19 @@ export const sweepCodingAutoPost = async ({
             crossEntity: row?.cross_entity || {},
             onFileCandidates
           });
+        // The VAT/ALV registration question (transactionLlm.js guard) is one
+        // fact per client: one live question per client, later refused lines
+        // join it (mintTaxRegistrationQuestionInDb), and its answer is read by
+        // the registration lane (taxRegistrationReply.js).
+        const registrationGuard = !isScopeDriftDemotion && suggestion.tax_unresolved_guard?.constraint === 'tax_registration_unrecorded'
+          && suggestion.tax_unresolved_guard.owner_answered !== true ? suggestion.tax_unresolved_guard : null;
+        if (registrationGuard && createEvidenceRequestFn === createClientEvidenceRequestInDb) {
+          const registration = await mintTaxRegistrationQuestionInDb({ firmId, clientId, transactionId: row.transaction_id,
+            reviewItemId, question: ownerAsk.question, evidenceType: ownerAsk.evidence_type, guard: registrationGuard, actorId: 'coding_auto_post' });
+          if (registration.answered_before) { stats.skipped += 1; bump('tax_registration_answered_before'); }
+          else if (registration.joined) { stats.skipped += 1; bump('tax_registration_question_joined'); } else stats.owner_asked += 1;
+          continue;
+        }
         await createEvidenceRequestFn({
           firmId,
           clientId,

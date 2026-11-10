@@ -750,6 +750,12 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
   let taxRegistration=null;
   try { taxRegistration=resolvePostingPolicy({ jurisdiction: policy.jurisdiction }).taxRegistration; } catch { taxRegistration=null; }
   const registrationRefusal=transaction.posting_recovery?.review?.previous_refusal || null;
+  // The owner's answer, once the registration lane read it
+  // (taxRegistrationReply.js stamps it on every line the question stood for).
+  // A line the record now says registered on meets the policy as any other
+  // (the guard is silent below); a line it does not cover is not asked again.
+  const registrationAnswer=transaction.tax_registration_answer && typeof transaction.tax_registration_answer==='object'
+    ? transaction.tax_registration_answer : null;
   const registrationGuard=taxRegistration && taxRegistration.refusalCodes.includes(registrationRefusal?.code) ? (()=>{
     const asOf=String(registrationRefusal.details?.as_of || transaction.date || transaction.transaction_date || '').slice(0, 10) || null;
     let status;
@@ -758,7 +764,10 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
     const language=preferredOwnerTemplateLanguage(clientProfile || {}, { jurisdiction: clientProfile?.jurisdiction ?? policy.jurisdiction });
     return { receipt: { treatment: suggestion.tax_treatment || fallback.tax_treatment || '', constraint: 'tax_registration_unrecorded',
         refusal_code: registrationRefusal.code, as_of: asOf, registered: status?.registered ?? null, registration_reason: status?.reason || null,
-        language, owner_answered: Boolean(String(transaction.client_reply_context?.client_reply || '').trim()) },
+        language, owner_answered: Boolean(String(transaction.client_reply_context?.client_reply || '').trim())
+          || Boolean(registrationAnswer?.evidence_request_id),
+        ...(registrationAnswer?.evidence_request_id ? { answer: { evidence_request_id: registrationAnswer.evidence_request_id,
+          receipt_id: registrationAnswer.receipt_id || null, state: registrationAnswer.state || null } } : {}) },
       question: String(taxRegistration.ownerQuestion({ language, lineLabel, onDate: asOf, registered: status?.registered ?? null }) || '').slice(0, 500) };
   })() : null;
   const unsureSourceQuestion=()=>{
@@ -849,7 +858,13 @@ const sanitizeSuggestion = (suggestion = {}, transaction = {}, accountOptions, t
     ...(registrationGuard?.receipt.owner_answered ? { tax_unresolved_guard: registrationGuard.receipt,
       posting_requirement: 'single_account', evidence_required: false, confidence: 'low', remember_candidate: false, auto_explain_limit: 0,
       ask_client_question: '',
-      support_note: `${String(suggestion.support_note || '').slice(0, 300)} The owner answered the VAT registration question. Record the registration on the client profile (or correct the coding); the ledger posts this line only once the record says registered on ${registrationGuard.receipt.as_of || 'its date'}.`.trim().slice(0, 500) } : {})
+      support_note: `${String(suggestion.support_note || '').slice(0, 300)} ${registrationGuard.receipt.answer?.state==='record_conflict'
+        ? `The owner answered the VAT registration question, but the answer would remove registered days the record already holds, so nothing was recorded; a person must reconcile the answer with the record before this line can post.`
+        : registrationGuard.receipt.answer?.state==='record_locked'
+        ? `The owner answered the VAT registration question, but the recorded registration is locked by pilot preparation and was not changed; a reviewed reapproval must record it before this line can post with VAT.`
+        : registrationGuard.receipt.answer?.state==='recorded'
+          ? `The owner's answer is recorded: the business is not registered for VAT on ${registrationGuard.receipt.as_of || 'its date'}, so this line cannot post with VAT. It needs coding without a VAT deduction.`
+          : `The owner answered the VAT registration question. Record the registration on the client profile (or correct the coding); the ledger posts this line only once the record says registered on ${registrationGuard.receipt.as_of || 'its date'}.`}`.trim().slice(0, 500) } : {})
   };
 };
 

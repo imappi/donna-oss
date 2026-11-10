@@ -89,3 +89,10 @@ test('while the one gate holds questions, the reply to the owner\'s own message 
   // Allowed but delivered nowhere (portal or escalated): the question still rides the reply, as before.
   assert.equal(buildResolvedReplyText({ resolved: resolved({ delivered: [], portal: ['ask-1'] }), fallback: 'x' }), 'Which month was this for?');
 });
+
+test('a factual answer whose writer recorded a fact speaks its one-line notice, never a booking it did not make', () => {
+  const notice = 'Kirjasimme, että yritys on arvonlisäverorekisterissä 2026-01-01 alkaen. Vastaa tähän, jos tieto ei ole oikein.';
+  assert.equal(buildResolvedReplyText({ resolved: { evidence_request: { status: 'resolved' }, recode: { applied: true, owner_notice: notice } }, fallback: 'x', language: 'fi' }), notice);
+  // Without an applied outcome the notice is not spoken.
+  assert.equal(buildResolvedReplyText({ resolved: { evidence_request: { status: 'resolved' }, recode: { applied: false, owner_notice: notice } }, fallback: 'x' }), 'x');
+});
