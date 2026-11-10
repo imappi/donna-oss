@@ -191,8 +191,40 @@ const blocked = ({
   host_receipt_ref: host?.latest_attempt_id == null ? null : {
     store: 'runtime_host_readiness_attempts',
     id: Number(host.latest_attempt_id)
-  }
+  },
+  // What the host's work-queue failure is, named (Host A v8
+  // `database_schema.detail.queue_failures`): the function, when its job
+  // died, and the next recovery or scheduled run. Read from the same receipt
+  // the verdict came from; it informs, it never decides.
+  host_queue_failures: hostQueueFailures(host)
 });
+
+const hostQueueFailures = (host) => {
+  const failures = (host?.certificate?.checks || [])
+    .find((entry) => entry?.id === 'database_schema')?.detail?.queue_failures;
+  if (!Array.isArray(failures) || !failures.length) return null;
+  return failures.map((entry) => ({
+    function_id: entry.function_id,
+    kind: entry.kind,
+    dead_job_id: entry.dead_job_id ?? null,
+    died_at: entry.died_at ?? null,
+    last_error: entry.last_error ?? null,
+    recovery: entry.recovery ?? null,
+    next_attempt: entry.next_attempt ?? null
+  }));
+};
+
+// "Scheduled job X failed at T; next attempt at T2." — one clause per failure.
+const describeQueueFailures = (failures) => failures.map((entry) => {
+  const noun = entry.kind === 'scheduled' ? 'Scheduled job' : 'Job';
+  const died = entry.died_at ? ` failed at ${entry.died_at}` : ' failed';
+  const next = entry.next_attempt?.at
+    ? `; next attempt at ${entry.next_attempt.at}${entry.next_attempt.kind === 'recovery' && entry.recovery
+      ? ` (recovery ${Math.min(entry.recovery.used + (entry.next_attempt.job_id == null ? 1 : 0), entry.recovery.max)} of ${entry.recovery.max})`
+      : entry.next_attempt.kind === 'scheduled' ? ' (its next scheduled run)' : ''}`
+    : '; it will not be retried automatically';
+  return `${noun} ${entry.function_id}${died}${next}.`;
+}).join(' ');
 
 // The refusal names its actual condition. "Recovery" is only honest while a
 // retry is scheduled or the host is being re-checked; an exhausted or failed
@@ -212,6 +244,9 @@ export const describeEntityReadinessAdmission = (decision = {}) => {
   }
   if (sagaState === 'failed' && reason && !reason.startsWith('host_')) {
     return `Donna's readiness check for this company failed (${reason}) and is being retried automatically. Use Retry in the company's readiness panel if it does not clear.`;
+  }
+  if (Array.isArray(decision?.host_queue_failures) && decision.host_queue_failures.length) {
+    return `Donna is holding new automated work until its work queue recovers. ${describeQueueFailures(decision.host_queue_failures)} New work resumes when it succeeds.`;
   }
   return 'Donna is completing a runtime readiness recovery before accepting new automated work.';
 };

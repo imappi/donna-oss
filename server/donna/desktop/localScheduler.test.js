@@ -74,6 +74,12 @@ const makeMemoryQueue = () => {
         cronState.set(functionId, lastEnqueuedTick);
       },
       pruneFinishedLocalJobs: async () => 0,
+      // Prompt recovery of a dead scheduled tick is planned in SQL from the
+      // stored dead row (localJobQueue.js); its behaviour is proven on real
+      // PostgreSQL (cronTickRecoveryPgLifecycle.test.js). This memory queue
+      // has no dead-row store, so it plans none and absorbs nothing.
+      enqueueCronRecoveryTicks: async () => [],
+      absorbScheduledTickIntoCronRecovery: async () => ({ live: null, absorbed: false }),
       makeDurableStep: ({ jobId }) => makeDurableStep({
         jobId,
         client: null,
