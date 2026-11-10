@@ -38,7 +38,11 @@ export const makeManifestClock = (start) => {
 
 export const createManifestTicker = ({
   manifest,
+  // `query` collapses waits and reads the ledger; `queueQuery` is what the
+  // dispatcher claims and settles jobs through (the runtime's own pool) —
+  // the same function when the caller has one connection source.
   query,
+  queueQuery = query,
   clock,
   logger = console,
   workerId = `manifest-ticker-${process.pid}`,
@@ -46,7 +50,7 @@ export const createManifestTicker = ({
   onQueueActivity = async () => {}
 }) => {
   const rows = async (text, params) => (await query(text, params)).rows;
-  const queueClient = { query: (text, params) => query(text, params) };
+  const queueClient = { query: (text, params) => queueQuery(text, params) };
 
   const collapseQueueWaits = async (functionIds = null) => rows(
     `update local_jobs set run_at = now()

@@ -185,6 +185,15 @@ test('the recorded month replays to coded and reconciled books with no key and t
       const sessions = (await db.query('select scope_client_id as client_id, recorded_answers from provider_replay_sessions')).rows;
       assert.equal(sessions.length, 1, 'the stored record behind the on-screen notice');
       assert.equal(sessions[0].client_id, 'kampaamo-kultalanka-oy');
+      // Host A's lane inventory, as persisted, says the lanes were served by replay.
+      const routes = (await db.query(`select c as detail from runtime_host_readiness_attempts a,
+          jsonb_path_query(a.certificate, '$.checks[*] ? (@.id == "model_routes").detail') c order by a.id desc limit 1`)).rows[0]?.detail;
+      assert.equal(routes?.provider_replay?.pack, 'fi-kultalanka-2025-02');
+      assert.ok(routes.lanes.every((lane) => lane.served_by === 'replay'));
+      // Every receipt that names a model from a reconciliation answer is marked.
+      const evaluations = (await db.query("select count(*) filter (where model like '%+replayed') as marked, count(*) as all from reconciliation_evaluations where model is not null")).rows[0];
+      assert.ok(Number(evaluations.all) > 0);
+      assert.equal(Number(evaluations.marked), Number(evaluations.all));
     } finally {
       await db.end();
     }

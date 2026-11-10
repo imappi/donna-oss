@@ -73,6 +73,7 @@
 
 import { createHash } from 'node:crypto';
 
+import { toUtcIsoDay } from './dates.js';
 import { KNOWN_PROVIDER_HOSTS } from './providerEndpoints.js';
 
 export const PROVIDER_REPLAY_FORMAT = 'donna.provider-replay.v1';
@@ -244,7 +245,7 @@ const bytesToken = (base64) => {
   return `<bytes sha256:${sha256(bytes)}>`;
 };
 
-const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+const isoDay = (ms) => toUtcIsoDay(new Date(ms));
 // The run's own calendar: today and RUN_DATE_SPAN_DAYS either side, in the
 // forms the prompts print dates in. Longest form first so 10.11.2026 is not
 // half-replaced by a shorter match.

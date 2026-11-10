@@ -1057,12 +1057,12 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     ["query", "dynamic_query", "dd2c2524438b4454b6e7799834f4af09443bac40670675a62706f6b824277317", 1, []],
     // text
     ["rows", "dynamic_query", "6a6d510359dc9c46c8db03c2c3e7dfbcf985953b1ba38bdb50676f34b9eb7976", 1, []],
-    // Re-pinned 2026-11-10 (zero-key demo): the tick loop moved to desktop/manifestTicker.js; the harness's query wrapper is now handed to it.
+    // Re-pinned 2026-11-10 (zero-key demo): the tick loop moved to desktop/manifestTicker.js; the harness hands it its scratch reader (query) and the runtime pool for the queue (queueQuery), as the loop used them before.
     ["query", "dynamic_query", "1a0cd01f3c8664add3fb805ba9498e299db8222eb2784c92e9b4ca98991f19df", 1, []],
+    ["queueQuery", "dynamic_query", "2be593881a938a46e44730cbaa0d0139cbf1a443cd10d9155805516b938e4ea5", 1, []],
   ]),
   ...group("server/donna/desktop/manifestTicker.js", "Deterministic dispatch over the desktop manifest, moved from the appliance harness 2026-11-10 (zero-key demo): the caller's query function, used for the local_jobs wait-collapse UPDATE and its reads. No memory target.", [
     ["rows", "dynamic_query", "6a6d510359dc9c46c8db03c2c3e7dfbcf985953b1ba38bdb50676f34b9eb7976", 1, []],
-    ["query", "dynamic_query", "1a0cd01f3c8664add3fb805ba9498e299db8222eb2784c92e9b4ca98991f19df", 1, []],
   ]),
   ...group("server/donna/testSupport/dmemFixtureSupport.js", "Existing runtime SQL boundary in server/donna/testSupport/dmemFixtureSupport.js.", [
     // select count(*)::int as n from __DYNAMIC_SQL__ where __DYNAMIC_SQL__ = $1

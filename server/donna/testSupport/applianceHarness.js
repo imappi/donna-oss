@@ -815,6 +815,7 @@ export const bootApplianceForTest = async ({
     const ticker = createManifestTicker({
       manifest: runtime.manifest,
       query: (text, params) => query(text, params),
+      queueQuery: (text, params) => queryFirmDb(text, params),
       clock,
       logger: captured.logger,
       workerId: `appliance-harness-${runToken}`,
