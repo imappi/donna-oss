@@ -1396,7 +1396,7 @@ components:
           format: date
           description: The business date the card is about (plain ISO date).
         created_at: { type: string, format: date-time }
-        amount: { type: [number, 'null'], description: Signed, major units. }
+        amount: { type: [number, 'null'], description: 'Signed, major units.' }
         currency: { type: [string, 'null'] }
         counterparty: { type: [string, 'null'] }
         blocks_close:
@@ -1691,7 +1691,7 @@ components:
           enum: [received, processing, attached, needs_info, failed, duplicate, stored]
         uploaded_at: { type: string, format: date-time }
         captured_at: { type: [string, 'null'], format: date-time }
-        document_type: { type: [string, 'null'], description: Backend classification, display only. }
+        document_type: { type: [string, 'null'], description: 'Backend classification, display only.' }
         document_date: { type: [string, 'null'], format: date }
         total_amount: { type: [number, 'null'] }
         currency: { type: [string, 'null'] }
