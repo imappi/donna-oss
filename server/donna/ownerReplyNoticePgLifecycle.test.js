@@ -69,7 +69,10 @@ const seedGb = async (pool, clientId, profile = {}) => {
     [ledgerRecordId('account', firmId, clientId, a.code), firmId, clientId, a.code, a.name_en, a.account_type, a.normal_balance, a.canonical_role || null]);
   await assignOwner(pool, clientId);
 };
-const seedFi = async (pool, clientId, profile = { alv_registration: { status: 'not_registered' } }) => {
+// No registration record: the line's date is unknown, so it is the owner's
+// question. (A record that says not registered on the date is never asked
+// about: the line posts without VAT; vatRegistrationOwnerQuestionPgLifecycle.)
+const seedFi = async (pool, clientId, profile = {}) => {
   await pool.query("insert into clients(id,firm_id,company_name,jurisdiction,entity_type,profile) values($1,$2,'Synthetic Ilmoitus Oy','FI','fi-oy',$3)", [clientId, firmId,
     { jurisdiction: 'FI', accounting_system: 'none', accounting_basis: 'cash', ...profile }]);
   for (const flag of ['FINLAND_ALV_CODING', 'JURISDICTION_ACCOUNT_PALETTE', 'RECONCILIATION_CODE_MATCHED_NO_REVIEW', 'CODING_AUTO_POST', 'LEDGER_AUTO_POST']) await pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source) values($1,$2,$3,$4,'auto','manual')", [`${clientId}-${flag}`, firmId, clientId, flag]);
@@ -182,21 +185,30 @@ const NOT_RECORDED = {
   GB: 'Your answer is saved, but we did not change the VAT registration details we hold for the business. Your accountant needs to check it before the record is changed.'
 };
 for (const item of [
-  { label: 'FI', name: 'a locked record (prepared client)', state: 'record_locked', country: FI, seed: seedFi, clientId: 'fi-portal-locked',
+  // A record pilot preparation bound that does not settle the date (a status
+  // outside the closed vocabulary), so the line is asked about.
+  { label: 'FI', name: 'a locked record (prepared client)', state: 'record_locked', country: FI, clientId: 'fi-portal-locked',
+    seed: (pool, id) => seedFi(pool, id, { alv_registration: { status: 'pending_review' } }),
     prepare: pool => pool.query("insert into audit_events(firm_id,client_id,actor_type,actor_id,action,resource_type,resource_id,metadata) values($1,'fi-portal-locked','system','fixture','pilot.prepared','client','fi-portal-locked','{}')", [firmId]),
     reading: answerWith('yes', '2026-01-01') },
+  // The question is asked while there is no record; the firm then records the
+  // registration from 2026-03-01 before the owner answers (a record already
+  // saying not registered on the line's date is never asked about).
   { label: 'GB', name: 'an answer that conflicts with the record', state: 'record_conflict', country: GB, clientId: 'gb-portal-conflict',
-    seed: (pool, id) => seedGb(pool, id, { vat_registration: { status: 'registered', registered_from: '2026-03-01' } }), date: '2026-02-10',
+    seed: (pool, id) => seedGb(pool, id), date: '2026-02-10',
+    afterAsk: (pool, id) => pool.query("update clients set profile = jsonb_set(profile, '{vat_registration}', $2::jsonb) where id = $1",
+      [id, JSON.stringify({ status: 'registered', registered_from: '2026-03-01' })]),
     reading: answerWith('yes', '2026-04-01') }
 ]) {
   test(`real PG (${item.label}): ${item.name} records nothing; the portal says so, never that it was recorded`, { skip: !pgUrl && 'DONNA_PG_TEST_URL required' }, async t => {
     const pool = await freshDb(t);
     await item.seed(pool, item.clientId);
     if (item.prepare) await item.prepare(pool);
-    const before = (await pool.query('select profile from clients where id=$1', [item.clientId])).rows[0].profile[item.country.field];
     const state = { reads: 0, readerDown: false, verdict: item.country.verdict, reading: item.reading };
     mockProviders(t, state);
     const ask = await askRegistration(pool, item.clientId, item.country, item.date);
+    if (item.afterAsk) await item.afterAsk(pool, item.clientId);
+    const before = (await pool.query('select profile from clients where id=$1', [item.clientId])).rows[0].profile[item.country.field];
     const answered = await portalReply(pool, ask.id, 'Synthetic owner answer.');
     assert.equal(answered.recode.drivenAction, `tax_registration_${item.state}`);
     assert.deepEqual((await pool.query('select profile from clients where id=$1', [item.clientId])).rows[0].profile[item.country.field], before, 'nothing recorded');
