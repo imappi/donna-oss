@@ -40,6 +40,8 @@ export {
   markAlvReturnFiledInDb,
   getAlvReturnByIdInDb,
   getAlvReturnForPeriodInDb,
+  findLiveAlvReturnsOverlappingInDb,
+  assertAlvReturnFileableInDb,
   __recordSuomifiMandateWithClient,
   recordSuomifiMandateInDb,
   __revokeSuomifiMandateWithClient,

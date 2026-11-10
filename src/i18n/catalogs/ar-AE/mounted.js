@@ -623,6 +623,10 @@ const KEY_OVERRIDES = Object.freeze({
   'mounted.financial.annual.uncomputedAsset': 'أصل غير محسوب: {category} ({base}) — {reason}',
   'mounted.financial.vat.filed': 'تم التقديم في {date}',
   'mounted.financial.vat.identifier': 'المعرّف {id}',
+  // Machine-written, unreviewed (UAE market on hold): ALV return overlap notice.
+  'mounted.financial.vat.coveredByFiled': 'مشمول بالفعل في الإقرار {period} (مُقدَّم)',
+  'mounted.financial.vat.coveredByPending': 'مشمول بالفعل في الإقرار {period} (بانتظار تأكيد المالك)',
+  'mounted.financial.vat.coveredByHint': 'لا يمكن الإبلاغ عن المبيعات والمشتريات نفسها مرتين، لذلك لا يُعدّ إقرار منفصل لهذه التواريخ.',
   'mounted.financial.vat.mandate': 'تفويض Suomi.fi',
   'mounted.financial.vat.uncodedRevenue': 'بنود إيرادات غير مرمّزة',
   'mounted.financial.vat.expected': 'المتوقع {amount}',

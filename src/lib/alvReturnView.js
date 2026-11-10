@@ -305,6 +305,17 @@ export const buildAlvReturnViewModel = (envelope) => {
     selfAssessedNote: alvReturn.selfAssessedFullyDeductible === true && num(boxes['307']) !== 0
       ? 'Käännetyn verovelvollisuuden ja maahantuonnin vero on vähennetty täysimääräisesti (oletus: vain vähennyskelpoista liiketoimintakäyttöä).'
       : null,
+    // The client's other live returns whose dates overlap this period (the
+    // server's covered_by: a filed 2026-Q3 covers 2026-09). Rendered as the
+    // server says; the view decides nothing about which return counts.
+    coveredBy: (Array.isArray(envelope.covered_by) ? envelope.covered_by : [])
+      .filter((row) => row && row.period_key && (row.status === 'filed' || row.status === 'draft_pending_confirmation'))
+      .map((row) => ({
+        periodKey: row.period_key,
+        status: row.status,
+        tone: row.status === 'filed' ? 'ok' : 'pending',
+        rangeLabel: row.starts_on && row.ends_on ? `${fiDate(row.starts_on)} – ${fiDate(row.ends_on)}` : null
+      })),
     lifecycle: lifecycleRow
       ? {
           status: lifecycleRow.status,

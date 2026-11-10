@@ -4701,7 +4701,14 @@ export const getAskBatchDraftsForFirmFromDb = async ({ firmId = DEFAULT_FIRM_ID 
 // deliverer runs, nothing is counted, the refusal is receipted
 // ('evidence_request.send_refused', naming `surface`) and the result carries
 // `refused: <code>` so the caller can keep the ask on the owner.
-export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], surface = 'ask_send', deps } = {}) => {
+//
+// `channels` narrows WHICH deliverers run (default: all four). It never
+// narrows the gate: the gate above runs for every call whatever the list. A
+// caller that has always delivered on one channel names it here, so moving it
+// onto this path does not open a channel it never sent on.
+export const OWNER_ASK_CHANNELS = Object.freeze(['whatsapp', 'sms', 'telegram', 'email']);
+export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientId, evidenceRequestIds = [], surface = 'ask_send', channels = OWNER_ASK_CHANNELS, deps } = {}) => {
+  const runChannels = new Set((Array.isArray(channels) ? channels : OWNER_ASK_CHANNELS).filter((channel) => OWNER_ASK_CHANNELS.includes(channel)));
   const results = {};
   // 122 — the OWNER-channel guard, enforced once for all four channels: only
   // client-audience asks may reach WhatsApp/SMS/Telegram/email. A seat/agent
@@ -4736,21 +4743,29 @@ export const deliverEvidenceAsksOnAllChannels = async ({ client, firmId, clientI
       return { error: error?.message || 'delivery_failed' };
     }
   };
-  results.whatsapp = await attempt('whatsapp', () =>
-    deliverWhatsAppEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
-  results.sms = await attempt('sms', () =>
-    deliverSmsEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  if (runChannels.has('whatsapp')) {
+    results.whatsapp = await attempt('whatsapp', () =>
+      deliverWhatsAppEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  }
+  if (runChannels.has('sms')) {
+    results.sms = await attempt('sms', () =>
+      deliverSmsEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  }
   // G14 (outbound-actions M1): Telegram + owner-email join the ask fan-out.
   // Each deliverer carries its own gate (binding / config-plane flag), so an
   // unbound or dark channel is an internal no-op.
-  results.telegram = await attempt('telegram', () =>
-    deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
-  results.email = await attempt('email', () =>
-    deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  if (runChannels.has('telegram')) {
+    results.telegram = await attempt('telegram', () =>
+      deliverTelegramEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  }
+  if (runChannels.has('email')) {
+    results.email = await attempt('email', () =>
+      deliverEmailEvidenceAsksAfterSend({ client, firmId, clientId, evidenceRequestIds: evidenceRequestIdsForChannels, deps }));
+  }
   // The asks at least one deliverer actually delivered (each deliverer reports
   // the asks the provider accepted, the same ones it stamped). Callers read
   // this instead of re-reading send_count.
-  results.delivered = [...new Set(['whatsapp', 'sms', 'telegram', 'email']
+  results.delivered = [...new Set(OWNER_ASK_CHANNELS
     .flatMap((channel) => (Array.isArray(results[channel]?.delivered) ? results[channel].delivered : [])))];
   return results;
 };

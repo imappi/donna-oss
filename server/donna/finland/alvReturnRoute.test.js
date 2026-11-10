@@ -58,7 +58,16 @@ const makeStore = () => {
       expires_on: null
     }
   };
+  store.overlapping = [];
   store.deps = {
+      // The overlap check before transmit: refuses while store.overlapping is non-empty.
+      assertFileableImpl: async ({ alvReturnId }) => {
+        assert.equal(alvReturnId, row.id);
+        if (store.overlapping.length) {
+          throw Object.assign(new Error('overlap'), { code: 'ALV_RETURN_FILING_OVERLAP', statusCode: 409, details: { overlapping: store.overlapping } });
+        }
+        return { ...row };
+      },
       getMandateImpl: async ({ scope }) => (scope === SUOMIFI_MANDATE_SCOPE_TAX ? store.mandate : null),
       getAlvReturnImpl: async ({ alvReturnId }) => (alvReturnId === row.id ? { ...row } : null),
       markFiledImpl: async ({ alvReturnId, filingReceipt, authorityBasis, actorId }) => {
@@ -227,4 +236,46 @@ test('flag off → skipped; the basis builder stamps the owner-confirmation sour
   assert.equal(basis.source, 'owner_whatsapp_alv_filing_confirmation');
   assert.equal(basis.providerMessageId, 'wamid.reply-1');
   assert.equal(basis.phoneHash, 'ph-1');
+});
+
+test('kyllä over dates another live return covers: NOTHING is transmitted — row pending, ask open, owner told which return', async () => {
+  const store = makeStore();
+  store.overlapping = [{ id: 'alv-q2', period_key: '2026-Q2', starts_on: '2026-04-01', ends_on: '2026-06-30', status: 'filed' }];
+  let transmitted = 0;
+  const result = await resolveAlvReturnInbound({
+    firmId: 'firm-1', clientId: 'client-1', ask, replyText: 'kyllä', message, phoneHash: 'ph-1', actorId: 'owner-1', flagActs: true,
+    submitReturn: async () => { transmitted += 1; return { channel: 'omavero_test', submission_id: 'SUB-X' }; },
+    ...store.deps
+  });
+  assert.equal(result.action, 'file_failed');
+  assert.equal(result.error, 'ALV_RETURN_FILING_OVERLAP');
+  assert.equal(transmitted, 0, 'the filing channel is never reached');
+  assert.equal(store.row.status, 'draft_pending_confirmation');
+  assert.equal(store.openAsks.size, 1, 'the ask stays open: the owner can answer "ei"');
+  assert.match(store.sent.at(-1), /ALV-ilmoitusta \(2026-06\) ei lähetetty: ilmoitus 2026-Q2 \(lähetetty\) kattaa jo/);
+  assert.match(store.sent.at(-1), /Lähetetty ilmoitus pysyy ennallaan/);
+
+  // Both waiting: neither is sent until one is cancelled.
+  store.overlapping = [{ id: 'alv-q2', period_key: '2026-Q2', status: 'draft_pending_confirmation' }];
+  await resolveAlvReturnInbound({
+    firmId: 'firm-1', clientId: 'client-1', ask, replyText: 'kyllä', message, phoneHash: 'ph-1', actorId: 'owner-1', flagActs: true,
+    submitReturn: async () => { transmitted += 1; return {}; }, ...store.deps
+  });
+  assert.equal(transmitted, 0);
+  assert.match(store.sent.at(-1), /2026-Q2 \(odottaa vahvistusta\).*Kumpaakaan ei lähetetä/);
+});
+
+test('kyllä with no overlap check wired is fail-closed: nothing is transmitted', async () => {
+  const store = makeStore();
+  let transmitted = 0;
+  const { assertFileableImpl, ...unwired } = store.deps;
+  assert.equal(typeof assertFileableImpl, 'function');
+  const result = await resolveAlvReturnInbound({
+    firmId: 'firm-1', clientId: 'client-1', ask, replyText: 'kyllä', message, phoneHash: 'ph-1', actorId: 'owner-1', flagActs: true,
+    submitReturn: async () => { transmitted += 1; return {}; }, ...unwired
+  });
+  assert.equal(result.action, 'file_failed');
+  assert.equal(result.error, 'ALV_FILING_OVERLAP_CHECK_REQUIRED');
+  assert.equal(transmitted, 0);
+  assert.equal(store.row.status, 'draft_pending_confirmation');
 });

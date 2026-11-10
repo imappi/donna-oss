@@ -270,6 +270,11 @@ const readLiveCanonicalWithClient = async (client, { firmId, clientId, checksum,
 const isCanonicalChecksumViolation = (error) =>
   error?.code === '23505' && error?.constraint === 'documents_firm_client_checksum_idx';
 
+// A concurrent registration of the same stored object committed its row
+// after this one's Layer 1 read (migration 011's per-object unique index).
+const isStorageObjectViolation = (error) =>
+  error?.code === '23505' && error?.constraint === 'documents_storage_object_unique';
+
 const buildByteMatchCollapseSummary = ({ existing, documentType, collapsedAt }) => ({
   reason: 'duplicate_auto_collapsed',
   duplicate_reason: 'byte_match',
@@ -465,6 +470,25 @@ export const registerDocumentInDb = async ({
           parse_run_id: existingByKey.rows[0].parse_run_id || null
         };
       }
+      // A lost race on the stored object settles as the Layer 1 replay of the
+      // row that won: its document and parse run, no receipt of this request's
+      // own. Callers roll back to their savepoint first; null if no row is there.
+      const replayStoredObjectWinner = async () => {
+        const winner = await client.query(
+          `select ${DOC_THIN_COLUMNS} from documents
+           where firm_id=$1 and client_id=$2 and storage_object_key=$3`,
+          [firmId, document.client_id, document.storage_object_key]
+        );
+        if (!winner.rows.length) return null;
+        await client.query('commit');
+        return {
+          document: rowToThinParseStatus(winner.rows[0]),
+          created: false,
+          already_exists: true,
+          duplicate_reason: 'storage_object_key_match',
+          parse_run_id: winner.rows[0].parse_run_id || null
+        };
+      };
 
       // Layer 2: byte-hash duplicate — AUTO-COLLAPSED (RT-10, audit F-13).
       //
@@ -509,6 +533,9 @@ export const registerDocumentInDb = async ({
         const collapsedAt = new Date().toISOString();
         const duplicateSummary = buildByteMatchCollapseSummary({ existing, documentType, collapsedAt });
         const payload = { ...document, parse_run_id: null };
+        // A concurrent registration of the same stored object may have
+        // committed its own collapsed row since the Layer 1 read.
+        await client.query('savepoint register_collapse_insert');
         const collapsed = await client.query(
           `insert into documents (
              id, firm_id, client_id, filename, document_type, status, uploaded_at,
@@ -555,7 +582,14 @@ export const registerDocumentInDb = async ({
             JSON.stringify(duplicateSummary),
             JSON.stringify(payload)
           ]
-        );
+        ).catch((error) => error);
+        if (collapsed instanceof Error) {
+          if (!isStorageObjectViolation(collapsed)) throw collapsed;
+          await client.query('rollback to savepoint register_collapse_insert');
+          const replay = await replayStoredObjectWinner();
+          if (replay) return replay;
+          throw collapsed;
+        }
         if (!collapsed.rows.length) {
           // id collision (concurrent register for the same doc id).
           // Re-read and return whatever is there.
@@ -690,8 +724,13 @@ export const registerDocumentInDb = async ({
           ]
         );
       } catch (error) {
-        if (!isCanonicalChecksumViolation(error)) throw error;
+        if (!isCanonicalChecksumViolation(error) && !isStorageObjectViolation(error)) throw error;
         await client.query('rollback to savepoint register_canonical_insert');
+        // Same stored object first: whichever of the two indexes reported the
+        // lost race, a winner holding this object is this registration.
+        const replay = await replayStoredObjectWinner();
+        if (replay) return replay;
+        if (!isCanonicalChecksumViolation(error)) throw error;
         const winner = await readCanonical();
         if (!winner) throw error;
         return collapseOnto(winner);
