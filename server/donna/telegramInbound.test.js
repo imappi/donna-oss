@@ -16,6 +16,7 @@ import {
   isBareTelegramStart
 } from './channels/telegramWebhookCore.js';
 import { hashPhoneE164 } from './channels/whatsappWebhookCore.js';
+import { recordOwnerMileageExpenseInDb } from './ownerMileageExpense.js';
 
 const envOn = { TELEGRAM_ENABLED: 'true', TELEGRAM_CLIENTS: 'client-1', TELEGRAM_BOT_TOKEN: 'BOT:tok' };
 const CHAT_ID = '987654321';
@@ -439,4 +440,50 @@ test('texts sent before a client is known are bilingual; once a binding names a 
   assert.deepEqual(asked.at(-1), ['firm-b', 'client-fi'], "the binding's own firm is read");
   assert.equal(await ownerLanguageForBindings({ firmId: 'firm', bindings: [{ client_id: 'client-fi' }, { client_id: 'client-en' }], deps: { getOwnerLanguage } }), 'en', 'clients that disagree get English, the existing rule');
   assert.equal(await ownerLanguageForBindings({ firmId: 'firm', bindings: [{ client_id: 'client-fi' }] }), null, 'no reader: no language');
+});
+
+// A mileage message that is processed again (a replay) reaches the real writer,
+// which finds the retained journal. The owner was sent the literal "undefined".
+const mileageReplayTurn = ({ language, recordOwnerMileageExpense } = {}) => {
+  const retainedClient = { query: async (sql) => {
+    if (['begin', 'commit', 'rollback'].includes(sql)) return { rows: [] };
+    if (sql.includes('pg_advisory_xact_lock')) return { rows: [] };
+    if (sql.includes('from clients')) return { rows: [{ id: 'client-1', jurisdiction: 'fi' }] };
+    if (sql.includes('from ledger_journals j\n')) return { rows: [{ id: 'journal-1', status: 'posted', reversed_at: null, currency: 'EUR', amount: '44.26', payload: { computation: { km: 80.47, unit: 'km' } } }] };
+    throw new Error(`a replay must not reach: ${sql}`);
+  } };
+  return makeDeps({ deps: {
+    ...(language ? { getOwnerLanguage: async () => language } : {}),
+    appendClientPortalChatMessage: async (row) => row,
+    assembleClientPortalTurn: async () => ({ context: { client: { name: 'Esimerkki Oy' } }, history: [], validAskIds: [], assistantName: null, ownerMemory: null }),
+    generateClientPortalChatReply: async () => ({ kind: 'ok', text: 'ok', actions: [{ type: 'record_mileage', miles: 50, purpose: 'asiakaskäynti', confidence: 'high' }], model: 'test-model' }),
+    recordOwnerMileageExpense: recordOwnerMileageExpense
+      || ((args) => recordOwnerMileageExpenseInDb({ ...args, deps: { withFirmDbClient: (fn) => fn(retainedClient), writeValidatedJournal: () => { throw new Error('a replay must not write'); } } }))
+  } });
+};
+
+test('owner chat: a replayed mileage message tells the owner it is already recorded, in their language', async () => {
+  const fi = mileageReplayTurn({ language: 'fi' });
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: fi.deps, message: { message_id: 60, chat: { id: Number(CHAT_ID) }, text: 'Ajoin 50 km asiakaskäynnille' } });
+  assert.equal(fi.calls.texts.at(-1).text, 'Tämä matka on jo kirjattu (44,26 EUR). En kirjannut sitä uudelleen.');
+  const en = mileageReplayTurn({});
+  await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: en.deps, message: { message_id: 61, chat: { id: Number(CHAT_ID) }, text: 'Drove 50 km to a client' } });
+  assert.equal(en.calls.texts.at(-1).text, "That trip is already recorded (EUR 44.26). I haven't booked it again.");
+});
+
+test('owner chat: an empty or non-string reply is never sent, and is logged as a fault', async () => {
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => { errors.push(args); };
+  try {
+    for (const result of [{ status: 'booked' }, { status: 'booked', consequence: '' }, { status: 'booked', consequence: { text: 'x' } }]) {
+      errors.length = 0;
+      const turn = mileageReplayTurn({ recordOwnerMileageExpense: async () => result });
+      await processTelegramInboundMessage({ from: CHAT_ID, firmId: 'firm', env: envOn, deps: turn.deps, message: { message_id: 62, chat: { id: Number(CHAT_ID) }, text: 'Drove 50 km' } });
+      assert.equal(turn.calls.texts.length, 0, `${JSON.stringify(result)}: nothing is sent`);
+      assert.ok(errors.some((args) => /fault/i.test(String(args[0]))), `${JSON.stringify(result)}: the refusal is logged as a fault`);
+    }
+  } finally {
+    console.error = originalError;
+  }
 });
