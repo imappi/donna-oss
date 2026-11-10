@@ -186,9 +186,14 @@ test('uploadFirmDocuments: a refused file is held (not failed), then stored and 
   assert.equal(rowOf(rowId).upload_state, 'held');
 
   await advance(retained.HELD_RETRY_DELAYS_MS[0]);
-  // The timer starts the re-send; the real path (FileReader, fetch) settles
-  // asynchronously.
-  for (let i = 0; i < 100 && !rowOf(rowId).document_id; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  // The timer starts the re-send and does not hand back its promise; the real
+  // path (FileReader, fetch) settles asynchronously. Wait for the row's end
+  // state — stored AND registered, or failed or held again — bounded in real
+  // time rather than by a count of event-loop turns, which a loaded machine can
+  // outrun. (`uploaded` is set when the bytes are stored, before register.)
+  const settled = (row) => row.upload_state === 'failed' || row.upload_state === 'held' || (row.upload_state === 'uploaded' && row.document_id);
+  const settleBy = Date.now() + 5_000;
+  while (!settled(rowOf(rowId)) && Date.now() < settleBy) await new Promise((resolve) => setImmediate(resolve));
   const row = rowOf(rowId);
   assert.equal(row.upload_state, 'uploaded', JSON.stringify(row));
   assert.equal(row.storage_object_key, 'c1/receipt.pdf');
