@@ -153,13 +153,24 @@ export const recordRefusalViaDb = async ({ firmId, clientId, transactionId, erro
            values ($1, $2, 'system', $5, 'ledger.auto_post_refused', 'transaction', $3, $4::jsonb)`,
           [firmId, clientId, transactionId, JSON.stringify(refusal), actorId]
         );
-        const stamped = await client.query(
+        // One owner per stamp. The named writer's own receipt
+        // (db/ledger.js receiptPostingFailure) already stamped the refusals it
+        // names, in the same attempt; this receipt then adds only the audit
+        // row the damping and the projection read. Any other refusal, and
+        // every unexpected failure, is stamped here.
+        const current = await client.query(
+          `select payload->'ledger_post_refusal' as stamp from transactions
+           where firm_id = $1 and client_id = $2 and id = $3 for update`,
+          [firmId, clientId, transactionId]);
+        if (current.rowCount !== 1) throw new Error('Refusal receipt transaction disappeared.');
+        const stamp = current.rows[0].stamp;
+        const writerOwned = Boolean(refusal.code) && stamp?.code === refusal.code && stamp?.source && stamp.source !== source;
+        if (!writerOwned) await client.query(
           `update transactions
            set payload = payload || jsonb_build_object($4::text, $5::jsonb)
            where firm_id = $1 and client_id = $2 and id = $3`,
           [firmId, clientId, transactionId, LEDGER_POST_REFUSAL_PAYLOAD_KEY, JSON.stringify({ ...refusal, refused_at: new Date().toISOString() })]
         );
-        if (stamped.rowCount !== 1) throw new Error('Refusal receipt transaction disappeared.');
         await client.query('commit');
       } catch (writeError) {
         await client.query('rollback');
