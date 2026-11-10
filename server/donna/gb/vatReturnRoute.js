@@ -5,6 +5,7 @@
 import { withFirmDbClient } from '../firmDb.js';
 import { resolveGbVatRegistrationOnDate } from './vatRegistration.js';
 import { buildGbVatReturnFromLedgerLines, gbVatRefusal, resolveGbVatPeriod } from './vatReturn.js';
+import { readOpenCodingCorrectionsWithClient } from '../postedCorrectionGap.js';
 
 export const prepareGbVatReturnWithClient = async ({ client, firmId, clientId, periodKey, asOf, vatRegistration } = {}) => {
   if (!firmId || !clientId) throw gbVatRefusal('GB_VAT_SCOPE_REQUIRED', 'firmId and clientId are required.', 400);
@@ -43,7 +44,18 @@ export const prepareGbVatReturnWithClient = async ({ client, firmId, clientId, p
       order by lj.journal_date asc, ll.journal_id asc, ll.line_no asc`,
     [firmId, clientId, period.startsOn, period.endsOn]
   );
-  return buildGbVatReturnFromLedgerLines({ period, lines: lineResult.rows });
+  const prepared = buildGbVatReturnFromLedgerLines({ period, lines: lineResult.rows });
+  // A posting of the period whose correction case is open carries a treatment
+  // already marked as in doubt (postedCorrectionGap.js): the return is not
+  // prepared until each case is corrected or closed. The refusal names the
+  // lines; no figure is changed.
+  const corrections = await readOpenCodingCorrectionsWithClient({ client, firmId, clientId, period });
+  if (corrections.count) {
+    throw gbVatRefusal('GB_VAT_RETURN_OPEN_CODING_CORRECTIONS',
+      `${corrections.count} posting${corrections.count === 1 ? '' : 's'} in this VAT period ${corrections.count === 1 ? 'has' : 'have'} an open correction case; the return waits until each is corrected or closed.`,
+      422, corrections);
+  }
+  return prepared;
 };
 
 export const prepareGbVatReturnFromDb = ({ firmId, clientId, periodKey, asOf, withFirmDbClientFn = withFirmDbClient } = {}) =>

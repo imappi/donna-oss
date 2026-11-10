@@ -21,6 +21,9 @@ test('owner card: owner-fact refusals surface as honest blockers, internal ones 
   assert.match(blocked.message, /VAT registration status/);
   const partial = ownerVatReturnCardState({ surface_acts: true, prepared: null, refusal: { code: 'GB_VAT_REGISTRATION_PARTIAL_PERIOD' } });
   assert.equal(partial.kind, 'blocked');
+  const corrections = ownerVatReturnCardState({ surface_acts: true, prepared: null, refusal: { code: 'GB_VAT_RETURN_OPEN_CODING_CORRECTIONS' } });
+  assert.equal(corrections.kind, 'blocked');
+  assert.match(corrections.message, /being corrected, and the return waits/);
   for (const code of ['GB_VAT_RETURN_NOT_REGISTERED_FOR_PERIOD', 'GB_VAT_PERIOD_NOT_ESTABLISHED', 'GB_VAT_TREATMENT_NOT_ESTABLISHED', 'GB_VAT_RETURN_MISFOOT_BOX_3']) {
     assert.equal(ownerVatReturnCardState({ surface_acts: true, prepared: null, refusal: { code } }), null, code);
   }

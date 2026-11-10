@@ -1,8 +1,8 @@
 const gbp = (value) => `£${Math.abs(Number(value) || 0).toFixed(2)}`;
 
 // Which prep refusals the OWNER should see, and as what. A missing VAT
-// registration is THEIR fact (an honest ask); a partial-period registration is
-// a hold they should know about. Everything else — no HMRC period persisted
+// registration is THEIR fact (an honest ask); a partial-period registration,
+// or postings of the period being corrected, is a hold they should know about. Everything else — no HMRC period persisted
 // yet, uncoded or misfooted ledger lines, not registered across the period —
 // is Donna's work-in-progress or a genuine nothing-due, and rendering it at
 // the owner would be noise they cannot act on. Those return null: no card.
@@ -10,7 +10,9 @@ const OWNER_VISIBLE_REFUSALS = {
   GB_VAT_REGISTRATION_NOT_ESTABLISHED:
     'Donna needs your VAT registration status before she can prepare a return. Tell her whether (and from when) the business is VAT-registered.',
   GB_VAT_REGISTRATION_PARTIAL_PERIOD:
-    'Your VAT registration covers only part of this period, so Donna is holding the return for review instead of preparing a partial one.'
+    'Your VAT registration covers only part of this period, so Donna is holding the return for review instead of preparing a partial one.',
+  GB_VAT_RETURN_OPEN_CODING_CORRECTIONS:
+    'Some postings in this period are being corrected, and the return waits until that is done.'
 };
 
 // The portal card's whole verdict from the owner envelope
