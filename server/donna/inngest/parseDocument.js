@@ -54,7 +54,7 @@ import {
 import { fetchEvidenceObjectBytes } from '../evidenceStorage.js';
 import { sendOwnerMediaParseSummary } from '../channels/ownerMediaParseSummary.js';
 import { applyPostExtractionEnrichment } from '../filenameFallback.js';
-import { extractBankStatementFromBase64 } from '../bankStatement.js';
+import { extractBankStatementFromBase64, STATEMENT_READER_KINDS, statementSourceKind } from '../bankStatement.js';
 import { extractReceiptFromBase64 } from '../receipt.js';
 import { extractSupplierBillFromBase64 } from '../supplierBill.js';
 import { extractSalesInvoiceFromBase64 } from '../salesInvoice.js';
@@ -363,6 +363,10 @@ export const __buildClassification = ({
   originalType,
   minConfidence,
   routerModel = null,
+  // response_proven / configured_fallback, as the router classified it
+  // (providerEndpoints.js classifyModelProvenance) — the same receipt pair
+  // every extractor carries.
+  routerModelSource = null,
   pickExtractorImpl = pickExtractor
 } = {}) => {
   const normalizedOriginal = originalType || 'unknown';
@@ -372,6 +376,7 @@ export const __buildClassification = ({
       classification: {
         source: 'user_hint',
         model: null,
+        model_source: null,
         confidence: null,
         original_type: normalizedOriginal,
         final_type: normalizedOriginal,
@@ -390,6 +395,7 @@ export const __buildClassification = ({
   const base = {
     source: 'router_v1',
     model: routerModel,
+    model_source: routerModel ? (routerModelSource || null) : null,
     confidence: typeof routerResult.confidence === 'number' ? routerResult.confidence : null,
     original_type: normalizedOriginal,
     family: routerResult.family || null,
@@ -1467,7 +1473,7 @@ const extractDocumentInner = async ({
   // rows. Never repair amounts or weaken balance checks. Bypass failed cached
   // extractions so the existing bounded queue retry can make fresh progress.
   const recoveringValidation = extraction?.extraction_status === 'needs_review' &&
-      extraction?.extraction_source !== 'openai_vision_structured' &&
+      statementSourceKind(extraction?.extraction_source) !== STATEMENT_READER_KINDS.VISION_STRUCTURED &&
       (mimeType === 'application/pdf' || /\.pdf$/i.test(filename));
   if (recoveringValidation) {
     extraction = await extractor.extract({ base64, filename, mimeType, ledgerCurrency,
@@ -1795,6 +1801,7 @@ const runParseAndWrite = async ({ firmId, documentId, parseRunId, log, attempt =
       // produced a receipt that lies whenever the router's resolved
       // model differs (CLAUDE.md: the model id is part of the receipt).
       routerModel: routerResult?.routed ? (routerResult.model || null) : null,
+      routerModelSource: routerResult?.routed ? (routerResult.model_source || null) : null,
       // Batch-2 Slice B — thread the run's config snapshot into the
       // perception-downgrade guard's dedicated-extractor probe, so the
       // guard's view of "which types have a dedicated extractor" matches
@@ -2063,6 +2070,8 @@ const runParseAndWrite = async ({ firmId, documentId, parseRunId, log, attempt =
           candidate_families: routerResult.candidate_families,
           language_hint: routerResult.language_hint,
           reason: routerResult.reason,
+          model: routerResult.model || null,
+          model_source: routerResult.model_source || null,
           confidence_envelope: calibrate(routerResult.confidence, {
             model: routerResult.model || 'unknown',
             source: 'router'

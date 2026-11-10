@@ -488,6 +488,8 @@ export const isOpenAiVisionConfigured = () => getOpenAiConfig().configured;
 export const statementReaderMissingProvider = () => getOpenAiConfig().missingProvider;
 // …and the lane knob whose model id pinned that provider, when one did.
 export const statementReaderPinnedBy = () => getOpenAiConfig().pinnedBy;
+// The provider the reader resolves (the plain transcription returns text only).
+export const statementReaderProvider = () => getOpenAiConfig().provider;
 
 const notConfiguredError = (config, what) => {
   const error = new Error(`No model provider key is configured for ${what} (${config.reason || 'no_provider_key'}).`);

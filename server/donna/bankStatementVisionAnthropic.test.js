@@ -269,3 +269,22 @@ test('statement receipt: the served model per call with its source; a mixed read
       'a response that names no model: the requested id, receipted as a fallback');
   } finally { providers.restore(); restoreEnv(); }
 });
+
+// The source on the statement's receipt names the reader AND the provider
+// that answered: `anthropic_vision_structured` when Claude read it (an OpenAI
+// read keeps `openai_vision_structured`, bankStatementLlmFirst.test.js).
+test('the statement\'s extraction_source names the provider that answered', async () => {
+  const { extractBankStatementFromBase64, statementSourceKind } = await import('./bankStatement.js');
+  const { readFileSync } = await import('node:fs');
+  const scanned = readFileSync(new URL('../../data/evals/fixtures/fi-kultalanka-2025-02/sources/01 OP Tiliote 02-2025.pdf', import.meta.url)).toString('base64');
+  onlyAnthropic();
+  const providers = installRecordedProviders();
+  try {
+    providers.script('bank_statement_extraction', [message({ transactions: [row('2025-02-03', 'Kahvila Synteetti', 'out', 12.4, 8124.59)], statement_summary: null })]);
+    const read = await extractBankStatementFromBase64({ base64: scanned, filename: 'tiliote.pdf', mimeType: 'application/pdf', bypassCache: true });
+    assert.deepEqual([read.extraction_source, read.extraction_provider, read.extraction_model, read.extraction_model_source],
+      ['anthropic_vision_structured', 'anthropic', 'claude-opus-5-5', 'response_proven']);
+    assert.equal(statementSourceKind(read.extraction_source), 'vision_structured');
+    assert.equal(statementSourceKind('openai_vision_structured'), 'vision_structured', 'the stored OpenAI spelling reads as the same reader');
+  } finally { providers.restore(); restoreEnv(); }
+});

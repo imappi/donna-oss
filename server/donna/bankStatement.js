@@ -15,7 +15,8 @@ import {
   isOpenAiVisionConfigured,
   ocrPdfWithOpenAiVision,
   statementReaderMissingProvider,
-  statementReaderPinnedBy
+  statementReaderPinnedBy,
+  statementReaderProvider
 } from './bankStatementVision.js';
 import { toUtcIsoDay } from './dates.js';
 import { providerFaultOfResponse } from './inngest/parseErrors.js';
@@ -30,6 +31,22 @@ import { isProviderStopFailure, stopFailureCode, stopFailureReason } from './doc
 const strongReaderStop = (error) => (isProviderStopFailure(error)
   ? { fault: stopFailureReason(error), code: stopFailureCode(error), provider: error.provider || null, model: error.servedModel || null }
   : null);
+// Which reader produced a statement's rows (`extraction_source`): the reader
+// kind, prefixed with the provider that ANSWERED — `anthropic_vision_structured`
+// when Claude read it, `openai_vision_structured` when OpenAI did (the value
+// every OpenAI read has always stored, so those rows and their readers are
+// unchanged). `extraction_provider` carries the provider beside it.
+// `statementSourceKind` reads the reader kind from either spelling.
+export const STATEMENT_READER_KINDS = Object.freeze({
+  VISION_STRUCTURED: 'vision_structured',
+  TEXT_STRUCTURED: 'text_structured',
+  VISION_TEXT: 'vision_text'
+});
+const statementSource = (kind, provider) => `${provider === 'anthropic' ? 'anthropic' : 'openai'}_${kind}`;
+export const statementSourceKind = (source) => {
+  const match = /^(openai|anthropic)_(vision_structured|text_structured|vision_text)$/.exec(String(source || ''));
+  return match ? match[2] : null;
+};
 const stopRecord = (base, stop, extra = {}) => ({ ...base, transactions: [], vision_skipped: 'provider_stop', vision_skipped_details: stop, ...extra });
 
 const OCR_SCRIPT_PATH = fileURLToPath(new URL('./pdfOcr.swift', import.meta.url));
@@ -1179,7 +1196,7 @@ const tryLlmTextExtraction = async (text, filename, { bypassCache = false } = {}
     if (Array.isArray(structured?.transactions) && structured.transactions.length > 0) {
       return {
         text: clean,
-        source: 'openai_text_structured',
+        source: statementSource(STATEMENT_READER_KINDS.TEXT_STRUCTURED, structured.provider),
         lineCount: countLines(clean),
         transactions: structured.transactions,
         statement_summary_hint: structured.statement_summary || null,
@@ -1319,7 +1336,7 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
       if (Array.isArray(structured?.transactions) && structured.transactions.length > 0) {
         return {
           text: '',
-          source: 'openai_vision_structured',
+          source: statementSource(STATEMENT_READER_KINDS.VISION_STRUCTURED, structured.provider),
           lineCount: structured.transactions.length,
           transactions: structured.transactions,
           statement_summary_hint: structured.statement_summary || null,
@@ -1407,7 +1424,8 @@ const selectPdfExtraction = async (base64, filename, { llmFirst = false, bypassC
           });
           return {
             text: sanitizeStatementText(visionText),
-            source: 'openai_vision_text',
+            source: statementSource(STATEMENT_READER_KINDS.VISION_TEXT, statementReaderProvider()),
+            extraction_provider: statementReaderProvider(),
             lineCount: countLines(visionText),
             transactions,
             vision_elapsed_ms: Date.now() - visionStart
@@ -1844,7 +1862,7 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
           if (stop) return stopRecord({ text: '', source: 'none', lineCount: 0 }, stop);
           throw error;
         }
-        return { text: '', source: 'openai_vision_structured',
+        return { text: '', source: statementSource(STATEMENT_READER_KINDS.VISION_STRUCTURED, structured.provider),
           lineCount: structured.transactions.length, transactions: structured.transactions,
           statement_summary_hint: structured.statement_summary, extraction_model: structured.model,
           extraction_model_source: structured.model_source || null,
@@ -1891,9 +1909,8 @@ export const extractBankStatementFromBase64 = async ({ base64, filename = '', mi
     model_candidate: hintCurrency || null
   };
 
-  const isStructuredLlm =
-    extraction.source === 'openai_vision_structured' ||
-    extraction.source === 'openai_text_structured';
+  const isStructuredLlm = [STATEMENT_READER_KINDS.VISION_STRUCTURED, STATEMENT_READER_KINDS.TEXT_STRUCTURED]
+    .includes(statementSourceKind(extraction.source));
   const correctedTransactions = isStructuredLlm
     ? repairStructuredDirectionsFromBalances(transactions, statementSummary)
     : transactions;

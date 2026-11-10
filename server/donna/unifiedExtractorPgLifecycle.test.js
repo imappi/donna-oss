@@ -168,6 +168,8 @@ test(
         [['anthropic', 'claude-opus-5-5', 'claude-opus-5-5']], 'the router ran on Anthropic');
       assert.equal(document.parse_summary.classification.source, 'router_v1');
       assert.equal(document.parse_summary.classification.model, 'claude-opus-5-5', 'the routing receipt names the served model');
+      assert.equal(document.parse_summary.classification.model_source, 'response_proven', 'and its source, as every extractor receipt does');
+      assert.deepEqual([document.parse_summary.router.model, document.parse_summary.router.model_source], ['claude-opus-5-5', 'response_proven']);
       assert.equal(document.parse_summary.classification.final_type, 'supplier_bill');
     } finally {
       await appliance.stop();
