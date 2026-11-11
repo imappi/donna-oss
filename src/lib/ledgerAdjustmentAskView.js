@@ -24,7 +24,11 @@ export const ledgerAdjustmentAskMessages = (ask = {}) => {
   if (!why) return null;
   const journal = subject.settlement_journal_id || '';
   return [
-    { id: 'mounted.financial.ledgerAdjustmentAsk.settlementReversal', values: {
+    // The entry is named by whose money it said paid (an older ask without
+    // the fact was an owner-funds entry: the only kind there was).
+    { id: subject.funding_source === 'company_cash'
+      ? 'mounted.financial.ledgerAdjustmentAsk.settlementReversalCompanyCash'
+      : 'mounted.financial.ledgerAdjustmentAsk.settlementReversal', values: {
       journal,
       document: subject.document_label || subject.document_id || '',
       amount: money(subject.amount),

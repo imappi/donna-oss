@@ -495,7 +495,8 @@ test('real PG (FI): the refused reversal is a question to a named firm member un
     kind: 'settlement_reversal', refusal_code: 'LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN',
     document_id: 'doc-cash', document_label: 'Synthetic Fuel', document_date: '2026-05-14', amount: GROSS, currency: 'EUR',
     bank_transaction_id: 'bank-late', bank_line_date: '2026-05-15', bank_line_description: 'Synthetic card payment',
-    settlement_journal_id: journal, original_journal_date: '2026-05-14', filed_return_id: 'alv-ask-q2', filed_return_period: '2026-Q2',
+    // An entry with no funding_source predates company-cash entries: the owner's funds.
+    settlement_journal_id: journal, funding_source: 'owner', original_journal_date: '2026-05-14', filed_return_id: 'alv-ask-q2', filed_return_period: '2026-Q2',
     tax_moved: [{ key: 'tax_code:ALV_25_5_INPUT', currency: 'EUR', amount: -GROSS }], refused_at: undefined, acknowledgement_digest: undefined });
   assert.match(subject.acknowledgement_digest, /^[0-9a-f]{64}$/);
   const doc = (await pool.query("select payload->'settlement_entry' as entry from documents where id='doc-cash'")).rows[0].entry;

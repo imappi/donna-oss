@@ -7,7 +7,9 @@
 // 'owner_reply') or an immaterial unprompted auto_explain — and which do NOT
 // yet carry a settlement journal (`payload.settlement_entry.journal_id`).
 // Those docs are "explained" but the books are still MISSING the entry:
-// DR the expense account / CR the owner's-funds account (901 Director loan).
+// DR the expense account / CR the account that paid it: the owner's funds
+// (901 Director loan), or the company's cash box on the market's declared
+// cash account (FI 1900 Käteinen raha) — documentSettlementFunding.js.
 //
 // PROPOSE → VALIDATE → EXPLAIN → COMMIT, with the migration-034 proposal card
 // as the receipt's home: the card observes, the named writer
@@ -89,6 +91,12 @@ import {
   getDispositionMaterialityPolicy,
   exceedsMaterialityCeiling
 } from './dispositionMateriality.js';
+import {
+  DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT,
+  SETTLEMENT_FUNDING_COMPANY_CASH,
+  documentSettlementFundingOrRefusal,
+  settlementFundingAccountLabel
+} from './documentSettlementFunding.js';
 
 export {
   DOCUMENT_SETTLEMENT_LEDGER_ENTRY_FLAG_KEY,
@@ -103,8 +111,10 @@ const LOG_TAG = 'documentSettlementEntry';
 // a different journal shape, deliberately out of scope (module header).
 export const SETTLEMENT_MONEY_IN_TYPES = Object.freeze(['sales_invoice', 'issued_receipt']);
 
-// The settlement channels that mean "the owner's own funds paid this" —
-// the only ones the DR-expense / CR-owner-funds entry is true for.
+// The settlement channels this entry books. A personal card is the owner's
+// funds; cash is the owner's funds or the company's own cash box, by the
+// disposition's funding_source (documentSettlementFunding.js decides the
+// credit account: 901 owner's funds, or the market's declared cash account).
 export const SETTLEMENT_ENTRY_CHANNELS = Object.freeze(['cash', 'personal_card']);
 
 // Bounded LLM calls per sweep (the gather is re-entrant — the next sweep
@@ -154,7 +164,7 @@ const clampConfidence = (value) => {
 
 const SETTLEMENT_ACCOUNT_SYSTEM_PROMPT = `You code ONE expense document to a client's chart of accounts for a bookkeeping firm.
 
-The document is a business expense that settled OUTSIDE the client's visible bank feed (paid in cash or with the owner's personal funds). The firm is about to record it as: DEBIT an expense account / CREDIT the owner's-funds account. Choose the expense account and the source-supported tax treatment from the supplied jurisdiction policy. The existing writer separates deductible tax; never choose the account default as a substitute for the document's treatment.
+The document is a business expense that settled OUTSIDE the client's visible bank feed (paid in cash from the owner's funds or the company's own cash box, or with the owner's personal funds). The firm is about to record it as: DEBIT an expense account / CREDIT the account that paid it (the owner's-funds account or the company's cash account). Choose the expense account and the source-supported tax treatment from the supplied jurisdiction policy. The existing writer separates deductible tax; never choose the account default as a substitute for the document's treatment.
 
 You are handed the client's chart of accounts. Pick EXACTLY ONE account name FROM THAT LIST — copy it verbatim. Never invent, rename, or combine account names. If nothing fits well, pick the closest reasonable account with an honestly low confidence.
 
@@ -232,7 +242,9 @@ ${options.map((name) => `  - ${name}`).join('\n')}`);
 
   const firmAnchor = formatFirmAnchor(
     firmContext?.clientIdentity,
-    'This document evidences money the firm PAID with the owner\'s own funds. The counterparty is whoever the firm paid — never the firm itself.'
+    disposition?.funding_source === SETTLEMENT_FUNDING_COMPANY_CASH
+      ? 'This document evidences money the firm PAID from its own cash box. The counterparty is whoever the firm paid — never the firm itself.'
+      : 'This document evidences money the firm PAID with the owner\'s own funds. The counterparty is whoever the firm paid — never the firm itself.'
   );
   if (firmAnchor) sections.push(firmAnchor);
 
@@ -373,7 +385,14 @@ const ceilingRefusesPost = ({ document, authorityBasis, materialityCeiling }) =>
   authorityBasis !== 'owner_reply'
   && exceedsMaterialityCeiling(Number(document?.total_amount || 0), materialityCeiling);
 
-const buildSettlementChecks = ({ document, proposal, confidenceFloor, authorityBasis, materialityCeiling }) => summarizeCheckReport([
+const buildSettlementChecks = ({ document, proposal, confidenceFloor, authorityBasis, materialityCeiling, fundingRefusal = null }) => summarizeCheckReport([
+  // Whose money paid and the account it credits (documentSettlementFunding.js):
+  // present only when the rule refuses, so an owner-funded report is unchanged.
+  ...(fundingRefusal ? [{
+    name: 'settlement_funding_account',
+    status: 'fail',
+    detail: fundingRefusal.message
+  }] : []),
   {
     name: 'document_currency',
     status: normalizeLedgerCurrency(document?.currency) ? 'pass' : 'fail',
@@ -414,8 +433,15 @@ const buildSettlementProposalCard = ({
   ownerFundsLabel,
   authorityBasis,
   checks,
-  model
+  model,
+  funding = null
 }) => {
+  // The credited account as the card names it: the owner's funds, or the
+  // company's cash account (none when the market declares no cash account).
+  const companyCash = funding?.funding_source === SETTLEMENT_FUNDING_COMPANY_CASH;
+  const creditLabel = companyCash
+    ? (funding.account ? settlementFundingAccountLabel(funding.account) : 'no declared cash account')
+    : ownerFundsLabel;
   const amount = Number(document?.total_amount || 0);
   const accountLabel = expenseAccountRow?.code
     ? `${expenseAccountRow.code} · ${expenseAccountRow.name}`
@@ -446,7 +472,7 @@ const buildSettlementProposalCard = ({
       },
       after: {
         payment_status: 'paid',
-        settlement_journal: `DR ${accountLabel || 'expense'} / CR ${ownerFundsLabel} — ${amount} ${document.currency || ''}`.trim()
+        settlement_journal: `DR ${accountLabel || 'expense'} / CR ${creditLabel} — ${amount} ${document.currency || ''}`.trim()
       }
     }],
     before_after_total: 1,
@@ -460,6 +486,7 @@ const buildSettlementProposalCard = ({
     detail: {
       expense_account: proposal?.account || null,
       expense_account_code: expenseAccountRow?.code || null,
+      ...(expenseAccountRow?.name && expenseAccountRow.name !== proposal?.account ? { expense_account_name: expenseAccountRow.name } : {}),
       confidence: clampConfidence(proposal?.confidence),
       reasoning: proposal?.reasoning || '',
       amount,
@@ -468,7 +495,9 @@ const buildSettlementProposalCard = ({
       verdict_source: disposition?.verdict_source || null,
       evidence_request_id: disposition?.evidence_request_id || null,
       authority_basis: authorityBasis,
-      owner_funds_account: ownerFundsLabel,
+      ...(companyCash
+        ? { funding_source: SETTLEMENT_FUNDING_COMPANY_CASH, settlement_account: funding.account ? creditLabel : null }
+        : { owner_funds_account: ownerFundsLabel }),
       model: model || null
     },
     warnings: proposal?.account
@@ -479,10 +508,11 @@ const buildSettlementProposalCard = ({
 
 // ── The producer ─────────────────────────────────────────────────────────
 
-// The gather: money-out docs settled to the owner's own funds, no journal
-// yet. Keyed PURELY on the persisted verdict merge (render-the-persisted-
-// verdict): shadow-mode dispositions never merged a payload, so they never
-// gather here — the entry chain only ever starts from an ACTED settle.
+// The gather: money-out docs settled outside the bank feed by the owner's
+// funds or the company's cash box, no journal yet. Keyed PURELY on the
+// persisted verdict merge (render-the-persisted-verdict): shadow-mode
+// dispositions never merged a payload, so they never gather here — the entry
+// chain only ever starts from an ACTED settle.
 const GATHER_SQL = `
   select d.id, d.document_type, d.vendor_name, d.customer_name, d.filename,
          d.total_amount, d.currency, d.document_date, d.payment_status, d.updated_at,
@@ -494,7 +524,7 @@ const GATHER_SQL = `
      and d.payload->'no_line_disposition'->>'disposition' = 'auto_explain'
      and d.payload->'no_line_disposition'->>'settlement_channel' = any($3::text[])
      and (d.payload->'no_line_disposition'->>'settlement_channel' = 'personal_card'
-       or d.payload->'no_line_disposition'->>'funding_source' = 'owner')
+       or d.payload->'no_line_disposition'->>'funding_source' in ('owner', 'company_cash'))
      and coalesce(d.payload->'settlement_entry'->>'journal_id', '') = ''
      and d.document_type <> all($4::text[])
      and d.total_amount is not null and d.total_amount > 0
@@ -524,7 +554,10 @@ const postSettlementForDocument = async ({
     document,
     expenseAccount: {
       code: detail.expense_account_code || '',
-      name: detail.expense_account,
+      // The chart row's own name when the pick resolved to one: the palette
+      // name posted onto a coded row would rename it (the account mint keys
+      // on the code and writes the name it is given).
+      name: detail.expense_account_name || detail.expense_account,
       tax_treatment:detail.tax_treatment || '',
       xero_tax_type: detail.tax_treatment ? '' : detail.expense_account_tax_type || ''
     },
@@ -648,15 +681,8 @@ export const runDocumentSettlementEntriesForClient = async ({
       || (async () => (await firmDb()).getClientAccountOptionsFromDb({ firmId, clientId }));
     const postFn = postJournalFn
       || (async (args) => (await firmDb()).postDocumentSettlementJournalWithClient(args));
-    const ownerFundsLabelOf = async () => {
-      if (postJournalFn) return '901 · Director loan';
-      const mod = await firmDb();
-      const acct = mod.DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT || { code: '901', name: 'Director loan' };
-      return `${acct.code} · ${acct.name}`;
-    };
-
     const accountOptions = await optionsFn();
-    const ownerFundsLabel = await ownerFundsLabelOf();
+    const ownerFundsLabel = settlementFundingAccountLabel(DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT);
     // A claude-family policy rung rides the anthropic transport as a model
     // override (same as the fixed sweeps); a non-claude rung rides `transport`.
     const model = modelOverride ?? policyModel ?? getModel();
@@ -815,7 +841,8 @@ export const runDocumentSettlementEntriesForClient = async ({
           ? await resolveExpenseAccountRow({ client, firmId, clientId, accountName: proposal.account })
           : null;
         const authorityBasis = authorityBasisFor(disposition);
-        const checks = buildSettlementChecks({ document, proposal, confidenceFloor, authorityBasis, materialityCeiling });
+        const funding = documentSettlementFundingOrRefusal({ disposition, jurisdiction: clientIdentity?.jurisdiction ?? null });
+        const checks = buildSettlementChecks({ document, proposal, confidenceFloor, authorityBasis, materialityCeiling, fundingRefusal: funding.refusal });
         const card = buildSettlementProposalCard({
           document,
           disposition,
@@ -824,7 +851,8 @@ export const runDocumentSettlementEntriesForClient = async ({
           ownerFundsLabel,
           authorityBasis,
           checks,
-          model: proposal.model || model
+          model: proposal.model || model,
+          funding
         });
         card.proposal_id = proposalId;
         if (proposal.tax_treatment) card.detail.tax_treatment = proposal.tax_treatment;
