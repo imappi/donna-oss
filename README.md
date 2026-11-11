@@ -139,7 +139,10 @@ reports is added after it. It prices calls from
 first; the `gpt-5.4` rate there is an assumption, not a published price,
 and so is the bare `claude-` row for any Claude model without a row of its
 own, so the cap is approximate for those models. A price table that cannot price
-every model the month calls stops the command before any call. The committed recordings are replaced only after a replay on a
+every model the reference recordings name stops the command before any
+call; a model they do not name (on a first full recording, or after a
+lane's model changes) is checked at its own first call, and refused there
+if it has no price, after the calls before it were paid for. The committed recordings are replaced only after a replay on a
 fresh book has used every one of them, each exactly as often as recorded.
 
 The starts below run the same book on live providers, with your own keys

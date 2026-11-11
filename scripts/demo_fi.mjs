@@ -143,6 +143,10 @@ const VIRTUAL_CLOCK_SKIP = new Set(['desktop-backup-daily']);
 const log = (line) => console.log(`[demo] ${line}`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The signals that end a demo: Ctrl-C, a kill, and the terminal closing.
+export const DEMO_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
+const SIGNAL_EXIT_CODES = Object.freeze({ SIGHUP: 129, SIGINT: 130, SIGTERM: 143 });
+
 export class DemoError extends Error {
   constructor({ code, message, exitCode = 1 }) {
     super(message);
@@ -672,15 +676,20 @@ export const runDemo = async (options) => {
     })();
     return stopping;
   };
-  // Ctrl-C at any point stops what the demo started (its PostgreSQL first of
-  // all) before the process ends; once the month is up it is the normal end.
+  // Ctrl-C, a kill, or the terminal window closing (SIGHUP) at any point
+  // stops what the demo started (its PostgreSQL first of all) before the
+  // process ends; once the month is up it is the normal end.
   const onSignal = (signal) => {
     if (up) { releaseUp?.(); return; }
     console.error(`[demo] ${signal}: stopping`);
-    stop().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143));
+    stop().finally(() => process.exit(SIGNAL_EXIT_CODES[signal] ?? 143));
   };
-  process.on('SIGINT', onSignal);
-  process.on('SIGTERM', onSignal);
+  for (const signal of DEMO_SIGNALS) process.on(signal, onSignal);
+  // A stop that has begun is not followed by a start: checked before each
+  // thing the demo starts (PostgreSQL, the runtime, the web app).
+  const notStopping = (what) => {
+    if (stopping) throw new DemoError({ code: 'DEMO_STOPPED', message: `demo: stopping; ${what} not started` });
+  };
   // Started by another demo process (the fixed-locale re-run, or a pass of
   // the record loop): when that process is gone, even killed outright, stop.
   const onParentGone = () => onSignal('parent process gone');
@@ -857,6 +866,7 @@ export const runDemo = async (options) => {
       process.env.LC_ALL = 'C';
       process.env.LANG = 'C';
       try {
+        notStopping('PostgreSQL');
         pgHandle = ensureLocalPostgres({ dataDir, onActive: 'attach', logger: { log: (l) => console.log(l), error: (l) => console.error(l) } });
       } finally {
         for (const [key, value] of Object.entries(priorLocale)) {
@@ -898,6 +908,7 @@ export const runDemo = async (options) => {
     }
 
     const { createDonnaRuntimeServer } = await import('../server/donna/desktop/runtimeServer.js');
+    notStopping('the runtime');
     runtime = await createDonnaRuntimeServer({
       listen: { host: '127.0.0.1', port },
       logger: options.quietRuntime ? { log: () => {}, error: console.error, warn: () => {} } : console,
@@ -931,6 +942,7 @@ export const runDemo = async (options) => {
       const distDir = path.join(ROOT, 'dist');
       if (existsSync(path.join(distDir, 'index.html'))) {
         const { createLocalWebServer } = await import('./local_web.mjs');
+        notStopping('the web app');
         webServer = createLocalWebServer({ distDir, runtimePort: port });
         await new Promise((resolve, reject) => { webServer.once('error', reject); webServer.listen(webPort, process.env.DONNA_LOCAL_WEB_HOST || '127.0.0.1', resolve); });
         log(`web app on http://127.0.0.1:${webPort}/firms`);
@@ -1098,8 +1110,7 @@ export const runDemo = async (options) => {
     return summary;
   } finally {
     await stop();
-    process.off('SIGINT', onSignal);
-    process.off('SIGTERM', onSignal);
+    for (const signal of DEMO_SIGNALS) process.off(signal, onSignal);
     process.off('disconnect', onParentGone);
   }
 };
@@ -1128,9 +1139,19 @@ export const printSummary = (summary) => {
 // sealed process on its own new book (removed after it). The passes work on
 // a copy; the committed file is replaced only after the verify passes. One
 // spend cap covers every pass: each is given what is left of it.
+// The pass running now: a signal to the record loop is passed on to it, and
+// the loop then ends with it.
+let currentPass = null;
+let loopSignal = null;
+const forwardToPass = (signal) => {
+  loopSignal = signal;
+  if (currentPass) currentPass.kill(signal); else process.exit(SIGNAL_EXIT_CODES[signal] ?? 143);
+};
 const runChild = (args, env = process.env) => new Promise((resolve) => {
+  if (loopSignal) { resolve(SIGNAL_EXIT_CODES[loopSignal] ?? 143); return; }
   const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'], env });
-  child.on('exit', (code) => resolve(code));
+  currentPass = child;
+  child.on('exit', (code) => { currentPass = null; resolve(loopSignal ? SIGNAL_EXIT_CODES[loopSignal] ?? 143 : code); });
 });
 const readJson = (file) => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; } };
 export const RECORD_MAX_FILL_PASSES = 4;
@@ -1217,8 +1238,8 @@ const runWithFixedLocale = () => {
   // killed outright (SIGKILL): it then stops what it started and exits.
   const child = spawn(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'], env });
   log(`time zone and locale fixed (${Object.entries(DEMO_FIXED_ENV).map(([k, v]) => `${k}=${v}`).join(' ')}): running as process ${child.pid}`);
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
-  child.on('exit', (code, signal) => process.exit(code ?? (signal === 'SIGINT' ? 130 : 143)));
+  for (const signal of DEMO_SIGNALS) process.on(signal, () => child.kill(signal));
+  child.on('exit', (code, signal) => process.exit(code ?? SIGNAL_EXIT_CODES[signal] ?? 143));
 };
 
 const isDirectRun = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
@@ -1233,7 +1254,8 @@ else if (isDirectRun) {
   }
   if (options.record && !options.exitAtRest) {
     // The record loop's own parent gone: end, so its passes notice in turn.
-    if (process.channel) { process.on('disconnect', () => process.exit(1)); process.channel.unref(); }
+    if (process.channel) { process.on('disconnect', () => forwardToPass('SIGTERM')); process.channel.unref(); }
+    for (const signal of DEMO_SIGNALS) process.on(signal, forwardToPass);
     recordAll(options, argv).then(({ code, temp }) => {
       if (temp) log(`the passes' reports are in ${temp}`);
       process.exit(code);

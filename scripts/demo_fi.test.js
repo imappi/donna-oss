@@ -16,7 +16,7 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -727,45 +727,83 @@ test('--data-dir: a folder holding another firm\'s book is refused, its catalogu
   }
 });
 
-// The fixed-locale re-run: killed outright, the parent leaves nothing behind.
+// Ending a demo from outside: the parent killed outright (SIGKILL), or the
+// terminal closed (SIGHUP). Each test acts at a known point (the child has
+// reported its migrations: past the one synchronous step during which it
+// cannot react), waits on the condition with a generous bound, and always
+// cleans up what it started.
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now() < end) { if (await fn()) return true; await new Promise((r) => setTimeout(r, 200)); } return fn(); };
-const startReRun = (args, env = {}) => {
+const PAST_MIGRATIONS = /\[demo\] migrations: \d+ applied/;
+const GONE_WITHIN_MS = 120_000;
+const startDemo = (args, { env = {}, fixedLocale = true } = {}) => {
   const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'demo_fi.mjs'), ...args], {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/_API_KEY$/.test(k))), TZ: 'Europe/Helsinki', LANG: 'fi_FI.UTF-8', LC_ALL: 'fi_FI.UTF-8',
-      DONNA_BUILD_COMMIT_SHA: 'demo-fi-test', DONNA_BUILD_DIRTY: 'false', DONNA_RUNTIME_BUILD_DIRTY: 'false', ...env }
+    env: {
+      ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/_API_KEY$/.test(k) && !/^LC_/.test(k))),
+      // fixedLocale false: a caller already in the demo's time zone and
+      // locale, so the demo runs in this process (no re-run child).
+      ...(fixedLocale ? { TZ: 'Europe/Helsinki', LANG: 'fi_FI.UTF-8', LC_ALL: 'fi_FI.UTF-8' } : { TZ: 'UTC', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' }),
+      DONNA_BUILD_COMMIT_SHA: 'demo-fi-test', DONNA_BUILD_DIRTY: 'false', DONNA_RUNTIME_BUILD_DIRTY: 'false', ...env
+    }
   });
   let out = '';
   child.stdout.on('data', (c) => { out += c; });
   child.stderr.on('data', (c) => { out += c; });
-  return { child, out: () => out };
+  const exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
+  return { child, exited, out: () => out };
+};
+const demoPidOf = (run) => Number(/running as process (\d+)/.exec(run.out())?.[1] || run.child.pid);
+const stopLeftovers = async ({ run, pgData }) => {
+  for (const pid of [run.child.pid, demoPidOf(run)]) if (alive(pid)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
+  if (pgData && existsSync(path.join(pgData, 'postmaster.pid'))) {
+    const { findPgBin } = await import('../server/donna/desktop/pgSupervisor.js');
+    const { execFileSync } = await import('node:child_process');
+    try { execFileSync(path.join(findPgBin(), 'pg_ctl'), ['-D', pgData, '-m', 'immediate', '-w', 'stop'], { stdio: 'ignore' }); } catch { /* not running */ }
+  }
 };
 
-test('the fixed-locale re-run: a parent killed with SIGKILL leaves no demo process behind', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async () => {
-  const name = `donna_demo_orphan_${process.pid}`;
-  const url = await scratchDatabase(name);
-  try {
-    const run = startReRun([`--database-url=${url}`, '--exit-at-rest', '--no-web', '--quiet', '--port=8796']);
-    assert.ok(await waitFor(() => /running as process \d+/.test(run.out()) && /applying migrations|replay: /.test(run.out()), 60_000), run.out().slice(-2000));
-    const childPid = Number(/running as process (\d+)/.exec(run.out())[1]);
-    assert.ok(alive(childPid));
-    run.child.kill('SIGKILL');
-    assert.ok(await waitFor(() => !alive(childPid), 15_000), `the re-run child ${childPid} is still running after its parent was killed`);
-  } finally {
-    await dropDatabase(name);
-  }
-});
+for (const [ending, act] of [['killed with SIGKILL', (run) => run.child.kill('SIGKILL')], ['sent SIGHUP (the terminal closed)', (run) => run.child.kill('SIGHUP')]]) {
+  test(`the fixed-locale re-run: a parent ${ending} leaves no demo process behind`, { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 400_000 }, async () => {
+    const name = `donna_demo_end_${process.pid}_${ending.length}`;
+    const url = await scratchDatabase(name);
+    const run = startDemo([`--database-url=${url}`, '--exit-at-rest', '--no-web', '--quiet', '--port=8796']);
+    try {
+      assert.ok(await waitFor(() => /running as process \d+/.test(run.out()) && PAST_MIGRATIONS.test(run.out()), GONE_WITHIN_MS), run.out().slice(-2000));
+      const childPid = demoPidOf(run);
+      assert.notEqual(childPid, run.child.pid, 'the demo runs as a re-run child');
+      assert.ok(alive(childPid));
+      act(run);
+      assert.ok(await waitFor(() => !alive(childPid) && !alive(run.child.pid), GONE_WITHIN_MS), `still running after the parent was ${ending}: ${[alive(run.child.pid) && 'parent', alive(childPid) && 'child'].filter(Boolean).join(', ')}`);
+    } finally {
+      await stopLeftovers({ run });
+      await dropDatabase(name);
+    }
+  });
+}
 
-test('the fixed-locale re-run on its own data folder: a parent killed with SIGKILL leaves no PostgreSQL behind', { skip: OWN_PG_SKIP, timeout: 300_000 }, async () => {
-  const dataDir = mkdtempSync(path.join(os.tmpdir(), 'dok-'));
-  const pgPort = 15900 + (process.pid % 500);
-  const run = startReRun([`--data-dir=${dataDir}`, '--exit-at-rest', '--no-web', '--quiet', '--port=8795'], { DONNA_DESKTOP_PG_PORT: String(pgPort) });
-  const pgData = path.join(dataDir, 'database', 'pg');
-  assert.ok(await waitFor(() => /applying migrations/.test(run.out()), 120_000), run.out().slice(-2000));
-  const childPid = Number(/running as process (\d+)/.exec(run.out())[1]);
-  const pgPid = Number(readFileSync(path.join(pgData, 'postmaster.pid'), 'utf8').split('\n')[0]);
-  assert.ok(alive(pgPid));
-  run.child.kill('SIGKILL');
-  assert.ok(await waitFor(() => !alive(childPid) && !alive(pgPid), 30_000), `left running: ${[!alive(childPid) ? null : `demo ${childPid}`, !alive(pgPid) ? null : `postgres ${pgPid}`].filter(Boolean).join(', ')}`);
-});
+for (const [ending, act, fixedLocale] of [
+  ['the parent of the fixed-locale re-run killed with SIGKILL', (run) => run.child.kill('SIGKILL'), true],
+  ['the parent of the fixed-locale re-run sent SIGHUP', (run) => run.child.kill('SIGHUP'), true],
+  ['a direct run sent SIGHUP (the terminal closed)', (run) => run.child.kill('SIGHUP'), false]
+]) {
+  test(`on its own data folder, ${ending}: no demo process and no PostgreSQL left behind`, { skip: OWN_PG_SKIP, timeout: 400_000 }, async () => {
+    const dataDir = mkdtempSync(path.join(os.tmpdir(), 'dok-'));
+    const pgData = path.join(dataDir, 'database', 'pg');
+    const pgPort = 15900 + (process.pid % 400) + ending.length % 50;
+    const run = startDemo([`--data-dir=${dataDir}`, '--exit-at-rest', '--no-web', '--quiet', '--port=8795'], { env: { DONNA_DESKTOP_PG_PORT: String(pgPort) }, fixedLocale });
+    try {
+      assert.ok(await waitFor(() => PAST_MIGRATIONS.test(run.out()), GONE_WITHIN_MS), run.out().slice(-2000));
+      const demoPid = demoPidOf(run);
+      const pgPid = Number(readFileSync(path.join(pgData, 'postmaster.pid'), 'utf8').split('\n')[0]);
+      assert.ok(alive(pgPid));
+      act(run);
+      assert.ok(await waitFor(() => !alive(demoPid) && !alive(run.child.pid) && !alive(pgPid), GONE_WITHIN_MS),
+        `left running: ${[alive(run.child.pid) && 'parent', alive(demoPid) && `demo ${demoPid}`, alive(pgPid) && `postgres ${pgPid}`].filter(Boolean).join(', ')}`);
+      if (!fixedLocale) assert.match(run.out(), /SIGHUP: stopping/);
+    } finally {
+      await stopLeftovers({ run, pgData });
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+}
