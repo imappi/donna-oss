@@ -420,6 +420,52 @@ test('a stream that ends in a failure event is treated like a non-200: not kept,
   }
 });
 
+test('a dropped attempt that the lane retried well is not a hole; a request that ended with no kept answer, or threw, is', async () => {
+  const body = triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' });
+  const other = triageBody({ txId: '0f8fad5b-d9cb-469f-a165-70867728950e', docId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z', system: 'You match a parsed invoice to one bank line.' });
+  const ok = () => new Response(JSON.stringify({ id: 'msg_01QzX9k2LmNoPqRsTuVwXyZa', model: 'claude-opus-4-8', content: [{ type: 'text', text: '{}' }], usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200, headers: { 'content-type': 'application/json' } });
+  const overloaded = () => new Response('{"type":"error","error":{"type":"overloaded_error"}}', { status: 529, headers: { 'content-type': 'application/json' } });
+  const plan = [overloaded, ok, overloaded, overloaded];
+  const target = withTarget(async () => { throw new Error('unused'); });
+  const recorder = installProviderRecorder({ target, now: () => T0, answer: async () => ({ response: plan.shift()(), provenance: 'live' }) });
+  const thrower = withTarget(async () => { throw new Error('unused'); });
+  const throwing = installProviderRecorder({ target: thrower, now: () => T0, answer: async () => { throw new TypeError('fetch failed'); } });
+  try {
+    // 529, then the lane's retry answered well: kept, no hole.
+    await (await target.fetch(ANTHROPIC, init(body))).text();
+    await (await target.fetch(ANTHROPIC, init(body))).text();
+    // 529 twice and given up: a hole.
+    await (await target.fetch(ANTHROPIC, init(other))).text();
+    await (await target.fetch(ANTHROPIC, init(other))).text();
+    await assert.rejects(thrower.fetch(ANTHROPIC, init(body)), /fetch failed/);
+  } finally {
+    recorder.restore();
+    throwing.restore();
+  }
+  assert.equal(recorder.entries().length, 1);
+  assert.equal(recorder.ledger.filter((row) => !row.kept).length, 3, 'three attempts kept nothing');
+  assert.deepEqual(recorder.unanswered().map((hole) => [hole.lane, hole.attempts, hole.last]), [['reconciliation_reasoning', 2, 'http_529']]);
+  // A request that threw has a ledger row of its own, and is a hole.
+  assert.deepEqual(throwing.ledger.map((row) => [row.kept, row.dropped]), [[false, 'threw_TypeError']]);
+  assert.equal(throwing.unanswered().length, 1);
+});
+
+test('replay names a request asked more often than it was recorded', async () => {
+  const body = streamedBody(triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' }));
+  const recorder = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10' }), body });
+  const recordings = unpackRecordings(packRecordings({ format: 'donna.provider-replay.v1', identity: 'donna.provider-request-identity.v1', entries: recorder.entries() }));
+  const target = withTarget(async () => { throw new Error('network refused in this test'); });
+  const replay = installProviderReplay({ recordings, target, now: () => T0 });
+  try {
+    await (await target.fetch(ANTHROPIC, init(body))).text();
+    assert.deepEqual(replay.overserved(), []);
+    await (await target.fetch(ANTHROPIC, init(body))).text();
+    assert.deepEqual(replay.overserved().map((o) => [o.recorded, o.served]), [[1, 2]]);
+  } finally {
+    replay.restore();
+  }
+});
+
 test('replay names every recorded answer the run never asked for', async () => {
   const body = streamedBody(triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' }));
   const recorder = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10' }), body });

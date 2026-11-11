@@ -104,8 +104,10 @@ Anthropic `claude-opus-4-8`; document routing, statement reading, coding
 and ask drafting are, in this recording, scripted stand-ins written from
 the pack in the OpenAI response format, in place of `gpt-5.4`. A stand-in
 names itself: its answers are marked `scripted_stand_in` in the file and
-carry the model `scripted-stand-in-for-gpt-5.4` on every receipt and
-screen. Every model call leaves the
+carry the model `scripted-stand-in-for-gpt-5.4`, which every receipt built
+from the answer shows, with one exception: the document-routing receipt
+(the router's confidence envelope) stores the configured model,
+`gpt-5.4`, not the one that answered. Every model call leaves the
 process through one seam (`server/donna/providerReplay.js`); the demo
 answers it from the recordings, so every parser, schema check, VAT rule
 and posting check runs on the recorded answer as on a live one. A request
@@ -118,11 +120,16 @@ The demo serves only its own company: before it writes anything it refuses
 a book that holds any other firm or company, and it stops answering if one
 appears. A PostgreSQL already running on its data folder is used and left
 running. To re-record (on the host, with `ANTHROPIC_API_KEY` and
-`OPENAI_API_KEY` in `.env`, and about 15 USD of model calls):
-`npm run demo:fi:record`. Its spend is capped at 20 USD across all its
-passes (`-- --cap-usd=N` to change it); a call is made only if its
-worst-case price still fits, and the committed recordings are replaced
-only after a replay on a fresh book has used every one of them.
+`OPENAI_API_KEY` in the environment or in `.env`, and about 15 USD of model
+calls): `npm run demo:fi:record`. It takes only those two names from
+`.env`, and needs no `.env` at all when no lane has to go live. Its spend
+is capped at 20 USD across all its passes (`-- --cap-usd=N` to change it):
+a call is made only if its estimate fits in what is left (Anthropic
+calls are counted exactly with the free token-count endpoint; other calls
+are bounded from their text and files, and from what the same lane's
+earlier calls used), and the actual spend each answer reports is added
+after it. The committed recordings are replaced only after a replay on a
+fresh book has used every one of them, each exactly as often as recorded.
 
 The starts below run the same book on live providers, with your own keys
 and your own data.

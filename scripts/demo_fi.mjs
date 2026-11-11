@@ -115,9 +115,11 @@ import {
   recordedModels,
   recordedResponseFor,
   recordingsDigest,
+  serializeEventStream,
   summarizeProviderResponse,
   unpackRecordings
 } from '../server/donna/providerReplay.js';
+import { parseDotEnv } from '../server/donna/desktop/providerKeyDotEnv.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_RECORDINGS = path.join(ROOT, 'data', 'demo-replay', 'fi-kultalanka-2025-02.json');
@@ -184,13 +186,17 @@ export const parseDemoArgs = (argv) => {
 // demo's own ports and sign-in, and which build this is (Host A's
 // source_build check reads it).
 export const DEMO_ENV_NAMES = Object.freeze([
-  'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP', 'TZ', 'LANG', 'LANGUAGE',
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP',
   'SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'COMSPEC', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'PROGRAMDATA',
   'PG_BIN', 'DONNA_BUNDLED_PG_BIN', 'DONNA_DESKTOP_PG_PORT',
   'DONNA_DESKTOP_PORT', 'DONNA_LOCAL_WEB_PORT', 'DONNA_LOCAL_WEB_HOST', 'DONNA_ACCESS_TOKEN',
   'DONNA_BUILD_COMMIT_SHA', 'DONNA_BUILD_DIRTY', 'DONNA_RUNTIME_BUILD_DIRTY', 'GITHUB_SHA', 'VERCEL_GIT_COMMIT_SHA'
 ]);
-const DEMO_ENV_PATTERNS = Object.freeze([/^LC_[A-Z]+$/]);
+const DEMO_ENV_PATTERNS = Object.freeze([]);
+// The time zone and locale are fixed, not kept: a prompt that prints a local
+// time or a locale-formatted number would otherwise ask a different question
+// in Helsinki than where it was recorded (UTC, C).
+export const DEMO_FIXED_ENV = Object.freeze({ TZ: 'UTC', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' });
 // A recording pass also keeps the two keys of the live lanes and what it
 // needs to reach them through a proxy.
 export const RECORD_ENV_NAMES = Object.freeze([
@@ -208,6 +214,7 @@ export const sealDemoEnvironment = ({ env = process.env, record = false } = {}) 
     dropped.push(name);
     delete env[name];
   }
+  Object.assign(env, DEMO_FIXED_ENV);
   const priorCwd = process.cwd();
   const cwd = mkdtempSync(path.join(os.tmpdir(), 'donna-demo-cwd-'));
   process.chdir(cwd);
@@ -328,17 +335,162 @@ export const priceUsage = ({ prices = {}, model, usage, provider }) => {
     + cacheRead * price.input_per_million * (price.cache_read_multiplier ?? 0.1) + output * price.output_per_million) / 1e6;
 };
 
-// The most one request can cost: every byte of the request body counted as
-// an input token (a token is never shorter than a byte), at the cache-write
-// price where the provider charges one, and the longest answer the request
-// allows (WORST_CASE_OUTPUT_TOKENS when it sets no limit).
-export const worstCaseUsd = ({ price, init, provider }) => {
-  const raw = init?.body;
-  const bytes = typeof raw === 'string' ? Buffer.byteLength(raw) : raw ? Buffer.byteLength(Buffer.from(raw)) : 0;
+// What one live call may cost, before it is made.
+// Input tokens, best source first:
+//   1. Anthropic: the free count_tokens endpoint's exact count;
+//   2. the lane's own earlier live calls in this pass: the most input tokens
+//      per bound unit (below) any of them used, times LEARNED_MARGIN;
+//   3. the hard bound: every byte of the request's text as a token (a text
+//      token is never shorter than a byte), and each attached file by what it
+//      can cost rather than by its size: a PDF page PDF_PAGE_TOKENS, an image
+//      IMAGE_TOKENS.
+// Output tokens: the request's own limit; else the longest answer the lane
+// gave (earlier in this pass, or in the reference recordings) times
+// LEARNED_MARGIN; else WORST_CASE_OUTPUT_TOKENS.
+// Input is priced at the cache-write rate where the provider has one. The
+// cap is still a hard stop on actual spend: after each call its reported
+// usage is added, and the next call is made only if its estimate fits in
+// what is left.
+export const PDF_PAGE_TOKENS = 3_000;
+export const IMAGE_TOKENS = 6_000;
+export const LEARNED_MARGIN = 1.5;
+// A file is only what the request says is one: a base64 data URL (OpenAI
+// input_file / input_image), or an Anthropic source block of type base64.
+const fileOf = (value) => {
+  if (typeof value !== 'string' || value.length < 64) return null;
+  const dataUrl = /^data:([^;,]+)(?:;[^,]*)?;base64,/.exec(value);
+  return dataUrl ? { mime: dataUrl[1], data: value.slice(dataUrl[0].length) } : null;
+};
+export const fileTokens = ({ mime, data }) => {
+  const bytes = Buffer.from(data, 'base64');
+  const isPdf = mime === 'application/pdf' || bytes.subarray(0, 5).toString('latin1') === '%PDF-';
+  if (isPdf) return Math.max(1, (bytes.toString('latin1').match(/\/Type\s*\/Page(?![s\w])/g) || []).length) * PDF_PAGE_TOKENS;
+  if ((mime && mime.startsWith('image/')) || /^(\x89PNG|\xff\xd8\xff|GIF8|RIFF)/.test(bytes.subarray(0, 4).toString('latin1'))) return IMAGE_TOKENS;
+  return bytes.length;
+};
+export const requestShape = (init) => {
   const body = parseRequestBody(init) || {};
-  const maxOut = Number(body.max_tokens ?? body.max_output_tokens ?? body.max_completion_tokens) || WORST_CASE_OUTPUT_TOKENS;
+  let files = 0;
+  const strip = (value) => {
+    if (typeof value === 'string') {
+      const file = fileOf(value);
+      if (file) { files += fileTokens(file); return ''; }
+      return value;
+    }
+    if (Array.isArray(value)) return value.map(strip);
+    if (value && typeof value === 'object') {
+      if (value.type === 'base64' && typeof value.data === 'string') {
+        files += fileTokens({ mime: value.media_type || null, data: value.data });
+        return { ...value, data: '' };
+      }
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, strip(v)]));
+    }
+    return value;
+  };
+  const text = strip(body);
+  return {
+    body,
+    textTokensBound: Buffer.byteLength(JSON.stringify(text)),
+    fileTokens: files,
+    outputLimit: Number(body.max_tokens ?? body.max_output_tokens ?? body.max_completion_tokens) || null
+  };
+};
+export const estimateCallUsd = ({ price, init, provider, countedInputTokens = null, laneOutputTokens = null, laneTokensPerUnit = null }) => {
+  const shape = requestShape(init);
+  const bound = shape.textTokensBound + shape.fileTokens;
+  const inputTokens = countedInputTokens
+    ?? (laneTokensPerUnit ? Math.ceil(bound * Math.min(1, laneTokensPerUnit * LEARNED_MARGIN)) : bound);
+  const outputTokens = shape.outputLimit ?? (laneOutputTokens ? Math.ceil(laneOutputTokens * LEARNED_MARGIN) : WORST_CASE_OUTPUT_TOKENS);
   const inputRate = price.input_per_million * (provider === 'anthropic' ? (price.cache_write_multiplier ?? 1.25) : 1);
-  return (bytes * inputRate + maxOut * price.output_per_million) / 1e6;
+  const outputUsd = outputTokens * price.output_per_million / 1e6;
+  return {
+    usd: inputTokens * inputRate / 1e6 + outputUsd, output_usd: outputUsd, input_tokens: inputTokens, output_tokens: outputTokens, bound_units: bound,
+    input_source: countedInputTokens != null ? 'counted' : laneTokensPerUnit ? 'learned' : 'bound'
+  };
+};
+
+// The longest answer each lane gave, from live answers in a recordings file.
+export const laneOutputTokensOf = (entries = []) => {
+  const longest = {};
+  for (const entry of entries || []) {
+    if (entry.provenance !== 'live') continue;
+    for (const response of entry.responses || []) {
+      const usage = response.events ? summarizeProviderResponse({ contentType: 'text/event-stream', text: serializeEventStream(response.events) }).usage : response.body?.usage;
+      const out = Number(usage?.output_tokens ?? usage?.completion_tokens) || 0;
+      const id = `${entry.provider}:${entry.lane}`;
+      if (out > (longest[id] || 0)) longest[id] = out;
+    }
+  }
+  return longest;
+};
+
+// Anthropic's count_tokens endpoint (free): the exact input size of a
+// Messages request. Null when it cannot be had.
+export const countAnthropicInputTokens = async ({ fetchFn, input, init }) => {
+  try {
+    const body = parseRequestBody(init);
+    if (!body) return null;
+    const pick = Object.fromEntries(['model', 'messages', 'system', 'tools', 'tool_choice', 'thinking'].filter((k) => k in body).map((k) => [k, body[k]]));
+    const headers = Object.fromEntries(Object.entries(Object.fromEntries(new Headers(init.headers || {}))).filter(([k]) => ['x-api-key', 'anthropic-version', 'anthropic-beta', 'content-type'].includes(k)));
+    const url = new URL('/v1/messages/count_tokens', typeof input === 'string' ? input : input.url);
+    const response = await fetchFn(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(pick) });
+    if (response.status !== 200) return null;
+    const counted = Number((await response.json())?.input_tokens);
+    return Number.isFinite(counted) && counted > 0 ? counted : null;
+  } catch {
+    return null;
+  }
+};
+
+// Where a book's PostgreSQL socket goes (pgSupervisor.js), and the longest
+// path a Unix socket may have here (sun_path: 104 bytes on macOS, 108 on
+// Linux, each with its closing NUL).
+export const socketPathFor = (dataDir, pgPort) => path.join(dataDir, 'runtime', 'sockets', `.s.PGSQL.${pgPort}`);
+export const SOCKET_PATH_MAX = process.platform === 'darwin' ? 103 : 107;
+export const assertSocketPathFits = (dataDir, pgPort) => {
+  const socket = socketPathFor(dataDir, pgPort);
+  if (Buffer.byteLength(socket) > SOCKET_PATH_MAX) {
+    throw new DemoError({
+      code: 'DEMO_SOCKET_PATH_TOO_LONG',
+      message: `demo: PostgreSQL's socket would be ${socket} (${Buffer.byteLength(socket)} bytes); this system allows ${SOCKET_PATH_MAX}. Use a shorter --data-dir (or a shorter TMPDIR).`
+    });
+  }
+};
+
+// The two keys a recording pass takes, from the environment or, where it
+// does not set them, from the repository's .env if there is one. Nothing
+// else is read from the file; a missing file is fine (a fill whose live
+// lanes all match needs no key).
+export const loadRecordKeys = (env = process.env, file = path.join(ROOT, '.env')) => {
+  if (!existsSync(file)) return [];
+  const vars = parseDotEnv(readFileSync(file, 'utf8'));
+  const loaded = [];
+  for (const name of REPLAY_PROVIDER_KEY_ENV) {
+    if (!env[name] && vars[name]) { env[name] = vars[name]; loaded.push(name); }
+  }
+  return loaded;
+};
+
+// One owner answer through the reply route. An answer the route refuses is
+// not an answered book.
+export const giveOwnerAnswer = async ({ client, firmId, answer }) => {
+  const response = await client.postJson(`/api/donna/firms/evidence/requests/${encodeURIComponent(answer.ask_id)}/resolve`, { firm_id: firmId, reply: answer.reply });
+  log(`owner answered ${answer.line} (ask ${answer.ask_id}): HTTP ${response.status}`);
+  if (response.status !== 200) {
+    throw new DemoError({ code: 'DEMO_OWNER_ANSWER_REFUSED', message: `demo: the owner's answer to ${answer.line} (ask ${answer.ask_id}) was refused: HTTP ${response.status} ${String(response.text || '').slice(0, 300)}` });
+  }
+  return { ...answer, http: response.status };
+};
+
+// The commit and runtime state a recording was made on. A recording that
+// cannot say is not written.
+export const recordedOn = () => {
+  const git = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  try {
+    return { commit: git(['rev-parse', 'HEAD']), runtime_dirty: Boolean(git(['status', '--porcelain', '--untracked-files=no', '--', 'server', 'packs', 'db/migrations', 'data/worlds'])) };
+  } catch (error) {
+    throw new DemoError({ code: 'DEMO_RECORDED_ON_UNKNOWN', message: `demo record: cannot tell which commit this is (git rev-parse HEAD in ${ROOT} failed: ${String(error.stderr || error.message).trim().split('\n')[0]}); recordings must say what they were recorded on` });
+  }
 };
 
 // The stored rows that say where the book is. Plain reads.
@@ -397,6 +549,9 @@ export const runDemo = async (options) => {
   // A recording pass and a verify pass always end at rest: the file is
   // written (or the verdict given) then.
   if (mode === 'record' || options.verify) options = { ...options, exitAtRest: true };
+  // Paths the caller gave are the caller's: resolved here, before the seal
+  // moves the process to its own (temporary) directory.
+  options = { ...options, ...Object.fromEntries(['report', 'trace', 'recordings', 'dataDir'].filter((k) => options[k]).map((k) => [k, path.resolve(options[k])])) };
   const facts = JSON.parse(readFileSync(FACTS_FILE, 'utf8'));
   const recordingsFile = path.resolve(options.recordings || DEFAULT_RECORDINGS);
   // Read before the seal: the two live keys (a recording pass only), the
@@ -415,7 +570,9 @@ export const runDemo = async (options) => {
   // new folder, removed when the pass ends.
   const ownTempDataDir = !options.databaseUrl && !options.dataDir && (mode === 'record' || options.verify);
   const dataDir = options.databaseUrl && !options.dataDir ? null : path.resolve(options.dataDir || (ownTempDataDir
-    ? mkdtempSync(path.join(os.tmpdir(), 'donna-demo-book-'))
+    // Short, directly under the system's temporary folder: PostgreSQL's
+    // socket lives inside it (assertSocketPathFits).
+    ? mkdtempSync(path.join(os.tmpdir(), 'ddb-'))
     : path.join(os.homedir(), '.donna-demo')));
 
   // ── The seal: nothing from this machine's configuration reaches the month ──
@@ -427,6 +584,7 @@ export const runDemo = async (options) => {
 
   let seam = null;
   let spend = null;
+  let recordedOnAtStart = null;
   let bookQuery = null;
   let pgHandle = null;
   let runtime = null;
@@ -487,6 +645,9 @@ export const runDemo = async (options) => {
       for (const key of REPLAY_PROVIDER_KEY_ENV) process.env[key] = REPLAY_PLACEHOLDER_KEY;
       log(`replay: ${recordings.entries.length} recorded answers (${recordings.recorded_at || 'date unknown'}; ${Object.entries(recordedModels(recordings)).map(([p, m]) => `${p} ${m.join(', ')}`).join('; ')}); no provider is called`);
     } else {
+      // Known before any money is spent: a recording that cannot say which
+      // commit it was made on is not made.
+      recordedOnAtStart = recordedOn();
       const realFetch = globalThis.fetch;
       const base = options.fill ? loadReplayRecordings(recordingsFile) : null;
       if (base && (base.scenario?.held_back || null) !== (options.hold || null)) {
@@ -507,51 +668,78 @@ export const runDemo = async (options) => {
       if (options.standIn) process.env.OPENAI_API_KEY = REPLAY_PLACEHOLDER_KEY;
       const keyFor = { openai: realKeys.OPENAI_API_KEY, anthropic: realKeys.ANTHROPIC_API_KEY };
       const capUsd = options.capUsd ?? DEFAULT_CAP_USD;
-      spend = { usd: 0, cap_usd: capUsd, live_calls: 0, stand_in: 0, unpriced: 0, reused: 0, new_requests: 0, stopped: null };
+      spend = { usd: 0, cap_usd: capUsd, live_calls: 0, stand_in: 0, unpriced: 0, reused: 0, new_requests: 0, estimated_usd: 0, over_estimate: 0, stopped: null };
       const writeSpend = () => { if (options.report) writeFileSync(`${options.report}.spend.json`, `${JSON.stringify(spend)}\n`); };
       writeSpend();
+      // The longest answer each lane gave, for the estimate of a call that
+      // sets no output limit: from the file a fill starts from, else from the
+      // committed recordings.
+      const reference = base || (existsSync(DEFAULT_RECORDINGS) ? (() => { try { return loadReplayRecordings(DEFAULT_RECORDINGS); } catch { return null; } })() : null);
+      const laneOutput = laneOutputTokensOf(reference?.entries);
+      const laneRatio = {};
+      const answerRequest = async (input, init, classified, identity) => {
+        const held = identity ? baseByKey.get(identity.key) : null;
+        if (!held) spend.new_requests += 1;
+        if (answeredByStandIn(classified)) {
+          spend.stand_in += 1;
+          return { response: await answerOpenAiStandIn({ input, init, classified }), provenance: 'scripted_stand_in' };
+        }
+        if (held) {
+          spend.reused += 1;
+          return { response: recordedResponseFor(held.entry, identity, held.served++), provenance: held.entry.provenance };
+        }
+        if (!keyFor[classified.endpoint_class]) {
+          spend.stopped ||= { reason: 'key_missing', lane: classified.lane, provider: classified.endpoint_class };
+          throw new TypeError(`demo record: lane ${classified.lane} must be recorded live and needs ${classified.endpoint_class === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} in the environment or .env`);
+        }
+        // A model the facts file does not price is not called at all.
+        const price = priceFor(facts.prices, classified.model_requested);
+        if (!price) {
+          spend.stopped ||= { reason: 'unpriced_model', lane: classified.lane, model: classified.model_requested };
+          throw new TypeError(`demo record: ${classified.model_requested || 'an unnamed model'} has no price in ${path.relative(ROOT, FACTS_FILE)} (prices); not calling ${classified.lane}`);
+        }
+        // The cap holds before the call: it is made only if its estimate
+        // fits in what is left. The output bound is checked first, so a call
+        // that cannot fit is refused without even counting its input.
+        const remaining = capUsd - spend.usd;
+        const laneId = `${classified.endpoint_class}:${classified.lane}`;
+        const laneOutputTokens = laneOutput[laneId] || null;
+        const first = estimateCallUsd({ price, init, provider: classified.endpoint_class, laneOutputTokens, laneTokensPerUnit: laneRatio[laneId] || null });
+        const counted = classified.endpoint_class === 'anthropic' && first.output_usd <= remaining
+          ? await countAnthropicInputTokens({ fetchFn: realFetch, input, init })
+          : null;
+        const estimate = counted ? estimateCallUsd({ price, init, provider: classified.endpoint_class, laneOutputTokens, countedInputTokens: counted }) : first;
+        if (estimate.usd > remaining) {
+          spend.stopped ||= { reason: 'cap', lane: classified.lane, spent_usd: spend.usd, next_estimate_usd: estimate.usd };
+          throw new TypeError(`demo record: spend cap ${capUsd.toFixed(2)} USD: ${spend.usd.toFixed(3)} spent, the next ${classified.lane} call is estimated at up to ${estimate.usd.toFixed(3)}; not calling`);
+        }
+        const response = await realFetch(input, init);
+        // JSON or an event stream: the model and usage the answer reports.
+        const answered = summarizeProviderResponse({ contentType: response.headers.get('content-type') || '', text: await response.clone().text() });
+        const usd = priceUsage({ prices: facts.prices, model: answered.model || classified.model_requested, usage: answered.usage, provider: classified.endpoint_class });
+        spend.live_calls += 1;
+        spend.estimated_usd += estimate.usd;
+        // What this call teaches about its lane, for the next estimate.
+        const usedIn = (Number(answered.usage?.input_tokens ?? answered.usage?.prompt_tokens) || 0)
+          + (Number(answered.usage?.cache_creation_input_tokens) || 0) + (Number(answered.usage?.cache_read_input_tokens) || 0);
+        const usedOut = Number(answered.usage?.output_tokens ?? answered.usage?.completion_tokens) || 0;
+        if (usedIn && estimate.bound_units) laneRatio[laneId] = Math.max(laneRatio[laneId] || 0, usedIn / estimate.bound_units);
+        if (usedOut > (laneOutput[laneId] || 0)) laneOutput[laneId] = usedOut;
+        // An answer that reports no usage is counted at its estimate.
+        if (usd == null) { spend.unpriced += 1; spend.usd += estimate.usd; } else {
+          spend.usd += usd;
+          if (usd > estimate.usd) { spend.over_estimate += 1; log(`record: ${classified.lane} cost ${usd.toFixed(4)} USD, more than its estimate ${estimate.usd.toFixed(4)}`); }
+        }
+        if (spend.usd >= capUsd) spend.stopped ||= { reason: 'cap', lane: classified.lane, spent_usd: spend.usd };
+        if (spend.live_calls % 10 === 0) log(`record: ${spend.live_calls} live calls, ${spend.usd.toFixed(3)} USD of ${capUsd.toFixed(2)}`);
+        log(`record: live ${classified.lane} (${classified.model_requested || 'model ?'})`);
+        return { response, provenance: 'live' };
+      };
       seam = installProviderRecorder({
         logger: console,
         secretValues: machineSecrets,
-        answer: async (input, init, classified, identity) => {
-          const held = identity ? baseByKey.get(identity.key) : null;
-          if (!held) spend.new_requests += 1;
-          if (answeredByStandIn(classified)) {
-            spend.stand_in += 1;
-            return { response: await answerOpenAiStandIn({ input, init, classified }), provenance: 'scripted_stand_in' };
-          }
-          if (held) {
-            spend.reused += 1;
-            return { response: recordedResponseFor(held.entry, identity, held.served++), provenance: held.entry.provenance };
-          }
-          if (!keyFor[classified.endpoint_class]) {
-            spend.stopped ||= { reason: 'key_missing', lane: classified.lane, provider: classified.endpoint_class };
-            throw new TypeError(`demo record: lane ${classified.lane} must be recorded live and needs ${classified.endpoint_class === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} in the environment`);
-          }
-          // The cap holds before the call: a call is made only if its worst
-          // case still fits. A model the facts file does not price is not
-          // called at all.
-          const price = priceFor(facts.prices, classified.model_requested);
-          if (!price) {
-            spend.stopped ||= { reason: 'unpriced_model', lane: classified.lane, model: classified.model_requested };
-            throw new TypeError(`demo record: ${classified.model_requested || 'an unnamed model'} has no price in ${path.relative(ROOT, FACTS_FILE)} (prices); not calling ${classified.lane}`);
-          }
-          const worst = worstCaseUsd({ price, init, provider: classified.endpoint_class });
-          if (spend.usd + worst > capUsd) {
-            spend.stopped ||= { reason: 'cap', lane: classified.lane, spent_usd: spend.usd, next_worst_case_usd: worst };
-            throw new TypeError(`demo record: spend cap ${capUsd.toFixed(2)} USD: ${spend.usd.toFixed(3)} spent, the next ${classified.lane} call could cost ${worst.toFixed(3)}; not calling`);
-          }
-          const response = await realFetch(input, init);
-          // JSON or an event stream: the model and usage the answer reports.
-          const answered = summarizeProviderResponse({ contentType: response.headers.get('content-type') || '', text: await response.clone().text() });
-          const usd = priceUsage({ prices: facts.prices, model: answered.model || classified.model_requested, usage: answered.usage, provider: classified.endpoint_class });
-          spend.live_calls += 1;
-          // An answer that reports no usage is counted at its worst case.
-          if (usd == null) { spend.unpriced += 1; spend.usd += worst; } else spend.usd += usd;
-          writeSpend();
-          if (spend.live_calls % 10 === 0) log(`record: ${spend.live_calls} live calls, ${spend.usd.toFixed(3)} USD of ${capUsd.toFixed(2)}`);
-          log(`record: live ${classified.lane} (${classified.model_requested || 'model ?'})`);
-          return { response, provenance: 'live' };
+        answer: async (...args) => {
+          try { return await answerRequest(...args); } finally { writeSpend(); }
         }
       });
       log(`record: ${options.fill ? 'fill from the existing recordings' : `live ${options.standIn ? 'anthropic; openai from the scripted stand-in' : 'openai and anthropic'}`}; cap ${capUsd.toFixed(2)} USD; writing ${path.relative(ROOT, recordingsFile)} only if the pass completes`);
@@ -574,6 +762,7 @@ export const runDemo = async (options) => {
       // for the demo's own data folder. A server already running on the
       // folder is used and left running ('attach'): the demo stops only a
       // server it started.
+      assertSocketPathFits(dataDir, Number(process.env.DONNA_DESKTOP_PG_PORT || 5433));
       const priorLocale = { LC_ALL: process.env.LC_ALL, LANG: process.env.LANG };
       process.env.LC_ALL = 'C';
       process.env.LANG = 'C';
@@ -706,15 +895,7 @@ export const runDemo = async (options) => {
         .filter((ask) => !answered.some((a) => a.ask_id === ask.id));
       const toGive = open.map((ask) => answerFor({ ask, transaction: ask.transaction_id ? ask : null, answers: facts.owner_answers || {} })).filter(Boolean);
       if (!toGive.length) break;
-      for (const answer of toGive) {
-        const response = await client.postJson(`/api/donna/firms/evidence/requests/${encodeURIComponent(answer.ask_id)}/resolve`, { firm_id: firmId, reply: answer.reply });
-        answered.push({ ...answer, http: response.status });
-        log(`owner answered ${answer.line} (ask ${answer.ask_id}): HTTP ${response.status}`);
-        // An answer the route refused is not an answered book.
-        if (response.status !== 200) {
-          throw new DemoError({ code: 'DEMO_OWNER_ANSWER_REFUSED', message: `demo: the owner's answer to ${answer.line} (ask ${answer.ask_id}) was refused: HTTP ${response.status} ${String(response.text || '').slice(0, 300)}` });
-        }
-      }
+      for (const answer of toGive) answered.push(await giveOwnerAnswer({ client, firmId, answer }));
       rest = await settle(`rest after answers, round ${round}`);
     }
 
@@ -728,12 +909,15 @@ export const runDemo = async (options) => {
       answered,
       end_state: endState,
       provider: mode === 'replay'
-        ? { served: seam.served.length, unrecorded: seam.missed.map(({ error, request, long_texts, ...rest }) => rest), unused: seam.unused(), network_refused: seam.refusedNetwork }
+        ? { served: seam.served.length, unrecorded: seam.missed.map(({ error, request, long_texts, ...rest }) => rest), unused: seam.unused(), overserved: seam.overserved(), network_refused: seam.refusedNetwork }
         : {
           calls: seam.ledger.length,
           spend,
           by_lane: seam.ledger.reduce((t, r) => ({ ...t, [r.lane]: (t[r.lane] || 0) + 1 }), {}),
-          dropped: seam.ledger.filter((r) => !r.kept).map(({ lane, provider, status, dropped }) => ({ lane, provider, status, dropped })),
+          // Attempts that kept nothing (a 529 the lane then retried well is
+          // one), and the requests that ended the pass with no answer at all.
+          dropped_attempts: seam.ledger.filter((r) => !r.kept).map(({ lane, provider, status, dropped }) => ({ lane, provider, status, dropped })),
+          unanswered: seam.unanswered(),
           network_refused: seam.refusedNetwork
         }
     };
@@ -744,7 +928,7 @@ export const runDemo = async (options) => {
       // committed file is either the old one or the new one, whole.
       const incomplete = [
         !rest.atRest && 'the book did not come to rest',
-        summary.provider.dropped.length && `${summary.provider.dropped.length} answer(s) not kept (${[...new Set(summary.provider.dropped.map((d) => `${d.lane} ${d.dropped}`))].join(', ')})`,
+        summary.provider.unanswered.length && `${summary.provider.unanswered.length} request(s) ended the pass with no kept answer (${[...new Set(summary.provider.unanswered.map((d) => `${d.lane} ${d.last}`))].join(', ')})`,
         spend.stopped && `live calls stopped: ${spend.stopped.reason}${spend.stopped.lane ? ` at ${spend.stopped.lane}` : ''}`
       ].filter(Boolean);
       if (incomplete.length) {
@@ -756,7 +940,7 @@ export const runDemo = async (options) => {
           identity: PROVIDER_REQUEST_IDENTITY_VERSION,
           pack: 'fi-kultalanka-2025-02',
           recorded_at: new Date().toISOString().slice(0, 10),
-          recorded_on: { commit: (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return null; } })() },
+          recorded_on: recordedOnAtStart,
           scenario: { held_back: options.hold || null, owner_answers: answered.map((a) => a.line) },
           note: 'Recorded provider answers for the zero-key demo (npm run demo:fi). Synthetic pack data only; provider ids are replaced, no header is kept. Re-record with `npm run demo:fi:record`.',
           entries
@@ -771,7 +955,7 @@ export const runDemo = async (options) => {
         summary.recordings = { written: true, file: path.relative(ROOT, recordingsFile), entries: entries.length, bytes: Buffer.byteLength(text), models: recordedModels({ entries }) };
         log(`wrote ${entries.length} recordings (${Math.round(Buffer.byteLength(text) / 1024)} KB) to ${path.relative(ROOT, recordingsFile)}`);
       }
-      log(`live spend ${spend.usd.toFixed(3)} USD over ${spend.live_calls} calls (${spend.unpriced} without usage, counted at their worst case); ${spend.stand_in} from the stand-in; ${spend.reused} from the existing recordings; ${spend.new_requests} not in them`);
+      log(`live spend ${spend.usd.toFixed(3)} USD over ${spend.live_calls} calls (${spend.unpriced} without usage, counted at their estimate); ${spend.stand_in} from the stand-in; ${spend.reused} from the existing recordings; ${spend.new_requests} not in them`);
     }
     if (options.report) writeFileSync(options.report, `${JSON.stringify(summary, null, 2)}\n`);
     if (options.report && mode === 'replay' && seam.missed.length) {
@@ -793,11 +977,14 @@ export const runDemo = async (options) => {
           + 'Run again with --report=FILE --trace=FILE to see what kept changing.'
       });
     }
-    if (options.verify && summary.provider.unused.length) {
-      const byLane = summary.provider.unused.reduce((t, u) => ({ ...t, [u.lane]: (t[u.lane] || 0) + (u.recorded - u.served) }), {});
+    if (options.verify && (summary.provider.unused.length || summary.provider.overserved.length)) {
+      const byLane = (rows, n) => Object.entries(rows.reduce((t, u) => ({ ...t, [u.lane]: (t[u.lane] || 0) + n(u) }), {})).map(([lane, k]) => `${lane} ${k}`).join(', ');
       throw new DemoError({
-        code: 'DEMO_VERIFY_UNUSED',
-        message: `demo verify: ${summary.provider.unused.length} recorded answer(s) were never asked for (${Object.entries(byLane).map(([lane, n]) => `${lane} ${n}`).join(', ')}): the recordings do not match what the code asks. Re-record with \`${RERECORD_COMMAND}\`.`
+        code: 'DEMO_VERIFY_MISMATCH',
+        message: `demo verify: the run and the recordings differ — ${[
+          summary.provider.unused.length && `recorded answers never asked for: ${byLane(summary.provider.unused, (u) => u.recorded - u.served)}`,
+          summary.provider.overserved.length && `requests asked more often than recorded: ${byLane(summary.provider.overserved, (u) => u.served - u.recorded)}`
+        ].filter(Boolean).join('; ')}. Re-record with \`${RERECORD_COMMAND}\`.`
       });
     }
     if (options.exitAtRest) return summary;
@@ -871,12 +1058,17 @@ const recordAll = async (options, argv) => {
     const report = path.join(temp, `${name}.json`);
     const record = args.includes('--record');
     const remaining = capUsd - spent;
-    if (record && remaining <= 0) return { code: 1, report: null, why: `the spend cap of ${capUsd.toFixed(2)} USD is used up` };
-    const code = await runChild([...args, '--exit-at-rest', '--no-web', `--data-dir=${path.join(temp, `${name}-book`)}`, `--report=${report}`, `--recordings=${working}`,
+    if (record && remaining <= 0) { log(`${name}: not started, the spend cap of ${capUsd.toFixed(2)} USD is used up`); return { code: 1, report: null, spend: null }; }
+    // Each pass's book in its own short folder directly under the system's
+    // temporary folder (PostgreSQL's socket lives inside it).
+    const book = mkdtempSync(path.join(os.tmpdir(), 'ddp-'));
+    const code = await runChild([...args, '--exit-at-rest', '--no-web', `--data-dir=${book}`, `--report=${report}`, `--recordings=${working}`,
       ...(record ? [`--cap-usd=${remaining.toFixed(6)}`] : []), ...passthrough.filter((a) => record || !/^--stand-in/.test(a))], env);
-    const spend = readJson(`${report}.spend.json`);
+    rmSync(book, { recursive: true, force: true });
+    // What the pass spent, from its sidecar (written after every answer, so
+    // it holds even when the pass failed); what it asked, from its report.
+    const spend = readJson(report)?.provider?.spend || readJson(`${report}.spend.json`);
     if (spend) spent += spend.usd;
-    rmSync(path.join(temp, `${name}-book`), { recursive: true, force: true });
     log(`${name}: exit ${code}; ${spent.toFixed(3)} of ${capUsd.toFixed(2)} USD spent so far`);
     return { code, report: readJson(report), spend };
   };
@@ -895,7 +1087,7 @@ const recordAll = async (options, argv) => {
       log(`pass ${n}: fill at replay speed`);
       const result = await pass(`fill-${n}`, ['--record', '--fill']);
       if (result.code !== 0) return { code: 1, temp };
-      if (!result.spend.new_requests) { settled = true; break; }
+      if (result.spend && !result.spend.new_requests) { settled = true; break; }
     }
     if (!settled) { log(`the recordings did not settle in ${RECORD_MAX_FILL_PASSES} fill passes; ${path.relative(ROOT, committed)} is unchanged`); return { code: 1, temp }; }
     log('verify: replay on a fresh book with no key');
@@ -914,11 +1106,30 @@ const recordAll = async (options, argv) => {
   }
 };
 
+// Node reads its locale (Intl's default, so every toLocaleString) once, at
+// start: setting LANG inside the process is too late. A caller whose time
+// zone or locale is not the demo's fixed one is run again, once, as a child
+// with them fixed, and its exit code is this command's.
+export const needsFixedLocaleRun = (env = process.env) => Object.entries(DEMO_FIXED_ENV).some(([k, v]) => env[k] !== v)
+  || Object.keys(env).some((k) => /^LC_/.test(k) && !(k in DEMO_FIXED_ENV));
+const runWithFixedLocale = () => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^LC_/.test(k)));
+  Object.assign(env, DEMO_FIXED_ENV);
+  const child = spawn(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit', env });
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
+  child.on('exit', (code, signal) => process.exit(code ?? (signal === 'SIGINT' ? 130 : 143)));
+};
+
 const isDirectRun = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
-if (isDirectRun) {
+if (isDirectRun && needsFixedLocaleRun()) runWithFixedLocale();
+else if (isDirectRun) {
   let options;
   const argv = process.argv.slice(2);
   try { options = parseDemoArgs(argv); } catch (error) { console.error(`[demo] ${error.message}`); process.exit(2); }
+  if (options.record) {
+    const loaded = loadRecordKeys(process.env);
+    if (loaded.length) log(`record: ${loaded.join(', ')} from .env`);
+  }
   if (options.record && !options.exitAtRest) {
     recordAll(options, argv).then(({ code, temp }) => {
       if (temp) log(`the passes' reports are in ${temp}`);

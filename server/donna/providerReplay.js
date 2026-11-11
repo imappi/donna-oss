@@ -387,7 +387,9 @@ export const unpackRecordings = (file) => {
   if (file.identity !== PROVIDER_REQUEST_IDENTITY_VERSION) {
     throw new ProviderReplayError({
       code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS,
-      message: `provider replay: the recordings use request identity ${file.identity}, this code computes ${PROVIDER_REQUEST_IDENTITY_VERSION}; re-record with \`${DEFAULT_RERECORD_HINT}\``
+      // A fill starts from this same file and would stop here too: only a
+      // full live re-record makes a file of the new identity.
+      message: `provider replay: the recordings use request identity ${file.identity}, this code computes ${PROVIDER_REQUEST_IDENTITY_VERSION}; no answer in them can be matched, and a fill cannot start from them. Re-record the whole month live with \`npm run demo:fi:record\` (both keys in .env)`
     });
   }
   const texts = file.texts || {};
@@ -636,8 +638,11 @@ export const SECRET_PATTERNS = Object.freeze([
   // A Together legacy key is 64 hex digits, the same shape as the digests the
   // file is made of; it is caught as a configured value instead (the caller
   // passes every key-like value it found in its environment as extraValues).
-  Object.freeze({ name: 'typesafe_key', pattern: /\b(?:typesafe|tsk|ts_(?:live|test))[-_][A-Za-z0-9_-]{16,}/i }),
-  Object.freeze({ name: 'together_key', pattern: /\btgp_v\d+_[A-Za-z0-9_-]{16,}/ }),
+  // A key shape, not a word: a key prefix, then at least 24 letters and
+  // digits with at least one digit ("typesafe-first-line-decision-lane" and
+  // other identifiers do not match).
+  Object.freeze({ name: 'typesafe_key', pattern: /\b(?:tsk|ts_live|ts_test|typesafe_(?:sk|key|live|test))_(?=[A-Za-z]*\d)[A-Za-z0-9]{24,}\b/ }),
+  Object.freeze({ name: 'together_key', pattern: /\btgp_v\d+_(?=[A-Za-z_-]*\d)[A-Za-z0-9_-]{24,}/ }),
   Object.freeze({ name: 'key_field', pattern: /"(?:api[_-]?key|apikey|access[_-]?token|secret[_-]?key|client[_-]?secret|password)"\s*:\s*"[^"<]{8,}"/i })
 ]);
 
@@ -797,6 +802,12 @@ export const installProviderReplay = ({
     state: activeReplay,
     // Recorded answers the run never asked for: an entry served fewer times
     // than it holds answers. A verify pass on a fresh book fails on any.
+    // Requests asked more often than the recordings answer them: the last
+    // answer is served again (a lane may retry), but in a verify pass that is
+    // a mismatch between the run and the recording, like an unused answer.
+    overserved: () => [...byKey.values()]
+      .filter((slot) => slot.served > slot.entry.responses.length)
+      .map((slot) => ({ key: slot.entry.key, lane: slot.entry.lane, provider: slot.entry.provider, recorded: slot.entry.responses.length, served: slot.served })),
     unused: () => [...byKey.values()]
       .filter((slot) => slot.served < slot.entry.responses.length)
       .map((slot) => ({ key: slot.entry.key, lane: slot.entry.lane, provider: slot.entry.provider, recorded: slot.entry.responses.length, served: slot.served })),
@@ -834,7 +845,17 @@ export const installProviderRecorder = ({
     }
     const identity = providerRequestIdentity({ url: input, init, now });
     const started = Date.now();
-    const { response, provenance } = await forward(input, init, classified, identity);
+    let answered;
+    try {
+      answered = await forward(input, init, classified, identity);
+    } catch (error) {
+      // A request that threw (a network error, a refused call) has no
+      // answer: it is a row in the ledger like any dropped answer.
+      ledger.push({ lane: classified.lane, provider: classified.endpoint_class, key: identity?.key || null, status: null, model: null, usage: null, provenance: null, ms: Date.now() - started, kept: false, dropped: `threw_${error?.name || 'Error'}` });
+      logger?.error?.(`[provider-recorder] no ${classified.lane} answer: the request threw (${error?.name || 'Error'})`);
+      throw error;
+    }
+    const { response, provenance } = answered;
     const contentType = response.headers.get('content-type') || 'application/json';
     const text = await response.clone().text();
     const streamed = contentType.includes(EVENT_STREAM_CONTENT_TYPE);
@@ -851,7 +872,7 @@ export const installProviderRecorder = ({
       : response.status !== 200 ? `http_${response.status}`
         : streamed && !summary.complete ? (summary.outcome === 'failed' ? `stream_${summary.end_event}` : 'stream_cut_off')
           : null;
-    const row = { lane: classified.lane, provider: classified.endpoint_class, status: response.status, model: summary.model, usage: summary.usage, provenance, ms: Date.now() - started, kept: !dropped, ...(dropped ? { dropped } : {}), ...(streamed ? { stream: true, complete: summary.complete } : {}) };
+    const row = { lane: classified.lane, provider: classified.endpoint_class, key: identity?.key || null, status: response.status, model: summary.model, usage: summary.usage, provenance, ms: Date.now() - started, kept: !dropped, ...(dropped ? { dropped } : {}), ...(streamed ? { stream: true, complete: summary.complete } : {}) };
     ledger.push(row);
     if (dropped) {
       logger?.error?.(`[provider-recorder] did not keep a ${classified.lane} answer: ${dropped}`);
@@ -891,6 +912,23 @@ export const installProviderRecorder = ({
     ledger,
     refusedNetwork,
     entries: () => [...entries.values()].sort((a, b) => (a.lane === b.lane ? a.key.localeCompare(b.key) : a.lane.localeCompare(b.lane))),
+    // Requests that ended the pass with no kept answer: dropped (a non-200,
+    // a failed or cut-off stream, a secret-shaped answer) or thrown, and not
+    // answered well by a later attempt with the same identity. A 529 that the
+    // lane retried successfully is not a hole; these are.
+    unanswered: () => {
+      const holes = new Map();
+      for (const row of ledger) {
+        if (row.kept) continue;
+        if (row.key && entries.has(row.key)) continue;
+        const id = row.key || `unreadable:${row.lane}`;
+        const hole = holes.get(id) || { key: row.key, lane: row.lane, provider: row.provider, attempts: 0, last: null };
+        hole.attempts += 1;
+        hole.last = row.dropped;
+        holes.set(id, hole);
+      }
+      return [...holes.values()];
+    },
     restore() { if (target.fetch === wrapper) target.fetch = realFetch; }
   };
 };

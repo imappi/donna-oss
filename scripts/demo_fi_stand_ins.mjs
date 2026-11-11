@@ -8,9 +8,12 @@
 // schema checks and writers run on it as on a live answer. The recordings
 // mark every such answer `provenance: "scripted_stand_in"`, and the answer
 // names its own model, never the one asked for: `scripted-stand-in-for-
-// <requested model>`, so every receipt reads
-// `scripted-stand-in-for-gpt-5.4+replayed` and no receipt claims a model
-// that did not answer. A live re-record replaces them.
+// <requested model>`, so a receipt built from the answer reads
+// `scripted-stand-in-for-gpt-5.4+replayed`. One receipt does not: the
+// document router's confidence envelope stores the configured model
+// (documentRouter.js returns config.model), so routing receipts, and the
+// coder prompts that quote them, say `gpt-5.4`. A live re-record replaces
+// the stand-ins.
 //
 // A lane with no stand-in answers 418 (refused, never retried), so the
 // recording run shows what is missing instead of inventing an answer.
@@ -250,7 +253,7 @@ export const answerOpenAiStandIn = async ({ init, classified }) => {
   const body = parseRequestBody(init);
   const make = LANES[classified.lane];
   const value = make ? make(body) : null;
-  standInLedger.push({ lane: classified.lane, answered: Boolean(value), body });
+  standInLedger.push({ lane: classified.lane, answered: Boolean(value) });
   if (!value) {
     return respond(418, { error: { type: 'stand_in_missing', message: `no scripted stand-in for lane ${classified.lane}` } });
   }

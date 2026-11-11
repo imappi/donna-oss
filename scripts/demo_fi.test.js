@@ -26,8 +26,9 @@ import pg from 'pg';
 import http from 'node:http';
 
 import {
-  DEFAULT_RECORDINGS, DEMO_ENV_NAMES, RECORD_ENV_NAMES, RERECORD_COMMAND, answerFor, answersFromStandIn, assertDemoBookOnly, loadReplayRecordings,
-  parseDemoArgs, priceFor, priceUsage, sealDemoEnvironment, standInLanesOf, worstCaseUsd
+  DEFAULT_RECORDINGS, DEMO_ENV_NAMES, DEMO_FIXED_ENV, IMAGE_TOKENS, LEARNED_MARGIN, PDF_PAGE_TOKENS, RECORD_ENV_NAMES, RERECORD_COMMAND, SOCKET_PATH_MAX,
+  WORST_CASE_OUTPUT_TOKENS, answerFor, answersFromStandIn, assertDemoBookOnly, assertSocketPathFits, estimateCallUsd, giveOwnerAnswer, laneOutputTokensOf,
+  loadRecordKeys, loadReplayRecordings, parseDemoArgs, priceFor, priceUsage, recordedOn, sealDemoEnvironment, socketPathFor, standInLanesOf
 } from './demo_fi.mjs';
 import { STAND_IN_MODEL_PREFIX, answerOpenAiStandIn } from './demo_fi_stand_ins.mjs';
 import {
@@ -69,13 +70,17 @@ test('the secret scan knows every provider\'s key shape, and any key value it is
   const shapes = {
     openai_key: `{"note":"${fake('sk-proj-')}"}`,
     anthropic_key: `{"note":"${fake('sk-ant-api03-')}"}`,
-    typesafe_key: `{"note":"${fake('typesafe_')}"}`,
+    typesafe_key: `{"note":"${fake('tsk_')}"}`,
     together_key: `{"note":"${fake('tgp_v1_')}"}`,
     key_field: `{"api_key":"${fake('', 12)}"}`,
     bearer_header: `{"h":"Bearer ${fake('', 20)}"}`
   };
   for (const [name, text] of Object.entries(shapes)) {
     assert.ok(findSecretShapes(text).some((hit) => hit.name === name), `${name} is caught`);
+  }
+  // Words are not keys: identifiers that merely name the lanes pass.
+  for (const word of ['typesafe-first-line-decision-lane', 'typesafe_first_line_lane_receipt_v2', 'tsk_first_line_decision_handoff', 'tgp_v1_lane_receipt_without_digits']) {
+    assert.deepEqual(findSecretShapes(`{"lane":"${word}"}`), [], `${word} is not a key`);
   }
   // A key with no shape of its own (a Together legacy key is 64 hex digits,
   // like the file's digests) is caught by its value.
@@ -187,7 +192,7 @@ test('replay is entered by the command only: no runtime module installs it, what
 
 test('the sealed environment keeps only the named variables, and a recording pass only two keys more', () => {
   const env = {
-    PATH: '/bin', HOME: '/home/x', TZ: 'UTC', LC_ALL: 'C', DONNA_ACCESS_TOKEN: 't', DONNA_BUILD_COMMIT_SHA: 'abc',
+    PATH: '/bin', HOME: '/home/x', TZ: 'Europe/Helsinki', LC_ALL: 'fi_FI.UTF-8', LANG: 'fi_FI.UTF-8', DONNA_ACCESS_TOKEN: 't', DONNA_BUILD_COMMIT_SHA: 'abc',
     OPENAI_API_KEY: 'k1', ANTHROPIC_API_KEY: 'k2', TYPESAFE_API_KEY: 'k3', TYPESAFE_MODEL: 'm', OPENAI_COMPATIBLE_BASE_URL: 'http://x',
     OPENAI_MODEL: 'gpt-x', MERCHANT_LOOKUP_ENABLED: 'true', DATABASE_URL: 'postgres://elsewhere', NODE_OPTIONS: '--env-file=.env', HTTPS_PROXY: 'http://p'
   };
@@ -202,7 +207,10 @@ test('the sealed environment keeps only the named variables, and a recording pas
   assert.equal(process.cwd(), cwd);
   const sealedReplay = { ...env };
   sealDemoEnvironment({ env: sealedReplay }).undo();
-  assert.deepEqual(Object.keys(sealedReplay).sort(), ['DONNA_ACCESS_TOKEN', 'DONNA_BUILD_COMMIT_SHA', 'HOME', 'LC_ALL', 'PATH', 'TZ']);
+  assert.deepEqual(Object.keys(sealedReplay).sort(), ['DONNA_ACCESS_TOKEN', 'DONNA_BUILD_COMMIT_SHA', 'HOME', 'LANG', 'LC_ALL', 'PATH', 'TZ']);
+  // The time zone and locale are fixed, not taken from the machine.
+  assert.deepEqual([sealedReplay.TZ, sealedReplay.LANG, sealedReplay.LC_ALL], [DEMO_FIXED_ENV.TZ, DEMO_FIXED_ENV.LANG, DEMO_FIXED_ENV.LC_ALL]);
+  assert.equal(DEMO_FIXED_ENV.TZ, 'UTC');
   const sealedRecord = { ...env };
   sealDemoEnvironment({ env: sealedRecord, record: true }).undo();
   assert.deepEqual(Object.keys(sealedRecord).filter((k) => !Object.keys(sealedReplay).includes(k)).sort(), ['ANTHROPIC_API_KEY', 'HTTPS_PROXY', 'OPENAI_API_KEY']);
@@ -212,17 +220,75 @@ test('the sealed environment keeps only the named variables, and a recording pas
   assert.deepEqual(RECORD_ENV_NAMES.filter((n) => /KEY/.test(n)), ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']);
 });
 
-test('spend: a live call is priced at its worst case before it is made, and an unpriced model is never called', () => {
+test('spend: a call is estimated before it is made, from the best source it has, and the bound counts files by what they cost', () => {
   const prices = { 'claude-': { input_per_million: 5, output_per_million: 25 }, 'gpt-': { input_per_million: 2.5, output_per_million: 15 } };
   assert.equal(priceFor(prices, 'unknown-model'), null);
   assert.equal(priceFor(prices, 'claude-opus-4-8'), prices['claude-']);
-  const body = JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 2048, system: 'x'.repeat(4000), messages: [{ role: 'user', content: 'y'.repeat(4000) }] });
-  const worst = worstCaseUsd({ price: prices['claude-'], init: { body }, provider: 'anthropic' });
-  // Whatever the provider reports for that request, it is not more.
-  const reported = priceUsage({ prices, model: 'claude-opus-4-8', provider: 'anthropic', usage: { input_tokens: Buffer.byteLength(body), output_tokens: 2048 } });
-  assert.ok(worst >= reported, `${worst} >= ${reported}`);
-  // A request that sets no answer length is priced at the longest answer.
-  assert.ok(worstCaseUsd({ price: prices['gpt-'], init: { body: '{}' }, provider: 'openai' }) >= 64_000 * 15 / 1e6);
+  const text = JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 2048, system: 'x'.repeat(4000), messages: [{ role: 'user', content: 'y'.repeat(4000) }] });
+  // The hard bound is a bound: whatever the provider reports, it is not more.
+  const bound = estimateCallUsd({ price: prices['claude-'], init: { body: text }, provider: 'anthropic' });
+  assert.equal(bound.input_source, 'bound');
+  assert.ok(bound.usd >= priceUsage({ prices, model: 'claude-opus-4-8', provider: 'anthropic', usage: { input_tokens: Buffer.byteLength(text), output_tokens: 2048 } }));
+  // An exact count (Anthropic count_tokens) replaces the bound.
+  const counted = estimateCallUsd({ price: prices['claude-'], init: { body: text }, provider: 'anthropic', countedInputTokens: 1200 });
+  assert.equal(counted.input_tokens, 1200);
+  assert.equal(counted.input_source, 'counted');
+  // What the lane's earlier calls used, with the margin.
+  const learned = estimateCallUsd({ price: prices['gpt-'], init: { body: text }, provider: 'openai', laneTokensPerUnit: 0.3 });
+  assert.equal(learned.input_tokens, Math.ceil(learned.bound_units * 0.3 * LEARNED_MARGIN));
+  // A PDF is its pages, an image a fixed price, whatever their size.
+  const pdf = Buffer.from(`%PDF-1.4\n1 0 obj << /Type /Pages /Count 2 >>\n2 0 obj << /Type /Page >>\n3 0 obj << /Type /Page >>\n${'%'.repeat(40_000)}`).toString('base64');
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(30_000)]).toString('base64');
+  const withFiles = estimateCallUsd({ price: prices['gpt-'], provider: 'openai', init: { body: JSON.stringify({ model: 'gpt-5.4', input: [{ content: [
+    { type: 'input_file', file_data: `data:application/pdf;base64,${pdf}` }, { type: 'input_image', image_url: `data:image/png;base64,${png}` }] }] }) } });
+  assert.ok(withFiles.input_tokens >= 2 * PDF_PAGE_TOKENS + IMAGE_TOKENS);
+  assert.ok(withFiles.input_tokens < 2 * PDF_PAGE_TOKENS + IMAGE_TOKENS + 400, 'the base64 itself is not counted as text');
+  // Output: the request's limit; else the lane's longest answer with the
+  // margin; else the stated worst case.
+  assert.equal(estimateCallUsd({ price: prices['gpt-'], init: { body: '{}' }, provider: 'openai' }).output_tokens, WORST_CASE_OUTPUT_TOKENS);
+  assert.equal(estimateCallUsd({ price: prices['gpt-'], init: { body: '{}' }, provider: 'openai', laneOutputTokens: 1000 }).output_tokens, 1000 * LEARNED_MARGIN);
+  assert.equal(estimateCallUsd({ price: prices['gpt-'], init: { body: '{"max_output_tokens":500}' }, provider: 'openai', laneOutputTokens: 1000 }).output_tokens, 500);
+  // The longest live answers per lane, from the committed recordings.
+  const longest = laneOutputTokensOf(loadReplayRecordings().entries);
+  assert.ok(longest['anthropic:unified_extraction'] > 0);
+  assert.equal(Object.keys(longest).some((id) => id.startsWith('openai:')), false, 'stand-in answers teach nothing');
+});
+
+test('the socket path is checked before PostgreSQL starts', () => {
+  assert.doesNotThrow(() => assertSocketPathFits('/tmp/ddb-abc123', 5433));
+  const deep = `/var/folders/7x/${'q'.repeat(28)}/T/donna-demo-passes-AbCdEf/fill-2-book`;
+  assert.ok(Buffer.byteLength(socketPathFor(deep, 5433)) > 103);
+  if (Buffer.byteLength(socketPathFor(deep, 5433)) > SOCKET_PATH_MAX) {
+    assert.throws(() => assertSocketPathFits(deep, 5433), (error) => error.code === 'DEMO_SOCKET_PATH_TOO_LONG' && /shorter --data-dir/.test(error.message));
+  }
+  const tooDeep = `/tmp/${'d'.repeat(110)}`;
+  assert.throws(() => assertSocketPathFits(tooDeep, 5433), (error) => error.code === 'DEMO_SOCKET_PATH_TOO_LONG');
+});
+
+test('a recording takes its two keys from the environment, else from .env if there is one, and nothing else', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'demo-fi-keys-'));
+  const file = path.join(dir, '.env');
+  assert.deepEqual(loadRecordKeys({}, file), [], 'no .env is fine');
+  writeFileSync(file, 'OPENAI_API_KEY=from-file-openai\nANTHROPIC_API_KEY=from-file-anthropic\nOPENAI_MODEL=gpt-other\n');
+  const env = { ANTHROPIC_API_KEY: 'from-env' };
+  assert.deepEqual(loadRecordKeys(env, file), ['OPENAI_API_KEY']);
+  assert.deepEqual(env, { ANTHROPIC_API_KEY: 'from-env', OPENAI_API_KEY: 'from-file-openai' });
+});
+
+test('a refused owner answer stops the demo by name', async () => {
+  const client = { postJson: async () => ({ status: 409, text: '{"error":"ask already closed"}' }) };
+  await assert.rejects(giveOwnerAnswer({ client, firmId: 'firm-demo-tilitoimisto', answer: { line: 'B17', ask_id: 'ask-1', reply: 'r' } }),
+    (error) => error.code === 'DEMO_OWNER_ANSWER_REFUSED' && /B17/.test(error.message) && /HTTP 409/.test(error.message));
+  const ok = { postJson: async () => ({ status: 200, text: '{}' }) };
+  assert.equal((await giveOwnerAnswer({ client: ok, firmId: 'f', answer: { line: 'B17', ask_id: 'ask-1', reply: 'r' } })).http, 200);
+});
+
+test('a recording says which commit it was made on', () => {
+  const on = recordedOn();
+  assert.match(on.commit, /^[0-9a-f]{40}$/);
+  assert.equal(typeof on.runtime_dirty, 'boolean');
+  const file = JSON.parse(readFileSync(DEFAULT_RECORDINGS, 'utf8'));
+  assert.match(String(file.recorded_on?.commit), /^[0-9a-f]{40}$/, 'the committed recordings name their commit');
 });
 
 test('a stand-in answers OpenAI requests only and names itself on the answer', async () => {
@@ -295,8 +361,11 @@ const FAKE_SETTINGS = (compatibleBase) => ({
 });
 const dotEnvText = (vars) => `${Object.entries(vars).map(([k, v]) => `${k}=${v}`).join('\n')}\n`;
 
-const runDemoChild = (args, { timeoutMs = 900_000, cwd = ROOT, env: extraEnv = {} } = {}) => new Promise((resolve) => {
+// `relative: true` runs the child in its own folder and names the report
+// (and any --trace=NAME given) relative to it, as a person would.
+const runDemoChild = (args, { timeoutMs = 900_000, cwd: givenCwd = null, env: extraEnv = {}, relative = false } = {}) => new Promise((resolve) => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'demo-fi-test-'));
+  const cwd = relative ? dir : givenCwd || ROOT;
   const preload = path.join(dir, 'refuse-network.mjs');
   const networkLog = path.join(dir, 'network.jsonl');
   writeFileSync(preload, REFUSE_NETWORK);
@@ -312,14 +381,14 @@ const runDemoChild = (args, { timeoutMs = 900_000, cwd = ROOT, env: extraEnv = {
     DONNA_RUNTIME_BUILD_DIRTY: 'false'
   }, extraEnv);
   const report = path.join(dir, 'report.json');
-  const child = spawn(process.execPath, ['--import', preload, path.join(ROOT, 'scripts', 'demo_fi.mjs'), ...args, `--report=${report}`], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['--import', preload, path.join(ROOT, 'scripts', 'demo_fi.mjs'), ...args, relative ? '--report=report.json' : `--report=${report}`], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   child.stdout.on('data', (c) => { out = (out + c).slice(-40000); });
   child.stderr.on('data', (c) => { out = (out + c).slice(-40000); });
   const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
   child.on('exit', (code) => {
     clearTimeout(timer);
-    resolve({ code, out, report: existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : null, network: readFileSync(networkLog, 'utf8').split('\n').filter(Boolean) });
+    resolve({ code, out, dir, report: existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : null, network: readFileSync(networkLog, 'utf8').split('\n').filter(Boolean) });
   });
 });
 
@@ -382,11 +451,16 @@ test('the recorded month replays as a verify pass to its pinned books, sealed fr
   try {
     const started = Date.now();
     // The fakes are in the environment too: the seal drops them there as well.
-    const run = await runDemoChild([`--database-url=${url}`, '--verify', '--quiet'], { cwd, env: { ...fakes, HOME: home } });
+    // And a person in Helsinki: local time zone and Finnish locale. The seal
+    // fixes both, so the month asks what it asked where it was recorded.
+    const run = await runDemoChild([`--database-url=${url}`, '--verify', '--quiet'], {
+      cwd, env: { ...fakes, HOME: home, TZ: 'Europe/Helsinki', LANG: 'fi_FI.UTF-8', LC_ALL: 'fi_FI.UTF-8', LC_TIME: 'fi_FI.UTF-8', LC_NUMERIC: 'fi_FI.UTF-8' }
+    });
     assert.equal(run.code, 0, `the replay demo failed — if a request has no recording, re-record with \`${RERECORD_COMMAND}\`:\n${run.out.slice(-8000)}`);
     const { report } = run;
     assert.deepEqual(report.provider.unrecorded, [], 'every request the code made was recorded');
     assert.deepEqual(report.provider.unused, [], 'every recorded answer was asked for');
+    assert.deepEqual(report.provider.overserved, [], 'no request was asked more often than recorded');
     assert.ok(report.provider.served > 0);
     // The only other outside requests are the coder's merchant-website
     // lookups (transactionLlm.js merchantWebContextFor, a domain read from the
@@ -489,11 +563,15 @@ test('a recording pass whose next live call would pass the cap makes no call and
   const bytes = readFileSync(file);
   try {
     const run = await runDemoChild([`--database-url=${url}`, '--record', '--fill', '--exit-at-rest', '--no-web', '--quiet', `--recordings=${file}`, '--cap-usd=0.01'],
-      { env: { ANTHROPIC_API_KEY: 'not-a-key-the-cap-stops-first' } });
+      { env: { ANTHROPIC_API_KEY: 'not-a-key-the-cap-stops-first' }, relative: true });
+    assert.ok(run.report, 'a relative --report lands in the caller\'s folder');
+    assert.ok(existsSync(path.join(run.dir, 'report.json.spend.json')), 'and so does its spend sidecar');
     assert.notEqual(run.code, 0, run.out.slice(-4000));
-    assert.match(run.out, /DEMO_RECORDING_INCOMPLETE: demo record: no recordings written — live calls stopped: cap at unified_extraction/);
+    assert.match(run.out, /DEMO_RECORDING_INCOMPLETE: demo record: no recordings written — \d+ request\(s\) ended the pass with no kept answer \(unified_extraction threw_TypeError.*live calls stopped: cap at unified_extraction/);
     assert.equal(run.report.provider.spend.live_calls, 0);
     assert.equal(run.report.provider.spend.stopped.reason, 'cap');
+    // The request the cap refused ended the pass with no answer: a hole.
+    assert.ok(run.report.provider.unanswered.some((hole) => hole.lane === 'unified_extraction' && /^threw_/.test(hole.last)));
     assert.equal(run.report.recordings.written, false);
     assert.deepEqual(run.network, [], 'no live call was made');
     assert.ok(readFileSync(file).equals(bytes), 'the recordings file is unchanged');
@@ -502,25 +580,82 @@ test('a recording pass whose next live call would pass the cap makes no call and
   }
 });
 
-test('a verify pass fails on a recorded answer nobody asked for', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 1_200_000 }, async () => {
+test('a verify pass fails on a recorded answer nobody asked for, and on a request asked more often than recorded', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 1_200_000 }, async () => {
   const name = `donna_demo_unused_${process.pid}`;
   const url = await scratchDatabase(name);
   const dir = mkdtempSync(path.join(os.tmpdir(), 'demo-fi-unused-'));
   const file = path.join(dir, 'recordings.json');
   const unpacked = unpackRecordings(JSON.parse(readFileSync(DEFAULT_RECORDINGS, 'utf8')));
-  const extra = unpacked.entries.find((entry) => entry.lane === 'reconciliation_reasoning');
-  // One answer more than the month asks for: a second answer to a request
-  // that is made once.
-  const entries = unpacked.entries.map((entry) => (entry === extra ? { ...entry, responses: [...entry.responses, entry.responses[0]] } : entry));
+  // One answer more than the month asks for (a second answer to a request
+  // made once), and one fewer (a request made twice, recorded once).
+  const extra = unpacked.entries.find((entry) => entry.lane === 'reconciliation_reasoning' && entry.responses.length === 1);
+  const short = unpacked.entries.find((entry) => entry.responses.length === 2);
+  assert.ok(extra && short);
+  const entries = unpacked.entries.map((entry) => (entry === extra ? { ...entry, responses: [...entry.responses, entry.responses[0]] }
+    : entry === short ? { ...entry, responses: entry.responses.slice(0, 1) } : entry));
   writeFileSync(file, `${JSON.stringify(packRecordings({ ...unpacked, entries }), null, 1)}\n`);
   try {
-    const run = await runDemoChild([`--database-url=${url}`, '--verify', '--quiet', `--recordings=${file}`]);
+    const run = await runDemoChild([`--database-url=${url}`, '--verify', '--quiet', `--recordings=${file}`, '--trace=trace.jsonl'], { relative: true });
     assert.equal(run.code, 1, run.out.slice(-4000));
-    assert.match(run.out, /DEMO_VERIFY_UNUSED/);
-    assert.match(run.out, /reconciliation_reasoning 1/);
+    assert.match(run.out, /DEMO_VERIFY_MISMATCH/);
+    assert.match(run.out, /recorded answers never asked for: reconciliation_reasoning 1/);
+    assert.match(run.out, new RegExp(`requests asked more often than recorded: ${short.lane} 1`));
     assert.deepEqual(run.report.provider.unrecorded, []);
-    assert.deepEqual(run.report.provider.unused.map((u) => [u.key, u.recorded, u.served]), [[extra.key, extra.responses.length + 1, extra.responses.length]]);
+    assert.deepEqual(run.report.provider.unused.map((u) => [u.key, u.recorded, u.served]), [[extra.key, 2, 1]]);
+    assert.deepEqual(run.report.provider.overserved.map((u) => [u.key, u.recorded, u.served]), [[short.key, 1, 2]]);
+    // A relative --trace lands in the caller's folder too.
+    assert.ok(readFileSync(path.join(run.dir, 'trace.jsonl'), 'utf8').split('\n').filter(Boolean).length >= run.report.provider.served);
   } finally {
     await dropDatabase(name);
+  }
+});
+
+// No database is reached by these two: each is refused before.
+test('replay refuses a --hold its recordings were not made with, by name, before any database', { timeout: 120_000 }, async () => {
+  const run = await runDemoChild(['--database-url=postgresql://nobody@127.0.0.1:1/none', '--exit-at-rest', '--no-web', '--quiet', '--hold=23 Kuitti.pdf']);
+  assert.equal(run.code, 1, run.out.slice(-3000));
+  assert.match(run.out, /DEMO_HOLD_NOT_RECORDED: demo: these recordings were made with every document loaded \(nothing held back\); holding back "23 Kuitti.pdf"/);
+});
+
+test('an uncommitted runtime is refused up front with the remedy, before any database', { timeout: 120_000 }, async () => {
+  const run = await runDemoChild(['--database-url=postgresql://nobody@127.0.0.1:1/none', '--exit-at-rest', '--no-web', '--quiet'],
+    { env: { DONNA_BUILD_DIRTY: 'true', DONNA_RUNTIME_BUILD_DIRTY: 'true' } });
+  assert.equal(run.code, 1, run.out.slice(-3000));
+  assert.match(run.out, /DEMO_UNCOMMITTED_RUNTIME: demo: this checkout has uncommitted changes to the runtime \(.*\)\. Host A does not start the scheduler on an uncommitted runtime build \(source_build: dirty_runtime_build\), so the month would not run\. Commit the change \(a work-in-progress commit on your branch is fine\), then run `npm run demo:fi` again\./);
+});
+
+// initdb refuses to run as root, so this one needs an ordinary user.
+const AS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
+test('--data-dir: a folder holding another firm\'s book is refused, its catalogue and rows unchanged, its running server left running', { skip: AS_ROOT ? 'initdb cannot run as root' : false, timeout: 600_000 }, async () => {
+  const { ensureLocalPostgres } = await import('../server/donna/desktop/pgSupervisor.js');
+  const dataDir = mkdtempSync(path.join(os.tmpdir(), 'dfb-'));
+  const pgPort = 15400 + (process.pid % 500);
+  const prior = { LC_ALL: process.env.LC_ALL, LANG: process.env.LANG };
+  process.env.LC_ALL = 'C'; process.env.LANG = 'C';
+  let handle;
+  try {
+    handle = ensureLocalPostgres({ dataDir, pgPort, logger: { log: () => {}, error: () => {} } });
+  } finally {
+    for (const [k, v] of Object.entries(prior)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+  try {
+    const db = new pg.Client({ connectionString: handle.databaseUrl });
+    await db.connect();
+    try {
+      await db.query("create table firms (id text primary key, name text); create table clients (id text primary key, firm_id text); insert into firms values ('firm-someone-else', 'Someone Else Oy')");
+    } finally {
+      await db.end();
+    }
+    const before = await catalogueOf(handle.databaseUrl);
+    const run = await runDemoChild([`--data-dir=${dataDir}`, '--exit-at-rest', '--no-web', '--quiet'], { timeoutMs: 240_000, env: { DONNA_DESKTOP_PG_PORT: String(pgPort) } });
+    assert.equal(run.code, 3, run.out.slice(-3000));
+    assert.match(run.out, /attaching to the postgres already running/);
+    assert.match(run.out, /PROVIDER_REPLAY_FOREIGN_BOOK/);
+    assert.match(run.out, /leaving the attached postgres running/);
+    assert.equal(await catalogueOf(handle.databaseUrl), before, 'catalogue and rows unchanged');
+    const { execFileSync } = await import('node:child_process');
+    assert.match(execFileSync(path.join(handle.pgBin, 'pg_ctl'), ['-D', handle.pgData, 'status'], { encoding: 'utf8' }), /server is running/);
+  } finally {
+    handle.stop();
   }
 });
