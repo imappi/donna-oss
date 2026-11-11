@@ -64,6 +64,7 @@ import { preferredOwnerTemplateLanguage } from '../ownerLanguage.js';
 import { CODER_FINISHED_CODING_STATES, CORRECTION_NOT_CORRECTABLE_CODE, CORRECTION_OUTCOMES, CORRECTION_READERS, correctionNotRecordedNotice, correctionOf } from '../ownerReplyCorrection.js';
 import { amountText, dayText } from '../salesRecognitionGap.js';
 import { getFirmSnapshotFromDb } from './snapshot.js';
+import { isFenceContention } from './codingPolicyContext.js';
 import { DOCUMENT_REPLY_OUTCOMES, DOCUMENT_UNAVAILABLE_ACTIONS, asksOwnerForDocument, cannotBookWithoutDocumentRequest,
   documentUnavailableFact, documentUnavailableOf, isDocumentRequestEvidenceType, ownerLanguageFor, postedWithoutDocumentNotice,
   readDocumentRequestReply } from '../ownerDocumentUnavailable.js';
@@ -1782,7 +1783,8 @@ const recodeTransactionAfterClientReplyWithClient = async ({
         try {
           await __prepareLedgerTransactionPosting({ client, firmId, clientId, transactionId, dryRun: true });
         } catch (error) {
-          if (!(Number(error?.statusCode) === 409 || /^(TRANSACTION|LEDGER|POSTING)_/.test(String(error?.code || '')))) throw error;
+          // A held fence answers 409 too, but it is no posting refusal.
+          if (isFenceContention(error) || !(Number(error?.statusCode) === 409 || /^(TRANSACTION|LEDGER|POSTING)_/.test(String(error?.code || '')))) throw error;
           postingRefusal = { code: error?.code || 'POSTING_REFUSED', message: String(error?.message || '').slice(0, 300) };
           await client.query('rollback to savepoint document_unavailable_apply');
           applies = false;

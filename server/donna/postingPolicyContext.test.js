@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveCodingPolicy, codingPolicyReceipt } from './codingPolicy.js';
+import { isFenceContention, isUnexpectedFailure } from './db/codingPolicyContext.js';
 import { assertPostingSuggestionLineage, assertPostingContextReceipt, resolvePostingContextWithClient, postingSourceReceipt, assertPostingSourceReceipt } from './db/postingPolicyContext.js';
 
 const judged = resolveCodingPolicy({ jurisdiction: 'gb', businessDate: '2026-09-04' });
@@ -60,6 +61,26 @@ test('persisted identity, base configuration and cohort SQL failures become type
     await assert.rejects(() => resolvePostingContextWithClient({ client, firmId: 'fixture-firm', clientId: 'fixture-client', businessDate: '2026-09-05' }),
       (error) => error.code === 'coding_policy_unavailable' && error.details.cause === '08006');
   }
+});
+
+test('a transient database condition at the posting context is passed through as itself, never a policy failure', async () => {
+  for (const code of ['55P03', '40001', '40P01']) {
+    const client = { query: async (sql) => {
+      if (sql.includes('from clients')) throw Object.assign(new Error('transient'), { code });
+      return { rows: [] };
+    } };
+    await assert.rejects(() => resolvePostingContextWithClient({ client, firmId: 'fixture-firm', clientId: 'fixture-client', businessDate: '2026-09-05' }),
+      (error) => error.code === code && error.statusCode === 409 && error.retryable === true);
+  }
+});
+
+test('one classifier: transient conditions, named refusals and unexpected failures are told apart', () => {
+  for (const code of ['55P03', '40001', '40P01']) assert.equal(isFenceContention({ code }), true);
+  for (const code of ['23505', '08006', 'LEDGER_LOCKED_PERIOD_IMMUTABLE', undefined]) assert.equal(isFenceContention({ code }), false);
+  for (const error of [new TypeError('bug'), { code: '23514' }, { code: 'XX000' }, { code: 'ECONNRESET', errno: -104, syscall: 'read' }, { code: '' }])
+    assert.equal(isUnexpectedFailure(error), true, JSON.stringify(error));
+  for (const code of ['LEDGER_LOCKED_PERIOD_IMMUTABLE', 'posting_policy_invalid', 'jurisdiction_unresolved', 'TRANSACTION_ALV_TREATMENT_UNRESOLVED', 'CODING_CORRECTION_AUTHORITY_REQUIRED'])
+    assert.equal(isUnexpectedFailure({ code }), false, code);
 });
 
 test('missing persisted identity keeps its owner-fact error instead of being disguised as a configuration outage', async () => {

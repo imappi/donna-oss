@@ -192,6 +192,23 @@ test('real PG (FI): a late bank line with a deductible purchase, dated inside th
   assert.ok(['ledger_auto_post_sweep', 'coding_batch_inline_post'].includes(sweepRefusals[0].metadata.source));
   assert.equal(sweepRefusals[0].metadata.code, CODE);
   assert.deepEqual(await effects(pool, clientId), before);
+  // One owner per stamp: the writer's own receipt stamps this named refusal
+  // (source filed_vat_return); the inline post's receipt adds only its audit
+  // row. The line changes, so the sweep itself meets the refusal: it too adds
+  // exactly one audit row, keeps the writer's stamp, and is damped again.
+  const stampOf = async () => (await pool.query("select payload->'ledger_post_refusal' as stamp from transactions where id = 'late-purchase'")).rows[0].stamp;
+  assert.equal((await stampOf()).source, 'filed_vat_return');
+  await pool.query("update transactions set updated_at = now() where id = 'late-purchase'");
+  const swept = await sweepLedgerAutoPost({ firmId, clientId, transactionId: 'late-purchase', configSnapshot: { LEDGER_AUTO_POST: { stage: 'auto' } }, env: {} });
+  assert.equal(swept.refused, 1, JSON.stringify(swept));
+  const sweptStamp = await stampOf();
+  assert.equal(sweptStamp.code, CODE);
+  assert.equal(sweptStamp.source, 'filed_vat_return', 'the sweep does not stamp over the writer');
+  const receipts = (await pool.query("select metadata->>'source' as source, metadata->>'code' as code from audit_events where client_id = $1 and action = 'ledger.auto_post_refused' and resource_id = 'late-purchase' order by id", [clientId])).rows;
+  assert.deepEqual(receipts.map((r) => r.code), [CODE, CODE], 'one audit row per attempt');
+  assert.equal(receipts.at(-1).source, 'ledger_auto_post_sweep');
+  assert.equal((await sweepLedgerAutoPost({ firmId, clientId, transactionId: 'late-purchase', configSnapshot: { LEDGER_AUTO_POST: { stage: 'auto' } }, env: {} })).eligible, 0, 'damped');
+  assert.deepEqual(await effects(pool, clientId), before);
 
   // The same purchase dated in the open month posts, with its input ALV.
   const open = await bankLine(pool, clientId, 'open-purchase', OPEN);

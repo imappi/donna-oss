@@ -1771,6 +1771,25 @@ export const __ledgerAccountMintShape = ({ account = {}, canonicalRole = null } 
   return { account_type: declaredType || 'unknown', normal_balance: account.normal_balance || 'debit' };
 };
 
+// The existing row a journal account lands on, or null to mint the derived id.
+// By code first (unique per book), whatever id the row was born with. A
+// name-only account (no code, or a code that is just the name) keeps its
+// derived row when it has one; otherwise it lands on the one coded row of that
+// name, and two such rows are no answer (the mint then behaves as before).
+const findLedgerAccountForJournalWithClient = async ({ client, firmId, clientId, derivedId, code, name, nameOnly }) => {
+  if (code) {
+    const byCode = (await client.query('select id, code from ledger_accounts where firm_id=$1 and client_id=$2 and code=$3',
+      [firmId, clientId, code])).rows[0];
+    if (byCode || !nameOnly) return byCode || null;
+  }
+  if (!nameOnly || !name) return null;
+  if ((await client.query('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3', [firmId, clientId, derivedId])).rows.length) return null;
+  const byName = (await client.query(`select id, code from ledger_accounts
+      where firm_id=$1 and client_id=$2 and coalesce(code,'')<>'' and lower(btrim(name))=lower(btrim($3)) limit 2`,
+    [firmId, clientId, name])).rows;
+  return byName.length === 1 ? byName[0] : null;
+};
+
 // Exported for canonicalRoleResolutionDb.js: the strong-model role-resolution
 // lane mints a ledger row for a synced (xero-mirror) chart account through THIS
 // writer rather than a second insert — same deterministic id scheme, same
@@ -1785,9 +1804,18 @@ export const upsertLedgerAccountForJournal = async ({ client, firmId, clientId, 
     if ((currency && currency !== choice.currency) || (account.currency && account.currency !== choice.currency)) codingChoiceFailure('account_currency_mismatch');
     return choice.id;
   }
-  const code = String(account.code || '').trim();
-  const name = String(account.name || account.label || code || 'Uncoded account').trim();
-  const accountId = ledgerRecordId('account', firmId, clientId, code || account.xero_account_id || name);
+  const postedCode = String(account.code || '').trim();
+  const name = String(account.name || account.label || postedCode || 'Uncoded account').trim();
+  const derivedId = ledgerRecordId('account', firmId, clientId, postedCode || account.xero_account_id || name);
+  // The book's own row wins over the derived id. A chart born by a seeder with
+  // its own id scheme (the GB default chart, the coded-chart scripts) holds the
+  // code under a different id, and inserting the derived id would be a second
+  // row for that code. The code is the account's identity on a book; a
+  // code-less posting that names exactly one coded row is that row too.
+  const existing = await findLedgerAccountForJournalWithClient({ client, firmId, clientId, derivedId, code: postedCode, name,
+    nameOnly: !String(account.xero_account_id || '').trim() && (!postedCode || normalizeIntelText(postedCode) === normalizeIntelText(name)) });
+  const accountId = existing?.id || derivedId;
+  const code = existing?.code || postedCode;
   // payload.role is the LINE role ('counterparty'/'bank'); canonical_role is the
   // CoA-level semantic identity (see __canonicalRoleForAccount). On conflict we
   // coalesce-FILL — a posting upsert may resolve a role for a previously-null row,

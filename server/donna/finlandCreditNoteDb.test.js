@@ -63,6 +63,7 @@ const fakePostClient = ({
       if (sql.includes('select profile from clients')) return { rows: [{ profile }] };
       if (sql.includes('from ledger_journals lj')) return { rows: existingJournal ? [existingJournal] : [] };
       if (sql.includes('from close_periods')) return { rows: lockedAtDate ? [{ id: 'cp-1' }] : [] };
+      if (sql.startsWith('select id, code from ledger_accounts') || sql.startsWith('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3')) return { rows: [] }; // the mint's existing-row lookup (2026-11-10)
       if (sql.includes('insert into ledger_accounts')) return { rows: [] };
       if (sql.includes('insert into ledger_journals')) return { rows: [{ id: 'journal-cn-1' }] };
       if (sql.includes('delete from ledger_lines')) return { rows: [] };
