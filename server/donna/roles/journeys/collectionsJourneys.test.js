@@ -155,11 +155,10 @@ test('journey: invoice to settlement passes end to end', async () => {
   // settlement withdrawing that reminder on its way to the case terminal.
   assert.deepEqual(report.evidence.audit_actions, [
     'outbound_payment_link.created',
-    // The first posting into this world's thin chart mints the AR and revenue
-    // accounts by name — each mint is receipted (nothing-silent at the chart
-    // plane, upsertLedgerAccountForJournal, 2026-08-25).
-    'ledger.account.created_at_posting',
-    'ledger.account.created_at_posting',
+    // The AR leg posts to the chart's own 1100 and 4000 rows: the mint finds
+    // them by code, so nothing is minted and no mint receipt is written
+    // (2026-11-10; until then each posting minted a second row for the code,
+    // which this harness did not refuse, and receipted it).
     'ledger.post_sales_invoice',
     'outbound_action.executed',
     'invoice.issued',
