@@ -466,6 +466,42 @@ npm run db:prepare:ci-host && npm run db:migrate && npm run runtime:initialize:c
 
 Without `DONNA_PG_TEST_URL` the database suites are skipped.
 
+### When you change a prompt: the demo's recordings
+
+`scripts/demo_fi.test.js` replays the zero-key demo's whole month against
+the committed recordings (`data/demo-replay/fi-kultalanka-2025-02.json`),
+with no key and the network refused. Any change to what a model is asked
+on that path (a prompt, a schema, the evidence a lane is shown, the order
+of a list in it) makes it fail with `PROVIDER_REPLAY_UNRECORDED`, naming
+the lane, the model and where the new request first differs from the
+recorded one. That failure is the point: the demo must not answer a
+question it was never asked.
+
+To bring the recordings up to date, with the keys of the lanes that
+changed in `.env`:
+
+```bash
+npm run demo:fi:record -- --fill
+```
+
+It replays the month on a fresh book, answers every request that still
+matches from the recordings, calls the provider only for the requests that
+changed (and for any later request their new answers change), and writes
+the file again; run it until it reports `0 calls`, then
+`npm run demo:fi -- --exit-at-rest` to confirm. A lane whose recordings
+are scripted stand-ins is answered by its stand-in again, with no key.
+`--report=FILE` writes the unrecorded requests in full beside the report,
+and `--trace=FILE` every request, to diff two runs. Rough cost of
+re-recording one live lane at list prices, if every one of its calls
+changes: receipt and invoice reading (unified extraction) 26 calls,
+about 1.60 USD; reconciliation 26 calls, about 1.00 USD; bank-line
+disposition 36 calls, about 0.40 USD; document disposition 1 call, under
+0.05 USD; the coder (when recorded live) about 13 calls and 3 USD;
+routing 27 calls, about 0.90 USD; ask drafting 6 calls, about 0.25 USD.
+A changed answer can change the requests after it, so a fill may also
+call a few downstream lanes. `npm run demo:fi:record` alone re-records
+everything (live pass, fill passes, verification).
+
 ## Licence
 
 Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). The licence

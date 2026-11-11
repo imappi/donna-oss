@@ -98,7 +98,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_RECORDINGS = path.join(ROOT, 'data', 'demo-replay', 'fi-kultalanka-2025-02.json');
 export const FACTS_FILE = path.join(ROOT, 'scripts', 'fixtures', 'fi_kultalanka_month_facts.json');
 export const DEMO_FIRM_ID = 'firm-demo-tilitoimisto';
-export const RERECORD_COMMAND = 'npm run demo:fi:record';
+// What a miss tells the next person to run: a fill re-records only the
+// requests that changed (live for live lanes, the stand-in for stand-in
+// lanes) and keeps every answer that still matches.
+export const RERECORD_COMMAND = 'npm run demo:fi:record -- --fill';
 export const SETTLE = Object.freeze({ advance_ms: 300_000, quiet_rounds: 3, max_rounds: 48 });
 export const ANSWER_ROUNDS = 4;
 // Daily backup packages are the one sweep a fast clock would multiply on disk;
@@ -229,6 +232,8 @@ export const answerFor = ({ ask, transaction, answers }) => {
 export const runDemo = async (options) => {
   const startedAt = Date.now();
   const mode = options.record ? 'record' : 'replay';
+  // A recording pass always ends at rest: its file is written then.
+  if (mode === 'record') options = { ...options, exitAtRest: true };
   const facts = JSON.parse(readFileSync(FACTS_FILE, 'utf8'));
   const { DEMO_CLIENT_ID, DEMO_STATEMENT_FILE, createRuntimeClient, loadFinnishDemo } = await import('./load_finnish_demo.mjs');
   const recordingsFile = path.resolve(options.recordings || DEFAULT_RECORDINGS);
@@ -253,15 +258,32 @@ export const runDemo = async (options) => {
     for (const key of REPLAY_PROVIDER_KEY_ENV) process.env[key] = REPLAY_PLACEHOLDER_KEY;
     log(`replay: ${recordings.entries.length} recorded answers (${recordings.recorded_at || 'date unknown'}; ${Object.entries(recordedModels(recordings)).map(([p, m]) => `${p} ${m.join(', ')}`).join('; ')}); no provider is called`);
   } else {
-    const { answerOpenAiStandIn } = options.standIn ? await import('./demo_fi_stand_ins.mjs') : {};
     const realFetch = globalThis.fetch;
-    if (!realKeys.ANTHROPIC_API_KEY) throw new Error('--record needs ANTHROPIC_API_KEY in the environment');
-    if (!options.standIn && !realKeys.OPENAI_API_KEY) throw new Error('--record needs OPENAI_API_KEY in the environment (or --stand-in=openai)');
-    if (options.standIn) process.env.OPENAI_API_KEY = REPLAY_PLACEHOLDER_KEY;
-    const capUsd = Number(options.capUsd || 20);
-    spend = { usd: 0, cap_usd: capUsd, live_calls: 0, stand_in: 0, unpriced: 0, reused: 0 };
     const base = options.fill ? loadReplayRecordings(recordingsFile) : null;
     const baseByKey = new Map((base?.entries || []).map((entry) => [entry.key, { entry, served: 0 }]));
+    // A fill keeps each lane's provenance: a lane the file holds only as
+    // scripted stand-ins is answered by the stand-in again; any other lane
+    // goes live. So `--fill` needs only the keys of the live lanes it misses.
+    const standInLanes = new Set();
+    if (base) {
+      const byLane = new Map();
+      for (const entry of base.entries) byLane.set(entry.lane, [...(byLane.get(entry.lane) || []), entry.provenance]);
+      for (const [lane, provenances] of byLane) if (provenances.every((p) => p === 'scripted_stand_in')) standInLanes.add(lane);
+    }
+    const { answerOpenAiStandIn } = options.standIn || standInLanes.size ? await import('./demo_fi_stand_ins.mjs') : {};
+    if (!options.fill) {
+      if (!realKeys.ANTHROPIC_API_KEY) throw new Error('--record needs ANTHROPIC_API_KEY in the environment');
+      if (!options.standIn && !realKeys.OPENAI_API_KEY) throw new Error('--record needs OPENAI_API_KEY in the environment (or --stand-in=openai)');
+    }
+    // Lanes the stand-in answers still need a key to be present so they reach
+    // the wire; the placeholder is not one and is never sent anywhere.
+    if (options.standIn || [...standInLanes].length) {
+      for (const key of REPLAY_PROVIDER_KEY_ENV) if (!realKeys[key]) process.env[key] = REPLAY_PLACEHOLDER_KEY;
+    }
+    if (options.standIn) process.env.OPENAI_API_KEY = REPLAY_PLACEHOLDER_KEY;
+    const keyFor = { openai: realKeys.OPENAI_API_KEY, anthropic: realKeys.ANTHROPIC_API_KEY };
+    const capUsd = Number(options.capUsd || 20);
+    spend = { usd: 0, cap_usd: capUsd, live_calls: 0, stand_in: 0, unpriced: 0, reused: 0 };
     seam = installProviderRecorder({
       logger: console,
       secretValues: Object.values(realKeys).filter(Boolean),
@@ -271,11 +293,14 @@ export const runDemo = async (options) => {
           spend.reused += 1;
           return { response: recordedResponseFor(held.entry, identity, held.served++), provenance: held.entry.provenance };
         }
-        if (options.standIn && classified.endpoint_class === 'openai') {
+        if ((options.standIn && classified.endpoint_class === 'openai') || standInLanes.has(classified.lane)) {
           spend.stand_in += 1;
           return { response: await answerOpenAiStandIn({ input, init, classified }), provenance: 'scripted_stand_in' };
         }
         if (spend.usd >= capUsd) throw new TypeError(`demo record: spend cap ${capUsd} USD reached; not calling ${classified.lane}`);
+        if (!keyFor[classified.endpoint_class]) {
+          throw new TypeError(`demo record: lane ${classified.lane} must be recorded live and needs a ${classified.endpoint_class} key in .env`);
+        }
         const response = await realFetch(input, init);
         let body = null;
         try { body = await response.clone().json(); } catch { body = null; }
@@ -289,12 +314,11 @@ export const runDemo = async (options) => {
     });
     log(`record: live ${options.standIn ? 'anthropic; openai from the scripted stand-in' : 'openai and anthropic'}; writing ${path.relative(ROOT, recordingsFile)}`);
   }
-  // Off switches only: the first-line lane needs a Typesafe key the demo
-  // does not have, and the challenger rung is not part of the demo.
-  delete process.env.TYPESAFE_API_KEY;
-  delete process.env.OPENAI_COMPATIBLE_API_KEY;
-  delete process.env.OPENAI_COMPATIBLE_BASE_URL;
-  process.env.CLIENT_CONFIG_FORCE_DISABLE = [...new Set([...(process.env.CLIENT_CONFIG_FORCE_DISABLE || '').split(',').map((s) => s.trim()).filter(Boolean), 'JEV_RECONCILIATION'])].join(',');
+  // The recordings hold no first-line (Typesafe) or challenger answers, so
+  // those providers are unset in this process: the first-line lane is then
+  // dark by itself (server/donna/firstLineLane.js) and the other lanes decide,
+  // as on any install without a Typesafe key. No kill switch is needed.
+  for (const key of ['TYPESAFE_API_KEY', 'TYPESAFE_MODEL', 'OPENAI_COMPATIBLE_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL']) delete process.env[key];
   // One parse at a time: the same order on every run, which is what lets a
   // recording and its replay see the same book at every step.
   process.env.INNGEST_PARSE_CONCURRENCY = '1';

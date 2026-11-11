@@ -4,7 +4,7 @@
  "pack": "fi-kultalanka-2025-02",
  "recorded_at": "2026-11-11",
  "recorded_on": {
-  "commit": "1c2496d8cfab1ae802f73a0d0de86bb58459dfaf"
+  "commit": "4249ce36a60d864e8862a618ff2312aafaaefd90"
  },
  "scenario": {
   "held_back": null,
@@ -10642,7 +10642,7 @@
    ]
   },
   {
-   "key": "3b6d1803a4138f0749f5722d13f6d85146e0f90622b5cbd88b0c51a1cd1bb855",
+   "key": "2e2eac58ca7de1e73026fa3259f2d082639c06405b6ed8d6632bc4d2f816d971",
    "lane": "transaction_coding",
    "provider": "openai",
    "endpoint": "api.openai.com/v1/responses",
@@ -10650,7 +10650,7 @@
    "schema": "transaction_coding_batch_suggestion",
    "provenance": "scripted_stand_in",
    "request": {
-    "input": "<text sha256:17f5d4129c672719966cea64e7846d834408ae9a959661c08de1f05af4556e1f chars:294370>",
+    "input": "<text sha256:22625ec931df984147e5dc506c4441ab04c194f78b0625adbcf0aa92841cadfb chars:294222>",
     "instructions": {
      "$text": "5de2deda7078b743752207ff"
     },
@@ -11234,21 +11234,21 @@
     }
    },
    "previews": {
-    "17f5d4129c672719966cea64e7846d834408ae9a959661c08de1f05af4556e1f": "{\"client\":{\"id\":\"kampaamo-kultalanka-oy\",\"name\":\"Kampaamo Kultalanka Oy\",\"registration_number\":\"3224455-8\",\"jurisdiction\":\"fi\",\"entity_type\":\"fi-oy\",\"taxProfile\":null,\"accountingCurrency\":\"EUR\",\"business_context\":[],\"principals\":[],\"known_bank_accounts\":[{\"bank\":\"\",\"account_number\":\"FI03 5000 9420 0012 34\",\"iban\":\"\"}]},\"transactions\":[{\"id\":\"doc-kampaamo-kultalanka-oy-564e3594f860-tx-14\",\"date\":\"2025-02-14\",\"description\":\"TOKMANNI TAMPERE KOSKIKESKUS · TAMPERE\",\"money_in\":0,\"money_out\":19.9,\"currency\":\"EUR\",\"proposed_account\":\"Operating supplies\",\"current_status\":\"needs_review\",\"current_suppor"
+    "22625ec931df984147e5dc506c4441ab04c194f78b0625adbcf0aa92841cadfb": "{\"client\":{\"id\":\"kampaamo-kultalanka-oy\",\"name\":\"Kampaamo Kultalanka Oy\",\"registration_number\":\"3224455-8\",\"jurisdiction\":\"fi\",\"entity_type\":\"fi-oy\",\"taxProfile\":null,\"accountingCurrency\":\"EUR\",\"business_context\":[],\"principals\":[],\"known_bank_accounts\":[{\"bank\":\"\",\"account_number\":\"FI03 5000 9420 0012 34\",\"iban\":\"\"}]},\"transactions\":[{\"id\":\"doc-kampaamo-kultalanka-oy-564e3594f860-tx-14\",\"date\":\"2025-02-14\",\"description\":\"TOKMANNI TAMPERE KOSKIKESKUS · TAMPERE\",\"money_in\":0,\"money_out\":19.9,\"currency\":\"EUR\",\"proposed_account\":\"Operating supplies\",\"current_status\":\"needs_review\",\"current_suppor"
    },
    "responses": [
     {
      "status": 200,
      "content_type": "application/json",
      "body": {
-      "id": "recorded_3b6d1803a4138f0749f5722d",
+      "id": "recorded_2e2eac58ca7de1e73026fa32",
       "object": "response",
-      "created_at": 1794351792,
+      "created_at": 1794358557,
       "status": "completed",
       "model": "gpt-5.4",
       "output": [
        {
-        "id": "recorded_3b6d1803a4138f07_0",
+        "id": "recorded_2e2eac58ca7de1e7_0",
         "type": "message",
         "status": "completed",
         "role": "assistant",
@@ -11274,14 +11274,14 @@
      "status": 200,
      "content_type": "application/json",
      "body": {
-      "id": "recorded_3b6d1803a4138f0749f5722d",
+      "id": "recorded_2e2eac58ca7de1e73026fa32",
       "object": "response",
-      "created_at": 1794351794,
+      "created_at": 1794358559,
       "status": "completed",
       "model": "gpt-5.4",
       "output": [
        {
-        "id": "recorded_3b6d1803a4138f07_0",
+        "id": "recorded_2e2eac58ca7de1e7_0",
         "type": "message",
         "status": "completed",
         "role": "assistant",
@@ -11307,14 +11307,14 @@
      "status": 200,
      "content_type": "application/json",
      "body": {
-      "id": "recorded_3b6d1803a4138f0749f5722d",
+      "id": "recorded_2e2eac58ca7de1e73026fa32",
       "object": "response",
-      "created_at": 1794351795,
+      "created_at": 1794358560,
       "status": "completed",
       "model": "gpt-5.4",
       "output": [
        {
-        "id": "recorded_3b6d1803a4138f07_0",
+        "id": "recorded_2e2eac58ca7de1e7_0",
         "type": "message",
         "status": "completed",
         "role": "assistant",

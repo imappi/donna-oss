@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useInterfaceLocale } from '../i18n/LocaleProvider.jsx';
+import { demoReplayNoticeText } from '../lib/demoReplayNotice.js';
 
 // The replay demo's notice (`npm run demo:fi`, scripts/demo_fi.mjs). Shown on
 // every screen while the book holds the stored record that it was given
@@ -7,38 +8,21 @@ import { useInterfaceLocale } from '../i18n/LocaleProvider.jsx';
 // the public health route returns as `provider_replay`. A normal book has no
 // such record and this renders nothing. Mounted from src/main.jsx beside
 // <App />, so it is above the sign-in screen, the firm view and the portal.
-// Its own two-language text, not the interface catalog: the notice belongs to
-// a demo command, not to the product's release-gated surfaces (whose catalogs
-// are frozen per release), and it must read the same in every language the
-// demo runs in.
-export const DEMO_REPLAY_TEXT = Object.freeze({
-  en: Object.freeze({
-    title: 'Demo: recorded model outputs',
-    body: (models, recordedAt) => `This book was read, coded and matched from answers recorded earlier (${models}, recorded ${recordedAt}). No model is called and no key is used.`
-  }),
-  fi: Object.freeze({
-    title: 'Demo: recorded model outputs · tallennetut mallivastaukset',
-    body: (models, recordedAt) => `Tämä kirjanpito on luettu, kirjattu ja täsmäytetty aiemmin tallennetuista vastauksista (${models}, tallennettu ${recordedAt}). Mallia ei kutsuta eikä avainta käytetä.`
-  })
-});
-
-export const describeRecordedModels = (models) =>
-  Object.values(models || {}).flat().filter(Boolean).join(', ');
-
+// Its text is its own (src/lib/demoReplayNotice.js), not the interface
+// catalog: it belongs to a demo command, not to the release-gated surfaces.
 const DemoReplayNotice = ({ fetchImpl = (...args) => fetch(...args) }) => {
   const { locale } = useInterfaceLocale();
-  const [session, setSession] = useState(null);
+  const [health, setHealth] = useState(null);
   useEffect(() => {
     let cancelled = false;
     fetchImpl('/api/donna/firms/health')
       .then((response) => (response.ok ? response.json() : null))
-      .then((body) => { if (!cancelled) setSession(body?.provider_replay || null); })
+      .then((body) => { if (!cancelled) setHealth(body || null); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [fetchImpl]);
-  if (!session) return null;
-  const models = describeRecordedModels(session.recorded_models) || '—';
-  const text = String(locale || '').startsWith('fi') ? DEMO_REPLAY_TEXT.fi : DEMO_REPLAY_TEXT.en;
+  const notice = demoReplayNoticeText({ health, locale });
+  if (!notice) return null;
   return (
     <div
       role="status"
@@ -59,8 +43,8 @@ const DemoReplayNotice = ({ fetchImpl = (...args) => fetch(...args) }) => {
         pointerEvents: 'none'
       }}
     >
-      <strong style={{ display: 'block' }}>{text.title}</strong>
-      <span style={{ opacity: 0.85 }}>{text.body(models, session.recorded_at || '—')}</span>
+      <strong style={{ display: 'block' }}>{notice.title}</strong>
+      <span style={{ opacity: 0.85 }}>{notice.body}</span>
     </div>
   );
 };

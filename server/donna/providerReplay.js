@@ -84,7 +84,7 @@ export const REPLAYED_MODEL_SUFFIX = '+replayed';
 // not a key: Host A and the boot line read it as "no credential, replayed".
 export const REPLAY_PLACEHOLDER_KEY = 'donna-demo-replay-not-a-key';
 export const REPLAY_PROVIDER_KEY_ENV = Object.freeze(['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']);
-export const DEFAULT_RERECORD_HINT = 'npm run demo:fi:record';
+export const DEFAULT_RERECORD_HINT = 'npm run demo:fi:record -- --fill';
 
 export const PROVIDER_REPLAY_CODES = Object.freeze({
   UNRECORDED: 'PROVIDER_REPLAY_UNRECORDED',
