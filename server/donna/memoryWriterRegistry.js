@@ -446,7 +446,9 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     // delete from __DYNAMIC_SQL__ where firm_id = $1
     ["resetData/callback", "dynamic_sql", "95e4f3159930e2dc81a8e04534e61d206e08a3db783a9eb446c035242bbd4bac", 1, []],
   ]),
-  ...group("scripts/demo_fi.mjs", "The zero-key demo's end-state and fingerprint reads over the runtime's query function, added 2026-11-10. Read-only. No memory target.", [
+  // Re-described 2026-11-11: this group was called read-only, but the demo
+  // also writes. Hashes unchanged.
+  ...group("scripts/demo_fi.mjs", "The zero-key demo's reads over the runtime's query function (end state, fingerprint, the book and collation guards), added 2026-11-10. It also writes, outside this group's callbacks: the storage-schema stub on a given database, local_job_cron_state.last_enqueued_tick set to its virtual clock before the first tick, and one provider_replay_sessions row (providerReplaySession.js). No memory target.", [
     ["one", "dynamic_query", "5a974a26389ef83aee2ba65c6258cda2b8176c7d6ed20be205b2f3740a20fd91", 1, []],
     ["query", "dynamic_query", "2be593881a938a46e44730cbaa0d0139cbf1a443cd10d9155805516b938e4ea5", 1, []],
   ]),

@@ -1,13 +1,16 @@
 // Scripted stand-ins for the OpenAI lanes of the Kultalanka month, used only
-// by `npm run demo:fi:record -- --stand-in=openai` while a lane cannot be
-// recorded live. Each answer is written from the pack's own files (the
+// by a recording pass: `--record --stand-in=openai`, or a `--fill` pass for
+// an OpenAI lane the recordings hold only as stand-ins (scripts/demo_fi.mjs),
+// while a lane cannot be recorded live. Each answer is written from the pack's own files (the
 // statement's printed rows, labels.json's documents and adjudicated lines) in
 // the lane's own wire shape (an OpenAI Responses body whose output_text is
 // the strict-schema JSON the module asked for), so the module's parser,
 // schema checks and writers run on it as on a live answer. The recordings
-// mark every such answer `provenance: "scripted_stand_in"`, and the replay's
-// receipts name the model as `<model> (scripted_stand_in)`-recorded; a live
-// re-record replaces them.
+// mark every such answer `provenance: "scripted_stand_in"`, and the answer
+// names its own model, never the one asked for: `scripted-stand-in-for-
+// <requested model>`, so every receipt reads
+// `scripted-stand-in-for-gpt-5.4+replayed` and no receipt claims a model
+// that did not answer. A live re-record replaces them.
 //
 // A lane with no stand-in answers 418 (refused, never retried), so the
 // recording run shows what is missing instead of inventing an answer.
@@ -27,12 +30,13 @@ const fileBySha = new Map(labels.sources.map((s) => [s.sha256, s.file]));
 export const standInLedger = [];
 
 const respond = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+export const STAND_IN_MODEL_PREFIX = 'scripted-stand-in-for-';
 const responsesBody = (model, value) => ({
   id: 'resp_stand_in',
   object: 'response',
   created_at: Math.floor(Date.now() / 1000),
   status: 'completed',
-  model: model || 'gpt-5.4',
+  model: `${STAND_IN_MODEL_PREFIX}${model || 'unnamed-model'}`,
   output: [{ id: 'msg_stand_in', type: 'message', status: 'completed', role: 'assistant', content: [{ type: 'output_text', annotations: [], text: typeof value === 'string' ? value : JSON.stringify(value) }] }],
   usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }
 });

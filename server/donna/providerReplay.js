@@ -407,8 +407,12 @@ export const unpackRecordings = (file) => {
       throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS, lane: entry.lane, key: entry.key, message: `provider replay: recording ${entry.key} (${entry.lane}) does not hash to its key or has no response` });
     }
     for (const response of entry.responses) {
-      if ('events' in response && !eventStreamIsComplete(response.events)) {
-        throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS, lane: entry.lane, key: entry.key, message: `provider replay: recording ${entry.key} (${entry.lane}) holds a stream that never reached its terminal event` });
+      const stream = 'events' in response ? eventStreamOutcome(response.events) : null;
+      if (stream && stream.outcome !== 'complete') {
+        throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS, lane: entry.lane, key: entry.key, message: `provider replay: recording ${entry.key} (${entry.lane}) holds a stream that ${stream.outcome === 'failed' ? `ended in ${stream.event}` : 'never reached its end'}; only answers that ended well are kept` });
+      }
+      if (!('events' in response) && response.status !== 200) {
+        throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS, lane: entry.lane, key: entry.key, message: `provider replay: recording ${entry.key} (${entry.lane}) holds an HTTP ${response.status} answer; only answers that ended well are kept` });
       }
     }
   }
@@ -427,12 +431,16 @@ export const unpackRecordings = (file) => {
 // event (so an id the model wrote across two deltas is bound whole; a lane's
 // parser accumulates deltas and reads the same text). On replay it is served
 // back as a stream with the same content type and framing, with the marker on
-// every model id it names. A stream that did not reach its terminal event is
-// not an answer: the recorder does not keep it, a recordings file that holds
-// one is refused at load, so a cut-off stream replays as a miss, never as a
-// silently shortened answer.
+// every model id it names. Only a stream that ENDED WELL is an answer: one
+// whose last event is its success terminal (message_stop, response.completed,
+// [DONE]) and that carries no failure event (error, response.failed,
+// response.incomplete). A stream cut off before its end, or one that ended
+// in a failure, is treated like a non-200 answer: the recorder does not keep
+// it and logs why, a recordings file that holds one is refused at load, so it
+// replays as a named miss, never as a silently shortened or failed answer.
 export const EVENT_STREAM_CONTENT_TYPE = 'text/event-stream';
-const TERMINAL_STREAM_EVENTS = new Set(['message_stop', 'response.completed', 'response.incomplete', 'response.failed', 'error', '[DONE]']);
+const STREAM_SUCCESS_END = new Set(['message_stop', 'response.completed', '[DONE]']);
+const STREAM_FAILURE_EVENTS = new Set(['error', 'response.failed', 'response.incomplete']);
 
 export const parseEventStream = (text) => {
   const events = [];
@@ -464,8 +472,15 @@ const streamEventType = (entry) => (entry?.data && typeof entry.data === 'object
   ? entry.data.type
   : entry?.event || (entry?.data === '[DONE]' ? '[DONE]' : null));
 
-export const eventStreamIsComplete = (events) =>
-  Array.isArray(events) && events.length > 0 && TERMINAL_STREAM_EVENTS.has(streamEventType(events[events.length - 1]));
+// 'complete' | 'failed' (with the failure event's type) | 'cut_off'.
+export const eventStreamOutcome = (events) => {
+  if (!Array.isArray(events) || !events.length) return { outcome: 'cut_off', event: null };
+  const failure = events.map(streamEventType).find((type) => STREAM_FAILURE_EVENTS.has(type));
+  if (failure) return { outcome: 'failed', event: failure };
+  const last = streamEventType(events[events.length - 1]);
+  return STREAM_SUCCESS_END.has(last) ? { outcome: 'complete', event: last } : { outcome: 'cut_off', event: last };
+};
+export const eventStreamIsComplete = (events) => eventStreamOutcome(events).outcome === 'complete';
 
 // Consecutive deltas of the same content block → one delta.
 const DELTA_FIELDS = Object.freeze({ text_delta: 'text', input_json_delta: 'partial_json', thinking_delta: 'thinking' });
@@ -504,7 +519,8 @@ export const eventStreamSummary = (events) => {
       || (typeof data.model === 'string' && data.model) || null;
     Object.assign(usage, data.message?.usage || {}, data.usage || {}, data.response?.usage || {});
   }
-  return { model, usage: Object.keys(usage).length ? usage : null, complete: eventStreamIsComplete(events) };
+  const { outcome, event } = eventStreamOutcome(events);
+  return { model, usage: Object.keys(usage).length ? usage : null, complete: outcome === 'complete', outcome, end_event: event };
 };
 
 const PROVIDER_ID_PATTERN = /^(msg|resp|req|rs|item|fc|chatcmpl|run)_[A-Za-z0-9]+$/;
@@ -613,7 +629,16 @@ export const SECRET_PATTERNS = Object.freeze([
   Object.freeze({ name: 'provider_request_id', pattern: /\breq_[A-Za-z0-9]{16,}\b/ }),
   Object.freeze({ name: 'anthropic_message_id', pattern: /\bmsg_0[A-Za-z0-9]{16,}\b/ }),
   Object.freeze({ name: 'openai_response_id', pattern: /\bresp_[a-f0-9]{32,}\b/ }),
-  Object.freeze({ name: 'organization_field', pattern: /"(?:organization|openai-organization|anthropic-organization-id|user_id|safety_identifier)"\s*:\s*"[^"]+"/i })
+  Object.freeze({ name: 'organization_field', pattern: /"(?:organization|openai-organization|anthropic-organization-id|user_id|safety_identifier)"\s*:\s*"[^"]+"/i }),
+  // The first-line (Typesafe) and openai-compatible (Together-class) lanes.
+  // Neither publishes one key shape, so these are the shapes a key of theirs
+  // is written in, plus any JSON field that carries a key or token by name.
+  // A Together legacy key is 64 hex digits, the same shape as the digests the
+  // file is made of; it is caught as a configured value instead (the caller
+  // passes every key-like value it found in its environment as extraValues).
+  Object.freeze({ name: 'typesafe_key', pattern: /\b(?:typesafe|tsk|ts_(?:live|test))[-_][A-Za-z0-9_-]{16,}/i }),
+  Object.freeze({ name: 'together_key', pattern: /\btgp_v\d+_[A-Za-z0-9_-]{16,}/ }),
+  Object.freeze({ name: 'key_field', pattern: /"(?:api[_-]?key|apikey|access[_-]?token|secret[_-]?key|client[_-]?secret|password)"\s*:\s*"[^"<]{8,}"/i })
 ]);
 
 export const findSecretShapes = (text, { extraValues = [] } = {}) => {
@@ -770,6 +795,11 @@ export const installProviderReplay = ({
     missed,
     refusedNetwork,
     state: activeReplay,
+    // Recorded answers the run never asked for: an entry served fewer times
+    // than it holds answers. A verify pass on a fresh book fails on any.
+    unused: () => [...byKey.values()]
+      .filter((slot) => slot.served < slot.entry.responses.length)
+      .map((slot) => ({ key: slot.entry.key, lane: slot.entry.lane, provider: slot.entry.provider, recorded: slot.entry.responses.length, served: slot.served })),
     restore() {
       if (target.fetch === wrapper) target.fetch = realFetch;
       activeReplay = null;
@@ -813,16 +843,27 @@ export const installProviderRecorder = ({
     if (streamed) events = coalesceStreamDeltas(parseEventStream(text));
     else { try { body = JSON.parse(text); } catch { body = text; } }
     const summary = streamed ? eventStreamSummary(events) : { model: body?.model || null, usage: body?.usage || null, complete: true };
-    ledger.push({ lane: classified.lane, provider: classified.endpoint_class, status: response.status, model: summary.model, usage: summary.usage, provenance, ms: Date.now() - started, ...(streamed ? { stream: true, complete: summary.complete } : {}) });
-    if (streamed && !summary.complete) {
-      logger?.error?.(`[provider-recorder] did not keep a ${classified.lane} stream that ended before its terminal event`);
+    // Only an answer that ended well is kept: HTTP 200 and, for a stream, its
+    // success end with no failure event. Anything else is dropped and said
+    // so in the ledger, and a pass with a dropped answer is not complete
+    // (scripts/demo_fi.mjs writes no file from it).
+    const dropped = !identity ? 'unreadable_request'
+      : response.status !== 200 ? `http_${response.status}`
+        : streamed && !summary.complete ? (summary.outcome === 'failed' ? `stream_${summary.end_event}` : 'stream_cut_off')
+          : null;
+    const row = { lane: classified.lane, provider: classified.endpoint_class, status: response.status, model: summary.model, usage: summary.usage, provenance, ms: Date.now() - started, kept: !dropped, ...(dropped ? { dropped } : {}), ...(streamed ? { stream: true, complete: summary.complete } : {}) };
+    ledger.push(row);
+    if (dropped) {
+      logger?.error?.(`[provider-recorder] did not keep a ${classified.lane} answer: ${dropped}`);
     }
-    if (identity && response.status === 200 && summary.complete) {
+    if (!dropped) {
       const kept = streamed
         ? { status: response.status, content_type: EVENT_STREAM_CONTENT_TYPE, events: bindResponse(scrubStreamEvents(events, identity.key), identity) }
         : { status: response.status, content_type: contentType.split(';')[0], body: bindResponse(scrubResponseBody(body, identity.key), identity) };
       const scan = findSecretShapes(JSON.stringify({ request: identity.request, response: kept }), { extraValues: secretValues });
       if (scan.length) {
+        row.kept = false;
+        row.dropped = 'secret_shaped';
         logger?.error?.(`[provider-recorder] refused to keep a ${classified.lane} answer: secret-shaped ${scan.map((s) => s.name).join(', ')}`);
       } else {
         const existing = entries.get(identity.key);

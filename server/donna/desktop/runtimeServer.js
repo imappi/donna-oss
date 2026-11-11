@@ -21,7 +21,10 @@ import {
   DESKTOP_REPO_ROOT
 } from './buildIdentity.js';
 
-export const applyDesktopRuntimeEnvDefaults = ({ dataDir } = {}) => {
+// `providerKeyFiles`: the files the provider-key bridge reads (default
+// providerKeyDotEnv.js defaultDotEnvFiles). The zero-key demo passes [] so
+// nothing on the machine fills a key or a model id (scripts/demo_fi.mjs).
+export const applyDesktopRuntimeEnvDefaults = ({ dataDir, providerKeyFiles } = {}) => {
   if (!process.env.DONNA_DESKTOP_BLOB_DIR && dataDir) {
     process.env.DONNA_DESKTOP_BLOB_DIR = `${dataDir}/documents`;
   }
@@ -32,7 +35,7 @@ export const applyDesktopRuntimeEnvDefaults = ({ dataDir } = {}) => {
   // (providerKeyDotEnv.js). Must land before the host defaults and the
   // model-lane receipt so both see the final key state. Key NAMES are
   // logged, never values.
-  const dotEnv = applyProviderKeyDotEnvDefaults(process.env);
+  const dotEnv = applyProviderKeyDotEnvDefaults(process.env, providerKeyFiles ? { files: providerKeyFiles } : {});
   if (dotEnv.applied.length) {
     console.log(`[runtime-server] provider keys loaded from repo .env: ${dotEnv.applied.join(', ')}`);
   }
@@ -55,7 +58,7 @@ export const applyDesktopRuntimeEnvDefaults = ({ dataDir } = {}) => {
 // Assembles router + scheduler. `listen` is either { host, port } (headless
 // harness) or { socketPath } (Electron shell). The returned schedulerRunning
 // accessor reports Host-A-gated state; stop() drains it before closing.
-export const createDonnaRuntimeServer = async ({ listen, logger = console } = {}) => {
+export const createDonnaRuntimeServer = async ({ listen, logger = console, providerKeyFiles } = {}) => {
   if (!listen || (!listen.socketPath && !listen.port)) {
     throw new Error('createDonnaRuntimeServer needs listen.socketPath or listen.port');
   }
@@ -70,7 +73,7 @@ export const createDonnaRuntimeServer = async ({ listen, logger = console } = {}
   // on purpose — the blob-dir and base-url halves stay with the callers that
   // know them; this call must land before the dynamic imports below so env
   // is final before any config-reading module loads.
-  applyDesktopRuntimeEnvDefaults({});
+  applyDesktopRuntimeEnvDefaults({ providerKeyFiles });
   applyDesktopBuildIdentityDefaults(process.env, { rootDir: DESKTOP_REPO_ROOT });
 
   // Imported dynamically so callers can finalize env (DATABASE_URL, blob

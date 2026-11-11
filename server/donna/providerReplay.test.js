@@ -10,6 +10,8 @@ import {
   REPLAYED_MODEL_SUFFIX,
   bindResponse,
   currentProviderReplay,
+  eventStreamIsComplete,
+  eventStreamOutcome,
   findSecretShapes,
   installProviderRecorder,
   installProviderReplay,
@@ -361,12 +363,73 @@ test('a cut-off stream is never a silent success: not kept when recorded, refuse
   const whole = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10' }), body });
   const entries = whole.entries().map((entry) => ({ ...entry, responses: entry.responses.map((r) => ({ ...r, events: r.events.slice(0, -2) })) }));
   assert.throws(() => unpackRecordings(packRecordings({ format: 'donna.provider-replay.v1', identity: 'donna.provider-request-identity.v1', entries })),
-    (error) => error.code === PROVIDER_REPLAY_CODES.BAD_RECORDINGS && /terminal event/.test(error.message));
+    (error) => error.code === PROVIDER_REPLAY_CODES.BAD_RECORDINGS && /never reached its end/.test(error.message));
   // And with nothing kept, the replay of that request is a named miss.
   const target = withTarget(async () => { throw new Error('network refused in this test'); });
   const replay = installProviderReplay({ recordings: { entries: [] }, target, now: () => T0 });
   try {
     await assert.rejects(target.fetch(ANTHROPIC, init(body)), (error) => error.code === PROVIDER_REPLAY_CODES.UNRECORDED);
+  } finally {
+    replay.restore();
+  }
+});
+
+test('a stream that ends in a failure event is treated like a non-200: not kept, logged, refused in a file, a miss on replay', async () => {
+  const body = streamedBody(triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' }));
+  const anthropicHead = [
+    { event: 'message_start', data: { type: 'message_start', message: { id: 'msg_01QzX9k2LmNoPqRsTuVwXyZa', model: 'claude-opus-4-8', content: [], usage: { input_tokens: 9, output_tokens: 1 } } } },
+    { event: 'content_block_delta', data: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '{"match":' } } }
+  ];
+  const endings = {
+    // Anthropic: an overloaded error mid-stream (a message_stop may still follow).
+    error: [...anthropicHead, { event: 'error', data: { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } } }, { event: 'message_stop', data: { type: 'message_stop' } }],
+    // OpenAI Responses: the run failed, or stopped short of its answer.
+    'response.failed': [{ event: 'response.created', data: { type: 'response.created', response: { id: 'resp_abc123', model: 'gpt-5.4' } } }, { event: 'response.failed', data: { type: 'response.failed', response: { id: 'resp_abc123', model: 'gpt-5.4', status: 'failed' } } }],
+    'response.incomplete': [{ event: 'response.created', data: { type: 'response.created', response: { id: 'resp_abc123', model: 'gpt-5.4' } } }, { event: 'response.incomplete', data: { type: 'response.incomplete', response: { id: 'resp_abc123', model: 'gpt-5.4', status: 'incomplete' } } }]
+  };
+  for (const [ending, events] of Object.entries(endings)) {
+    assert.equal(eventStreamOutcome(events).outcome, 'failed', ending);
+    assert.equal(eventStreamIsComplete(events), false, ending);
+    const logged = [];
+    const target = withTarget(async () => { throw new Error('unused'); });
+    const recorder = installProviderRecorder({ target, now: () => T0, logger: { error: (line) => logged.push(line) }, answer: async () => ({ response: new Response(sse(events), { status: 200, headers: { 'content-type': 'text/event-stream' } }), provenance: 'live' }) });
+    try { await (await target.fetch(ANTHROPIC, init(body))).text(); } finally { recorder.restore(); }
+    assert.equal(recorder.entries().length, 0, `${ending}: not kept`);
+    assert.equal(recorder.ledger[0].kept, false);
+    assert.equal(recorder.ledger[0].dropped, `stream_${ending}`);
+    assert.match(logged.join('\n'), new RegExp(`did not keep .*stream_${ending.replace('.', '\\.')}`));
+  }
+  // A non-200 is dropped the same way and named in the ledger.
+  const target = withTarget(async () => { throw new Error('unused'); });
+  const recorder = installProviderRecorder({ target, now: () => T0, answer: async () => ({ response: new Response('{"error":{"type":"overloaded_error"}}', { status: 529, headers: { 'content-type': 'application/json' } }), provenance: 'live' }) });
+  try { await (await target.fetch(ANTHROPIC, init(triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' })))).text(); } finally { recorder.restore(); }
+  assert.equal(recorder.entries().length, 0);
+  assert.deepEqual([recorder.ledger[0].kept, recorder.ledger[0].dropped], [false, 'http_529']);
+  // A file edited to hold a failed stream is refused at load.
+  const whole = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10' }), body });
+  const entries = whole.entries().map((entry) => ({ ...entry, responses: entry.responses.map((r) => ({ ...r, events: [...r.events.slice(0, -1), endings.error[2], r.events.at(-1)] })) }));
+  assert.throws(() => unpackRecordings(packRecordings({ format: 'donna.provider-replay.v1', identity: 'donna.provider-request-identity.v1', entries })),
+    (error) => error.code === PROVIDER_REPLAY_CODES.BAD_RECORDINGS && /ended in error/.test(error.message));
+  // With nothing kept, replay of that request is a named miss.
+  const replayTarget = withTarget(async () => { throw new Error('network refused in this test'); });
+  const replay = installProviderReplay({ recordings: { entries: [] }, target: replayTarget, now: () => T0 });
+  try {
+    await assert.rejects(replayTarget.fetch(ANTHROPIC, init(body)), (error) => error.code === PROVIDER_REPLAY_CODES.UNRECORDED);
+  } finally {
+    replay.restore();
+  }
+});
+
+test('replay names every recorded answer the run never asked for', async () => {
+  const body = streamedBody(triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' }));
+  const recorder = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10' }), body });
+  const recordings = unpackRecordings(packRecordings({ format: 'donna.provider-replay.v1', identity: 'donna.provider-request-identity.v1', entries: recorder.entries() }));
+  const target = withTarget(async () => { throw new Error('network refused in this test'); });
+  const replay = installProviderReplay({ recordings, target, now: () => T0 });
+  try {
+    assert.deepEqual(replay.unused().map((u) => [u.lane, u.recorded, u.served]), [[recordings.entries[0].lane, 1, 0]]);
+    await (await target.fetch(ANTHROPIC, init(body))).text();
+    assert.deepEqual(replay.unused(), []);
   } finally {
     replay.restore();
   }

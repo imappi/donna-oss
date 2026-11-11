@@ -1,25 +1,39 @@
 // The zero-key demo (scripts/demo_fi.mjs) and its committed recordings.
 //
 // Without a database: the recordings carry no secret-shaped string, load and
-// re-hash, stay small, and a changed prompt is refused with the re-record
-// command; the scope guard refuses a foreign book.
-// With DONNA_PG_TEST_URL: the whole month replays, in a child process with
-// every provider key unset and the network refused, to coded and reconciled
-// books — so the recordings cannot drift from what the code asks for without
-// this test failing — and replay refuses to start on a book holding another
-// company.
+// re-hash, stay small, and name the model that answered (a stand-in names
+// itself); a changed prompt is refused with the re-record command; the scope
+// guard, the arguments, the sealed environment, the spend arithmetic and
+// replay's entry point.
+// With DONNA_PG_TEST_URL, each in a child process with the network refused:
+// the whole month replays as a --verify pass on an empty book, with a .env in
+// its working directory and a providers.env under HOME full of fake settings,
+// to a pinned end state, every request recorded and every recorded answer
+// used — so the recordings cannot drift from what the code asks for without
+// this test failing; a book holding another firm is refused before anything
+// is written; a recording pass whose live call would pass the cap writes no
+// file; a verify pass fails on a recorded answer nobody asked for.
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
-import { DEFAULT_RECORDINGS, RERECORD_COMMAND, assertDemoBookOnly, answerFor, loadReplayRecordings, parseDemoArgs } from './demo_fi.mjs';
-import { PROVIDER_REPLAY_CODES, eventStreamIsComplete, findSecretShapes, installProviderReplay, recordedResponseModel } from '../server/donna/providerReplay.js';
+import http from 'node:http';
+
+import {
+  DEFAULT_RECORDINGS, DEMO_ENV_NAMES, RECORD_ENV_NAMES, RERECORD_COMMAND, answerFor, answersFromStandIn, assertDemoBookOnly, loadReplayRecordings,
+  parseDemoArgs, priceFor, priceUsage, sealDemoEnvironment, standInLanesOf, worstCaseUsd
+} from './demo_fi.mjs';
+import { STAND_IN_MODEL_PREFIX, answerOpenAiStandIn } from './demo_fi_stand_ins.mjs';
+import {
+  PROVIDER_REPLAY_CODES, REPLAYED_MODEL_SUFFIX, currentProviderReplay, eventStreamIsComplete, findSecretShapes, installProviderReplay, packRecordings,
+  recordedResponseModel, unpackRecordings
+} from '../server/donna/providerReplay.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MAX_RECORDINGS_BYTES = 6 * 1024 * 1024;
@@ -38,9 +52,36 @@ test('the committed recordings carry no key, header or account identifier, and s
     for (const response of entry.responses) {
       assert.equal(typeof recordedResponseModel(response), 'string', `${entry.key}: the recorded model id`);
       if (response.body) assert.ok(!('user' in response.body) && !('organization' in response.body), `${entry.key}: no account field`);
-      if (response.events) assert.ok(eventStreamIsComplete(response.events), `${entry.key}: a stream that reached its end`);
+      if (response.events) assert.ok(eventStreamIsComplete(response.events), `${entry.key}: a stream that ended well`);
+      assert.equal(response.status, 200, `${entry.key}: only answers that ended well are kept`);
+      // The model on the receipt is the one that answered: a stand-in names
+      // itself, a live answer names the provider's model.
+      const model = recordedResponseModel(response);
+      assert.ok(!model.endsWith(REPLAYED_MODEL_SUFFIX), `${entry.key}: no replay marker stored`);
+      if (entry.provenance === 'scripted_stand_in') assert.ok(model.startsWith(STAND_IN_MODEL_PREFIX), `${entry.key}: a stand-in names itself (${model})`);
+      else assert.ok(!model.startsWith(STAND_IN_MODEL_PREFIX), `${entry.key}: a live answer names the provider's model`);
     }
   }
+});
+
+test('the secret scan knows every provider\'s key shape, and any key value it is given', () => {
+  const fake = (prefix, n = 24) => `${prefix}${'x7Q'.repeat(Math.ceil(n / 3)).slice(0, n)}`;
+  const shapes = {
+    openai_key: `{"note":"${fake('sk-proj-')}"}`,
+    anthropic_key: `{"note":"${fake('sk-ant-api03-')}"}`,
+    typesafe_key: `{"note":"${fake('typesafe_')}"}`,
+    together_key: `{"note":"${fake('tgp_v1_')}"}`,
+    key_field: `{"api_key":"${fake('', 12)}"}`,
+    bearer_header: `{"h":"Bearer ${fake('', 20)}"}`
+  };
+  for (const [name, text] of Object.entries(shapes)) {
+    assert.ok(findSecretShapes(text).some((hit) => hit.name === name), `${name} is caught`);
+  }
+  // A key with no shape of its own (a Together legacy key is 64 hex digits,
+  // like the file's digests) is caught by its value.
+  const legacy = 'ab'.repeat(32);
+  assert.deepEqual(findSecretShapes(`{"x":"${legacy}"}`), []);
+  assert.equal(findSecretShapes(`{"x":"${legacy}"}`, { extraValues: [legacy] })[0].name, 'configured_key_value');
 });
 
 test('a changed prompt is refused with the lane and the re-record command, and touches no network', async () => {
@@ -70,7 +111,7 @@ test('a changed prompt is refused with the lane and the re-record command, and t
 });
 
 test('the scope guard refuses any firm or company but the demo one', async () => {
-  const fakeQuery = (rows) => async (sql) => ({ rows: /from firms/.test(sql) ? rows.firms : rows.clients });
+  const fakeQuery = (rows) => async (sql) => ({ rows: /to_regclass/.test(sql) ? [{ firms: true, clients: true }] : /from firms/.test(sql) ? rows.firms : rows.clients });
   await assertDemoBookOnly({ query: fakeQuery({ firms: [], clients: [] }), clientId: 'kampaamo-kultalanka-oy' });
   await assert.rejects(
     assertDemoBookOnly({ query: fakeQuery({ firms: [], clients: [{ id: 'acme-oy', firm_id: 'firm-demo-tilitoimisto' }] }), clientId: 'kampaamo-kultalanka-oy' }),
@@ -78,8 +119,14 @@ test('the scope guard refuses any firm or company but the demo one', async () =>
   );
   await assert.rejects(
     assertDemoBookOnly({ query: fakeQuery({ firms: [{ id: 'real-firm' }], clients: [] }), clientId: 'kampaamo-kultalanka-oy' }),
-    (error) => error.code === PROVIDER_REPLAY_CODES.FOREIGN_BOOK && /firm real-firm/.test(error.message)
+    (error) => error.code === PROVIDER_REPLAY_CODES.FOREIGN_BOOK && /firm real-firm/.test(error.message) && /Nothing was written/.test(error.message)
   );
+  // A database with no tables holds no book: it passes, and nothing but the
+  // catalogue is read.
+  const asked = [];
+  await assertDemoBookOnly({ query: async (sql) => { asked.push(sql); return { rows: [{ firms: false, clients: false }] }; }, clientId: 'kampaamo-kultalanka-oy' });
+  assert.equal(asked.length, 1);
+  assert.match(asked[0], /to_regclass/);
 });
 
 test('owner answers are matched to their statement line by date, amount and direction', () => {
@@ -96,10 +143,103 @@ test('the demo refuses a database that does not sort text in C order', async () 
     (error) => error.code === 'PROVIDER_REPLAY_COLLATION' && /template template0 locale 'C'/.test(error.message));
 });
 
-test('replay is entered by the command only', () => {
+test('the arguments: a spend cap is a positive number of dollars, --verify is a replay on its own book', () => {
   assert.equal(parseDemoArgs([]).record, false);
   assert.throws(() => parseDemoArgs(['--stand-in=openai']), /only for --record/);
   assert.throws(() => parseDemoArgs(['--replay=off']), /unknown argument/);
+  assert.equal(parseDemoArgs(['--record', '--cap-usd=7.5']).capUsd, 7.5);
+  for (const bad of ['abc', '0', '-1', '1e3', 'Infinity', '0.0', '']) {
+    assert.throws(() => parseDemoArgs(['--record', `--cap-usd=${bad}`]), bad === '' ? /unknown argument/ : /positive number of US dollars/, `--cap-usd=${bad}`);
+  }
+  assert.throws(() => parseDemoArgs(['--cap-usd=5']), /only for --record/);
+  assert.throws(() => parseDemoArgs(['--record', '--verify']), /not for --record/);
+  assert.deepEqual([parseDemoArgs(['--verify']).exitAtRest, parseDemoArgs(['--verify']).noWeb], [true, true]);
+});
+
+test('replay is entered by the command only: no runtime module installs it, whatever the environment says', async () => {
+  // Statically: outside tests, the one caller of installProviderReplay is the
+  // demo command, and the seam module reads no environment variable.
+  const { execFileSync } = await import('node:child_process');
+  const callers = execFileSync('git', ['grep', '-l', 'installProviderReplay(', '--', 'server', 'scripts', 'src', 'desktop', 'api'], { cwd: ROOT, encoding: 'utf8' })
+    .split('\n').filter(Boolean).filter((file) => !/\.test\.js$/.test(file));
+  assert.deepEqual(callers.sort(), ['scripts/demo_fi.mjs']);
+  assert.doesNotMatch(readFileSync(path.join(ROOT, 'server/donna/providerReplay.js'), 'utf8'), /process\.env/);
+  // At run time: with every name that might sound like a switch set and no
+  // key, loading the envelope, the transport, the endpoints, the lane receipt
+  // and the runtime assembly leaves `fetch` as it was and no replay active.
+  const before = globalThis.fetch;
+  const names = ['DONNA_DEMO', 'DONNA_REPLAY', 'PROVIDER_REPLAY', 'DONNA_PROVIDER_REPLAY', 'DEMO_REPLAY', 'REPLAY'];
+  const prior = Object.fromEntries(names.map((n) => [n, process.env[n]]));
+  for (const n of names) process.env[n] = '1';
+  try {
+    await import('../server/donna/llmCall.js');
+    await import('../server/donna/providerTransport.js');
+    await import('../server/donna/providerEndpoints.js');
+    const { buildModelLaneReceipt } = await import('../server/donna/desktop/capabilityReceipt.js');
+    await import('../server/donna/desktop/runtimeServer.js');
+    assert.equal(globalThis.fetch, before);
+    assert.equal(currentProviderReplay(), null);
+    assert.doesNotMatch(buildModelLaneReceipt({ ...process.env, OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '' }).line, /REPLAY/);
+  } finally {
+    for (const [n, v] of Object.entries(prior)) { if (v === undefined) delete process.env[n]; else process.env[n] = v; }
+  }
+});
+
+test('the sealed environment keeps only the named variables, and a recording pass only two keys more', () => {
+  const env = {
+    PATH: '/bin', HOME: '/home/x', TZ: 'UTC', LC_ALL: 'C', DONNA_ACCESS_TOKEN: 't', DONNA_BUILD_COMMIT_SHA: 'abc',
+    OPENAI_API_KEY: 'k1', ANTHROPIC_API_KEY: 'k2', TYPESAFE_API_KEY: 'k3', TYPESAFE_MODEL: 'm', OPENAI_COMPATIBLE_BASE_URL: 'http://x',
+    OPENAI_MODEL: 'gpt-x', MERCHANT_LOOKUP_ENABLED: 'true', DATABASE_URL: 'postgres://elsewhere', NODE_OPTIONS: '--env-file=.env', HTTPS_PROXY: 'http://p'
+  };
+  const cwd = process.cwd();
+  const replay = sealDemoEnvironment({ env: { ...env }, record: false });
+  try {
+    assert.notEqual(process.cwd(), cwd);
+    assert.deepEqual(readdirSync(process.cwd()), [], 'the demo works from an empty directory: no <cwd>/.env');
+  } finally {
+    replay.undo();
+  }
+  assert.equal(process.cwd(), cwd);
+  const sealedReplay = { ...env };
+  sealDemoEnvironment({ env: sealedReplay }).undo();
+  assert.deepEqual(Object.keys(sealedReplay).sort(), ['DONNA_ACCESS_TOKEN', 'DONNA_BUILD_COMMIT_SHA', 'HOME', 'LC_ALL', 'PATH', 'TZ']);
+  const sealedRecord = { ...env };
+  sealDemoEnvironment({ env: sealedRecord, record: true }).undo();
+  assert.deepEqual(Object.keys(sealedRecord).filter((k) => !Object.keys(sealedReplay).includes(k)).sort(), ['ANTHROPIC_API_KEY', 'HTTPS_PROXY', 'OPENAI_API_KEY']);
+  // No kept name is a model id, a lane switch, an endpoint or a key (a
+  // recording pass adds the two live keys and its proxy only).
+  for (const name of DEMO_ENV_NAMES) assert.doesNotMatch(name, /MODEL|KEY|URL|ENABLED|TYPESAFE|COMPATIBLE|OPENAI|ANTHROPIC/);
+  assert.deepEqual(RECORD_ENV_NAMES.filter((n) => /KEY/.test(n)), ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']);
+});
+
+test('spend: a live call is priced at its worst case before it is made, and an unpriced model is never called', () => {
+  const prices = { 'claude-': { input_per_million: 5, output_per_million: 25 }, 'gpt-': { input_per_million: 2.5, output_per_million: 15 } };
+  assert.equal(priceFor(prices, 'unknown-model'), null);
+  assert.equal(priceFor(prices, 'claude-opus-4-8'), prices['claude-']);
+  const body = JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 2048, system: 'x'.repeat(4000), messages: [{ role: 'user', content: 'y'.repeat(4000) }] });
+  const worst = worstCaseUsd({ price: prices['claude-'], init: { body }, provider: 'anthropic' });
+  // Whatever the provider reports for that request, it is not more.
+  const reported = priceUsage({ prices, model: 'claude-opus-4-8', provider: 'anthropic', usage: { input_tokens: Buffer.byteLength(body), output_tokens: 2048 } });
+  assert.ok(worst >= reported, `${worst} >= ${reported}`);
+  // A request that sets no answer length is priced at the longest answer.
+  assert.ok(worstCaseUsd({ price: prices['gpt-'], init: { body: '{}' }, provider: 'openai' }) >= 64_000 * 15 / 1e6);
+});
+
+test('a stand-in answers OpenAI requests only and names itself on the answer', async () => {
+  const entries = [
+    { lane: 'transaction_coding', provider: 'openai', provenance: 'scripted_stand_in' },
+    { lane: 'document_routing', provider: 'openai', provenance: 'scripted_stand_in' },
+    { lane: 'document_routing', provider: 'openai', provenance: 'live' },
+    { lane: 'transaction_coding', provider: 'anthropic', provenance: 'live' }
+  ];
+  const lanes = standInLanesOf(entries);
+  assert.deepEqual([...lanes], ['transaction_coding'], 'a lane with any live answer goes live');
+  assert.equal(answersFromStandIn({ classified: { endpoint_class: 'openai', lane: 'transaction_coding' }, standInLanes: lanes }), true);
+  assert.equal(answersFromStandIn({ classified: { endpoint_class: 'anthropic', lane: 'transaction_coding' }, standInLanes: lanes }), false, 'same lane name, other provider: never the stand-in');
+  assert.equal(answersFromStandIn({ classified: { endpoint_class: 'anthropic', lane: 'x' }, standIn: 'openai' }), false);
+  assert.equal(answersFromStandIn({ classified: { endpoint_class: 'openai', lane: 'document_routing' }, standInLanes: lanes }), false);
+  const response = await answerOpenAiStandIn({ init: { body: JSON.stringify({ model: 'gpt-5.4', text: { format: { name: 'firm_fact_distillation' } } }) }, classified: { lane: 'memory_extraction' } });
+  assert.equal((await response.json()).model, `${STAND_IN_MODEL_PREFIX}gpt-5.4`);
 });
 
 // ── With PostgreSQL ────────────────────────────────────────────────────────
@@ -138,7 +278,24 @@ const dropDatabase = async (name) => {
   await admin.end();
 };
 
-const runDemoChild = (args, { timeoutMs = 900_000 } = {}) => new Promise((resolve) => {
+
+// Every name a configuration reader on this machine might take a model id, a
+// lane switch, an endpoint or a key from: the provider-key bridge's names and
+// the `<cwd>/.env` fallbacks' names. The demo must use none of them.
+const FAKE_SETTINGS = (compatibleBase) => ({
+  OPENAI_API_KEY: 'sk-proj-fakefakefakefakefakefake0000', OPENAI_MODEL: 'gpt-fake-model', ANTHROPIC_API_KEY: 'sk-ant-fakefakefakefakefake0000', LOUIS_MODEL: 'claude-fake-model',
+  TYPESAFE_API_KEY: 'typesafe_fakefakefakefakefake0000', TYPESAFE_MODEL: 'typesafe-fake-model',
+  OPENAI_COMPATIBLE_API_KEY: 'tgp_v1_fakefakefakefakefake0000', OPENAI_COMPATIBLE_BASE_URL: compatibleBase, OPENAI_COMPATIBLE_MODEL: 'compatible-fake-model',
+  MODEL_CHALLENGER_CAP_TOKENS: '999999999', JEV_SHADOW_SAMPLE_FRACTION: '1',
+  BILL_EXTRACTOR_MODEL: 'fake', CLIENT_INTAKE_MODEL: 'fake', CONTRACT_EXTRACTOR_MODEL: 'fake', DOCUMENT_ROUTER_MODEL: 'fake', GENERIC_DOC_MODEL: 'fake',
+  INTENT_COMPILER_MODEL: 'fake', INVOICE_EXTRACTOR_MODEL: 'fake', MERCHANT_LOOKUP_ENABLED: 'true', MERCHANT_LOOKUP_MODEL: 'fake', OPENAI_VISION_MODEL: 'fake',
+  OPENAI_VISION_CACHE_DISABLED: 'true', OPENAI_VISION_CONCURRENCY: '9', OPENAI_VISION_PAGES_PER_CHUNK: '1', PAYOUT_EXTRACTOR_MODEL: 'fake', RECEIPT_CLASSIFIER_MODEL: 'fake',
+  TRANSACTION_CHAT_MODEL: 'fake', DATABASE_URL: 'postgresql://nobody@127.0.0.1:1/elsewhere', POSTGRES_URL: 'postgresql://nobody@127.0.0.1:1/elsewhere',
+  SUPABASE_URL: 'http://127.0.0.1:1', SUPABASE_SERVICE_ROLE_KEY: 'fake-service-role', DATABASE_POOL_MAX: '1', INNGEST_PARSE_CONCURRENCY: '9'
+});
+const dotEnvText = (vars) => `${Object.entries(vars).map(([k, v]) => `${k}=${v}`).join('\n')}\n`;
+
+const runDemoChild = (args, { timeoutMs = 900_000, cwd = ROOT, env: extraEnv = {} } = {}) => new Promise((resolve) => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'demo-fi-test-'));
   const preload = path.join(dir, 'refuse-network.mjs');
   const networkLog = path.join(dir, 'network.jsonl');
@@ -153,12 +310,12 @@ const runDemoChild = (args, { timeoutMs = 900_000 } = {}) => new Promise((resolv
     DONNA_BUILD_COMMIT_SHA: 'demo-fi-test',
     DONNA_BUILD_DIRTY: 'false',
     DONNA_RUNTIME_BUILD_DIRTY: 'false'
-  });
+  }, extraEnv);
   const report = path.join(dir, 'report.json');
-  const child = spawn(process.execPath, ['--import', preload, path.join(ROOT, 'scripts', 'demo_fi.mjs'), ...args, `--report=${report}`], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['--import', preload, path.join(ROOT, 'scripts', 'demo_fi.mjs'), ...args, `--report=${report}`], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
-  child.stdout.on('data', (c) => { out = (out + c).slice(-20000); });
-  child.stderr.on('data', (c) => { out = (out + c).slice(-20000); });
+  child.stdout.on('data', (c) => { out = (out + c).slice(-40000); });
+  child.stderr.on('data', (c) => { out = (out + c).slice(-40000); });
   const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
   child.on('exit', (code) => {
     clearTimeout(timer);
@@ -166,15 +323,71 @@ const runDemoChild = (args, { timeoutMs = 900_000 } = {}) => new Promise((resolv
   });
 });
 
-test('the recorded month replays to coded and reconciled books with no key and the network refused', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 1_200_000 }, async () => {
+// The month's end state, read from the stored rows (demo_fi.mjs
+// readDemoEndState). A change here is a change in what the demo shows.
+const PINNED_END_STATE = Object.freeze({
+  journals: [
+    {status: 'posted', n: 19}
+  ],
+  transactions_by_state: [
+    {coding_state: 'applied', convergence_state: 'hanging', n: 4},
+    {coding_state: 'asked', convergence_state: 'on_owner', n: 8},
+    {coding_state: 'posted', convergence_state: 'auto_reconciled', n: 19},
+    {coding_state: 'proposed', convergence_state: 'hanging', n: 5}
+  ],
+  documents_by_state: [
+    {parse_status: 'completed', convergence_state: 'auto_reconciled', n: 1},
+    {parse_status: 'completed', convergence_state: 'on_owner', n: 1},
+    {parse_status: 'completed', convergence_state: null, n: 25}
+  ],
+  matches_by_status: [
+    {status: 'auto_matched', n: 25},
+    {status: 'suggested', n: 3}
+  ],
+  asks_by_status: [
+    {status: 'draft', n: 9},
+    {status: 'replied', n: 5},
+    {status: 'resolved', n: 3}
+  ],
+  vat_lines: [
+    {tax_type: 'ALV_25_5_INPUT', n: 4},
+    {tax_type: 'ALV_25_5_OUTPUT', n: 4},
+    {tax_type: 'ALV_EU_ACQUISITION', n: 1},
+    {tax_type: 'ALV_EU_SERVICE_ACQUISITION', n: 2},
+    {tax_type: 'ALV_EXEMPT', n: 3},
+    {tax_type: 'ALV_NONDEDUCTIBLE_INPUT', n: 1},
+    {tax_type: 'ALV_OUT_OF_SCOPE', n: 4},
+    {tax_type: 'NONE', n: 31}
+  ],
+  models: [
+    {model: 'scripted-stand-in-for-gpt-5.4+replayed'}
+  ]
+});
+
+test('the recorded month replays as a verify pass to its pinned books, sealed from the machine\'s settings, with the network refused', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 1_200_000 }, async () => {
   const name = `donna_demo_replay_${process.pid}`;
   const url = await scratchDatabase(name);
+  // A loopback "compatible endpoint" that counts what reaches it: the fake
+  // settings point the challenger lane at it.
+  let compatibleHits = 0;
+  const compatible = http.createServer((req, res) => { compatibleHits += 1; res.writeHead(500); res.end(); });
+  await new Promise((resolve) => compatible.listen(0, '127.0.0.1', resolve));
+  const fakes = FAKE_SETTINGS(`http://127.0.0.1:${compatible.address().port}/v1`);
+  const cwd = mkdtempSync(path.join(os.tmpdir(), 'demo-fi-cwd-'));
+  const home = mkdtempSync(path.join(os.tmpdir(), 'demo-fi-home-'));
+  writeFileSync(path.join(cwd, '.env'), dotEnvText(fakes));
+  writeFileSync(path.join(cwd, '.env.local'), dotEnvText(fakes));
+  mkdirSync(path.join(home, '.config', 'donna'), { recursive: true });
+  writeFileSync(path.join(home, '.config', 'donna', 'providers.env'), dotEnvText(fakes));
   try {
     const started = Date.now();
-    const run = await runDemoChild([`--database-url=${url}`, '--exit-at-rest', '--no-web', '--quiet']);
-    assert.equal(run.code, 0, `the replay demo failed — if a request has no recording, re-record with \`${RERECORD_COMMAND}\`:\n${run.out.slice(-6000)}`);
+    // The fakes are in the environment too: the seal drops them there as well.
+    const run = await runDemoChild([`--database-url=${url}`, '--verify', '--quiet'], { cwd, env: { ...fakes, HOME: home } });
+    assert.equal(run.code, 0, `the replay demo failed — if a request has no recording, re-record with \`${RERECORD_COMMAND}\`:\n${run.out.slice(-8000)}`);
     const { report } = run;
     assert.deepEqual(report.provider.unrecorded, [], 'every request the code made was recorded');
+    assert.deepEqual(report.provider.unused, [], 'every recorded answer was asked for');
+    assert.ok(report.provider.served > 0);
     // The only other outside requests are the coder's merchant-website
     // lookups (transactionLlm.js merchantWebContextFor, a domain read from the
     // bank text). The demo refuses them before any socket, exactly as the
@@ -183,12 +396,19 @@ test('the recorded month replays to coded and reconciled books with no key and t
       assert.ok(!/(^|\.)(openai|anthropic|typesafe|together)\./.test(refused.host || ''), `a provider host was refused: ${refused.host}`);
     }
     assert.deepEqual(run.network, [], 'no socket left this machine');
+    assert.equal(compatibleHits, 0, 'the fake compatible endpoint was never called');
+    assert.doesNotMatch(run.out, /fake-model|provider keys loaded from repo \.env|typesafe LIT/, 'no fake setting reached the runtime');
+    assert.match(run.out, /typesafe DARK/);
     assert.equal(report.at_rest, true);
-    const posted = report.end_state.journals.find((row) => row.status === 'posted')?.n || 0;
-    assert.ok(posted > 0, 'journals were posted');
-    assert.ok(report.end_state.vat_lines.some((row) => /^ALV_/.test(row.tax_type)), 'posted lines carry ALV codes');
-    assert.ok(report.end_state.models.every((row) => row.model.endsWith('+replayed')), 'every model on a coded line is marked replayed');
-    console.log(`replay month: ${Math.round((Date.now() - started) / 1000)} s, ${report.provider.served} answers served, ${posted} journals posted`);
+    // The owner's six answers, each accepted by the reply route.
+    assert.deepEqual(report.answered.map((a) => [a.line, a.http]).sort(), [['B17', 200], ['B22', 200], ['B25', 200], ['B28', 200], ['B30', 200], ['B31', 200]]);
+    assert.deepEqual({ ...report.end_state, models: undefined }, { ...PINNED_END_STATE, models: undefined });
+    assert.ok(report.end_state.models.length > 0, 'the coded lines name their models');
+    for (const { model } of report.end_state.models) {
+      assert.ok(model.endsWith(REPLAYED_MODEL_SUFFIX), `${model}: marked replayed`);
+    }
+    assert.deepEqual(report.end_state.models.map((m) => m.model), PINNED_END_STATE.models.map((m) => m.model));
+    console.log(`replay month: ${Math.round((Date.now() - started) / 1000)} s, ${report.provider.served} answers served`);
     const db = new pg.Client({ connectionString: url });
     await db.connect();
     try {
@@ -199,53 +419,107 @@ test('the recorded month replays to coded and reconciled books with no key and t
       const routes = (await db.query(`select c as detail from runtime_host_readiness_attempts a,
           jsonb_path_query(a.certificate, '$.checks[*] ? (@.id == "model_routes").detail') c order by a.id desc limit 1`)).rows[0]?.detail;
       assert.equal(routes?.provider_replay?.pack, 'fi-kultalanka-2025-02');
+      assert.ok(routes.lanes.length > 0, 'Host A lists the lanes');
       assert.ok(routes.lanes.every((lane) => lane.served_by === 'replay'));
       // Every receipt that names a model from a reconciliation answer is marked.
-      const evaluations = (await db.query("select count(*) filter (where model like '%+replayed') as marked, count(*) as all from reconciliation_evaluations where model is not null")).rows[0];
-      assert.ok(Number(evaluations.all) > 0);
-      assert.equal(Number(evaluations.marked), Number(evaluations.all));
+      const evaluations = (await db.query("select count(*) filter (where model like '%+replayed')::int as marked, count(*)::int as all from reconciliation_evaluations where model is not null")).rows[0];
+      assert.ok(evaluations.all > 0);
+      assert.equal(evaluations.marked, evaluations.all);
     } finally {
       await db.end();
     }
   } finally {
+    compatible.close();
     await dropDatabase(name);
   }
 });
 
-test('replay refuses to start on a book that holds another company, before any answer is served', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async () => {
+const catalogueOf = async (url) => {
+  const db = new pg.Client({ connectionString: url });
+  await db.connect();
+  try {
+    return JSON.stringify({
+      schemas: (await db.query("select nspname from pg_namespace where nspname not like 'pg\\_%' and nspname <> 'information_schema' order by 1")).rows,
+      tables: (await db.query("select table_schema, table_name, table_type from information_schema.tables where table_schema not in ('pg_catalog', 'information_schema') order by 1, 2")).rows,
+      columns: (await db.query("select table_schema, table_name, column_name, data_type from information_schema.columns where table_schema not in ('pg_catalog', 'information_schema') order by 1, 2, 3")).rows,
+      ledger: (await db.query("select to_regclass('public.schema_migrations') is not null as present")).rows,
+      firms: (await db.query('select * from firms order by id')).rows
+    });
+  } finally {
+    await db.end();
+  }
+};
+
+test('a book holding another firm is refused before the demo writes anything: no schema, no migration', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async () => {
   const name = `donna_demo_foreign_${process.pid}`;
   const url = await scratchDatabase(name);
   try {
     const db = new pg.Client({ connectionString: url });
     await db.connect();
     try {
-      await db.query(`create schema if not exists storage;
-        create table if not exists storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
-        create table if not exists storage.objects (id uuid default gen_random_uuid() primary key, bucket_id text references storage.buckets(id), name text, metadata jsonb);`);
+      // Someone else's book, not migrated by Donna's ledger.
+      await db.query("create table firms (id text primary key, name text); create table clients (id text primary key, firm_id text); insert into firms values ('firm-someone-else', 'Someone Else Oy')");
     } finally {
       await db.end();
     }
-    const { execFileSync } = await import('node:child_process');
-    execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'migrate_firm_db.js')], { cwd: ROOT, env: { ...process.env, DATABASE_URL: url }, stdio: 'ignore' });
-    const seeded = new pg.Client({ connectionString: url });
-    await seeded.connect();
-    try {
-      await seeded.query("insert into firms (id, name, slug) values ('firm-someone-else', 'Someone Else Oy', 'someone-else')");
-    } finally {
-      await seeded.end();
-    }
+    const before = await catalogueOf(url);
     const run = await runDemoChild([`--database-url=${url}`, '--exit-at-rest', '--no-web', '--quiet'], { timeoutMs: 240_000 });
     assert.equal(run.code, 3, run.out.slice(-3000));
     assert.match(run.out, /PROVIDER_REPLAY_FOREIGN_BOOK/);
     assert.match(run.out, /firm firm-someone-else/);
-    const check = new pg.Client({ connectionString: url });
-    await check.connect();
-    try {
-      assert.equal((await check.query('select count(*)::int as n from provider_replay_sessions')).rows[0].n, 0, 'no replay session was opened');
-      assert.equal((await check.query('select count(*)::int as n from clients')).rows[0].n, 0, 'nothing was written into the book');
-    } finally {
-      await check.end();
-    }
+    assert.doesNotMatch(run.out, /applying migrations/);
+    assert.equal(await catalogueOf(url), before, 'byte for byte the same catalogue: no storage schema, no migration ledger, no table, no row');
+  } finally {
+    await dropDatabase(name);
+  }
+});
+
+test('a recording pass whose next live call would pass the cap makes no call and writes no file', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 1_200_000 }, async () => {
+  const name = `donna_demo_cap_${process.pid}`;
+  const url = await scratchDatabase(name);
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'demo-fi-cap-'));
+  const file = path.join(dir, 'recordings.json');
+  // The committed recordings with one live answer taken out: the fill must
+  // ask for it live.
+  const raw = JSON.parse(readFileSync(DEFAULT_RECORDINGS, 'utf8'));
+  const unpacked = unpackRecordings(raw);
+  const dropped = unpacked.entries.find((entry) => entry.provenance === 'live' && entry.lane === 'unified_extraction');
+  assert.ok(dropped, 'a live answer to take out');
+  writeFileSync(file, `${JSON.stringify(packRecordings({ ...unpacked, entries: unpacked.entries.filter((entry) => entry !== dropped) }), null, 1)}\n`);
+  const bytes = readFileSync(file);
+  try {
+    const run = await runDemoChild([`--database-url=${url}`, '--record', '--fill', '--exit-at-rest', '--no-web', '--quiet', `--recordings=${file}`, '--cap-usd=0.01'],
+      { env: { ANTHROPIC_API_KEY: 'not-a-key-the-cap-stops-first' } });
+    assert.notEqual(run.code, 0, run.out.slice(-4000));
+    assert.match(run.out, /DEMO_RECORDING_INCOMPLETE: demo record: no recordings written — live calls stopped: cap at unified_extraction/);
+    assert.equal(run.report.provider.spend.live_calls, 0);
+    assert.equal(run.report.provider.spend.stopped.reason, 'cap');
+    assert.equal(run.report.recordings.written, false);
+    assert.deepEqual(run.network, [], 'no live call was made');
+    assert.ok(readFileSync(file).equals(bytes), 'the recordings file is unchanged');
+  } finally {
+    await dropDatabase(name);
+  }
+});
+
+test('a verify pass fails on a recorded answer nobody asked for', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 1_200_000 }, async () => {
+  const name = `donna_demo_unused_${process.pid}`;
+  const url = await scratchDatabase(name);
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'demo-fi-unused-'));
+  const file = path.join(dir, 'recordings.json');
+  const unpacked = unpackRecordings(JSON.parse(readFileSync(DEFAULT_RECORDINGS, 'utf8')));
+  const extra = unpacked.entries.find((entry) => entry.lane === 'reconciliation_reasoning');
+  // One answer more than the month asks for: a second answer to a request
+  // that is made once.
+  const entries = unpacked.entries.map((entry) => (entry === extra ? { ...entry, responses: [...entry.responses, entry.responses[0]] } : entry));
+  writeFileSync(file, `${JSON.stringify(packRecordings({ ...unpacked, entries }), null, 1)}\n`);
+  try {
+    const run = await runDemoChild([`--database-url=${url}`, '--verify', '--quiet', `--recordings=${file}`]);
+    assert.equal(run.code, 1, run.out.slice(-4000));
+    assert.match(run.out, /DEMO_VERIFY_UNUSED/);
+    assert.match(run.out, /reconciliation_reasoning 1/);
+    assert.deepEqual(run.report.provider.unrecorded, []);
+    assert.deepEqual(run.report.provider.unused.map((u) => [u.key, u.recorded, u.served]), [[extra.key, extra.responses.length + 1, extra.responses.length]]);
   } finally {
     await dropDatabase(name);
   }

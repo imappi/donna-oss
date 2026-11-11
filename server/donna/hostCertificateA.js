@@ -300,7 +300,9 @@ const expectedMigrations = async (rootDir) => (await readdir(path.join(rootDir, 
   .map((file) => file.replace(/\.sql$/, ''))
   .sort();
 
-const buildIdentityCheck = (env) => {
+// Exported for scripts/demo_fi.mjs, which refuses up front, with a plain
+// message, a run Host A would hold on this predicate (the same predicate).
+export const buildIdentityCheck = (env) => {
   const commit = clean(env.DONNA_BUILD_COMMIT_SHA || env.GITHUB_SHA || env.VERCEL_GIT_COMMIT_SHA);
   const workspaceDirtyRaw = clean(env.DONNA_BUILD_DIRTY).toLowerCase();
   const workspaceDirty = workspaceDirtyRaw === 'true' ? true : workspaceDirtyRaw === 'false' ? false : null;

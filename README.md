@@ -74,8 +74,12 @@ It starts the runtime and the web app on a book of its own (on the host
 the demo firm and company with its ALV registration, uploads the month's
 26 documents, runs the scheduler's work to rest, gives the owner's answers
 (`scripts/fixtures/fi_kultalanka_month_facts.json`) and runs to rest
-again, in under a minute. It ends with a summary read from the stored rows
-and keeps the book up:
+again, in under a minute. It reads no setting from this machine: no key,
+model id or switch from the environment, `.env` or
+`~/.config/donna/providers.env`, so every machine runs the same month. It
+ends with a summary read from the stored rows and keeps the book up; a
+month that does not come to rest is a failure, said in words, and the
+command exits non-zero:
 
 ```text
 [demo] replay at rest in 36 s
@@ -98,8 +102,10 @@ real run of this month and are committed in
 invoices, matching them to bank lines and triaging bank lines by
 Anthropic `claude-opus-4-8`; document routing, statement reading, coding
 and ask drafting are, in this recording, scripted stand-ins written from
-the pack in the OpenAI response format (`gpt-5.4`), marked
-`scripted_stand_in` in the file and on screen. Every model call leaves the
+the pack in the OpenAI response format, in place of `gpt-5.4`. A stand-in
+names itself: its answers are marked `scripted_stand_in` in the file and
+carry the model `scripted-stand-in-for-gpt-5.4` on every receipt and
+screen. Every model call leaves the
 process through one seam (`server/donna/providerReplay.js`); the demo
 answers it from the recordings, so every parser, schema check, VAT rule
 and posting check runs on the recorded answer as on a live one. A request
@@ -108,10 +114,15 @@ the lane, the model and where it differs; it never goes to the network.
 Each receipt names the recorded model with `+replayed` after it, and the
 runtime's `model lanes:` line says `REPLAY`.
 
-The demo serves only its own company: it refuses to start on a book that
-holds any other firm or company, and stops answering if one appears.
-To re-record (on the host, with `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`
-in `.env`, and about 15 USD of model calls): `npm run demo:fi:record`.
+The demo serves only its own company: before it writes anything it refuses
+a book that holds any other firm or company, and it stops answering if one
+appears. A PostgreSQL already running on its data folder is used and left
+running. To re-record (on the host, with `ANTHROPIC_API_KEY` and
+`OPENAI_API_KEY` in `.env`, and about 15 USD of model calls):
+`npm run demo:fi:record`. Its spend is capped at 20 USD across all its
+passes (`-- --cap-usd=N` to change it); a call is made only if its
+worst-case price still fits, and the committed recordings are replaced
+only after a replay on a fresh book has used every one of them.
 
 The starts below run the same book on live providers, with your own keys
 and your own data.
@@ -477,19 +488,32 @@ the lane, the model and where the new request first differs from the
 recorded one. That failure is the point: the demo must not answer a
 question it was never asked.
 
-To bring the recordings up to date, with the keys of the lanes that
-changed in `.env`:
+To bring the recordings up to date, commit the change first (a
+work-in-progress commit on your branch is fine), then, with the keys of the
+lanes that changed in `.env`:
 
 ```bash
 npm run demo:fi:record -- --fill
 ```
 
-It replays the month on a fresh book, answers every request that still
-matches from the recordings, calls the provider only for the requests that
-changed (and for any later request their new answers change), and writes
-the file again; run it until it reports `0 calls`, then
-`npm run demo:fi -- --exit-at-rest` to confirm. A lane whose recordings
-are scripted stand-ins is answered by its stand-in again, with no key.
+The demo, like the desktop runtime, does not run the scheduler on an
+uncommitted runtime build (Host A's `source_build` check), so on a working
+tree with uncommitted changes under `server/` it stops at once with
+`DEMO_UNCOMMITTED_RUNTIME: demo: this checkout has uncommitted changes to
+the runtime (…). Host A does not start the scheduler on an uncommitted
+runtime build (source_build: dirty_runtime_build), so the month would not
+run. Commit the change (a work-in-progress commit on your branch is fine),
+then run `npm run demo:fi:record -- --fill` again.`
+
+Each pass replays the month on a fresh book, answers every request that
+still matches from the recordings, and calls the provider only for the
+requests that changed (and for any later request their new answers
+change). It repeats until a pass asks nothing new, then replays the result
+on a fresh book with no key and fails unless every request was recorded
+and every recorded answer was asked for; only then is the committed file
+replaced. A lane whose recordings are scripted stand-ins is answered by its
+stand-in again, with no key. Live calls are capped at 20 USD across the
+passes (`-- --cap-usd=N`).
 `--report=FILE` writes the unrecorded requests in full beside the report,
 and `--trace=FILE` every request, to diff two runs. Rough cost of
 re-recording one live lane at list prices, if every one of its calls

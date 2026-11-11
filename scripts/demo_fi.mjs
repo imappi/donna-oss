@@ -5,6 +5,9 @@
 //
 //   npm run demo:fi                 replay (no key needed, no network call)
 //   npm run demo:fi:record          re-record the outputs from live models
+//   npm run demo:fi:record -- --fill
+//                                   re-record only what the code now asks
+//                                   differently (after a prompt change)
 //
 // One process does what the README's three commands do, plus the rest:
 //   1. its own PostgreSQL in its own data folder (~/.donna-demo; the book
@@ -21,31 +24,46 @@
 //      `owner_answers`) given through the reply route, then rest again;
 //   6. a summary read from the stored rows, and the book left up to look at,
 //      still ticking, so a receipt uploaded in the web app is read, coded and
-//      matched within seconds. Ctrl-C stops it.
+//      matched within seconds. Ctrl-C stops it. A book that does not come to
+//      rest is a failed run: the command says so and exits non-zero.
 //
 // REPLAY IS ENTERED ONLY HERE. Nothing in the runtime switches it on: no
 // environment variable, no missing key. This command installs the replay
 // seam (server/donna/providerReplay.js) on the process's `fetch` before any
 // runtime module loads, and it is the only caller that does.
 //
-// GUARDS. Replay serves the demo book only: the command refuses to start when
-// the database holds any firm but the demo firm or any company but the demo
-// company (PROVIDER_REPLAY_FOREIGN_BOOK), and the seam re-reads the book
-// before every answer it serves, so a company created in the web app during
-// the demo stops replay instead of receiving a recorded answer. Provider keys
-// in the environment or in .env are replaced in this process by a placeholder
-// that is not a key (providerReplay.js REPLAY_PLACEHOLDER_KEY); every
-// non-loopback request is refused.
+// HERMETIC. What the month asks the models depends on configuration (model
+// ids, lane switches, endpoints), so the demo reads none from this machine:
+// sealDemoEnvironment() below keeps only the names in DEMO_ENV_NAMES (the
+// machine, PostgreSQL's binaries, the demo's ports and sign-in, the build's
+// identity) and drops every other variable; the process then works from an
+// empty directory, so no module's `<cwd>/.env` fallback finds a file; and the
+// runtime is assembled with no provider-key files (no ~/.config/donna/
+// providers.env, no .env.local, no .env). The provider keys are then a
+// placeholder that is not a key (providerReplay.js REPLAY_PLACEHOLDER_KEY).
+// A recording pass keeps exactly two more names, OPENAI_API_KEY and
+// ANTHROPIC_API_KEY (and the proxy settings it needs to reach them); the
+// passes `npm run demo:fi:record` starts are sealed the same way.
+//
+// GUARDS. Replay serves the demo book only: before the demo writes anything
+// (no schema, no migration) it refuses a database that holds any firm but the
+// demo firm or any company but the demo company (PROVIDER_REPLAY_FOREIGN_BOOK,
+// exit 3), and the seam re-reads the book before every answer it serves, so a
+// company created in the web app during the demo stops replay instead of
+// receiving a recorded answer. A PostgreSQL already running on the data
+// folder is used and left running, never stopped. Every non-loopback request
+// is refused.
 //
 // Options:
 //   --data-dir=DIR        the demo's own data folder (default ~/.donna-demo)
 //   --database-url=URL    use an existing, empty PostgreSQL database instead
-//                         (tests and recording; the same guards apply)
+//                         (tests and Docker; the same guards apply)
 //   --port=N --web-port=N runtime and web ports (default 8787 / 5173, or
 //                         DONNA_DESKTOP_PORT / DONNA_LOCAL_WEB_PORT); the web
 //                         app listens on DONNA_LOCAL_WEB_HOST (default
 //                         127.0.0.1), as scripts/local_web.mjs does
-//   --hold=FILE           leave one document out, to upload it by hand
+//   --hold=FILE           leave one document out, to upload it by hand; only
+//                         with recordings made with the same --hold
 //   --exit-at-rest        stop once the book is at rest (tests, recording)
 //   --no-web              do not serve the web app
 //   --quiet               keep the runtime's own log out of the terminal
@@ -53,24 +71,29 @@
 //   --trace=FILE          replay: write every normalized request (served or
 //                         not) as JSON lines, to diff two runs
 //   --recordings=FILE     the recordings (default data/demo-replay/…)
-//   --record              re-record: live provider calls, keys from the
-//                         environment, written to --recordings. Alone (as
-//                         `npm run demo:fi:record`) it runs the live pass,
-//                         fill passes until one needs nothing new, and a
-//                         replay with no key to verify; with --exit-at-rest
-//                         it is one pass
-//   --cap-usd=N           with --record: stop live calls past N USD (default 20),
-//                         priced from the facts file's `prices`
+//   --verify              replay on an empty book and fail unless every
+//                         request was recorded AND every recorded answer was
+//                         asked for (the last pass of `demo:fi:record`)
+//   --record              re-record. Alone (as `npm run demo:fi:record`) it
+//                         runs the live pass, fill passes until one asks
+//                         nothing new, and a --verify replay, each on a fresh
+//                         book of its own; only then is --recordings replaced.
+//                         With --exit-at-rest it is one pass, whose file is
+//                         written only if the pass came to rest with every
+//                         answer kept and the spend cap not reached
 //   --fill                with --record: start from the existing --recordings,
 //                         answer what they hold from them, call live only for
-//                         what they miss, and write the union (one pass of
-//                         the re-record loop, scripts/demo_fi_record.mjs)
+//                         what they miss; the file a pass writes holds exactly
+//                         the requests that pass made
+//   --cap-usd=N           with --record: the spend cap in USD for the whole
+//                         command, across every pass (default 20); a live call
+//                         is made only if its worst-case price still fits
 //   --stand-in=openai     with --record: answer the OpenAI lanes from the
 //                         scripted stand-in (scripts/demo_fi_stand_ins.mjs)
 //                         instead of the network
 
 import { randomBytes } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -88,6 +111,7 @@ import {
   installProviderRecorder,
   installProviderReplay,
   packRecordings,
+  parseRequestBody,
   recordedModels,
   recordedResponseFor,
   recordingsDigest,
@@ -99,12 +123,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_RECORDINGS = path.join(ROOT, 'data', 'demo-replay', 'fi-kultalanka-2025-02.json');
 export const FACTS_FILE = path.join(ROOT, 'scripts', 'fixtures', 'fi_kultalanka_month_facts.json');
 export const DEMO_FIRM_ID = 'firm-demo-tilitoimisto';
-// What a miss tells the next person to run: a fill re-records only the
+// What a miss tells the next person to run: fill passes re-record only the
 // requests that changed (live for live lanes, the stand-in for stand-in
-// lanes) and keeps every answer that still matches.
+// lanes), keep every answer that still matches, and verify the result.
 export const RERECORD_COMMAND = 'npm run demo:fi:record -- --fill';
 export const SETTLE = Object.freeze({ advance_ms: 300_000, quiet_rounds: 3, max_rounds: 48 });
 export const ANSWER_ROUNDS = 4;
+export const DEFAULT_CAP_USD = 20;
+// A live call whose request does not say how long the answer may be is
+// priced as if it were this long.
+export const WORST_CASE_OUTPUT_TOKENS = 64_000;
 // Daily backup packages are the one sweep a fast clock would multiply on disk;
 // a demo book needs none. Everything else in the manifest runs.
 const VIRTUAL_CLOCK_SKIP = new Set(['desktop-backup-daily']);
@@ -112,11 +140,21 @@ const VIRTUAL_CLOCK_SKIP = new Set(['desktop-backup-daily']);
 const log = (line) => console.log(`[demo] ${line}`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export class DemoError extends Error {
+  constructor({ code, message, exitCode = 1 }) {
+    super(message);
+    this.name = 'DemoError';
+    this.code = code;
+    this.exitCode = exitCode;
+  }
+}
+
 export const parseDemoArgs = (argv) => {
   const out = { record: false, exitAtRest: false };
   for (const arg of argv) {
     if (arg === '--record') out.record = true;
     else if (arg === '--fill') out.fill = true;
+    else if (arg === '--verify') out.verify = true;
     else if (arg === '--no-web') out.noWeb = true;
     else if (arg === '--quiet') out.quietRuntime = true;
     else if (arg === '--exit-at-rest') out.exitAtRest = true;
@@ -128,14 +166,72 @@ export const parseDemoArgs = (argv) => {
   }
   if (out.standIn && (!out.record || out.standIn !== 'openai')) throw new Error('--stand-in=openai is only for --record');
   if (out.fill && !out.record) throw new Error('--fill is only for --record');
+  if (out.verify && out.record) throw new Error('--verify is a replay; it is not for --record');
+  if (out.capUsd !== undefined) {
+    if (!out.record) throw new Error('--cap-usd is only for --record');
+    // A number of US dollars above zero, written plainly: anything else
+    // (abc, 0, -1, 1e3, Infinity) is refused, never read as "no cap".
+    if (!/^\d+(\.\d+)?$/.test(out.capUsd) || !(Number(out.capUsd) > 0)) throw new Error(`--cap-usd must be a positive number of US dollars, not "${out.capUsd}"`);
+    out.capUsd = Number(out.capUsd);
+  }
+  if (out.verify) Object.assign(out, { exitAtRest: true, noWeb: true });
   return out;
 };
 
-// The book the replay may serve: no firm but the demo firm, no company but
-// the demo company. `query` reads the runtime's database.
+// ── The sealed environment ─────────────────────────────────────────────────
+// The only variables the demo keeps. Nothing here changes what the month asks
+// a model: these name the machine, where PostgreSQL's binaries are, the
+// demo's own ports and sign-in, and which build this is (Host A's
+// source_build check reads it).
+export const DEMO_ENV_NAMES = Object.freeze([
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP', 'TZ', 'LANG', 'LANGUAGE',
+  'SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'COMSPEC', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'PROGRAMDATA',
+  'PG_BIN', 'DONNA_BUNDLED_PG_BIN', 'DONNA_DESKTOP_PG_PORT',
+  'DONNA_DESKTOP_PORT', 'DONNA_LOCAL_WEB_PORT', 'DONNA_LOCAL_WEB_HOST', 'DONNA_ACCESS_TOKEN',
+  'DONNA_BUILD_COMMIT_SHA', 'DONNA_BUILD_DIRTY', 'DONNA_RUNTIME_BUILD_DIRTY', 'GITHUB_SHA', 'VERCEL_GIT_COMMIT_SHA'
+]);
+const DEMO_ENV_PATTERNS = Object.freeze([/^LC_[A-Z]+$/]);
+// A recording pass also keeps the two keys of the live lanes and what it
+// needs to reach them through a proxy.
+export const RECORD_ENV_NAMES = Object.freeze([
+  'OPENAI_API_KEY', 'ANTHROPIC_API_KEY',
+  'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy', 'NODE_USE_ENV_PROXY', 'NODE_EXTRA_CA_CERTS'
+]);
+
+// Drop every variable but the kept names, in place, and move the process to
+// a new empty directory. Returns what was dropped (names only) and undo().
+export const sealDemoEnvironment = ({ env = process.env, record = false } = {}) => {
+  const keep = new Set([...DEMO_ENV_NAMES, ...(record ? RECORD_ENV_NAMES : [])]);
+  const dropped = [];
+  for (const name of Object.keys(env)) {
+    if (keep.has(name) || DEMO_ENV_PATTERNS.some((pattern) => pattern.test(name))) continue;
+    dropped.push(name);
+    delete env[name];
+  }
+  const priorCwd = process.cwd();
+  const cwd = mkdtempSync(path.join(os.tmpdir(), 'donna-demo-cwd-'));
+  process.chdir(cwd);
+  return {
+    cwd,
+    dropped: dropped.sort(),
+    undo() {
+      try { process.chdir(priorCwd); } catch { /* the old directory is gone */ }
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  };
+};
+
+// ── The book the replay may serve ──────────────────────────────────────────
+// No firm but the demo firm, no company but the demo company. A database
+// whose tables do not exist yet holds no book at all: it passes, and the
+// check reads nothing it would have to create. `query` reads the database.
+const bookTables = async (query) => (await query(
+  "select to_regclass('public.firms') is not null as firms, to_regclass('public.clients') is not null as clients"
+)).rows[0];
 export const assertDemoBookOnly = async ({ query, clientId, firmId = DEMO_FIRM_ID }) => {
-  const foreignFirms = (await query('select id from firms where id <> $1 order by id limit 5', [firmId])).rows;
-  const foreignClients = (await query('select id, firm_id from clients where id <> $1 or firm_id <> $2 order by id limit 5', [clientId, firmId])).rows;
+  const tables = await bookTables(query);
+  const foreignFirms = tables.firms ? (await query('select id from firms where id <> $1 order by id limit 5', [firmId])).rows : [];
+  const foreignClients = tables.clients ? (await query('select id, firm_id from clients where id <> $1 or firm_id <> $2 order by id limit 5', [clientId, firmId])).rows : [];
   if (foreignFirms.length || foreignClients.length) {
     throw new ProviderReplayError({
       code: PROVIDER_REPLAY_CODES.FOREIGN_BOOK,
@@ -143,10 +239,14 @@ export const assertDemoBookOnly = async ({ query, clientId, firmId = DEMO_FIRM_I
         ...foreignFirms.map((row) => `firm ${row.id}`),
         ...foreignClients.map((row) => `company ${row.id} (firm ${row.firm_id})`)
       ].join(', ')}; recorded answers are served only to the demo company ${clientId} of firm ${firmId}. `
-        + 'Use the demo\'s own data folder (--data-dir) or an empty database.',
+        + 'Nothing was written. Use the demo\'s own data folder (--data-dir) or an empty database.',
       detail: { foreign_firms: foreignFirms.map((row) => row.id), foreign_clients: foreignClients.map((row) => row.id) }
     });
   }
+};
+const bookIsEmpty = async (query) => {
+  const tables = await bookTables(query);
+  return !tables.firms || !(await query('select 1 from firms limit 1')).rows.length;
 };
 
 // The recordings were made on a database with C (byte-order) collation. Some
@@ -160,10 +260,37 @@ export const assertDemoCollation = async ({ query }) => {
   if (!DEMO_COLLATIONS.includes(collation)) {
     throw new ProviderReplayError({
       code: 'PROVIDER_REPLAY_COLLATION',
-      message: `provider replay: this database sorts text as ${collation}; the recordings were made on C collation and the prompts would differ. `
+      message: `provider replay: this database sorts text as ${collation}; the recordings were made on C collation and the prompts would differ. Nothing was written. `
         + "Use the demo's own data folder, or create the database with: create database <name> template template0 locale 'C'"
     });
   }
+};
+
+// Host A holds the scheduler on a working tree with uncommitted changes under
+// the runtime's paths (source_build: dirty_runtime_build), so the month would
+// never run: the first upload is refused with HTTP 503. Say so first, in
+// words, with the same predicate Host A uses (hostCertificateA.js
+// buildIdentityCheck). No check is skipped: the remedy is to commit.
+export const assertDemoBuildRuns = async ({ env = process.env, mode }) => {
+  const { applyDesktopBuildIdentityDefaults, DESKTOP_REPO_ROOT, DESKTOP_RUNTIME_IDENTITY_PATHS } = await import('../server/donna/desktop/buildIdentity.js');
+  const { buildIdentityCheck } = await import('../server/donna/hostCertificateA.js');
+  applyDesktopBuildIdentityDefaults(env, { rootDir: DESKTOP_REPO_ROOT });
+  const check = buildIdentityCheck(env);
+  if (check.status === 'PASS') return check;
+  let changed = [];
+  try {
+    changed = execFileSync('git', ['status', '--porcelain', '--untracked-files=no', '--', ...DESKTOP_RUNTIME_IDENTITY_PATHS], { cwd: DESKTOP_REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .split('\n').filter(Boolean).map((line) => line.slice(3));
+  } catch { /* not a checkout */ }
+  const again = mode === 'record' ? RERECORD_COMMAND : 'npm run demo:fi';
+  throw new DemoError({
+    code: 'DEMO_UNCOMMITTED_RUNTIME',
+    message: check.detail?.reason === 'dirty_runtime_build'
+      ? `demo: this checkout has uncommitted changes to the runtime (${changed.slice(0, 6).join(', ')}${changed.length > 6 ? ', …' : ''}). `
+        + 'Host A does not start the scheduler on an uncommitted runtime build (source_build: dirty_runtime_build), so the month would not run. '
+        + `Commit the change (a work-in-progress commit on your branch is fine), then run \`${again}\` again.`
+      : `demo: Host A cannot tell which build this is (source_build: ${check.detail?.reason || check.status}), so the month would not run. Run the demo from a git checkout of Donna.`
+  });
 };
 
 const STORAGE_STUB_SQL = `
@@ -173,17 +300,25 @@ const STORAGE_STUB_SQL = `
 
 export const loadReplayRecordings = (file = DEFAULT_RECORDINGS) => {
   if (!existsSync(file)) {
-    throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS, message: `provider replay: no recordings at ${path.relative(ROOT, file)}; make them with \`${RERECORD_COMMAND}\`` });
+    throw new ProviderReplayError({
+      code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS,
+      message: `provider replay: no recordings at ${path.relative(ROOT, file)}; the repository ships them there (git checkout -- ${path.relative(ROOT, DEFAULT_RECORDINGS)}), or make new ones with \`npm run demo:fi:record\` (live keys needed)`
+    });
   }
   const raw = JSON.parse(readFileSync(file, 'utf8'));
   const unpacked = unpackRecordings(raw);
   return { ...unpacked, digest: recordingsDigest(raw) };
 };
 
-// What one live answer cost, from the facts file's list prices (the spend
-// meter of scripts/fi_month_two_stage_run.js). Null when the model is unpriced.
+// ── Spend ──────────────────────────────────────────────────────────────────
+// List prices from the facts file (the spend meter of
+// scripts/fi_month_two_stage_run.js), by exact model id or id prefix.
+export const priceFor = (prices = {}, model) => prices[model] || Object.entries(prices).find(([prefix]) => model && model.startsWith(prefix))?.[1] || null;
+
+// What one live answer cost, from its reported usage. Null when the model is
+// unpriced or the answer reports no usage.
 export const priceUsage = ({ prices = {}, model, usage, provider }) => {
-  const price = prices[model] || Object.entries(prices).find(([prefix]) => model && model.startsWith(prefix))?.[1];
+  const price = priceFor(prices, model);
   if (!price || !usage) return null;
   const cacheRead = provider === 'anthropic' ? usage.cache_read_input_tokens || 0 : usage.input_tokens_details?.cached_tokens || 0;
   const cacheWrite = provider === 'anthropic' ? usage.cache_creation_input_tokens || 0 : 0;
@@ -191,6 +326,19 @@ export const priceUsage = ({ prices = {}, model, usage, provider }) => {
   const output = usage.output_tokens ?? usage.completion_tokens ?? 0;
   return (input * price.input_per_million + cacheWrite * price.input_per_million * (price.cache_write_multiplier ?? 1.25)
     + cacheRead * price.input_per_million * (price.cache_read_multiplier ?? 0.1) + output * price.output_per_million) / 1e6;
+};
+
+// The most one request can cost: every byte of the request body counted as
+// an input token (a token is never shorter than a byte), at the cache-write
+// price where the provider charges one, and the longest answer the request
+// allows (WORST_CASE_OUTPUT_TOKENS when it sets no limit).
+export const worstCaseUsd = ({ price, init, provider }) => {
+  const raw = init?.body;
+  const bytes = typeof raw === 'string' ? Buffer.byteLength(raw) : raw ? Buffer.byteLength(Buffer.from(raw)) : 0;
+  const body = parseRequestBody(init) || {};
+  const maxOut = Number(body.max_tokens ?? body.max_output_tokens ?? body.max_completion_tokens) || WORST_CASE_OUTPUT_TOKENS;
+  const inputRate = price.input_per_million * (provider === 'anthropic' ? (price.cache_write_multiplier ?? 1.25) : 1);
+  return (bytes * inputRate + maxOut * price.output_per_million) / 1e6;
 };
 
 // The stored rows that say where the book is. Plain reads.
@@ -230,166 +378,253 @@ export const answerFor = ({ ask, transaction, answers }) => {
   return hit ? { line: hit[0], reply: hit[1].reply, ask_id: ask.id } : null;
 };
 
+// The stand-in answers OpenAI requests only, and only in a recording pass.
+// A fill keeps each lane's provenance: an OpenAI lane the file holds only as
+// scripted stand-ins is answered by the stand-in again (always, so a changed
+// stand-in changes the file); every other lane is reused or goes live. So
+// `--fill` needs only the keys of the live lanes it misses.
+export const standInLanesOf = (entries = []) => {
+  const byLane = new Map();
+  for (const entry of entries || []) if (entry.provider === 'openai') byLane.set(entry.lane, [...(byLane.get(entry.lane) || []), entry.provenance]);
+  return new Set([...byLane].filter(([, provenances]) => provenances.every((p) => p === 'scripted_stand_in')).map(([lane]) => lane));
+};
+export const answersFromStandIn = ({ classified, standIn = null, standInLanes = new Set() }) => classified.endpoint_class === 'openai'
+  && (standIn === 'openai' || standInLanes.has(classified.lane));
+
 export const runDemo = async (options) => {
   const startedAt = Date.now();
   const mode = options.record ? 'record' : 'replay';
-  // A recording pass always ends at rest: its file is written then.
-  if (mode === 'record') options = { ...options, exitAtRest: true };
+  // A recording pass and a verify pass always end at rest: the file is
+  // written (or the verdict given) then.
+  if (mode === 'record' || options.verify) options = { ...options, exitAtRest: true };
   const facts = JSON.parse(readFileSync(FACTS_FILE, 'utf8'));
-  const { DEMO_CLIENT_ID, DEMO_STATEMENT_FILE, createRuntimeClient, loadFinnishDemo } = await import('./load_finnish_demo.mjs');
   const recordingsFile = path.resolve(options.recordings || DEFAULT_RECORDINGS);
+  // Read before the seal: the two live keys (a recording pass only), the
+  // demo's own ports and sign-in, and where its data folder is.
+  const realKeys = mode === 'record' ? Object.fromEntries(REPLAY_PROVIDER_KEY_ENV.map((k) => [k, process.env[k] || ''])) : {};
+  // Every key-like value this machine's environment held, whatever the
+  // provider: a recording that contained one would be refused. Held in
+  // memory for the scan only, never printed.
+  const machineSecrets = mode === 'record'
+    ? Object.entries(process.env).filter(([name, value]) => /(_API_KEY|_KEY|_TOKEN|_SECRET|_PASSWORD)$/.test(name) && value && value.trim().length >= 8).map(([, value]) => value.trim())
+    : [];
+  const port = Number(options.port || process.env.DONNA_DESKTOP_PORT || 8787);
+  const webPort = Number(options.webPort || process.env.DONNA_LOCAL_WEB_PORT || 5173);
+  const accessToken = process.env.DONNA_ACCESS_TOKEN || randomBytes(24).toString('hex');
+  // A recording or verify pass starts from an empty book every time: its own
+  // new folder, removed when the pass ends.
+  const ownTempDataDir = !options.databaseUrl && !options.dataDir && (mode === 'record' || options.verify);
+  const dataDir = options.databaseUrl && !options.dataDir ? null : path.resolve(options.dataDir || (ownTempDataDir
+    ? mkdtempSync(path.join(os.tmpdir(), 'donna-demo-book-'))
+    : path.join(os.homedir(), '.donna-demo')));
 
-  // ── The seam, before any runtime module loads ──
-  let seam;
-  let spend = null;
-  let bookQuery = null;
-  const realKeys = Object.fromEntries(['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'TYPESAFE_API_KEY'].map((k) => [k, process.env[k] || '']));
-  if (mode === 'replay') {
-    const recordings = loadReplayRecordings(recordingsFile);
-    seam = installProviderReplay({
-      recordings,
-      rerecordHint: RERECORD_COMMAND,
-      logger: console,
-      onRequest: options.trace ? (entry) => appendFileSync(options.trace, `${JSON.stringify(entry)}\n`) : null,
-      assertScope: async () => {
-        if (!bookQuery) throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.FOREIGN_BOOK, message: 'provider replay: the book is not open yet' });
-        await assertDemoBookOnly({ query: bookQuery, clientId: DEMO_CLIENT_ID });
-      }
-    });
-    for (const key of REPLAY_PROVIDER_KEY_ENV) process.env[key] = REPLAY_PLACEHOLDER_KEY;
-    log(`replay: ${recordings.entries.length} recorded answers (${recordings.recorded_at || 'date unknown'}; ${Object.entries(recordedModels(recordings)).map(([p, m]) => `${p} ${m.join(', ')}`).join('; ')}); no provider is called`);
-  } else {
-    const realFetch = globalThis.fetch;
-    const base = options.fill ? loadReplayRecordings(recordingsFile) : null;
-    const baseByKey = new Map((base?.entries || []).map((entry) => [entry.key, { entry, served: 0 }]));
-    // A fill keeps each lane's provenance: a lane the file holds only as
-    // scripted stand-ins is answered by the stand-in again; any other lane
-    // goes live. So `--fill` needs only the keys of the live lanes it misses.
-    const standInLanes = new Set();
-    if (base) {
-      const byLane = new Map();
-      for (const entry of base.entries) byLane.set(entry.lane, [...(byLane.get(entry.lane) || []), entry.provenance]);
-      for (const [lane, provenances] of byLane) if (provenances.every((p) => p === 'scripted_stand_in')) standInLanes.add(lane);
-    }
-    const { answerOpenAiStandIn } = options.standIn || standInLanes.size ? await import('./demo_fi_stand_ins.mjs') : {};
-    if (!options.fill) {
-      if (!realKeys.ANTHROPIC_API_KEY) throw new Error('--record needs ANTHROPIC_API_KEY in the environment');
-      if (!options.standIn && !realKeys.OPENAI_API_KEY) throw new Error('--record needs OPENAI_API_KEY in the environment (or --stand-in=openai)');
-    }
-    // Lanes the stand-in answers still need a key to be present so they reach
-    // the wire; the placeholder is not one and is never sent anywhere.
-    if (options.standIn || [...standInLanes].length) {
-      for (const key of REPLAY_PROVIDER_KEY_ENV) if (!realKeys[key]) process.env[key] = REPLAY_PLACEHOLDER_KEY;
-    }
-    if (options.standIn) process.env.OPENAI_API_KEY = REPLAY_PLACEHOLDER_KEY;
-    const keyFor = { openai: realKeys.OPENAI_API_KEY, anthropic: realKeys.ANTHROPIC_API_KEY };
-    const capUsd = Number(options.capUsd || 20);
-    spend = { usd: 0, cap_usd: capUsd, live_calls: 0, stand_in: 0, unpriced: 0, reused: 0 };
-    seam = installProviderRecorder({
-      logger: console,
-      secretValues: Object.values(realKeys).filter(Boolean),
-      answer: async (input, init, classified, identity) => {
-        const held = identity ? baseByKey.get(identity.key) : null;
-        if (held) {
-          spend.reused += 1;
-          return { response: recordedResponseFor(held.entry, identity, held.served++), provenance: held.entry.provenance };
-        }
-        if ((options.standIn && classified.endpoint_class === 'openai') || standInLanes.has(classified.lane)) {
-          spend.stand_in += 1;
-          return { response: await answerOpenAiStandIn({ input, init, classified }), provenance: 'scripted_stand_in' };
-        }
-        if (spend.usd >= capUsd) throw new TypeError(`demo record: spend cap ${capUsd} USD reached; not calling ${classified.lane}`);
-        if (!keyFor[classified.endpoint_class]) {
-          throw new TypeError(`demo record: lane ${classified.lane} must be recorded live and needs a ${classified.endpoint_class} key in .env`);
-        }
-        const response = await realFetch(input, init);
-        // JSON or an event stream: the model and usage the answer reports.
-        const answered = summarizeProviderResponse({ contentType: response.headers.get('content-type') || '', text: await response.clone().text() });
-        const usd = priceUsage({ prices: facts.prices, model: answered.model || classified.model_requested, usage: answered.usage, provider: classified.endpoint_class });
-        spend.live_calls += 1;
-        if (usd == null) spend.unpriced += 1; else spend.usd += usd;
-        if (spend.live_calls % 10 === 0) log(`record: ${spend.live_calls} live calls, ${spend.usd.toFixed(3)} USD`);
-        log(`record: live ${classified.lane} (${classified.model_requested || 'model ?'})`);
-        return { response, provenance: 'live' };
-      }
-    });
-    log(`record: live ${options.standIn ? 'anthropic; openai from the scripted stand-in' : 'openai and anthropic'}; writing ${path.relative(ROOT, recordingsFile)}`);
-  }
-  // The recordings hold no first-line (Typesafe) or challenger answers, so
-  // those providers are unset in this process: the first-line lane is then
-  // dark by itself (server/donna/firstLineLane.js) and the other lanes decide,
-  // as on any install without a Typesafe key. No kill switch is needed.
-  for (const key of ['TYPESAFE_API_KEY', 'TYPESAFE_MODEL', 'OPENAI_COMPATIBLE_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL']) delete process.env[key];
+  // ── The seal: nothing from this machine's configuration reaches the month ──
+  const sealed = sealDemoEnvironment({ record: mode === 'record' });
+  process.env.DONNA_ACCESS_TOKEN = accessToken;
   // One parse at a time: the same order on every run, which is what lets a
   // recording and its replay see the same book at every step.
   process.env.INNGEST_PARSE_CONCURRENCY = '1';
 
-  // ── The database ──
+  let seam = null;
+  let spend = null;
+  let bookQuery = null;
   let pgHandle = null;
-  if (options.databaseUrl) {
-    process.env.DATABASE_URL = options.databaseUrl;
-    process.env.DONNA_DESKTOP_BLOB_DIR = options.dataDir ? path.join(options.dataDir, 'documents') : path.join(os.tmpdir(), `donna-demo-blobs-${process.pid}`);
-  } else {
-    // A recording starts from an empty book every time: its own new folder.
-    const dataDir = path.resolve(options.dataDir || (mode === 'record'
-      ? mkdtempSync(path.join(os.tmpdir(), 'donna-demo-record-'))
-      : path.join(os.homedir(), '.donna-demo')));
-    const { ensureLocalPostgres } = await import('../server/donna/desktop/pgSupervisor.js');
-    // The demo's own cluster is initialised with C collation (see
-    // assertDemoCollation); only initdb and its server see this, and only for
-    // the demo's own data folder.
-    const priorLocale = { LC_ALL: process.env.LC_ALL, LANG: process.env.LANG };
-    process.env.LC_ALL = 'C';
-    process.env.LANG = 'C';
-    try {
-      pgHandle = ensureLocalPostgres({ dataDir, logger: { log: (l) => console.log(l), error: (l) => console.error(l) } });
-    } finally {
-      for (const [key, value] of Object.entries(priorLocale)) {
-        if (value === undefined) delete process.env[key]; else process.env[key] = value;
-      }
-    }
-    process.env.DATABASE_URL = pgHandle.databaseUrl;
-    process.env.DONNA_DESKTOP_BLOB_DIR = path.join(dataDir, 'documents');
-    log(`data folder ${dataDir}`);
-  }
-  mkdirSync(process.env.DONNA_DESKTOP_BLOB_DIR, { recursive: true });
-  if (!process.env.DONNA_ACCESS_TOKEN) process.env.DONNA_ACCESS_TOKEN = randomBytes(24).toString('hex');
-  const port = Number(options.port || process.env.DONNA_DESKTOP_PORT || 8787);
-  const webPort = Number(options.webPort || process.env.DONNA_LOCAL_WEB_PORT || 5173);
-
   let runtime = null;
   let webServer = null;
-  let stopping = false;
-  const stop = async () => {
-    if (stopping) return;
-    stopping = true;
-    if (webServer) await new Promise((resolve) => webServer.close(resolve));
-    if (runtime) await runtime.stop().catch(() => {});
-    const { closeFirmDbPool } = await import('../server/donna/firmDb.js');
-    await closeFirmDbPool().catch(() => {});
-    pgHandle?.stop();
-    seam.restore();
+  let stopping = null;
+  let up = false;
+  let releaseUp = null;
+  const stop = () => {
+    stopping ||= (async () => {
+      if (webServer) await new Promise((resolve) => webServer.close(resolve));
+      if (runtime) await runtime.stop().catch(() => {});
+      const { closeFirmDbPool } = await import('../server/donna/firmDb.js');
+      await closeFirmDbPool().catch(() => {});
+      // stop() leaves a server the demo attached to (one it did not start)
+      // running; only the demo's own is stopped.
+      pgHandle?.stop();
+      if (ownTempDataDir && dataDir) rmSync(dataDir, { recursive: true, force: true });
+      seam?.restore();
+      sealed.undo();
+    })();
+    return stopping;
   };
+  // Ctrl-C at any point stops what the demo started (its PostgreSQL first of
+  // all) before the process ends; once the month is up it is the normal end.
+  const onSignal = (signal) => {
+    if (up) { releaseUp?.(); return; }
+    console.error(`[demo] ${signal}: stopping`);
+    stop().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143));
+  };
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
 
   try {
+    const { DEMO_CLIENT_ID, createRuntimeClient, loadFinnishDemo } = await import('./load_finnish_demo.mjs');
+
+    // ── The seam, before any runtime module loads ──
+    if (mode === 'replay') {
+      const recordings = loadReplayRecordings(recordingsFile);
+      const recordedHold = recordings.scenario?.held_back || null;
+      if ((options.hold || null) !== recordedHold) {
+        throw new DemoError({
+          code: 'DEMO_HOLD_NOT_RECORDED',
+          message: `demo: these recordings were made with ${recordedHold ? `"${recordedHold}" held back` : 'every document loaded (nothing held back)'}; `
+            + `${options.hold ? `holding back "${options.hold}"` : 'loading every document'} would ask the models different questions. `
+            + `${recordedHold ? `Run with --hold="${recordedHold}"` : 'Run without --hold'}, or record a month that holds it back: npm run demo:fi:record -- --hold="${options.hold || '…'}" --recordings=FILE`
+        });
+      }
+      seam = installProviderReplay({
+        recordings,
+        rerecordHint: RERECORD_COMMAND,
+        logger: console,
+        onRequest: options.trace ? (entry) => appendFileSync(options.trace, `${JSON.stringify(entry)}\n`) : null,
+        assertScope: async () => {
+          if (!bookQuery) throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.FOREIGN_BOOK, message: 'provider replay: the book is not open yet' });
+          await assertDemoBookOnly({ query: bookQuery, clientId: DEMO_CLIENT_ID });
+        }
+      });
+      for (const key of REPLAY_PROVIDER_KEY_ENV) process.env[key] = REPLAY_PLACEHOLDER_KEY;
+      log(`replay: ${recordings.entries.length} recorded answers (${recordings.recorded_at || 'date unknown'}; ${Object.entries(recordedModels(recordings)).map(([p, m]) => `${p} ${m.join(', ')}`).join('; ')}); no provider is called`);
+    } else {
+      const realFetch = globalThis.fetch;
+      const base = options.fill ? loadReplayRecordings(recordingsFile) : null;
+      if (base && (base.scenario?.held_back || null) !== (options.hold || null)) {
+        throw new DemoError({ code: 'DEMO_HOLD_NOT_RECORDED', message: `demo: --fill starts from recordings made with held_back ${base.scenario?.held_back || 'none'}; this pass holds back ${options.hold || 'nothing'}. Use the same --hold.` });
+      }
+      const baseByKey = new Map((base?.entries || []).map((entry) => [entry.key, { entry, served: 0 }]));
+      const standInLanes = standInLanesOf(base?.entries);
+      const answeredByStandIn = (classified) => answersFromStandIn({ classified, standIn: options.standIn, standInLanes });
+      const { answerOpenAiStandIn } = options.standIn || standInLanes.size ? await import('./demo_fi_stand_ins.mjs') : {};
+      if (standInLanes.size) log(`fill: OpenAI lanes the file holds as scripted stand-ins are answered by the stand-in again: ${[...standInLanes].sort().join(', ')}`);
+      if (!options.fill) {
+        if (!realKeys.ANTHROPIC_API_KEY) throw new DemoError({ code: 'DEMO_RECORD_KEY', message: '--record needs ANTHROPIC_API_KEY in the environment' });
+        if (!options.standIn && !realKeys.OPENAI_API_KEY) throw new DemoError({ code: 'DEMO_RECORD_KEY', message: '--record needs OPENAI_API_KEY in the environment (or --stand-in=openai)' });
+      }
+      // A lane the stand-in answers still needs a key present to reach the
+      // wire; the placeholder is not one and is never sent anywhere.
+      for (const key of REPLAY_PROVIDER_KEY_ENV) if (!realKeys[key]) process.env[key] = REPLAY_PLACEHOLDER_KEY;
+      if (options.standIn) process.env.OPENAI_API_KEY = REPLAY_PLACEHOLDER_KEY;
+      const keyFor = { openai: realKeys.OPENAI_API_KEY, anthropic: realKeys.ANTHROPIC_API_KEY };
+      const capUsd = options.capUsd ?? DEFAULT_CAP_USD;
+      spend = { usd: 0, cap_usd: capUsd, live_calls: 0, stand_in: 0, unpriced: 0, reused: 0, new_requests: 0, stopped: null };
+      const writeSpend = () => { if (options.report) writeFileSync(`${options.report}.spend.json`, `${JSON.stringify(spend)}\n`); };
+      writeSpend();
+      seam = installProviderRecorder({
+        logger: console,
+        secretValues: machineSecrets,
+        answer: async (input, init, classified, identity) => {
+          const held = identity ? baseByKey.get(identity.key) : null;
+          if (!held) spend.new_requests += 1;
+          if (answeredByStandIn(classified)) {
+            spend.stand_in += 1;
+            return { response: await answerOpenAiStandIn({ input, init, classified }), provenance: 'scripted_stand_in' };
+          }
+          if (held) {
+            spend.reused += 1;
+            return { response: recordedResponseFor(held.entry, identity, held.served++), provenance: held.entry.provenance };
+          }
+          if (!keyFor[classified.endpoint_class]) {
+            spend.stopped ||= { reason: 'key_missing', lane: classified.lane, provider: classified.endpoint_class };
+            throw new TypeError(`demo record: lane ${classified.lane} must be recorded live and needs ${classified.endpoint_class === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} in the environment`);
+          }
+          // The cap holds before the call: a call is made only if its worst
+          // case still fits. A model the facts file does not price is not
+          // called at all.
+          const price = priceFor(facts.prices, classified.model_requested);
+          if (!price) {
+            spend.stopped ||= { reason: 'unpriced_model', lane: classified.lane, model: classified.model_requested };
+            throw new TypeError(`demo record: ${classified.model_requested || 'an unnamed model'} has no price in ${path.relative(ROOT, FACTS_FILE)} (prices); not calling ${classified.lane}`);
+          }
+          const worst = worstCaseUsd({ price, init, provider: classified.endpoint_class });
+          if (spend.usd + worst > capUsd) {
+            spend.stopped ||= { reason: 'cap', lane: classified.lane, spent_usd: spend.usd, next_worst_case_usd: worst };
+            throw new TypeError(`demo record: spend cap ${capUsd.toFixed(2)} USD: ${spend.usd.toFixed(3)} spent, the next ${classified.lane} call could cost ${worst.toFixed(3)}; not calling`);
+          }
+          const response = await realFetch(input, init);
+          // JSON or an event stream: the model and usage the answer reports.
+          const answered = summarizeProviderResponse({ contentType: response.headers.get('content-type') || '', text: await response.clone().text() });
+          const usd = priceUsage({ prices: facts.prices, model: answered.model || classified.model_requested, usage: answered.usage, provider: classified.endpoint_class });
+          spend.live_calls += 1;
+          // An answer that reports no usage is counted at its worst case.
+          if (usd == null) { spend.unpriced += 1; spend.usd += worst; } else spend.usd += usd;
+          writeSpend();
+          if (spend.live_calls % 10 === 0) log(`record: ${spend.live_calls} live calls, ${spend.usd.toFixed(3)} USD of ${capUsd.toFixed(2)}`);
+          log(`record: live ${classified.lane} (${classified.model_requested || 'model ?'})`);
+          return { response, provenance: 'live' };
+        }
+      });
+      log(`record: ${options.fill ? 'fill from the existing recordings' : `live ${options.standIn ? 'anthropic; openai from the scripted stand-in' : 'openai and anthropic'}`}; cap ${capUsd.toFixed(2)} USD; writing ${path.relative(ROOT, recordingsFile)} only if the pass completes`);
+    }
+
+    // The pool's size and the rest of the appliance defaults, before the
+    // first query opens the pool (the runtime applies the same, only where
+    // unset, so both see one value).
+    const { applyDesktopHostRuntimeDefaults } = await import('../server/donna/desktop/hostRuntimeDefaults.js');
+    applyDesktopHostRuntimeDefaults(process.env);
+    await assertDemoBuildRuns({ mode });
+
+    // ── The database: read, refuse, and only then write ──
+    if (options.databaseUrl) {
+      process.env.DATABASE_URL = options.databaseUrl;
+    } else {
+      const { ensureLocalPostgres } = await import('../server/donna/desktop/pgSupervisor.js');
+      // The demo's own cluster is initialised with C collation (see
+      // assertDemoCollation); only initdb and its server see this, and only
+      // for the demo's own data folder. A server already running on the
+      // folder is used and left running ('attach'): the demo stops only a
+      // server it started.
+      const priorLocale = { LC_ALL: process.env.LC_ALL, LANG: process.env.LANG };
+      process.env.LC_ALL = 'C';
+      process.env.LANG = 'C';
+      try {
+        pgHandle = ensureLocalPostgres({ dataDir, onActive: 'attach', logger: { log: (l) => console.log(l), error: (l) => console.error(l) } });
+      } finally {
+        for (const [key, value] of Object.entries(priorLocale)) {
+          if (value === undefined) delete process.env[key]; else process.env[key] = value;
+        }
+      }
+      process.env.DATABASE_URL = pgHandle.databaseUrl;
+      log(`data folder ${dataDir}${pgHandle.attached ? ' (its PostgreSQL was already running and is left running)' : ''}`);
+    }
+    process.env.DONNA_DESKTOP_BLOB_DIR = dataDir ? path.join(dataDir, 'documents') : path.join(sealed.cwd, 'documents');
     const { queryFirmDb, withFirmDbClient } = await import('../server/donna/firmDb.js');
-    if (options.databaseUrl) await queryFirmDb(STORAGE_STUB_SQL);
-    log('applying migrations…');
-    execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'migrate_firm_db.js')], { cwd: ROOT, stdio: 'ignore', env: process.env });
     await assertDemoCollation({ query: queryFirmDb });
-    // Refuse a book that holds anything but the demo, before the runtime starts.
+    // Refuse a book that holds anything but the demo, before the demo writes
+    // anything into it: no schema, no migration.
     await assertDemoBookOnly({ query: queryFirmDb, clientId: DEMO_CLIENT_ID });
-    if (mode === 'record' && (await queryFirmDb('select 1 from firms limit 1')).rows.length) {
-      throw new Error('--record needs an empty book: every request of the month must be recorded from the start');
+    if ((mode === 'record' || options.verify) && !(await bookIsEmpty(queryFirmDb))) {
+      throw new DemoError({ code: 'DEMO_BOOK_NOT_EMPTY', message: `${mode === 'record' ? '--record' : '--verify'} needs an empty book: every request of the month must be made from the start` });
     }
     bookQuery = queryFirmDb;
+    mkdirSync(process.env.DONNA_DESKTOP_BLOB_DIR, { recursive: true });
+    if (options.databaseUrl) await queryFirmDb(STORAGE_STUB_SQL);
+    log('applying migrations…');
+    try {
+      const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'migrate_firm_db.js')], {
+        cwd: ROOT, env: process.env, encoding: 'utf8', stdio: ['ignore', options.quietRuntime ? 'pipe' : 'inherit', options.quietRuntime ? 'pipe' : 'inherit']
+      });
+      if (options.quietRuntime) {
+        const lines = String(out || '').split('\n');
+        log(`migrations: ${lines.filter((l) => l.startsWith('Applied')).length} applied, ${lines.filter((l) => l.startsWith('Skipping')).length} already applied`);
+      }
+    } catch (error) {
+      if (error.stdout) process.stdout.write(error.stdout);
+      if (error.stderr) process.stderr.write(error.stderr);
+      throw new DemoError({ code: 'DEMO_MIGRATIONS_FAILED', message: `demo: migrations failed (scripts/migrate_firm_db.js exit ${error.status ?? '?'}); its output is above` });
+    }
     if (mode === 'replay') {
       const { recordProviderReplaySession } = await import('../server/donna/providerReplaySession.js');
       await recordProviderReplaySession({ withFirmDbClientFn: withFirmDbClient, replay: seam.state, clientId: DEMO_CLIENT_ID, firmId: DEMO_FIRM_ID });
     }
 
     const { createDonnaRuntimeServer } = await import('../server/donna/desktop/runtimeServer.js');
-    runtime = await createDonnaRuntimeServer({ listen: { host: '127.0.0.1', port }, logger: options.quietRuntime ? { log: () => {}, error: console.error, warn: () => {} } : console });
+    runtime = await createDonnaRuntimeServer({
+      listen: { host: '127.0.0.1', port },
+      logger: options.quietRuntime ? { log: () => {}, error: console.error, warn: () => {} } : console,
+      // No provider-key file: the keys are the ones set above, and nothing else.
+      providerKeyFiles: []
+    });
     // Take over dispatch: the same manifest on a virtual clock (manifestTicker.js).
     // The runtime's own scheduler runs on the wall clock; under the demo it
     // is stopped and may not be started again by a later readiness renewal,
@@ -426,7 +661,7 @@ export const runDemo = async (options) => {
     }
 
     // ── The month ──
-    const client = createRuntimeClient({ baseUrl: `http://127.0.0.1:${port}`, accessToken: process.env.DONNA_ACCESS_TOKEN });
+    const client = createRuntimeClient({ baseUrl: `http://127.0.0.1:${port}`, accessToken });
     const exclude = options.hold ? [options.hold] : [];
     const loaded = await loadFinnishDemo({
       client, allDocuments: true, exclude, log: (line) => console.log(line),
@@ -458,9 +693,9 @@ export const runDemo = async (options) => {
         last = now;
       }
       log(`${label}: ${quiet >= SETTLE.quiet_rounds ? 'at rest' : 'NOT at rest'} after ${rounds} rounds (${Math.round((Date.now() - startedAt) / 1000)} s)`);
-      return quiet >= SETTLE.quiet_rounds;
+      return { atRest: quiet >= SETTLE.quiet_rounds, rounds };
     };
-    let atRest = await settle('first rest');
+    let rest = await settle('first rest');
 
     const answered = [];
     for (let round = 1; round <= ANSWER_ROUNDS; round += 1) {
@@ -475,43 +710,68 @@ export const runDemo = async (options) => {
         const response = await client.postJson(`/api/donna/firms/evidence/requests/${encodeURIComponent(answer.ask_id)}/resolve`, { firm_id: firmId, reply: answer.reply });
         answered.push({ ...answer, http: response.status });
         log(`owner answered ${answer.line} (ask ${answer.ask_id}): HTTP ${response.status}`);
+        // An answer the route refused is not an answered book.
+        if (response.status !== 200) {
+          throw new DemoError({ code: 'DEMO_OWNER_ANSWER_REFUSED', message: `demo: the owner's answer to ${answer.line} (ask ${answer.ask_id}) was refused: HTTP ${response.status} ${String(response.text || '').slice(0, 300)}` });
+        }
       }
-      atRest = await settle(`rest after answers, round ${round}`);
+      rest = await settle(`rest after answers, round ${round}`);
     }
 
     const endState = await readDemoEndState(ids);
     const summary = {
       mode,
-      at_rest: atRest,
+      at_rest: rest.atRest,
       seconds: Math.round((Date.now() - startedAt) / 1000),
       documents_loaded: loaded.uploaded.length,
       held_back: options.hold || null,
       answered,
       end_state: endState,
       provider: mode === 'replay'
-        ? { served: seam.served.length, unrecorded: seam.missed.map(({ error, request, long_texts, ...rest }) => rest), network_refused: seam.refusedNetwork }
-        : { calls: seam.ledger.length, spend, by_lane: seam.ledger.reduce((t, r) => ({ ...t, [r.lane]: (t[r.lane] || 0) + 1 }), {}), network_refused: seam.refusedNetwork }
+        ? { served: seam.served.length, unrecorded: seam.missed.map(({ error, request, long_texts, ...rest }) => rest), unused: seam.unused(), network_refused: seam.refusedNetwork }
+        : {
+          calls: seam.ledger.length,
+          spend,
+          by_lane: seam.ledger.reduce((t, r) => ({ ...t, [r.lane]: (t[r.lane] || 0) + 1 }), {}),
+          dropped: seam.ledger.filter((r) => !r.kept).map(({ lane, provider, status, dropped }) => ({ lane, provider, status, dropped })),
+          network_refused: seam.refusedNetwork
+        }
     };
     if (mode === 'record') {
-      const entries = seam.entries();
-      const file = packRecordings({
-        format: PROVIDER_REPLAY_FORMAT,
-        identity: PROVIDER_REQUEST_IDENTITY_VERSION,
-        pack: 'fi-kultalanka-2025-02',
-        recorded_at: new Date().toISOString().slice(0, 10),
-        recorded_on: { commit: (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return null; } })() },
-        scenario: { held_back: options.hold || null, owner_answers: answered.map((a) => a.line) },
-        note: 'Recorded provider answers for the zero-key demo (npm run demo:fi). Synthetic pack data only; provider ids are replaced, no header is kept. Re-record with `npm run demo:fi:record`.',
-        entries
-      });
-      const text = `${JSON.stringify(file, null, 1)}\n`;
-      const leaks = findSecretShapes(text, { extraValues: Object.values(realKeys).filter(Boolean) });
-      if (leaks.length) throw new Error(`refusing to write recordings: secret-shaped content (${leaks.map((l) => l.name).join(', ')})`);
-      mkdirSync(path.dirname(recordingsFile), { recursive: true });
-      writeFileSync(recordingsFile, text);
-      summary.recordings = { file: path.relative(ROOT, recordingsFile), entries: entries.length, bytes: Buffer.byteLength(text), models: recordedModels({ entries }) };
-      log(`live spend ${spend.usd.toFixed(3)} USD over ${spend.live_calls} calls (${spend.unpriced} unpriced); ${spend.stand_in} from the stand-in; ${spend.reused} from the existing recordings`);
-      log(`wrote ${entries.length} recordings (${Math.round(Buffer.byteLength(text) / 1024)} KB) to ${path.relative(ROOT, recordingsFile)}`);
+      // The file is replaced only by a complete set from a pass at rest: no
+      // answer dropped, the cap never reached, nothing refused for want of a
+      // key or a price. Written beside the target and moved over it, so the
+      // committed file is either the old one or the new one, whole.
+      const incomplete = [
+        !rest.atRest && 'the book did not come to rest',
+        summary.provider.dropped.length && `${summary.provider.dropped.length} answer(s) not kept (${[...new Set(summary.provider.dropped.map((d) => `${d.lane} ${d.dropped}`))].join(', ')})`,
+        spend.stopped && `live calls stopped: ${spend.stopped.reason}${spend.stopped.lane ? ` at ${spend.stopped.lane}` : ''}`
+      ].filter(Boolean);
+      if (incomplete.length) {
+        summary.recordings = { written: false, why: incomplete };
+      } else {
+        const entries = seam.entries();
+        const file = packRecordings({
+          format: PROVIDER_REPLAY_FORMAT,
+          identity: PROVIDER_REQUEST_IDENTITY_VERSION,
+          pack: 'fi-kultalanka-2025-02',
+          recorded_at: new Date().toISOString().slice(0, 10),
+          recorded_on: { commit: (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return null; } })() },
+          scenario: { held_back: options.hold || null, owner_answers: answered.map((a) => a.line) },
+          note: 'Recorded provider answers for the zero-key demo (npm run demo:fi). Synthetic pack data only; provider ids are replaced, no header is kept. Re-record with `npm run demo:fi:record`.',
+          entries
+        });
+        const text = `${JSON.stringify(file, null, 1)}\n`;
+        const leaks = findSecretShapes(text, { extraValues: machineSecrets });
+        if (leaks.length) throw new Error(`refusing to write recordings: secret-shaped content (${leaks.map((l) => l.name).join(', ')})`);
+        mkdirSync(path.dirname(recordingsFile), { recursive: true });
+        const temp = `${recordingsFile}.writing-${process.pid}`;
+        writeFileSync(temp, text);
+        renameSync(temp, recordingsFile);
+        summary.recordings = { written: true, file: path.relative(ROOT, recordingsFile), entries: entries.length, bytes: Buffer.byteLength(text), models: recordedModels({ entries }) };
+        log(`wrote ${entries.length} recordings (${Math.round(Buffer.byteLength(text) / 1024)} KB) to ${path.relative(ROOT, recordingsFile)}`);
+      }
+      log(`live spend ${spend.usd.toFixed(3)} USD over ${spend.live_calls} calls (${spend.unpriced} without usage, counted at their worst case); ${spend.stand_in} from the stand-in; ${spend.reused} from the existing recordings; ${spend.new_requests} not in them`);
     }
     if (options.report) writeFileSync(options.report, `${JSON.stringify(summary, null, 2)}\n`);
     if (options.report && mode === 'replay' && seam.missed.length) {
@@ -523,27 +783,45 @@ export const runDemo = async (options) => {
     printSummary(summary);
 
     if (mode === 'replay' && seam.missed.length) throw seam.missed[0].error;
+    if (mode === 'record' && !summary.recordings.written) {
+      throw new DemoError({ code: 'DEMO_RECORDING_INCOMPLETE', message: `demo record: no recordings written — ${summary.recordings.why.join('; ')}. ${path.relative(ROOT, recordingsFile)} is unchanged.` });
+    }
+    if (!rest.atRest) {
+      throw new DemoError({
+        code: 'DEMO_NOT_AT_REST',
+        message: `demo: the book did not come to rest (it was still changing after ${rest.rounds} rounds of five virtual minutes), so the month above is not finished. `
+          + 'Run again with --report=FILE --trace=FILE to see what kept changing.'
+      });
+    }
+    if (options.verify && summary.provider.unused.length) {
+      const byLane = summary.provider.unused.reduce((t, u) => ({ ...t, [u.lane]: (t[u.lane] || 0) + (u.recorded - u.served) }), {});
+      throw new DemoError({
+        code: 'DEMO_VERIFY_UNUSED',
+        message: `demo verify: ${summary.provider.unused.length} recorded answer(s) were never asked for (${Object.entries(byLane).map(([lane, n]) => `${lane} ${n}`).join(', ')}): the recordings do not match what the code asks. Re-record with \`${RERECORD_COMMAND}\`.`
+      });
+    }
     if (options.exitAtRest) return summary;
 
-    log(`sign in at http://127.0.0.1:${webPort}/firms with the access key ${process.env.DONNA_ACCESS_TOKEN}`);
+    log(`sign in at http://127.0.0.1:${webPort}/firms with the access key ${accessToken}`);
     log(`the owner's view: http://127.0.0.1:${webPort}/portal/${clientId}`);
     if (options.hold) log(`upload "${options.hold}" from data/evals/fixtures/fi-kultalanka-2025-02/sources there to watch it read, coded and matched`);
     log('the book keeps ticking (five virtual minutes every two seconds). Ctrl-C to stop.');
-    const keepTicking = async () => {
-      while (!stopping) {
-        await ticker.tick({ advanceMs: SETTLE.advance_ms, settleTimeoutMs: 600_000 }).catch((error) => { if (!stopping) console.error(`[demo] tick failed: ${error.message}`); });
-        await sleep(2000);
-      }
-    };
     await new Promise((resolve) => {
-      const onSignal = () => { stop().then(resolve); };
-      process.once('SIGINT', onSignal);
-      process.once('SIGTERM', onSignal);
-      keepTicking();
+      up = true;
+      releaseUp = resolve;
+      (async () => {
+        while (up && !stopping) {
+          await ticker.tick({ advanceMs: SETTLE.advance_ms, settleTimeoutMs: 600_000 }).catch((error) => { if (!stopping) console.error(`[demo] tick failed: ${error.message}`); });
+          await sleep(2000);
+        }
+      })();
     });
+    up = false;
     return summary;
   } finally {
     await stop();
+    process.off('SIGINT', onSignal);
+    process.off('SIGTERM', onSignal);
   }
 };
 
@@ -559,43 +837,81 @@ export const printSummary = (summary) => {
   log(`models on the coded lines: ${s.models.map((m) => m.model).join(', ') || 'none'}`);
 };
 
-// `npm run demo:fi:record`: the live pass, then fill passes until one needs
-// no new answer, then a replay with no key. Why passes: a live run takes
-// minutes and the replay seconds, and some of the runtime's work is paced by
-// the wall clock (readiness renewal, settle gates), so a few questions are
-// asked in a different state at replay speed. A fill pass runs a fresh book
-// at replay speed, answers what the recordings hold from them and calls live
-// only for what they miss; the file it writes holds exactly the requests a
-// replay makes. Each pass is its own process (one book per process).
-const runChild = (args) => new Promise((resolve) => {
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { stdio: 'inherit', env: process.env });
+// `npm run demo:fi:record`: the live pass, then fill passes until one asks
+// nothing new, then a --verify replay with no key. With --fill it starts from
+// the committed recordings and runs only the fill passes and the verify.
+// Why passes: a live run takes minutes and the replay seconds, and some of
+// the runtime's work is paced by the wall clock (readiness renewal, settle
+// gates), so a few questions are asked in a different state at replay
+// speed. A fill pass runs a fresh book at replay speed, answers what the
+// recordings hold from them and calls live only for what they miss; the file
+// it writes holds exactly the requests that pass made. Every pass is its own
+// sealed process on its own new book (removed after it). The passes work on
+// a copy; the committed file is replaced only after the verify passes. One
+// spend cap covers every pass: each is given what is left of it.
+const runChild = (args, env = process.env) => new Promise((resolve) => {
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { stdio: 'inherit', env });
   child.on('exit', (code) => resolve(code));
 });
+const readJson = (file) => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; } };
 export const RECORD_MAX_FILL_PASSES = 4;
 const recordAll = async (options, argv) => {
-  const passthrough = argv.filter((a) => !/^--(record|fill|exit-at-rest|report|data-dir|database-url)(=|$)/.test(a));
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'donna-demo-passes-'));
-  const report = (name) => path.join(temp, `${name}.json`);
-  log('pass 1: live');
-  if (await runChild(['--record', '--exit-at-rest', `--report=${report('live')}`, ...passthrough, ...(options.databaseUrl ? [`--database-url=${options.databaseUrl}`] : [])]) !== 0) return 1;
   if (options.databaseUrl) {
-    log('fill passes need a fresh book each; with --database-url, run `--record --fill` against new empty databases yourself');
-    return 0;
+    throw new DemoError({ code: 'DEMO_RECORD_FRESH_BOOKS', message: '`demo:fi:record` gives every pass a fresh book of its own and cannot with --database-url; run single passes yourself with --record --exit-at-rest [--fill] --database-url=… on new empty databases' });
   }
-  for (let pass = 2; pass <= RECORD_MAX_FILL_PASSES + 1; pass += 1) {
-    log(`pass ${pass}: fill at replay speed`);
-    if (await runChild(['--record', '--fill', '--exit-at-rest', `--report=${report(`fill-${pass}`)}`, ...passthrough]) !== 0) return 1;
-    const spent = JSON.parse(readFileSync(report(`fill-${pass}`), 'utf8')).provider.spend;
-    if (!spent.live_calls && !spent.stand_in) break;
-    if (pass === RECORD_MAX_FILL_PASSES + 1) { log('the recordings did not settle; run `npm run demo:fi:record -- --fill` again'); return 1; }
+  // Every pass would stop on an uncommitted runtime the same way: say it once.
+  await assertDemoBuildRuns({ env: { ...process.env }, mode: 'record' });
+  const committed = path.resolve(options.recordings || DEFAULT_RECORDINGS);
+  const capUsd = options.capUsd ?? DEFAULT_CAP_USD;
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'donna-demo-passes-'));
+  const working = path.join(temp, 'recordings.json');
+  const passthrough = argv.filter((a) => !/^--(record|fill|verify|exit-at-rest|no-web|report|data-dir|database-url|recordings|cap-usd)(=|$)/.test(a));
+  let spent = 0;
+  const pass = async (name, args, env) => {
+    const report = path.join(temp, `${name}.json`);
+    const record = args.includes('--record');
+    const remaining = capUsd - spent;
+    if (record && remaining <= 0) return { code: 1, report: null, why: `the spend cap of ${capUsd.toFixed(2)} USD is used up` };
+    const code = await runChild([...args, '--exit-at-rest', '--no-web', `--data-dir=${path.join(temp, `${name}-book`)}`, `--report=${report}`, `--recordings=${working}`,
+      ...(record ? [`--cap-usd=${remaining.toFixed(6)}`] : []), ...passthrough.filter((a) => record || !/^--stand-in/.test(a))], env);
+    const spend = readJson(`${report}.spend.json`);
+    if (spend) spent += spend.usd;
+    rmSync(path.join(temp, `${name}-book`), { recursive: true, force: true });
+    log(`${name}: exit ${code}; ${spent.toFixed(3)} of ${capUsd.toFixed(2)} USD spent so far`);
+    return { code, report: readJson(report), spend };
+  };
+  try {
+    let first = 2;
+    if (options.fill) {
+      if (!existsSync(committed)) throw new DemoError({ code: 'DEMO_NO_RECORDINGS', message: `--fill starts from ${path.relative(ROOT, committed)}, which does not exist` });
+      copyFileSync(committed, working);
+      first = 1;
+    } else {
+      log('pass 1: live');
+      if ((await pass('live', ['--record'])).code !== 0) return { code: 1, temp };
+    }
+    let settled = false;
+    for (let n = first; n < first + RECORD_MAX_FILL_PASSES; n += 1) {
+      log(`pass ${n}: fill at replay speed`);
+      const result = await pass(`fill-${n}`, ['--record', '--fill']);
+      if (result.code !== 0) return { code: 1, temp };
+      if (!result.spend.new_requests) { settled = true; break; }
+    }
+    if (!settled) { log(`the recordings did not settle in ${RECORD_MAX_FILL_PASSES} fill passes; ${path.relative(ROOT, committed)} is unchanged`); return { code: 1, temp }; }
+    log('verify: replay on a fresh book with no key');
+    const verifyEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !REPLAY_PROVIDER_KEY_ENV.includes(k)));
+    if ((await pass('verify', ['--verify'], verifyEnv)).code !== 0) { log(`verify failed; ${path.relative(ROOT, committed)} is unchanged`); return { code: 1, temp }; }
+    mkdirSync(path.dirname(committed), { recursive: true });
+    const staged = `${committed}.writing-${process.pid}`;
+    copyFileSync(working, staged);
+    renameSync(staged, committed);
+    log(`recordings verified and written to ${path.relative(ROOT, committed)} (${spent.toFixed(3)} USD spent)`);
+    rmSync(temp, { recursive: true, force: true });
+    return { code: 0, temp: null };
+  } catch (error) {
+    console.error(`[demo] ${error.code ? `${error.code}: ` : ''}${error.message}`);
+    return { code: 1, temp };
   }
-  log('verify: replay with no key');
-  const verifyEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/_API_KEY$/.test(k)));
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--exit-at-rest', '--no-web', `--report=${report('verify')}`,
-      ...passthrough.filter((a) => !/^--(stand-in|cap-usd)/.test(a))], { stdio: 'inherit', env: verifyEnv });
-    child.on('exit', (code) => resolve(code));
-  });
 };
 
 const isDirectRun = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
@@ -603,13 +919,19 @@ if (isDirectRun) {
   let options;
   const argv = process.argv.slice(2);
   try { options = parseDemoArgs(argv); } catch (error) { console.error(`[demo] ${error.message}`); process.exit(2); }
-  if (options.record && !options.fill && !options.exitAtRest) {
-    recordAll(options, argv).then((code) => process.exit(code), (error) => { console.error(`[demo] ${error.message}`); process.exit(1); });
+  if (options.record && !options.exitAtRest) {
+    recordAll(options, argv).then(({ code, temp }) => {
+      if (temp) log(`the passes' reports are in ${temp}`);
+      process.exit(code);
+    }, (error) => {
+      console.error(`[demo] ${error.code ? `${error.code}: ` : ''}${error.message}`);
+      process.exit(error?.exitCode || 1);
+    });
   } else runDemo(options).then(
     () => process.exit(0),
     (error) => {
       console.error(`[demo] ${error.code ? `${error.code}: ` : ''}${error.message}`);
-      process.exit(error?.code === PROVIDER_REPLAY_CODES.FOREIGN_BOOK ? 3 : 1);
+      process.exit(error?.code === PROVIDER_REPLAY_CODES.FOREIGN_BOOK ? 3 : (error?.exitCode || 1));
     }
   );
 }

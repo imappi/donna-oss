@@ -4,7 +4,7 @@
  "pack": "fi-kultalanka-2025-02",
  "recorded_at": "2026-11-11",
  "recorded_on": {
-  "commit": "4249ce36a60d864e8862a618ff2312aafaaefd90"
+  "commit": null
  },
  "scenario": {
   "held_back": null,
@@ -202,9 +202,9 @@
      "body": {
       "id": "recorded_289adfccde1d3240854c89a0",
       "object": "response",
-      "created_at": 1794356665,
+      "created_at": 1794363834,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_289adfccde1d3240_0",
@@ -414,9 +414,9 @@
      "body": {
       "id": "recorded_77b4fe1122db179192df09a3",
       "object": "response",
-      "created_at": 1794356675,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_77b4fe1122db1791_0",
@@ -445,9 +445,9 @@
      "body": {
       "id": "recorded_77b4fe1122db179192df09a3",
       "object": "response",
-      "created_at": 1794356676,
+      "created_at": 1794363845,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_77b4fe1122db1791_0",
@@ -655,9 +655,9 @@
      "body": {
       "id": "recorded_d09f164062e2da6ee130a5f0",
       "object": "response",
-      "created_at": 1794356670,
+      "created_at": 1794363839,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_d09f164062e2da6e_0",
@@ -686,9 +686,9 @@
      "body": {
       "id": "recorded_d09f164062e2da6ee130a5f0",
       "object": "response",
-      "created_at": 1794356671,
+      "created_at": 1794363840,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_d09f164062e2da6e_0",
@@ -717,9 +717,9 @@
      "body": {
       "id": "recorded_d09f164062e2da6ee130a5f0",
       "object": "response",
-      "created_at": 1794356672,
+      "created_at": 1794363841,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_d09f164062e2da6e_0",
@@ -3262,9 +3262,9 @@
      "body": {
       "id": "recorded_545be4bb537c90750db3108c",
       "object": "response",
-      "created_at": 1794349311,
+      "created_at": 1794363828,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_545be4bb537c9075_0",
@@ -3494,9 +3494,9 @@
      "body": {
       "id": "recorded_04e2945648c74d7a0f50e6da",
       "object": "response",
-      "created_at": 1794349601,
+      "created_at": 1794363832,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_04e2945648c74d7a_0",
@@ -3659,9 +3659,9 @@
      "body": {
       "id": "recorded_095f6412f9dcafdc66ccff79",
       "object": "response",
-      "created_at": 1794349391,
+      "created_at": 1794363830,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_095f6412f9dcafdc_0",
@@ -3824,9 +3824,9 @@
      "body": {
       "id": "recorded_0b04310465a68e613dbfd2a7",
       "object": "response",
-      "created_at": 1794349461,
+      "created_at": 1794363831,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_0b04310465a68e61_0",
@@ -3989,9 +3989,9 @@
      "body": {
       "id": "recorded_15ede679c990af53e0d97c0d",
       "object": "response",
-      "created_at": 1794349446,
+      "created_at": 1794363830,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_15ede679c990af53_0",
@@ -4154,9 +4154,9 @@
      "body": {
       "id": "recorded_1b0c69123546c63d8859d8d1",
       "object": "response",
-      "created_at": 1794349485,
+      "created_at": 1794363831,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_1b0c69123546c63d_0",
@@ -4319,9 +4319,9 @@
      "body": {
       "id": "recorded_22ca15a11971f0aa21a37f7a",
       "object": "response",
-      "created_at": 1794349552,
+      "created_at": 1794363831,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_22ca15a11971f0aa_0",
@@ -4484,9 +4484,9 @@
      "body": {
       "id": "recorded_2b35363feb89c7ba9056d65c",
       "object": "response",
-      "created_at": 1794349659,
+      "created_at": 1794363833,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_2b35363feb89c7ba_0",
@@ -4649,9 +4649,9 @@
      "body": {
       "id": "recorded_3976ba77e0b61c0f4c047473",
       "object": "response",
-      "created_at": 1794349670,
+      "created_at": 1794363833,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_3976ba77e0b61c0f_0",
@@ -4814,9 +4814,9 @@
      "body": {
       "id": "recorded_44e7ebdff1acb7cf0fd42c64",
       "object": "response",
-      "created_at": 1794349499,
+      "created_at": 1794363831,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_44e7ebdff1acb7cf_0",
@@ -4979,9 +4979,9 @@
      "body": {
       "id": "recorded_4c7b85e8a3ad48cb09c94db4",
       "object": "response",
-      "created_at": 1794349569,
+      "created_at": 1794363832,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_4c7b85e8a3ad48cb_0",
@@ -5144,9 +5144,9 @@
      "body": {
       "id": "recorded_5166be520c83e2e2a63733ab",
       "object": "response",
-      "created_at": 1794349740,
+      "created_at": 1794363834,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_5166be520c83e2e2_0",
@@ -5309,9 +5309,9 @@
      "body": {
       "id": "recorded_581177d6edf044201c17bf9a",
       "object": "response",
-      "created_at": 1794349311,
+      "created_at": 1794363828,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_581177d6edf04420_0",
@@ -5474,9 +5474,9 @@
      "body": {
       "id": "recorded_5ee7f8ac57af3d186a25920c",
       "object": "response",
-      "created_at": 1794349539,
+      "created_at": 1794363831,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_5ee7f8ac57af3d18_0",
@@ -5639,9 +5639,9 @@
      "body": {
       "id": "recorded_616df40a62bfb30d366ed0b6",
       "object": "response",
-      "created_at": 1794349683,
+      "created_at": 1794363833,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_616df40a62bfb30d_0",
@@ -5804,9 +5804,9 @@
      "body": {
       "id": "recorded_6c1a5e5520f2176aedefafb9",
       "object": "response",
-      "created_at": 1794349696,
+      "created_at": 1794363833,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_6c1a5e5520f2176a_0",
@@ -5969,9 +5969,9 @@
      "body": {
       "id": "recorded_737f24039166cdbd7f8781a6",
       "object": "response",
-      "created_at": 1794349729,
+      "created_at": 1794363834,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_737f24039166cdbd_0",
@@ -6134,9 +6134,9 @@
      "body": {
       "id": "recorded_84ccfa9d19282f4371281709",
       "object": "response",
-      "created_at": 1794349417,
+      "created_at": 1794363830,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_84ccfa9d19282f43_0",
@@ -6299,9 +6299,9 @@
      "body": {
       "id": "recorded_86d60f27258e2df7e6a04e33",
       "object": "response",
-      "created_at": 1794349705,
+      "created_at": 1794363833,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_86d60f27258e2df7_0",
@@ -6464,9 +6464,9 @@
      "body": {
       "id": "recorded_9774d08da2f3d272366e335c",
       "object": "response",
-      "created_at": 1794349718,
+      "created_at": 1794363833,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_9774d08da2f3d272_0",
@@ -6629,9 +6629,9 @@
      "body": {
       "id": "recorded_9d9b8f56c32346bd6172c303",
       "object": "response",
-      "created_at": 1794349513,
+      "created_at": 1794363831,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_9d9b8f56c32346bd_0",
@@ -6794,9 +6794,9 @@
      "body": {
       "id": "recorded_a422d6ae2fe04ad2cb635a14",
       "object": "response",
-      "created_at": 1794349649,
+      "created_at": 1794363832,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_a422d6ae2fe04ad2_0",
@@ -6959,9 +6959,9 @@
      "body": {
       "id": "recorded_b4758ed93f36b03a943b0a29",
       "object": "response",
-      "created_at": 1794349618,
+      "created_at": 1794363832,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_b4758ed93f36b03a_0",
@@ -7124,9 +7124,9 @@
      "body": {
       "id": "recorded_bc38b486f72a50aeb1ea3222",
       "object": "response",
-      "created_at": 1794349524,
+      "created_at": 1794363831,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_bc38b486f72a50ae_0",
@@ -7289,9 +7289,9 @@
      "body": {
       "id": "recorded_c132905c1c5e3a2b93748da0",
       "object": "response",
-      "created_at": 1794349634,
+      "created_at": 1794363832,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_c132905c1c5e3a2b_0",
@@ -7454,9 +7454,9 @@
      "body": {
       "id": "recorded_d29226cd03ed6ab6cb48362b",
       "object": "response",
-      "created_at": 1794349431,
+      "created_at": 1794363830,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_d29226cd03ed6ab6_0",
@@ -7619,9 +7619,9 @@
      "body": {
       "id": "recorded_d4e08397f8403776b7388c0a",
       "object": "response",
-      "created_at": 1794349585,
+      "created_at": 1794363832,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_d4e08397f8403776_0",
@@ -7784,9 +7784,9 @@
      "body": {
       "id": "recorded_fbc9e29a9a4bed0679b35bde",
       "object": "response",
-      "created_at": 1794349403,
+      "created_at": 1794363830,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_fbc9e29a9a4bed06_0",
@@ -7889,9 +7889,9 @@
      "body": {
       "id": "recorded_1c42f98521e148d09d5aeff6",
       "object": "response",
-      "created_at": 1794350727,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_1c42f98521e148d0_0",
@@ -7994,9 +7994,9 @@
      "body": {
       "id": "recorded_3ae278ae73df439e50372bff",
       "object": "response",
-      "created_at": 1794350728,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_3ae278ae73df439e_0",
@@ -8099,9 +8099,9 @@
      "body": {
       "id": "recorded_814700f3861203487c4f4fd6",
       "object": "response",
-      "created_at": 1794350728,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_814700f386120348_0",
@@ -8204,9 +8204,9 @@
      "body": {
       "id": "recorded_92374dafb33a8b24cee3e745",
       "object": "response",
-      "created_at": 1794350728,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_92374dafb33a8b24_0",
@@ -8309,9 +8309,9 @@
      "body": {
       "id": "recorded_d30bcfa77f7698083dd71060",
       "object": "response",
-      "created_at": 1794350728,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_d30bcfa77f769808_0",
@@ -10612,9 +10612,9 @@
      "body": {
       "id": "recorded_06a7a776b5519a3ad82433a1",
       "object": "response",
-      "created_at": 1794351781,
+      "created_at": 1794363829,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_06a7a776b5519a3a_0",
@@ -11243,9 +11243,9 @@
      "body": {
       "id": "recorded_2e2eac58ca7de1e73026fa32",
       "object": "response",
-      "created_at": 1794358557,
+      "created_at": 1794363840,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_2e2eac58ca7de1e7_0",
@@ -11276,9 +11276,9 @@
      "body": {
       "id": "recorded_2e2eac58ca7de1e73026fa32",
       "object": "response",
-      "created_at": 1794358559,
+      "created_at": 1794363841,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_2e2eac58ca7de1e7_0",
@@ -11309,9 +11309,9 @@
      "body": {
       "id": "recorded_2e2eac58ca7de1e73026fa32",
       "object": "response",
-      "created_at": 1794358560,
+      "created_at": 1794363842,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_2e2eac58ca7de1e7_0",
@@ -11736,9 +11736,9 @@
      "body": {
       "id": "recorded_54b51d0313f7a0457e98144a",
       "object": "response",
-      "created_at": 1794350497,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_54b51d0313f7a045_0",
@@ -12363,9 +12363,9 @@
      "body": {
       "id": "recorded_73071223e12a4ee0edaf42b9",
       "object": "response",
-      "created_at": 1794351789,
+      "created_at": 1794363837,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_73071223e12a4ee0_0",
@@ -12790,9 +12790,9 @@
      "body": {
       "id": "recorded_855675d90108699f00857e6a",
       "object": "response",
-      "created_at": 1794350497,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_855675d90108699f_0",
@@ -13421,9 +13421,9 @@
      "body": {
       "id": "recorded_bcbe6dc0d4df8d6a94af79e2",
       "object": "response",
-      "created_at": 1794351797,
+      "created_at": 1794363844,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_bcbe6dc0d4df8d6a_0",
@@ -13848,9 +13848,9 @@
      "body": {
       "id": "recorded_d90ed6841d62c8adf89b1eff",
       "object": "response",
-      "created_at": 1794350498,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_d90ed6841d62c8ad_0",
@@ -14475,9 +14475,9 @@
      "body": {
       "id": "recorded_df195787fc3b0f4f548d6613",
       "object": "response",
-      "created_at": 1794351789,
+      "created_at": 1794363837,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_df195787fc3b0f4f_0",
@@ -14902,9 +14902,9 @@
      "body": {
       "id": "recorded_ebb5d933af230b7557355af6",
       "object": "response",
-      "created_at": 1794350497,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_ebb5d933af230b75_0",
@@ -15329,9 +15329,9 @@
      "body": {
       "id": "recorded_f054743af30d2d13b995a531",
       "object": "response",
-      "created_at": 1794350497,
+      "created_at": 1794363843,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_f054743af30d2d13_0",
@@ -15956,9 +15956,9 @@
      "body": {
       "id": "recorded_f1681a7edffde56c4b872633",
       "object": "response",
-      "created_at": 1794351781,
+      "created_at": 1794363830,
       "status": "completed",
-      "model": "gpt-5.4",
+      "model": "scripted-stand-in-for-gpt-5.4",
       "output": [
        {
         "id": "recorded_f1681a7edffde56c_0",
