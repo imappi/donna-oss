@@ -50,6 +50,10 @@ export const summarizeBankLineDispositions = (rows = [], { settledTransactionIds
       reasoning: typeof payload.reasoning === 'string' ? payload.reasoning : null,
       reason: row.unmatchable_reason || null,
       model: row.model || null,
+      // 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): the persisted basis
+      // that put the deciding model in charge, so the feed can mark a verdict
+      // an unqualified self-hosted model made. null on the default path.
+      policy_basis: typeof payload.policy_basis === 'string' ? payload.policy_basis : null,
       // RT-10 — the lane a needs_human verdict took ({ kind, … }); null when
       // the verdict has none. RT-13 carries `lane.kind` into the persisted
       // convergence reason key (reconcileConvergenceState.js), so every

@@ -261,7 +261,8 @@ export const AR_AE_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-01.ar2-remaining-surfaces-contract',
   catalogVersion: AR_AE_CATALOG_VERSION,
-  expectedMessageCount: 2875,
+  // 2026-11-11 (run on a local model): +4 mounted messages — the seat notice and its description (settings), the unqualified-local-model marker, and the proposed-rule marker.
+  expectedMessageCount: 2877,
   sourceContext: Object.freeze([
     'docs/design-donna-arabic-localization.md',
     'docs/ar4f-ae-native-review-packet.md'

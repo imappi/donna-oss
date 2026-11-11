@@ -729,6 +729,7 @@ export const runSupplierBillReconciliationLlmForDocument = async ({
       autoThreshold,
       authorization: effectiveAuthorization,
       returnedModel: llmResult.model || model,
+      policyBasis,
       source: PAYLOAD_SOURCE,
       matchKind: 'supplier_bill',
       unmatchableReason: llmResult.unmatchable_reason || null,

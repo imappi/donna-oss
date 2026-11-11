@@ -940,7 +940,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/paymentAccountStatementReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/paymentAccountStatementReconciliationLlm.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runPaymentAccountStatementReconciliationLlmForDocument", "dynamic_sql", "b4bbef70026675f931325e96766ccda0108acec1219637928b6e2cb41e4e7ace", 1, []],
+    // Re-pinned 2026-11-11 (run on a local model, the match card's marker): the SQL, targets and count are unchanged; the enclosing body now hands the seat's policy basis to upsertMatchAndCascade, which records it on the match payload. No memory target.
+    ["runPaymentAccountStatementReconciliationLlmForDocument", "dynamic_sql", "3dd3eacb25097e0b4fcfc3973bd66d08ef0e61759268803dcfc4f830f15f2315", 1, []],
   ]),
   ...group("server/donna/paymentConfirmationReconciliation.js", "Existing runtime SQL boundary in server/donna/paymentConfirmationReconciliation.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, payload->>'bank_line_disposition_ …
@@ -949,11 +950,13 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/paymentConfirmationReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/paymentConfirmationReconciliationLlm.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runPaymentConfirmationReconciliationLlmForDocument", "dynamic_sql", "9b44c69623b89a2808a491611ce74cdd6d7196ddd446dff280893e3bf9cb9159", 1, []],
+    // Re-pinned 2026-11-11 (run on a local model, the match card's marker): the SQL, targets and count are unchanged; the enclosing body now hands the seat's policy basis to upsertMatchAndCascade, which records it on the match payload. No memory target.
+    ["runPaymentConfirmationReconciliationLlmForDocument", "dynamic_sql", "03814168aa383ef1b67250b4260020ed8a8edcc00b58756bb8873fc85b7dd779", 1, []],
   ]),
   ...group("server/donna/payoutReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/payoutReconciliationLlm.js.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runPayoutReconciliationLlmForDocument", "dynamic_sql", "3b6875f9baa4b07fb3f86b5c9acc5559faeecd135803273e39610afe72f19f81", 1, []], // RT-21c (2026-09-08): the statement gained the matched row (matched_line_id / document_lines join); reads reconciliation_matches + document_lines, no memory table. Re-registered by the runtime orchestrator.
+    // Re-pinned 2026-11-11 (run on a local model, the match card's marker): the SQL, targets and count are unchanged; the enclosing body now hands the seat's policy basis to upsertMatchAndCascade, which records it on the match payload. No memory target.
+    ["runPayoutReconciliationLlmForDocument", "dynamic_sql", "901a86fd4301a4506ec522bb57931ac88c99cc0dd21568f99f4cb90f9fb0c8da", 1, []], // RT-21c (2026-09-08): the statement gained the matched row (matched_line_id / document_lines join); reads reconciliation_matches + document_lines, no memory table. Re-registered by the runtime orchestrator.
   ]),
   ...group("server/donna/proposalStore.js", "Existing runtime SQL boundary in server/donna/proposalStore.js.", [
     // select id, status, proposal_type, triage_source, review_mode, check_status, detail, warnings, created_at, updated_at from proposal_cards where firm_id = $1 and client_id = $2 and proposal_type = 'owner_intent_candidate'__DYNAMIC_SQL__ order …
@@ -972,7 +975,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/receiptReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/receiptReconciliationLlm.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runReceiptReconciliationLlmForDocument", "dynamic_sql", "13b5dc9ae8e08859fe93913a774a8c305efebce355d93eb15d2876d67ccac237", 1, []],
+    // Re-pinned 2026-11-11 (run on a local model, the match card's marker): the SQL, targets and count are unchanged; the enclosing body now hands the seat's policy basis to upsertMatchAndCascade, which records it on the match payload. No memory target.
+    ["runReceiptReconciliationLlmForDocument", "dynamic_sql", "fa3bc44b0bef3b122e407281ec5e75d68bf50e5de05bc09deeb759d9e32ebf44", 1, []],
   ]),
   ...group("server/donna/reconcileConvergenceState.js", "Existing runtime SQL boundary in server/donna/reconcileConvergenceState.js.", [
     // WRITE_SQL[targetType]
@@ -1041,7 +1045,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/salesInvoiceReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/salesInvoiceReconciliationLlm.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runSalesInvoiceReconciliationLlmForDocument", "dynamic_sql", "f28857589074a01e79ab3a82200f8e8e6bcbb9a10db5c1c3295c9d948cc25760", 1, []],
+    // Re-pinned 2026-11-11 (run on a local model, the match card's marker): the SQL, targets and count are unchanged; the enclosing body now hands the seat's policy basis to upsertMatchAndCascade, which records it on the match payload. No memory target.
+    ["runSalesInvoiceReconciliationLlmForDocument", "dynamic_sql", "c71e2ce068eace0903151384a52d38e3601c9da4e6d9c12a46d4fd865ec34149", 1, []],
   ]),
   ...group("server/donna/statutoryBlocker.js", "Existing runtime SQL boundary in server/donna/statutoryBlocker.js.", [
     // sql
@@ -1049,7 +1054,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/supplierBillReconciliationLlm.js", "Existing runtime SQL boundary in server/donna/supplierBillReconciliationLlm.js. Existing SELECT unchanged; enclosing owner re-reviewed for the client-configured Jev dispatch and explicit legacy-backstop exclusion. No new memory mutation.", [
     // select id, firm_id, client_id, money_in, money_out, currency, transaction_date as date, description, raw_description, payload->>'contact' as contact, payload->>'source_line' as source_line, __DYNAMIC_SQL__, reconciliation_status, account_co …
-    ["runSupplierBillReconciliationLlmForDocument", "dynamic_sql", "dca1168297e2a61181d83713eb8053f2835bffc3c682ea49cd22b5afed4e68f9", 1, []],
+    // Re-pinned 2026-11-11 (run on a local model, the match card's marker): the SQL, targets and count are unchanged; the enclosing body now hands the seat's policy basis to upsertMatchAndCascade, which records it on the match payload. No memory target.
+    ["runSupplierBillReconciliationLlmForDocument", "dynamic_sql", "dfc649fc2bb1529b60037c8c20582168c33d6457384e67a0e6964906c55036bd", 1, []],
   ]),
   ...group("server/donna/testSupport/applianceHarness.js", "Existing runtime SQL boundary in server/donna/testSupport/applianceHarness.js.", [
     // create database "__DYNAMIC_SQL__"

@@ -635,6 +635,7 @@ export const runReceiptReconciliationLlmForDocument = async ({
       autoThreshold,
       authorization: effectiveAuthorization,
       returnedModel: llmResult.model || model,
+      policyBasis,
       source: PAYLOAD_SOURCE,
       matchKind: 'receipt',
       unmatchableReason: llmResult.unmatchable_reason || null,

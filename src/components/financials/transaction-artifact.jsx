@@ -14,6 +14,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
+import { UnqualifiedModelMarker } from '../shared/UnqualifiedModelMarker.jsx';
 
 import { T, V, D } from '../shared/design-tokens.js';
 import { btnPrimary, btnChip } from '../shared/buttons.js';
@@ -1349,6 +1350,7 @@ const MatchHero = ({
         <span style={{ fontSize: 13, lineHeight: 'normal', fontWeight: 600, color: D.ink }}>
           {message(TRANSACTION_STATUS_MESSAGE_IDS[chip.label] || 'transaction.status.unknown', { status: chip.label })}
         </span>
+        <UnqualifiedModelMarker decision={match} style={{ color: D.inkMute }} />
         {reasoning?.confidence != null && (
           <span style={{ fontSize: 12, color: D.inkMute, ...D.tabular }}>
             <FormattedValue>

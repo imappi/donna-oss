@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Pill } from '../shared/pill.jsx';
+import { UnqualifiedModelMarker } from '../shared/UnqualifiedModelMarker.jsx';
 import { V } from '../shared/design-tokens.js';
 import { buildEvidenceRequestForTransaction } from '../../lib/firmAccounting.js';
 import {
@@ -1863,6 +1864,7 @@ const FinancialsView = ({
                       </div>
                       <div style={{ marginTop: 6, color: accountingUi.muted, fontFamily: accountingUi.mono, fontSize: 10, fontWeight: 700 }}>
                         {summary.kind_display}
+                        <UnqualifiedModelMarker decision={summary.proposed_by} messageId="mounted.model.proposedByUnqualifiedLocal" />
                       </div>
                     </td>
                     <td style={{ ...accountingCellStyle, color: accountingUi.muted, fontFamily: accountingUi.mono, fontSize: 11, fontWeight: 700 }}>
@@ -2156,6 +2158,7 @@ const FinancialsView = ({
                         >
                           <div style={{ fontFamily: accountingUi.mono, fontSize: 10, color: accountingUi.mutedSoft, textTransform: 'uppercase', letterSpacing: 0, marginBottom: 7 }}>
                             AI · {suggestion.model || 'model'} · {suggestion.confidence || 'low'} confidence
+                            <UnqualifiedModelMarker decision={suggestion} />
                           </div>
                           {suggestion.reasoning || suggestion.ask_client_question || 'Review the category before applying.'}
                         </div>

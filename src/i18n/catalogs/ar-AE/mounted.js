@@ -506,6 +506,8 @@ const KEY_OVERRIDES = Object.freeze({
   'mounted.settings.ai.experiment': 'تجربة',
   'mounted.settings.ai.unqualifiedSeat': 'نموذج محلي غير مؤهل',
   'mounted.settings.ai.unqualifiedSeatDesc': 'يقرر {model} المسار {lane} للشركة {client}، منذ {date}، عبر نقطة النهاية الخاصة بهذا التثبيت. لم تقِس Donna هذا النموذج: فهو غير مؤهل ولا يُعد مؤهلاً أبداً، وتنطبق جميع الفحوصات والضوابط على إجاباته. أزِله بالأمر node scripts/seat_local_model.js --clear.',
+  'mounted.model.unqualifiedLocal': 'نموذج محلي غير مؤهل',
+  'mounted.model.proposedByUnqualifiedLocal': 'اقترحه نموذج محلي غير مؤهل',
   'mounted.import.sheetCount': '{count, plural, one {ورقة واحدة} other {# أوراق}}',
   'mounted.import.delimiter': 'الفاصل {delimiter}',
   'mounted.import.validationSummary': 'الصالح: {valid} · المحظور: {blocked} · المشكلات: {issues}',

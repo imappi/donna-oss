@@ -2242,6 +2242,11 @@ export const upsertMatchAndCascade = async ({
   // null for a document-level match. Written to matched_line_id (migration
   // 150) and receipted on the payload.
   settlementRow = null,
+  // 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): the policy basis that
+  // put the deciding model in charge ('self_hosted_unqualified' marks an
+  // unqualified local model); persisted on the match payload so the match
+  // card can say so. null off a seat — the payload is byte-identical then.
+  policyBasis = null,
   // RT-27: the credit-note applications validated under the lock for THIS
   // settlement ({ invoice, applications, actorId, model, authority }) — persisted
   // by applyCreditApplicationsWithClient right after a fresh/upgraded
@@ -2298,6 +2303,7 @@ export const upsertMatchAndCascade = async ({
 
   const payload = {
     source,
+    ...(policyBasis ? { policy_basis: policyBasis } : {}),
     match_reason: {
       source,
       summary,

@@ -305,6 +305,22 @@ export const saveMerchantRuleForPayload = async ({
     label: `${merchantPattern} -> ${accountCode}`
   };
   const modelOrigin = isModelOriginRuleSource(source);
+  // 2026-11-10 (modelLanes.js SELF_HOSTED_DECISION): a model-origin proposal
+  // made under a policy seat records WHO proposed it — the model the response
+  // named, the seat's basis and its policy row id — so the proposed-rule
+  // surface can say "proposed by an unqualified local model" and clearing the
+  // seat can list what it left behind. Additive: rides the existing
+  // merge-on-conflict; activation is unchanged (a person, proposed → active).
+  const proposer = payload.ai_suggestion && typeof payload.ai_suggestion === 'object' ? payload.ai_suggestion : null;
+  if (modelOrigin && proposer?.policy_basis) {
+    rulePayload.proposed_by = {
+      model: proposer.model || null,
+      policy_basis: proposer.policy_basis,
+      policy_id: proposer.policy_id || null,
+      transaction_id: transactionId || null,
+      ...(proposer.policy_basis === 'self_hosted_unqualified' ? { qualified: false } : {})
+    };
+  }
   const { effectiveFrom, bound: effectiveBound } = resolveRuleEffectiveFrom({ payload });
   rulePayload.effective_from = effectiveFrom;
   rulePayload.effective_from_basis = effectiveBound;

@@ -639,7 +639,8 @@ const codingViaCompatibleTransport = async ({
 // the same honesty columns the disposition stamp persists (Q6c).
 const compatibleReceiptFields = (compat, transport) => ({
   ...(compat.model_source ? { model_source: compat.model_source } : {}),
-  ...(transport?.policy_basis ? { policy_basis: transport.policy_basis } : {})
+  ...(transport?.policy_basis ? { policy_basis: transport.policy_basis } : {}),
+  ...(transport?.policy_id ? { policy_id: transport.policy_id } : {})
 });
 
 // Schema-shape enforcement ONLY (system correctness): enum-validate the

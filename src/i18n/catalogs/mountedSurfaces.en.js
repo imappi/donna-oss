@@ -364,6 +364,8 @@ export const MOUNTED_SURFACE_MESSAGES = Object.freeze({
   'mounted.settings.ai.experiment': 'experiment',
   'mounted.settings.ai.unqualifiedSeat': 'Unqualified local model',
   'mounted.settings.ai.unqualifiedSeatDesc': '{model} decides {lane} for company {client}, seated {date} on this installation\'s own endpoint. Donna has not measured this model: it is unqualified, never counts as qualified, and every check and gate still applies to its answers. Clear it with node scripts/seat_local_model.js --clear.',
+  'mounted.model.unqualifiedLocal': 'unqualified local model',
+  'mounted.model.proposedByUnqualifiedLocal': 'proposed by an unqualified local model',
   'mounted.settings.ai.dormant': 'Dormant lanes',
   'mounted.settings.ai.dormantDesc': 'Every other model call site is inventoried and challenger-ready, but flips on only after its own evaluation gate — never by preference or price.',
   'mounted.settings.ai.laneCount': '{count, plural, one {# lane} other {# lanes}}',

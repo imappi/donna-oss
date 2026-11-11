@@ -78,7 +78,10 @@ export const proposedRuleSummary = (rule) => {
     confidence_band: confidenceBandFor(confidenceAvg),
     observation_count: Number.isFinite(observationCount) ? observationCount : 0,
     last_observed_at: payload.last_observed_at || null,
-    window_days: Number(payload.observation_window_days) || null
+    window_days: Number(payload.observation_window_days) || null,
+    // 2026-11-10 (SELF_HOSTED_DECISION): who proposed the rule when a policy
+    // seat did ({ model, policy_basis, policy_id }); null otherwise.
+    proposed_by: payload.proposed_by && typeof payload.proposed_by === 'object' ? payload.proposed_by : null
   };
 };
 

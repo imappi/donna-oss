@@ -730,6 +730,7 @@ export const runSalesInvoiceReconciliationLlmForDocument = async ({
       autoThreshold,
       authorization: effectiveAuthorization,
       returnedModel: llmResult.model || model,
+      policyBasis,
       source: PAYLOAD_SOURCE,
       matchKind: 'sales_invoice',
       unmatchableReason: llmResult.unmatchable_reason || null,

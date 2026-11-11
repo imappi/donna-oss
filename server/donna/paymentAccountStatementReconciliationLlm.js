@@ -631,6 +631,7 @@ export const runPaymentAccountStatementReconciliationLlmForDocument = async ({
       autoThreshold,
       authorization: effectiveAuthorization,
       returnedModel: llmResult.model || model,
+      policyBasis,
       source: PAYLOAD_SOURCE,
       matchKind: 'payment_account_statement',
       unmatchableReason: llmResult.unmatchable_reason || null,

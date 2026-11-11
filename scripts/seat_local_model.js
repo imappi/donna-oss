@@ -174,12 +174,15 @@ export const run = async (opts, { env = process.env, fetchImpl = fetch, withClie
     return { applied: false, plan };
   }
   const results = [];
+  const proposedRulesLeft = [];
   await withClient(async (client) => {
     if (opts.clear) {
       const active = await listLaneDecidingPolicies({ client, firmId: opts.firmId });
+      const clearedPolicyIds = [];
       for (const laneId of request.lanes) {
         const row = active.find((p) => p.lane === laneId && p.client_id === opts.clientId);
         if (!row || row.basis !== SELF_HOSTED_BASIS) continue; // never clears a lab or promotion row
+        clearedPolicyIds.push(row.id);
         const result = await clearLaneDecidingPolicy({
           client, firmId: opts.firmId, clientId: opts.clientId, laneId,
           reason: opts.reason, actorType: 'firm_member', actorId: opts.memberId
@@ -187,6 +190,25 @@ export const run = async (opts, { env = process.env, fetchImpl = fetch, withClie
         log(`CLEARED: ${laneId} (was ${row.deciding_model}) — back to the firm-wide policy or the default`);
         results.push({ laneId, ...result });
       }
+      // What the cleared seats left behind: merchant rules they PROPOSED that
+      // still wait for a person. Listed, never deleted or retired here — a
+      // proposal decides nothing until a person activates it, and retiring
+      // one is that person's call (PATCH /client-rules/{id}).
+      const left = clearedPolicyIds.length
+        ? await client.query(
+          `select id, pattern_text, account_code, payload->'proposed_by'->>'model' as model
+             from client_rules
+            where firm_id = $1 and client_id = $2 and status = 'proposed'
+              and payload->'proposed_by'->>'policy_id' = any($3::text[])
+            order by pattern_text, id`,
+          [opts.firmId, opts.clientId, clearedPolicyIds]
+        )
+        : { rows: [] };
+      proposedRulesLeft.push(...left.rows);
+      for (const rule of left.rows) {
+        log(`PROPOSED RULE LEFT BY THE SEAT (not active; review or discard it): ${rule.id} ${rule.pattern_text} -> ${rule.account_code} (proposed by ${rule.model || 'unknown model'})`);
+      }
+      if (clearedPolicyIds.length && !left.rows.length) log('no proposed rule left by the cleared seats');
       return;
     }
     for (const laneId of request.lanes) {
@@ -199,7 +221,7 @@ export const run = async (opts, { env = process.env, fetchImpl = fetch, withClie
       results.push(result);
     }
   });
-  return { applied: true, plan, results };
+  return { applied: true, plan, results, ...(opts.clear ? { proposed_rules_left: proposedRulesLeft } : {}) };
 };
 
 const invokedDirectly = process.argv[1] && process.argv[1].endsWith('seat_local_model.js');

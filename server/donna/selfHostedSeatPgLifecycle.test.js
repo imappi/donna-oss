@@ -135,6 +135,25 @@ test('real PG: seat a local model for one company, decide over the stub, clear i
     assert.equal(coding.model, SEAT_MODEL);
     assert.equal(coding.policy_basis, SELF_HOSTED_BASIS);
     assert.equal(await resolveCodingTransport(db, { firmId: FIRM, clientId: UNSEATED }), null, 'the unseated company is untouched');
+    const codingSeat = await policy.readLaneDecidingPolicy({ client: db, firmId: FIRM, clientId: SEATED, laneId: 'transaction_coding' });
+    assert.equal(coding.policy_id, codingSeat.id, 'the transport names the seat row');
+
+    // 4b. A merchant rule the seat PROPOSES records who proposed it; it stays
+    // proposed (a person activates it). A proposal from the default coder
+    // carries no proposer stamp.
+    const { saveMerchantRuleForPayload } = await import('./db/memory.js');
+    const seatSuggestion = { model: SEAT_MODEL, model_source: 'response', policy_basis: SELF_HOSTED_BASIS, policy_id: coding.policy_id, proposed_account: '4000' };
+    await saveMerchantRuleForPayload({ client: db, firmId: FIRM, clientId: SEATED, transactionId: 'tx-seat-1', source: 'ai_batch',
+      payload: { description: 'ESIMERKKIKAUPPA HELSINKI', contact: 'Esimerkkikauppa', merchant_pattern: 'esimerkkikauppa', proposed_account: '4000', account_code: '4000', ai_suggestion: seatSuggestion } });
+    await saveMerchantRuleForPayload({ client: db, firmId: FIRM, clientId: SEATED, transactionId: 'tx-default-1', source: 'ai_batch',
+      payload: { description: 'TOINENKAUPPA TAMPERE', contact: 'Toinenkauppa', merchant_pattern: 'toinenkauppa', proposed_account: '4100', account_code: '4100', ai_suggestion: { model: 'claude-opus-5-5', proposed_account: '4100' } } });
+    const rules = (await db.query(`select pattern_text, status, created_by, payload->'proposed_by' as proposed_by from client_rules where firm_id = $1 and client_id = $2 order by pattern_text`, [FIRM, SEATED])).rows;
+    assert.equal(rules.length, 2);
+    const seatRule = rules.find((r) => r.proposed_by);
+    assert.equal(seatRule.status, 'proposed', 'a seat proposal decides nothing until a person activates it');
+    assert.equal(seatRule.created_by, 'ai');
+    assert.deepEqual(seatRule.proposed_by, { model: SEAT_MODEL, policy_basis: SELF_HOSTED_BASIS, policy_id: coding.policy_id, transaction_id: 'tx-seat-1', qualified: false });
+    assert.equal(rules.filter((r) => !r.proposed_by).length, 1, 'the default coder\'s proposal carries no seat stamp');
     const askSeat = resolveSeatTransport({ policy: await policy.readLaneDecidingPolicy({ client: db, firmId: FIRM, clientId: SEATED, laneId: 'ask_drafting' }), onlyBasis: SELF_HOSTED_BASIS });
     assert.equal(askSeat.model, SEAT_MODEL);
     assert.equal(resolveSeatTransport({ policy: await policy.readLaneDecidingPolicy({ client: db, firmId: FIRM, clientId: UNSEATED, laneId: 'ask_drafting' }), onlyBasis: SELF_HOSTED_BASIS }), null);
@@ -166,6 +185,8 @@ test('real PG: seat a local model for one company, decide over the stub, clear i
     // 7. --clear closes every self-hosted seat of the company, each with its receipt.
     const cleared = await run({ ...opts, model: null, all: false, clear: true, apply: true }, { env: process.env, withClient });
     assert.equal(cleared.applied, true);
+    assert.deepEqual(cleared.proposed_rules_left.map((r) => r.model), [SEAT_MODEL], '--clear lists what the seat proposed');
+    assert.equal((await db.query(`select status from client_rules where firm_id = $1 and payload->'proposed_by' is not null`, [FIRM])).rows[0].status, 'proposed', 'listed, never deleted or retired');
     assert.equal((await db.query(`select count(*)::int as n from model_lane_policy where valid_to is null`)).rows[0].n, 0);
     assert.equal((await db.query(`select count(*)::int as n from audit_events where action = $1`, [policy.MODEL_LANE_POLICY_CLEARED_ACTION])).rows[0].n, 4);
     assert.equal(await resolveCodingTransport(db, { firmId: FIRM, clientId: SEATED }), null, 'cleared: back to the default');

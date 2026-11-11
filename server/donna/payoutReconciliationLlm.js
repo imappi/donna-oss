@@ -696,6 +696,7 @@ export const runPayoutReconciliationLlmForDocument = async ({
       autoThreshold,
       authorization: effectiveAuthorization,
       returnedModel: llmResult.model || model,
+      policyBasis,
       source: PAYLOAD_SOURCE,
       matchKind: objectType,
       unmatchableReason: llmResult.unmatchable_reason || null,

@@ -3940,6 +3940,9 @@ const rowToClientAskBatchPayload = (row = {}) => ({
   sent: row.payload?.sent || null,
   verdicts_as_of: row.verdicts_as_of ? new Date(row.verdicts_as_of).toISOString() : null,
   model: row.model || null,
+  // 2026-11-10 (SELF_HOSTED_DECISION): 'self_hosted_unqualified' when an
+  // unqualified self-hosted model drafted the batch; null otherwise.
+  policy_basis: row.payload?.policy_basis || null,
   created_by: row.created_by || null,
   sent_at: row.sent_at ? new Date(row.sent_at).toISOString() : null,
   sent_by: row.sent_by || null,

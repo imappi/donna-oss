@@ -116,7 +116,8 @@ const reachableFrom = (entryPath) => {
 test('AR-3B publishes one closed mounted-surface namespace across every installed catalog', () => {
   assert.equal(SUPPORTED_SURFACE_MANIFEST_VERSION, INTERFACE_CATALOG_VERSION);
   assert.equal(INTERFACE_CATALOG_VERSION, '2026-09-28.sg-native-intake.1');
-  assert.equal(Object.keys(mountedSurfacesEn).length, 1063);
+  // 2026-11-11 (run on a local model): +4 mounted messages — the seat notice and its description (settings), the unqualified-local-model marker, and the proposed-rule marker.
+  assert.equal(Object.keys(mountedSurfacesEn).length, 1065);
   assert.ok(Object.keys(mountedSurfacesEn).every((key) => key.startsWith(MOUNTED_SURFACE_NAMESPACE)));
   assert.deepEqual(validateInterfaceCatalog(mountedSurfacesEn, { locale: 'en-mounted' }), []);
   Object.keys(mountedSurfacesEn).forEach((key) => {

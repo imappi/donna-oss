@@ -33,7 +33,8 @@ export const FI_CATALOG_METADATA = Object.freeze({
   sourceLocale: 'en',
   sourceCatalogVersion: '2026-09-28.sg-native-intake.1',
   catalogVersion: FI_CATALOG_VERSION,
-  expectedMessageCount: 2875,
+  // 2026-11-11 (run on a local model): +4 mounted messages — the seat notice and its description (settings), the unqualified-local-model marker, and the proposed-rule marker.
+  expectedMessageCount: 2877,
   register: 'informal second person singular (sinä); never teitittely',
   outOfScope: Object.freeze([
     'server-built text: emails, SMS, chat-channel messages, questions written by code or a model',

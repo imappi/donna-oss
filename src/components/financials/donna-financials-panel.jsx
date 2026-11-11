@@ -13,6 +13,7 @@ import { useIntl } from 'react-intl';
 
 import { BidiText, FormattedValue, IdentifierText } from '../../i18n/BidiText.jsx';
 import { useInterfaceLocale } from '../../i18n/LocaleProvider.jsx';
+import { UnqualifiedModelMarker } from '../shared/UnqualifiedModelMarker.jsx';
 import { T, D } from '../shared/design-tokens.js';
 import { STACKED_STRIP_TOP } from '../shared/FilterPills.jsx';
 import {
@@ -2613,6 +2614,9 @@ function TxnRow({
           ) : null}
           <CategoryWasNote diff={catDiff} />
           <LiveReceiptNote receipt={liveReceipt} />
+          {/* The disposition stamp's deciding model, when an unqualified
+              self-hosted model made it (persisted policy_basis). */}
+          <UnqualifiedModelMarker decision={tx._tx?.bank_line_disposition} style={{ color: T.amber }} />
         </span>
       </div>
     </div>

@@ -710,7 +710,10 @@ export const resolveCodingTransport = async (client, { firmId, clientId }) => {
     provider: 'openai_compatible',
     endpoint,
     model: policy.deciding_model,
-    policy_basis: policy.basis || null
+    policy_basis: policy.basis || null,
+    // 2026-11-10 (SELF_HOSTED_DECISION): the seat's row id, so what the seat
+    // proposed (a merchant rule) can be found again when it is cleared.
+    policy_id: policy.id || null
   };
 };
 

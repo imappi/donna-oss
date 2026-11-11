@@ -4,6 +4,7 @@ import { draftFirmAskBatch, fetchFirmAskBatches, formatFirmError, sendFirmAskBat
 import { askBatchCountsLabel, askBatchCoveredSpanLabel, askBatchStaleness, parseAskMessageMarkdown } from '../../lib/askBatchView.js';
 import { T, D } from '../shared/design-tokens.js';
 import { btnPrimary, btnChip, btnDisabled } from '../shared/buttons.js';
+import { UnqualifiedModelMarker } from '../shared/UnqualifiedModelMarker.jsx';
 
 // The drafted client message as an ARTIFACT (Kari, 2026-09-01: the list view
 // carries only a row + pill; the details — full message, audit trail, Send —
@@ -281,7 +282,7 @@ const AskBatchArtifact = ({ artifact, onRefreshRef = null }) => {
           {auditOpen && (
             <div style={{ marginTop: 10 }}>
               <div style={{ color: D.inkMute, fontFamily: D.mono, fontSize: 11 }}>
-                drafted {stampLabel(liveDraft.created_at)} · model {liveDraft.model || '—'} · verdicts as of {stampLabel(liveDraft.verdicts_as_of)}
+                drafted {stampLabel(liveDraft.created_at)} · model {liveDraft.model || '—'}<UnqualifiedModelMarker decision={liveDraft} /> · verdicts as of {stampLabel(liveDraft.verdicts_as_of)}
               </div>
               {Array.isArray(liveDraft.draft?.items) && liveDraft.draft.items.length > 0 && (
                 <div style={{ marginTop: 10 }}>
