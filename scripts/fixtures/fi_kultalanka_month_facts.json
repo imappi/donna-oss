@@ -1,12 +1,54 @@
 {
-  "_note": "Company facts for scripts/fi_month_two_stage_run.js on data/evals/fixtures/fi-kultalanka-2025-02. The pack states no ALV registration date: registered_from is the earliest period its documents evidence (ALV for Q4/2024 paid 12.2.2025); tax_period month from 'ALV-tilitys 2/2025, eräpäivä 12.4.2025'. Prices are for the spend meter only: Anthropic list prices; the gpt-5.4 rate is an assumption, not a published figure.",
+  "_note": "Company facts for scripts/fi_month_two_stage_run.js on data/evals/fixtures/fi-kultalanka-2025-02. The pack states no ALV registration date: registered_from is the earliest period its documents evidence (ALV for Q4/2024 paid 12.2.2025); tax_period month from 'ALV-tilitys 2/2025, eräpäivä 12.4.2025'. Prices are for the spend meter only: Anthropic list prices (platform.claude.com/docs/en/about-claude/pricing: claude-opus-4-8 5 / 25 USD per million, 5-minute cache writes 1.25x, cache hits 0.1x; claude-opus-5-5 4 / 20, cache writes 1.25x, cache hits 0.05x); the bare claude- row is a guess for any model it catches, and the gpt-5.4 rate is an assumption, not a published figure (both marked assumed).",
   "profile": {},
   "alv_registration": { "status": "registered", "registered_from": "2024-10-01", "tax_period": "month",
     "note": "Pack: ALV-tunnus FI32244558 on the company's own invoices; output ALV charged 2/2025; ALV for Q4/2024 paid 12.2.2025; the 2/2025 return due 12.4.2025 (monthly). No registration date is stated; the earliest period the pack evidences is Q4/2024." },
   "prices": {
-    "claude-opus-4-8": { "input_per_million": 5, "output_per_million": 25 },
-    "claude-": { "input_per_million": 5, "output_per_million": 25 },
-    "gpt-5.4": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1 },
-    "gpt-": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1 }
+    "claude-opus-4-8": { "input_per_million": 5, "output_per_million": 25, "cache_write_multiplier": 1.25, "cache_read_multiplier": 0.1 },
+    "claude-opus-5-5": { "input_per_million": 4, "output_per_million": 20, "cache_write_multiplier": 1.25, "cache_read_multiplier": 0.05 },
+    "claude-": { "input_per_million": 5, "output_per_million": 25, "assumed": true },
+    "gpt-5.4": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1, "assumed": true },
+    "gpt-": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1, "assumed": true }
+  },
+  "owner_answers": {
+    "_note": "The owner's answers for the zero-key demo (scripts/demo_fi.mjs), one per bank line whose adjudicated terminal is an owner question (labels.json). Each is given through the reply route (POST /api/donna/firms/evidence/requests/:id/resolve) to the open ask on that statement line; an ask the file does not answer stays open. Synthetic, like the pack.",
+    "by_statement_line": {
+      "B17": {
+        "date": "2025-02-14",
+        "amount": 52.1,
+        "direction": "out",
+        "reply": "That St1 fuel on 14.2. was for my own car on a private trip, not for the salon. I paid it from the company account by mistake, so please book it as a private withdrawal."
+      },
+      "B22": {
+        "date": "2025-02-18",
+        "amount": 43.45,
+        "direction": "out",
+        "reply": "I bought the office supplies and the book at the shop on 18.2.2025 and took them with me the same day."
+      },
+      "B25": {
+        "date": "2025-02-21",
+        "amount": 28.6,
+        "direction": "out",
+        "reply": "The train ticket was bought on 21.2.2025 for a business trip to Helsinki that same day, to the hair-products trade day."
+      },
+      "B28": {
+        "date": "2025-02-24",
+        "amount": 923.6,
+        "direction": "in",
+        "reply": "Lumikki paid invoice 1002 (903,60 €) and the 20,00 € late-payment interest from our reminder 1002-M together in this one payment."
+      },
+      "B30": {
+        "date": "2025-02-26",
+        "amount": 40.0,
+        "direction": "out",
+        "reply": "I have lost the receipt for the 40 € at Shell Ratina and the station cannot print a copy. It was fuel for fetching salon supplies from the wholesaler."
+      },
+      "B31": {
+        "date": "2025-02-26",
+        "amount": 17.5,
+        "direction": "out",
+        "reply": "The taxi on 26.2.2025 took a box of hair-colour stock from the wholesaler back to the salon; the ride was on the receipt date."
+      }
+    }
   }
 }

@@ -73,9 +73,10 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/db/coding.js", "Reviewed SG C4 owner-body rehash of two unchanged normalized candidate SELECTs. The batch now refreshes persisted evidence between generation units; these exact SQL expressions, targets and site counts are unchanged. Rehashed again 2026-11-05: a comment inside the owner body renamed a real supplier to a made-up one for the public export; the SELECTs are unchanged. Rehashed again 2026-11-06: the comment no longer names any real counterparty; the SELECTs are unchanged.", [
     // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
-    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","71b9ba4d410a535b031cb3cf82359f1112457b6bf0234305d0fdbae314a92e65",1,[]],
+    // Re-pinned 2026-11-11 (zero-key demo, merged with the first-line change above): the review-pool SELECT gains `q.id asc` as its last ORDER BY key, so rows queued in one transaction (equal created_at) come back in one order on every run; targets and counts unchanged. No memory target.
+    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","7bcf6f33d32514ef8fe487e1c0bce2227655d44e92bb491245df170024832c45",1,[]],
     // Re-pinned 2026-11-10 (first-line lane dark without its provider): the SQL, targets and count are unchanged; the enclosing body now asks firstLineLane.js whether the first-line lane decides (flag acts AND provider configured) instead of reading the flag alone. No memory target.
-    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","45723e8459887fa03afe45e6e219be4f611eee9f08659a40a55d0ed0c4f56c34",1,[]],
+    ["batchSuggestTransactionCodingInDb/callback","dynamic_sql","a9cb5463c5782fe0d32ef8bbb68de0d24bf1e051e413d7c8f708242ca6edc62b",1,[]],
   ]),
   ...group("server/donna/db/codingCorrection.js", "Reviewed SG C4 candidate SELECT excluding retained or partial native markers through retainedNativeMarkerSql with fixed alias t. Firm and limit remain bound. Discovery refuses work and grants no posting or review authority.", [
     ["candidates/callback","dynamic_sql","cb0b46a00c8ed26ebaece05502eb54dbbd099cbaf918127de4c68898299d6ebe",1,[]],
@@ -445,6 +446,12 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     // delete from __DYNAMIC_SQL__ where firm_id = $1
     ["resetData/callback", "dynamic_sql", "95e4f3159930e2dc81a8e04534e61d206e08a3db783a9eb446c035242bbd4bac", 1, []],
   ]),
+  // Re-described 2026-11-11: this group was called read-only, but the demo
+  // also writes. Hashes unchanged.
+  ...group("scripts/demo_fi.mjs", "The zero-key demo's reads over the runtime's query function (end state, fingerprint, the book and collation guards), added 2026-11-10. It also writes, outside this group's callbacks: the storage-schema stub on a given database, local_job_cron_state.last_enqueued_tick set to its virtual clock before the first tick, and one provider_replay_sessions row (providerReplaySession.js). No memory target.", [
+    ["one", "dynamic_query", "5a974a26389ef83aee2ba65c6258cda2b8176c7d6ed20be205b2f3740a20fd91", 1, []],
+    ["query", "dynamic_query", "2be593881a938a46e44730cbaa0d0139cbf1a443cd10d9155805516b938e4ea5", 1, []],
+  ]),
   ...group("scripts/retry_failed_parses.js", "Existing maintenance SQL boundary in scripts/retry_failed_parses.js.", [
     // SELECT d.id, d.client_id, d.document_type, d.filename, d.parse_status, d.parse_error->>'code' as error_code, d.parse_error->>'safe_user_message' as error_message, d.parse_attempts, c.company_name as client_name FROM documents d LEFT JOIN cl …
     ["main", "dynamic_sql", "65924d86af5dc5439142b7bd8412089bd1ea69f230e5fa40c2ab52318da2584a", 1, []],
@@ -459,7 +466,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/api.js", "Existing runtime SQL boundary in server/donna/api.js.", [
     // sql
-    ["queryFn", "dynamic_query", "14f8c424018b8ca1192529ac75a0f674e292783d8a129e245f3d4d8abe2474d1", 1, []],
+    // Re-pinned 2026-11-10 (zero-key demo): a second queryFn site — the public health route reads the latest provider_replay_sessions row (providerReplaySession.js, read-only). No memory target.
+    ["queryFn", "dynamic_query", "14f8c424018b8ca1192529ac75a0f674e292783d8a129e245f3d4d8abe2474d1", 2, []],
   ]),
   ...group("server/donna/askAutoSendProducer.js", "Existing runtime SQL boundary in server/donna/askAutoSendProducer.js.", [
     // select id, firm_id, client_id, payload, status from client_ask_batches where __DYNAMIC_SQL__ order by created_at asc limit $__DYNAMIC_SQL__
@@ -1069,8 +1077,12 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
     ["query", "dynamic_query", "dd2c2524438b4454b6e7799834f4af09443bac40670675a62706f6b824277317", 1, []],
     // text
     ["rows", "dynamic_query", "6a6d510359dc9c46c8db03c2c3e7dfbcf985953b1ba38bdb50676f34b9eb7976", 1, []],
-    // text
-    ["query", "dynamic_query", "2be593881a938a46e44730cbaa0d0139cbf1a443cd10d9155805516b938e4ea5", 1, []],
+    // Re-pinned 2026-11-10 (zero-key demo): the tick loop moved to desktop/manifestTicker.js; the harness hands it its scratch reader (query) and the runtime pool for the queue (queueQuery), as the loop used them before.
+    ["query", "dynamic_query", "1a0cd01f3c8664add3fb805ba9498e299db8222eb2784c92e9b4ca98991f19df", 1, []],
+    ["queueQuery", "dynamic_query", "2be593881a938a46e44730cbaa0d0139cbf1a443cd10d9155805516b938e4ea5", 1, []],
+  ]),
+  ...group("server/donna/desktop/manifestTicker.js", "Deterministic dispatch over the desktop manifest, moved from the appliance harness 2026-11-10 (zero-key demo): the caller's query function, used for the local_jobs wait-collapse UPDATE and its reads. No memory target.", [
+    ["rows", "dynamic_query", "6a6d510359dc9c46c8db03c2c3e7dfbcf985953b1ba38bdb50676f34b9eb7976", 1, []],
   ]),
   ...group("server/donna/testSupport/dmemFixtureSupport.js", "Existing runtime SQL boundary in server/donna/testSupport/dmemFixtureSupport.js.", [
     // select count(*)::int as n from __DYNAMIC_SQL__ where __DYNAMIC_SQL__ = $1

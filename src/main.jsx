@@ -6,6 +6,7 @@ import { Analytics } from '@vercel/analytics/react';
 import App from './App.jsx';
 import CaptureTaskPage from './components/inventory/CaptureTaskPage.jsx';
 import DesktopTitlebar, { DESKTOP_TITLEBAR_HEIGHT } from './components/DesktopTitlebar.jsx';
+import DemoReplayNotice from './components/DemoReplayNotice.jsx';
 import LocaleSettingsPreview from './components/settings/LocaleSettingsPreview.jsx';
 import LocaleShellStatesPreview from './components/i18n/LocaleShellStatesPreview.jsx';
 import LocaleWorkspaceStatesPreview from './components/i18n/LocaleWorkspaceStatesPreview.jsx';
@@ -43,6 +44,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           : isLocaleMountedPreview()
             ? <LocaleMountedSurfacePreview />
           : <App />}
+      {capture ? null : <DemoReplayNotice />}
       {capture ? null : <Analytics />}
     </LocaleProvider>
   </React.StrictMode>

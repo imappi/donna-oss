@@ -199,7 +199,7 @@ test(
       const health = await requestOverSocket(socketPath, '/api/donna/firms/health');
       assert.equal(health.status, 200);
       const healthBody = JSON.parse(health.text);
-      assert.deepEqual(healthBody.model_lanes, { openai: true, anthropic: false, openai_compatible: false, typesafe: false });
+      assert.deepEqual(healthBody.model_lanes, { openai: true, anthropic: false, openai_compatible: false, typesafe: false, replay: false });
       assert.ok(!JSON.stringify(healthBody).includes(OPENAI_PRESENCE_ONLY), 'the health receipt never carries key material');
 
       // 4. An enrolled entity certifies ready against this host.

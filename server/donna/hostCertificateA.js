@@ -27,6 +27,7 @@ import { queryFirmDb } from './firmDb.js';
 import { FIRST_LINE_PROVIDER_ENV } from './firstLineLane.js';
 import { LANE_KINDS, MODEL_LANES } from './modelLanes.js';
 import { ENDPOINT_CLASSES, OPENAI_COMPATIBLE_ENV_KEYS } from './providerEndpoints.js';
+import { REPLAY_PLACEHOLDER_KEY, currentProviderReplay } from './providerReplay.js';
 
 // v4: workspace dirt stays visible, while only the explicit accounting-runtime
 // scope gates the host. Renderer/local-artifact edits cannot brick ingestion.
@@ -79,7 +80,17 @@ import { ENDPOINT_CLASSES, OPENAI_COMPATIBLE_ENV_KEYS } from './providerEndpoint
 // compatibility projection (lane_id, provider, kind): the host digest entity
 // generations were certified against does not move. Persisted v8 receipts
 // keep naming the shape that scored them; the next boot or renewal mints v9.
-export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v9';
+// v10 (2026-11-11, the zero-key demo): the predicate is unchanged; the
+// `model_routes` detail says when the lanes are served from RECORDINGS
+// (`npm run demo:fi`, server/donna/providerReplay.js): `detail.provider_replay`
+// names the pack, the recording date and the recorded models per provider,
+// and every lane carries `served_by: 'replay'` (else 'provider'). The demo's
+// placeholder in a key variable is not a credential, so a replayed lane reads
+// `credential_present: false` and is listed dark — dark of keys, served by
+// recordings. The detail is a receipt, outside the compatibility projection:
+// the host digest does not move. Persisted v9 receipts keep naming the shape
+// that scored them; the next boot or renewal mints v10.
+export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v10';
 export const HOST_COMPATIBILITY_CONTRACT_VERSION = 'donna.host-compatibility.v1';
 export const HOST_CERTIFICATE_FRESHNESS_CONTRACT_VERSION = 'donna.host-certificate-freshness.v1';
 export const HOST_CERTIFICATE_RENEWAL_INTERVAL_MS = 5 * 60 * 1000;
@@ -289,7 +300,9 @@ const expectedMigrations = async (rootDir) => (await readdir(path.join(rootDir, 
   .map((file) => file.replace(/\.sql$/, ''))
   .sort();
 
-const buildIdentityCheck = (env) => {
+// Exported for scripts/demo_fi.mjs, which refuses up front, with a plain
+// message, a run Host A would hold on this predicate (the same predicate).
+export const buildIdentityCheck = (env) => {
   const commit = clean(env.DONNA_BUILD_COMMIT_SHA || env.GITHUB_SHA || env.VERCEL_GIT_COMMIT_SHA);
   const workspaceDirtyRaw = clean(env.DONNA_BUILD_DIRTY).toLowerCase();
   const workspaceDirty = workspaceDirtyRaw === 'true' ? true : workspaceDirtyRaw === 'false' ? false : null;
@@ -706,7 +719,7 @@ const storageCheck = async ({ env, observedAt, commitSha, fetchImpl, storageOps,
 // a human reads "anthropic dark" from the certificate, the boot line and
 // /firms/health — every consumer already fails soft without its key
 // (desktop/capabilityReceipt.js). Nothing here invokes a model.
-const modelRouteCheck = (env, modelLanes = MODEL_LANES) => {
+const modelRouteCheck = (env, modelLanes = MODEL_LANES, replay = currentProviderReplay()) => {
   const inventory = (Array.isArray(modelLanes) ? modelLanes : []).map((lane) => ({
     lane_id: clean(lane?.id),
     kind: clean(lane?.kind) || null,
@@ -738,7 +751,9 @@ const modelRouteCheck = (env, modelLanes = MODEL_LANES) => {
   const lanes = inventory.map((lane) => {
     const perProvider = lane.providers.map((provider) => {
       const credentials = LANE_CREDENTIAL_ENV[provider] || null;
-      return credentials?.length ? credentials.every((name) => Boolean(clean(env[name]))) : null;
+      return credentials?.length
+        ? credentials.every((name) => Boolean(clean(env[name])) && clean(env[name]) !== REPLAY_PLACEHOLDER_KEY)
+        : null;
     });
     const credentialPresent = perProvider.some((present) => present === true)
       ? true
@@ -749,8 +764,9 @@ const modelRouteCheck = (env, modelLanes = MODEL_LANES) => {
       lit_providers: lane.providers.filter((_, index) => perProvider[index] === true),
       // v9: the rows a dark lane lacks, by name (never a value). Empty when lit.
       missing_env: credentialPresent === false
-        ? [...new Set(lane.providers.flatMap((provider) => (LANE_CREDENTIAL_ENV[provider] || []).filter((name) => !clean(env[name]))))]
-        : []
+        ? [...new Set(lane.providers.flatMap((provider) => (LANE_CREDENTIAL_ENV[provider] || []).filter((name) => !clean(env[name]) || clean(env[name]) === REPLAY_PLACEHOLDER_KEY)))]
+        : [],
+      served_by: replay ? 'replay' : 'provider'
     };
   });
   const dark = lanes.filter(({ credential_present }) => credential_present === false);
@@ -766,6 +782,9 @@ const modelRouteCheck = (env, modelLanes = MODEL_LANES) => {
     failures,
     dark_providers: [...new Set(dark.map(({ provider }) => provider))].sort(),
     dark_lanes: dark.map(({ lane_id }) => lane_id),
+    provider_replay: replay
+      ? { pack: replay.pack, recorded_at: replay.recorded_at, recordings_digest: replay.recordings_digest, recorded_models: replay.models }
+      : null,
     lanes
   });
 };

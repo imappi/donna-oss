@@ -105,9 +105,44 @@ services:
       runtime:
         condition: service_healthy
 
+  # The zero-key demo (README.md, "The zero-key demo"), only on request:
+  #   docker compose run --rm --service-ports demo
+  # It replays recorded model outputs (scripts/demo_fi.mjs) into a database of
+  # its own, donna_demo (C collation, as the recordings were made), on the same
+  # PostgreSQL server — never donna_local, the book `docker compose up` serves —
+  # with its documents in donna-demo-data.
+  # No .env and no key: it needs none and reads none. Its web app is on
+  # http://127.0.0.1:5174/firms so it can run beside `docker compose up`.
+  demo:
+    image: donna-local:compose
+    build: .
+    profiles: ["demo"]
+    init: true
+    command:
+      - bash
+      - -c
+      - >-
+        /opt/pg16/bin/psql -h /run/donna-pg -U donna -d donna_local -Atqc
+        "select 1 from pg_database where datname = 'donna_demo'" | grep -q 1
+        || /opt/pg16/bin/psql -h /run/donna-pg -U donna -d donna_local -qc "create database donna_demo template template0 locale 'C'";
+        exec node scripts/demo_fi.mjs --data-dir=/data --web-port=5174
+        '--database-url=postgresql://donna@localhost/donna_demo?host=/run/donna-pg&port=5432'
+    environment:
+      DONNA_LOCAL_WEB_HOST: 0.0.0.0
+    volumes:
+      - donna-demo-data:/data
+      - donna-pg-socket:/run/donna-pg
+    ports:
+      - "127.0.0.1:5174:5174"
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 30s
+
 volumes:
   donna-db:
   donna-data:
+  donna-demo-data:
   # The database's Unix socket, in memory, shared by db and runtime.
   donna-pg-socket:
     driver_opts:

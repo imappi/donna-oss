@@ -120,7 +120,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import PgTypeOverrides from 'pg/lib/type-overrides.js';
 
-import { createLocalScheduler } from '../desktop/localScheduler.js';
+import { createManifestTicker, makeManifestClock } from '../desktop/manifestTicker.js';
 import { defaultDotEnvFiles } from '../desktop/providerKeyDotEnv.js';
 import { createDonnaRuntimeServer } from '../desktop/runtimeServer.js';
 import { closeFirmDbPool, createFirmInDb, queryFirmDb, withFirmDbClient } from '../firmDb.js';
@@ -140,8 +140,6 @@ const PROVIDER_KEY_ENV = Object.freeze({
   typesafe: 'TYPESAFE_API_KEY',
   openai_compatible: 'OPENAI_COMPATIBLE_API_KEY'
 });
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Gate 2A's run-identity discipline (scripts/eval_world_birth_to_parse.js
 // assertGate2aRunIdentity), generalized to N clients and N documents: every
@@ -417,23 +415,7 @@ export const assertNotApplianceCluster = async ({ adminUrl, scratchDbName = null
   return { observed, recorded: Boolean(recorded) };
 };
 
-const makeClock = (start) => {
-  let current = new Date(start).getTime();
-  if (!Number.isFinite(current)) throw new Error('appliance harness: `now` must be a valid date');
-  return {
-    now: () => new Date(current),
-    set: (date) => {
-      const next = new Date(date).getTime();
-      if (!Number.isFinite(next)) throw new Error('appliance harness: clock.set needs a valid date');
-      current = next;
-      return new Date(current);
-    },
-    advance: (ms) => {
-      current += Number(ms) || 0;
-      return new Date(current);
-    }
-  };
-};
+const makeClock = makeManifestClock;
 
 // Ring-buffered capture of the runtime's logger so a failing fixture can
 // print what the scheduler and the runtime said, without flooding stdout.
@@ -828,84 +810,22 @@ export const bootApplianceForTest = async ({
 
     // ── Dispatch: one scheduler minute, deterministic ──
     const promptDueEntityHeal = makePromptDueEntityHeal({ withFirmDbClientFn: withFirmDbClient, logger: captured.logger });
-    const queueClient = { query: (text, params) => queryFirmDb(text, params) };
-
-    const collapseQueueWaits = async (functionIds = null) => rows(
-      `update local_jobs set run_at = now()
-        where status = 'pending' and run_at > now()
-          and ($1::text[] is null or function_id = any($1::text[]))
-        returning id, function_id`,
-      [functionIds]
-    );
-
-    const duePending = async (functionIds) => (await rows(
-      `select count(*)::int as due from local_jobs
-        where status = 'pending' and run_at <= now() and function_id = any($1::text[])`,
-      [functionIds]
-    ))[0].due;
-
-    const tick = async ({
-      advanceMs = 60_000,
-      functions = null,
-      collapseWaits = true,
-      maxRounds = 25,
-      settleTimeoutMs = 180_000
-    } = {}) => {
-      const startedAt = Date.now();
-      const advancedTo = clock.advance(advanceMs);
-      const entries = functions
-        ? runtime.manifest.filter((entry) => functions.includes(entry.functionId))
-        : runtime.manifest;
-      if (!entries.length) throw new Error(`appliance harness: tick() matched no manifest entries for ${JSON.stringify(functions)}`);
-      const functionIds = entries.map((entry) => entry.functionId);
-      const settled = [];
-      const collapsed = [];
-      const errorsBefore = captured.lines.length;
-      const dispatcher = createLocalScheduler({
-        manifest: entries,
-        client: queueClient,
-        logger: captured.logger,
-        workerId: `appliance-harness-${runToken}`,
-        now: clock.now,
-        onQueueActivity: async (activity) => {
-          if (activity?.kind === 'job_settled') settled.push(activity);
-          await promptDueEntityHeal(activity);
-        }
-      });
-      await dispatcher.initialize();
-      let rounds = 0;
-      try {
-        while (rounds < maxRounds) {
-          rounds += 1;
-          if (collapseWaits) collapsed.push(...await collapseQueueWaits(functionIds));
-          await dispatcher.tickOnce();
-          while (dispatcher.inFlightCount() > 0) {
-            if (Date.now() - startedAt > settleTimeoutMs) {
-              throw new Error(`appliance harness: tick() did not settle within ${settleTimeoutMs}ms (${dispatcher.inFlightCount()} in flight)`);
-            }
-            await sleep(20);
-          }
-          if ((await duePending(functionIds)) === 0) break;
-        }
-      } finally {
-        await dispatcher.stop();
-      }
-      const jobIds = settled.map((activity) => activity.job_id);
-      const jobs = jobIds.length
-        ? await rows(
-          `select id, function_id, status, attempt_count, max_attempts, last_error, result, run_at, completed_at
-             from local_jobs where id = any($1::bigint[]) order by id`,
-          [jobIds]
-        )
-        : [];
-      return {
-        advanced_to: advancedTo.toISOString(),
-        functions: functionIds,
-        rounds,
-        jobs,
-        collapsed,
-        log: captured.lines.slice(errorsBefore)
-      };
+    // The deterministic rounds live in desktop/manifestTicker.js (shared
+    // with the zero-key demo, scripts/demo_fi.mjs).
+    const ticker = createManifestTicker({
+      manifest: runtime.manifest,
+      query: (text, params) => query(text, params),
+      queueQuery: (text, params) => queryFirmDb(text, params),
+      clock,
+      logger: captured.logger,
+      workerId: `appliance-harness-${runToken}`,
+      onQueueActivity: (activity) => promptDueEntityHeal(activity)
+    });
+    const collapseQueueWaits = ticker.collapseQueueWaits;
+    const tick = async (options = {}) => {
+      const linesBefore = captured.lines.length;
+      const receipt = await ticker.tick(options);
+      return { ...receipt, log: captured.lines.slice(linesBefore) };
     };
 
     return Object.freeze({

@@ -15,8 +15,10 @@
 // gains or loses a provider (the test pins the shape, not the census).
 
 import { FIRST_LINE_PROVIDER_ENV, firstLineProviderMissing } from '../firstLineLane.js';
+import { REPLAY_PLACEHOLDER_KEY, currentProviderReplay } from '../providerReplay.js';
 
-const present = (value) => typeof value === 'string' && value.trim().length > 0;
+// The replay demo's placeholder is not a key (providerReplay.js).
+const present = (value) => typeof value === 'string' && value.trim().length > 0 && value.trim() !== REPLAY_PLACEHOLDER_KEY;
 
 export const MODEL_LANES = Object.freeze({
   openai: Object.freeze([
@@ -61,8 +63,15 @@ const MODEL_OVERRIDE_KNOBS = Object.freeze({ openai: 'OPENAI_MODEL', anthropic: 
 // One provider → one receipt line: "openai LIT (…)",
 // "openai LIT — OPENAI_MODEL override: gpt-5.4-nano (…)" or
 // "anthropic DARK — no ANTHROPIC_API_KEY (…)".
-const providerLine = (provider, keyName, env) => {
+// Under the replay demo (scripts/demo_fi.mjs) a provider's lanes are served
+// from recordings, never from the provider: "openai REPLAY — recorded
+// outputs from gpt-5.4 (…)", whatever the key state.
+const providerLine = (provider, keyName, env, replay = null) => {
   const lanes = MODEL_LANES[provider].join(', ');
+  if (replay) {
+    const models = replay.models?.[provider] || [];
+    return `${provider} REPLAY — recorded outputs${models.length ? ` from ${models.join(', ')}` : ' (none recorded)'}, no provider called (${lanes})`;
+  }
   if (!present(env?.[keyName])) return `${provider} DARK — no ${keyName} (${lanes})`;
   const knob = MODEL_OVERRIDE_KNOBS[provider];
   const override = present(env?.[knob]) ? env[knob].trim() : null;
@@ -102,7 +111,7 @@ const firstLineLine = (env) => {
   return `typesafe LIT — ${FIRST_LINE_PROVIDER_ENV[1]}: ${env[FIRST_LINE_PROVIDER_ENV[1]].trim()} (${lanes})`;
 };
 
-export const buildModelLaneReceipt = (env = process.env) => {
+export const buildModelLaneReceipt = (env = process.env, { replay = currentProviderReplay() } = {}) => {
   const openaiLit = present(env?.OPENAI_API_KEY);
   const anthropicLit = present(env?.ANTHROPIC_API_KEY);
   const compatibleLit = present(env?.OPENAI_COMPATIBLE_API_KEY)
@@ -114,7 +123,9 @@ export const buildModelLaneReceipt = (env = process.env) => {
     anthropic: anthropicLit,
     openai_compatible: compatibleLit,
     typesafe: firstLineProviderMissing(env).length === 0,
-    line: `model lanes: ${providerLine('openai', 'OPENAI_API_KEY', env)}; `
-      + `${providerLine('anthropic', 'ANTHROPIC_API_KEY', env)}; ${compatibleLine(env)}; ${firstLineLine(env)}`
+    replay: replay ? { mode: replay.mode, pack: replay.pack, recorded_at: replay.recorded_at, models: replay.models } : null,
+    line: `model lanes: ${replay ? `REPLAY of recorded outputs (${replay.pack}, recorded ${replay.recorded_at || 'date unknown'}); ` : ''}`
+      + `${providerLine('openai', 'OPENAI_API_KEY', env, replay)}; `
+      + `${providerLine('anthropic', 'ANTHROPIC_API_KEY', env, replay)}; ${compatibleLine(env)}; ${firstLineLine(env)}`
   };
 };

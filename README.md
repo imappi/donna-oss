@@ -46,7 +46,107 @@ and a sign-in key you choose. It is the headless form of the desktop
 appliance (`scripts/desktop-boot.mjs`). The demo company is synthetic:
 Kampaamo Kultalanka Oy, a Finnish hairdresser, from the test pack in
 `data/evals/fixtures/fi-kultalanka-2025-02`. There are two ways to start
-it: with Docker (one command), or on the host.
+it: with Docker (one command), or on the host. To see it work first, with
+no provider key, start with the zero-key demo.
+
+### The zero-key demo
+
+One command, no provider key, no network call. On the host (what you need
+is listed under "What you need on the host"):
+
+```bash
+git clone https://github.com/imappi/donna-oss.git
+cd donna-oss
+npm ci
+npm run build
+npm run demo:fi
+```
+
+Or with Docker, from the same checkout:
+
+```bash
+docker compose run --rm --service-ports demo
+```
+
+It starts the runtime and the web app on a book of its own (on the host
+`~/.donna-demo`; with Docker the database `donna_demo` and the volume
+`donna_donna-demo-data`), never the book of the starts below. It creates
+the demo firm and company with its ALV registration, uploads the month's
+26 documents, runs the scheduler's work to rest, gives the owner's answers
+(`scripts/fixtures/fi_kultalanka_month_facts.json`) and runs to rest
+again, in under a minute. It reads no setting from this machine: no key,
+model id or switch from the environment, `.env` or
+`~/.config/donna/providers.env`, so every machine runs the same month. It
+ends with a summary read from the stored rows and keeps the book up; a
+month that does not come to rest is a failure, said in words, and the
+command exits non-zero:
+
+```text
+[demo] replay at rest in 36 s
+[demo] journals: posted 19
+[demo] bank lines (coding/convergence): … posted/auto_reconciled 19 …
+[demo] posted lines by tax code: ALV_25_5_INPUT 4, ALV_25_5_OUTPUT 4, ALV_EU_ACQUISITION 1, …
+[demo] sign in at http://127.0.0.1:5173/firms with the access key …
+```
+
+Open the address it prints (with Docker, <http://127.0.0.1:5174/firms>),
+paste the printed access key, and choose Kampaamo Kultalanka Oy. Every
+screen says **Demo: recorded model outputs**. Ctrl-C stops it. To start
+again from nothing: `rm -rf ~/.donna-demo` on the host; with Docker,
+`docker compose down` then `docker volume rm donna_donna-demo-data` and
+drop the `donna_demo` database.
+
+**The model answers are recorded, not live.** They were made once from a
+real run of this month and are committed in
+`data/demo-replay/fi-kultalanka-2025-02.json`: reading the receipts and
+invoices, matching them to bank lines and triaging bank lines by
+Anthropic `claude-opus-4-8`; document routing, statement reading, coding
+and ask drafting are, in this recording, scripted stand-ins written from
+the pack in the OpenAI response format, in place of `gpt-5.4`. A stand-in
+names itself: its answers are marked `scripted_stand_in` in the file and
+carry the model `scripted-stand-in-for-gpt-5.4`. A receipt that takes its
+model from the response reads `scripted-stand-in-for-gpt-5.4+replayed`.
+These receipts store the configured model instead, so they read `gpt-5.4`:
+the document-routing receipt (the router's confidence envelope,
+`documentRouter.js`), the bank statement's parse summary
+(`extraction_model`, from `bankStatementVision.js`), and the firm-fact
+distiller's result (`firmFacts.js`; it stores nothing in this month). Every model call leaves the
+process through one seam (`server/donna/providerReplay.js`); the demo
+answers it from the recordings, so every parser, schema check, VAT rule
+and posting check runs on the recorded answer as on a live one. A request
+the recordings do not hold stops with `PROVIDER_REPLAY_UNRECORDED`, naming
+the lane, the model and where it differs; it never goes to the network.
+Each receipt names the recorded model with `+replayed` after it, and the
+runtime's `model lanes:` line says `REPLAY`.
+
+The demo serves only its own company: before it writes anything it refuses
+a book that holds any other firm or company, and it stops answering if one
+appears. A PostgreSQL already running on its data folder is used and left
+running. To re-record (on the host, with `ANTHROPIC_API_KEY` and
+`OPENAI_API_KEY` in the environment or in `.env`, and about 15 USD of model
+calls): `npm run demo:fi:record`. It takes only those two names from
+`.env`, and needs no `.env` at all when no lane has to go live. Its spend
+is capped at 20 USD across all its passes (`-- --cap-usd=N` to change it):
+a call is made only if its estimate fits in what is left (an Anthropic
+call's input is counted with Anthropic's token-count endpoint, which the
+documentation describes as free with its own rate limit and as an estimate,
+so the count gets a 5% margin, and its output is bounded by the request's
+own limit; other calls are estimated
+from what the same lane used before, in the pass or in the recordings,
+and bounded from their text and files), and the actual spend each answer
+reports is added after it. It prices calls from
+`scripts/fixtures/fi_kultalanka_month_facts.json` and lists those prices
+first; the `gpt-5.4` rate there is an assumption, not a published price,
+and so is the bare `claude-` row for any Claude model without a row of its
+own, so the cap is approximate for those models. A price table that cannot price
+every model the reference recordings name stops the command before any
+call; a model they do not name (on a first full recording, or after a
+lane's model changes) is checked at its own first call, and refused there
+if it has no price, after the calls before it were paid for. The committed recordings are replaced only after a replay on a
+fresh book has used every one of them, each exactly as often as recorded.
+
+The starts below run the same book on live providers, with your own keys
+and your own data.
 
 ### Start with Docker
 
@@ -209,7 +309,7 @@ npm run local:web
 **5. Load the demo company.** In a third terminal:
 
 ```bash
-npm run demo:fi
+npm run demo:fi:load
 ```
 
 ```text
@@ -397,6 +497,55 @@ npm run db:prepare:ci-host && npm run db:migrate && npm run runtime:initialize:c
 ```
 
 Without `DONNA_PG_TEST_URL` the database suites are skipped.
+
+### When you change a prompt: the demo's recordings
+
+`scripts/demo_fi.test.js` replays the zero-key demo's whole month against
+the committed recordings (`data/demo-replay/fi-kultalanka-2025-02.json`),
+with no key and the network refused. Any change to what a model is asked
+on that path (a prompt, a schema, the evidence a lane is shown, the order
+of a list in it) makes it fail with `PROVIDER_REPLAY_UNRECORDED`, naming
+the lane, the model and where the new request first differs from the
+recorded one. That failure is the point: the demo must not answer a
+question it was never asked.
+
+To bring the recordings up to date, commit the change first (a
+work-in-progress commit on your branch is fine), then, with the keys of the
+lanes that changed in `.env`:
+
+```bash
+npm run demo:fi:record -- --fill
+```
+
+The demo, like the desktop runtime, does not run the scheduler on an
+uncommitted runtime build (Host A's `source_build` check), so on a working
+tree with uncommitted changes under `server/` it stops at once with
+`DEMO_UNCOMMITTED_RUNTIME: demo: this checkout has uncommitted changes to
+the runtime (…). Host A does not start the scheduler on an uncommitted
+runtime build (source_build: dirty_runtime_build), so the month would not
+run. Commit the change (a work-in-progress commit on your branch is fine),
+then run `npm run demo:fi:record -- --fill` again.`
+
+Each pass replays the month on a fresh book, answers every request that
+still matches from the recordings, and calls the provider only for the
+requests that changed (and for any later request their new answers
+change). It repeats until a pass asks nothing new, then replays the result
+on a fresh book with no key and fails unless every request was recorded
+and every recorded answer was asked for; only then is the committed file
+replaced. A lane whose recordings are scripted stand-ins is answered by its
+stand-in again, with no key. Live calls are capped at 20 USD across the
+passes (`-- --cap-usd=N`).
+`--report=FILE` writes the unrecorded requests in full beside the report,
+and `--trace=FILE` every request, to diff two runs. Rough cost of
+re-recording one live lane at list prices, if every one of its calls
+changes: receipt and invoice reading (unified extraction) 26 calls,
+about 1.60 USD; reconciliation 26 calls, about 1.00 USD; bank-line
+disposition 36 calls, about 0.40 USD; document disposition 1 call, under
+0.05 USD; the coder (when recorded live) about 13 calls and 3 USD;
+routing 27 calls, about 0.90 USD; ask drafting 6 calls, about 0.25 USD.
+A changed answer can change the requests after it, so a fill may also
+call a few downstream lanes. `npm run demo:fi:record` alone re-records
+everything (live pass, fill passes, verification).
 
 ## Licence
 
