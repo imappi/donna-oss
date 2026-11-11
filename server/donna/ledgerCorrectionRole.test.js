@@ -64,6 +64,8 @@ test('insertLedgerCorrectionJournal persists role on the correction ledger_lines
       // assertJournalDateOutsideFiledReturn, 2026-11-10); this fixture has none, so nothing more is read.
       if (sql === 'select jurisdiction, profile from clients where firm_id = $1 and id = $2') return { rows: [] };
       if (sql.includes('insert into ledger_accounts')) return { rows: [] };
+      // The mint's existing-row lookup (2026-11-10): an empty chart, so it mints.
+      if (sql.startsWith('select id, code from ledger_accounts') || sql.startsWith('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3')) return { rows: [] };
       if (sql.includes('insert into ledger_journals')) return { rows: [] };
       if (sql.includes('insert into ledger_lines')) {
         lineInserts.push(params);

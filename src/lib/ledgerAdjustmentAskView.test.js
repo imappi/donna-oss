@@ -21,6 +21,14 @@ test('a ledger adjustment ask renders its stored facts through catalog messages'
   for (const message of messages) assert.ok(en[message.id], message.id);
 });
 
+test('a company-cash entry\'s reversal question names the company\'s cash; an older ask without the fact names own funds', () => {
+  const [line] = ledgerAdjustmentAskMessages({ evidence_type: 'ledger_adjustment', ledger_adjustment: { ...subject, funding_source: 'company_cash' } });
+  assert.equal(line.id, 'mounted.financial.ledgerAdjustmentAsk.settlementReversalCompanyCash');
+  assert.match(en[line.id], /paid-from-company-cash/);
+  const [owner] = ledgerAdjustmentAskMessages({ evidence_type: 'ledger_adjustment', ledger_adjustment: subject });
+  assert.match(en[owner.id], /paid-from-own-funds/);
+});
+
 test('any other ask, or an unknown refusal, keeps its stored question', () => {
   assert.equal(ledgerAdjustmentAskMessages({ evidence_type: 'colleague_answer', question: 'Is this right?' }), null);
   assert.equal(ledgerAdjustmentAskMessages({ evidence_type: 'ledger_adjustment', ledger_adjustment: { ...subject, refusal_code: 'OTHER' } }), null);

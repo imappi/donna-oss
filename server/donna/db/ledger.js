@@ -14,6 +14,7 @@ import { hash } from '../jevEvidenceContract.js';
 import { loadTaxPostingContext, readTaxPostingEvidence, taxFactsDigest } from './taxPostingFacts.js';
 import { readPostingAdmissionWithClient, requirePostingAdmission } from '../postingAdmissionRegistry.js';
 import { resolveMarketPostingAccounts } from '../provisioningPolicyRegistry.js';
+import { DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT, resolveDocumentSettlementFunding, settlementFundingAccountLabel } from '../documentSettlementFunding.js';
 
 import { aeOpeningDigest } from '../ae/openingBalances.js';
 import { prepareAeOpeningPostWithClient, finishAeOpeningPostWithClient } from '../ae/openingBalanceDb.js';
@@ -1770,6 +1771,25 @@ export const __ledgerAccountMintShape = ({ account = {}, canonicalRole = null } 
   return { account_type: declaredType || 'unknown', normal_balance: account.normal_balance || 'debit' };
 };
 
+// The existing row a journal account lands on, or null to mint the derived id.
+// By code first (unique per book), whatever id the row was born with. A
+// name-only account (no code, or a code that is just the name) keeps its
+// derived row when it has one; otherwise it lands on the one coded row of that
+// name, and two such rows are no answer (the mint then behaves as before).
+const findLedgerAccountForJournalWithClient = async ({ client, firmId, clientId, derivedId, code, name, nameOnly }) => {
+  if (code) {
+    const byCode = (await client.query('select id, code from ledger_accounts where firm_id=$1 and client_id=$2 and code=$3',
+      [firmId, clientId, code])).rows[0];
+    if (byCode || !nameOnly) return byCode || null;
+  }
+  if (!nameOnly || !name) return null;
+  if ((await client.query('select 1 from ledger_accounts where firm_id=$1 and client_id=$2 and id=$3', [firmId, clientId, derivedId])).rows.length) return null;
+  const byName = (await client.query(`select id, code from ledger_accounts
+      where firm_id=$1 and client_id=$2 and coalesce(code,'')<>'' and lower(btrim(name))=lower(btrim($3)) limit 2`,
+    [firmId, clientId, name])).rows;
+  return byName.length === 1 ? byName[0] : null;
+};
+
 // Exported for canonicalRoleResolutionDb.js: the strong-model role-resolution
 // lane mints a ledger row for a synced (xero-mirror) chart account through THIS
 // writer rather than a second insert — same deterministic id scheme, same
@@ -1784,9 +1804,18 @@ export const upsertLedgerAccountForJournal = async ({ client, firmId, clientId, 
     if ((currency && currency !== choice.currency) || (account.currency && account.currency !== choice.currency)) codingChoiceFailure('account_currency_mismatch');
     return choice.id;
   }
-  const code = String(account.code || '').trim();
-  const name = String(account.name || account.label || code || 'Uncoded account').trim();
-  const accountId = ledgerRecordId('account', firmId, clientId, code || account.xero_account_id || name);
+  const postedCode = String(account.code || '').trim();
+  const name = String(account.name || account.label || postedCode || 'Uncoded account').trim();
+  const derivedId = ledgerRecordId('account', firmId, clientId, postedCode || account.xero_account_id || name);
+  // The book's own row wins over the derived id. A chart born by a seeder with
+  // its own id scheme (the GB default chart, the coded-chart scripts) holds the
+  // code under a different id, and inserting the derived id would be a second
+  // row for that code. The code is the account's identity on a book; a
+  // code-less posting that names exactly one coded row is that row too.
+  const existing = await findLedgerAccountForJournalWithClient({ client, firmId, clientId, derivedId, code: postedCode, name,
+    nameOnly: !String(account.xero_account_id || '').trim() && (!postedCode || normalizeIntelText(postedCode) === normalizeIntelText(name)) });
+  const accountId = existing?.id || derivedId;
+  const code = existing?.code || postedCode;
   // payload.role is the LINE role ('counterparty'/'bank'); canonical_role is the
   // CoA-level semantic identity (see __canonicalRoleForAccount). On conflict we
   // coalesce-FILL — a posting upsert may resolve a role for a previously-null row,
@@ -2631,18 +2660,11 @@ export const __writeLedgerJournalRows = async ({
   };
 };
 
-// Slice 4b (docs/donna-settlement-answer-and-ledger-entry-plan.md §3) — the
-// owner's-funds credit account for a cash/personal-card settlement entry: the
-// DONNA_COA 901 seed (xeroCoaProvisioning.js), jurisdiction-safe in all four
-// markets (plan decision #2, ratified by the silent #792 merge).
-// upsertLedgerAccountForJournal mints it on demand — no provisioning step.
-export const DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT = Object.freeze({
-  code: '901',
-  name: 'Director loan',
-  type: 'liability',
-  canonical_role: 'liability.director_loan',
-  tax_type: 'NONE'
-});
+// Slice 4b — the owner's-funds credit account (DONNA_COA 901) and the rule
+// that picks the credit account by whose money paid (owner's funds or the
+// company's cash box): documentSettlementFunding.js, shared with the entry
+// producer.
+export { DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT };
 
 // Slice 4b — the NAMED WRITER for a document-settlement journal (plan §3;
 // INV-1: proposals route here, the card only observes). For a money-out doc
@@ -2696,12 +2718,13 @@ export const postDocumentSettlementJournalWithClient = async ({
   // Posting consumes the locked source, not a stale proposal's amount or tax.
   const currentDocument = {...document,...source,currency};
   const disposition = source.payload?.no_line_disposition || {};
-  if (disposition.settlement_channel === 'cash' && disposition.funding_source !== 'owner') {
-    throw Object.assign(new Error('Cash settlement needs evidence of whose funds paid the document.'), {
-      code:'DOCUMENT_SETTLEMENT_FUNDING_REQUIRED',statusCode:409});
-  }
   const context = await resolvePostingContextWithClient({client,firmId,clientId,
     businessDate:toIsoDay(currentDocument.document_date),lockContext:true});
+  // Whose money paid decides the credit leg (documentSettlementFunding.js):
+  // the owner's funds, or the market's declared cash account for the
+  // company's cash box. Cash with no funding fact, or company cash in a
+  // market that declares no cash account, refuses before any write.
+  const funding = resolveDocumentSettlementFunding({ disposition, jurisdiction: context.policy.jurisdiction, ownerFundsAccount });
   const ledgerAccounts = context.policy.supplierBillNeedsChart
     ? await getDonnaLedgerAccountsForClient({client,firmId,clientId}) : [];
   const {alvSplit,expenseTaxType} = context.policy.capabilities.supplierBillTaxPosting
@@ -2709,7 +2732,7 @@ export const postDocumentSettlementJournalWithClient = async ({
       verdict:expenseAccount,document:currentDocument,ledgerAccounts,taxCodingEnabled:context.taxCodingEnabled,profile:context.profile})
     : {alvSplit:null,expenseTaxType:expenseAccount.tax_type || expenseAccount.xero_tax_type};
   const journal = buildLedgerJournalForDocumentSettlement({ document:currentDocument,
-    expenseAccount:{...expenseAccount,tax_type:expenseTaxType,xero_tax_type:expenseTaxType},ownerFundsAccount,alvSplit });
+    expenseAccount:{...expenseAccount,tax_type:expenseTaxType,xero_tax_type:expenseTaxType},ownerFundsAccount:funding.account,alvSplit });
   assertCorrectionLinesBalance(journal.lines);
 
   const existingJournal = await client.query(
@@ -2754,6 +2777,7 @@ export const postDocumentSettlementJournalWithClient = async ({
 
   const settlementReceipt = {
     document_id: document.id,
+    funding_source: funding.funding_source,
     settlement_channel: settlement.settlement_channel || null,
     verdict_source: settlement.verdict_source || null,
     evidence_request_id: settlement.evidence_request_id || null
@@ -2793,6 +2817,28 @@ export const postDocumentSettlementJournalWithClient = async ({
     settlement_entry: prior.rows[0].settlement_entry ?? null,
     no_line_disposition_owner_notified: prior.rows[0].no_line_owner_notified ?? null
   };
+  // The company's cash box cannot be credited below zero unnoticed: the
+  // entry's receipt states the cash account's balance at the entry's date
+  // after this credit, and names a negative balance (cash_account_negative).
+  // The entry still posts — the receipt says what it is; a negative till
+  // is a fact for a person to read (an unrecorded cash sale, a missing
+  // opening balance), not a reason to leave the paid receipt unbooked.
+  let cashBalance = null;
+  if (funding.funding_source === 'company_cash') {
+    cashBalance = Number((await client.query(
+      `select coalesce(sum(l.debit - l.credit), 0) as balance
+         from ledger_lines l
+         join ledger_journals j on j.id = l.journal_id and j.firm_id = l.firm_id and j.client_id = l.client_id
+        where l.firm_id = $1 and l.client_id = $2
+          and l.account_id = (select account_id from ledger_lines where journal_id = $3 and direction = 'credit' order by line_no desc limit 1)
+          and j.status in ('posted', 'closed') and j.journal_date <= $4::date`,
+      [firmId, clientId, post.ledger_journal_id, journal.journal_date]
+    )).rows[0]?.balance);
+  }
+  const cashReceipt = cashBalance === null ? {} : {
+    cash_balance_after: cashBalance,
+    ...(cashBalance < 0 ? { cash_account_negative: true } : {})
+  };
   const expenseLine = journal.lines[0]?.account || {};
   const settlementEntry = {
     journal_id: post.ledger_journal_id,
@@ -2800,7 +2846,13 @@ export const postDocumentSettlementJournalWithClient = async ({
     amount: journal.amount,
     currency: journal.currency,
     expense_account: expenseLine.label || expenseLine.name || '',
-    owner_funds_account: `${ownerFundsAccount.code || ''} · ${ownerFundsAccount.name || ''}`.replace(/^ · /, ''),
+    // The credited account: the owner's funds, or the company's cash box.
+    // owner_funds_account stays the owner-funded entry's field, byte for byte.
+    ...(funding.funding_source === 'owner'
+      ? { owner_funds_account: `${funding.account.code || ''} · ${funding.account.name || ''}`.replace(/^ · /, '') }
+      : { settlement_account: settlementFundingAccountLabel(funding.account) }),
+    funding_source: funding.funding_source,
+    ...cashReceipt,
     settlement_channel: settlementReceipt.settlement_channel,
     verdict_source: settlementReceipt.verdict_source,
     evidence_request_id: settlementReceipt.evidence_request_id,
@@ -2836,7 +2888,9 @@ export const postDocumentSettlementJournalWithClient = async ({
       amount: journal.amount,
       currency: journal.currency,
       expense_account: settlementEntry.expense_account,
-      owner_funds_account: settlementEntry.owner_funds_account,
+      ...(settlementEntry.owner_funds_account ? { owner_funds_account: settlementEntry.owner_funds_account } : { settlement_account: settlementEntry.settlement_account }),
+      funding_source: funding.funding_source,
+      ...cashReceipt,
       settlement_channel: settlementReceipt.settlement_channel,
       verdict_source: settlementReceipt.verdict_source,
       evidence_request_id: settlementReceipt.evidence_request_id,
