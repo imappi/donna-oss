@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { clientFlagActs } from '../clientConfig.js';
 import { codingPolicyReceipt, assertCodingPolicyReceipt, CodingPolicyError, isCodingPolicyError } from '../codingPolicy.js';
-import { readClientCodingContextWithClient } from './codingPolicyContext.js';
+import { readClientCodingContextWithClient, isFenceContention, nativeSourceFenceBusy } from './codingPolicyContext.js';
 import { resolvePostingPolicy, PostingPolicyError } from '../postingPolicy.js';
 import { codingInputFromTransaction } from '../xeroWriteback.js';
 import { toIsoDay } from '../dates.js';
@@ -42,6 +42,9 @@ export const resolvePostingContextWithClient = async (args) => {
     return await readPostingContextWithClient(args);
   } catch (error) {
     if (isCodingPolicyError(error) || error instanceof PostingPolicyError) throw error;
+    // A held fence is not an unavailable policy: pass it through as itself,
+    // or the posting failure writer receipts a policy incident for a lock.
+    if (isFenceContention(error)) throw nativeSourceFenceBusy(error);
     // The same durable recovery path as coding owns transient read failures.
     // A database outage is not missing owner identity or a disabled tax flag.
     throw new CodingPolicyError('coding_policy_unavailable', {

@@ -11,10 +11,38 @@ import { resolveCodingPolicy, CodingPolicyError, isCodingPolicyError } from '../
 // rolls back whole and stays proposed/re-appliable; nothing failed, so no
 // transaction.coding.policy_failed receipt is minted for a collision (the same
 // pattern as cloud evidence intake's lockUploadClientInFirm). The driver's
-// 55P03 code stays on the error so every caller that classifies a skip as
+// code stays on the error so every caller that classifies a skip as
 // contended keeps working; only the status, the member-facing text and the
 // retryable marker are added.
-export const isFenceContention = (error) => error?.code === '55P03';
+//
+// The one rule for every coding, correction and posting catch: a transient
+// database condition is never an outcome of a line or a case. Lock not
+// available (a NOWAIT fence lost to a writer or to autovacuum), a
+// serialization failure (a REPEATABLE READ scan overtaken by a commit) and a
+// detected deadlock all mean the same thing: nothing was decided. The caller
+// records no refusal, no blocked code and no failure receipt, spends no
+// attempt, and takes the item again on its next tick.
+export const TRANSIENT_DATABASE_CODES = Object.freeze(['55P03', '40001', '40P01']);
+export const isFenceContention = (error) => TRANSIENT_DATABASE_CODES.includes(error?.code);
+// The other half of an honest catch: an error that carries no business code
+// (a raw SQLSTATE such as a constraint violation, a Node system error, or a
+// plain programming error) is not a named refusal. A caller that stores it
+// stores it as an unexpected failure with its message, never under that code.
+// A SQLSTATE is five upper-case letters or digits and always has a digit;
+// business codes are longer, snake-cased names.
+export const RAW_DATABASE_CODE_PATTERN = '^[0-9A-Z]{5}$';
+export const isRawDatabaseCode = (code) => typeof code === 'string' && new RegExp(RAW_DATABASE_CODE_PATTERN).test(code) && /[0-9]/.test(code);
+export const isUnexpectedFailure = (error) => {
+  const code = typeof error?.code === 'string' ? error.code.trim() : '';
+  return !code || isRawDatabaseCode(code) || typeof error?.errno === 'number' || typeof error?.syscall === 'string';
+};
+export const unexpectedFailureDetails = (error) => ({
+  message: error?.pgMessage || error?.message || String(error),
+  cause_code: error?.code || null,
+  cause_name: error?.name || null,
+  ...(error?.statusCode ? { status_code: error.statusCode } : {}),
+  ...(error?.details ? { cause_details: error.details } : {})
+});
 export const nativeSourceFenceBusy = (error) => {
   if (!error || error.statusCode === 409 && error.retryable === true) return error;
   error.pgMessage = error.message;

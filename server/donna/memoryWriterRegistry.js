@@ -101,7 +101,8 @@ export const MEMORY_WRITER_REGISTRY = Object.freeze([
   ]),
   ...group("server/donna/ledgerAutoPost.js", "Reviewed SG C4 existing admission and discovery SELECTs now interpolate the shared retainedNativeMarkerSql with fixed alias t. Firm/client boundaries remain bound. These reads exclude retained scope from the existing posting consumer; they add no posting writer or authority.", [
     // SG audit_events index (2026-09-28): the retained-native marker is now evaluated once per candidate client through a scope CTE (ELIGIBLE_LINES_SQL) / distinct-client subselect (DISCOVER_LEDGER_POST_CLIENTS_SQL). Same firm/client-scoped SELECTs, targets and counts; no writer added.
-    ["ELIGIBLE_LINES_SQL","dynamic_sql","27f2047a64bc6bebd1b8cc0da50779adb5a6e5b0188d231350cf667b62568719",1,[]],
+    // Re-pinned 2026-11-10 (transient database conditions are not refusals): the same firm/client-scoped SELECT now also skips, in its retry damping, a refusal receipt stored under a raw SQLSTATE (the fixed RAW_DATABASE_CODE_PATTERN). Targets and count are unchanged; no writer added.
+    ["ELIGIBLE_LINES_SQL","dynamic_sql","ff1b6bdc002a6d0b91979cf728060eec8de635fed98f86aab0626ba97008b67d",1,[]],
     ["DISCOVER_LEDGER_POST_CLIENTS_SQL","dynamic_sql","1646b74c8bd96dd86770c1a11e6295d25dbe589a5164221dcced5e7be80be5e5",1,[]],
   ]),
   ...group("server/donna/reconcileConvergenceState.js", "Reviewed SG C4 native target discovery SELECT, scoped by bound firm and target ids and the shared retained-native marker read. No new source writer.", [
