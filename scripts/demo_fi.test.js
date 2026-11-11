@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 import { DEFAULT_RECORDINGS, RERECORD_COMMAND, assertDemoBookOnly, answerFor, loadReplayRecordings, parseDemoArgs } from './demo_fi.mjs';
-import { PROVIDER_REPLAY_CODES, findSecretShapes, installProviderReplay } from '../server/donna/providerReplay.js';
+import { PROVIDER_REPLAY_CODES, eventStreamIsComplete, findSecretShapes, installProviderReplay, recordedResponseModel } from '../server/donna/providerReplay.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MAX_RECORDINGS_BYTES = 6 * 1024 * 1024;
@@ -36,8 +36,9 @@ test('the committed recordings carry no key, header or account identifier, and s
     assert.ok(['live', 'scripted_stand_in'].includes(entry.provenance), `${entry.key}: provenance`);
     assert.ok(entry.lane && entry.provider && entry.endpoint, `${entry.key}: lane, provider, endpoint`);
     for (const response of entry.responses) {
-      assert.equal(typeof response.body?.model, 'string', `${entry.key}: the recorded model id`);
-      assert.ok(!('user' in response.body) && !('organization' in response.body), `${entry.key}: no account field`);
+      assert.equal(typeof recordedResponseModel(response), 'string', `${entry.key}: the recorded model id`);
+      if (response.body) assert.ok(!('user' in response.body) && !('organization' in response.body), `${entry.key}: no account field`);
+      if (response.events) assert.ok(eventStreamIsComplete(response.events), `${entry.key}: a stream that reached its end`);
     }
   }
 });

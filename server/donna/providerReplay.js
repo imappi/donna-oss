@@ -406,10 +406,169 @@ export const unpackRecordings = (file) => {
     if (key !== entry.key || !Array.isArray(entry.responses) || !entry.responses.length) {
       throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS, lane: entry.lane, key: entry.key, message: `provider replay: recording ${entry.key} (${entry.lane}) does not hash to its key or has no response` });
     }
+    for (const response of entry.responses) {
+      if ('events' in response && !eventStreamIsComplete(response.events)) {
+        throw new ProviderReplayError({ code: PROVIDER_REPLAY_CODES.BAD_RECORDINGS, lane: entry.lane, key: entry.key, message: `provider replay: recording ${entry.key} (${entry.lane}) holds a stream that never reached its terminal event` });
+      }
+    }
   }
   const { texts: _texts, ...rest } = file;
   return { ...rest, entries };
 };
+
+// ── Event streams (a streamed answer, text/event-stream) ──────────────────
+// A provider may answer a request as a stream of server-sent events: the
+// Anthropic Messages stream (message_start … content_block_delta …
+// message_delta, message_stop) or the OpenAI Responses stream (response.created
+// … response.output_text.delta … response.completed). A stream is a
+// first-class recorded shape: kept as its events, with the provider's ids
+// scrubbed inside them, the request's ids and dates bound inside them, the
+// usage kept, and the text deltas of one content block coalesced into one
+// event (so an id the model wrote across two deltas is bound whole; a lane's
+// parser accumulates deltas and reads the same text). On replay it is served
+// back as a stream with the same content type and framing, with the marker on
+// every model id it names. A stream that did not reach its terminal event is
+// not an answer: the recorder does not keep it, a recordings file that holds
+// one is refused at load, so a cut-off stream replays as a miss, never as a
+// silently shortened answer.
+export const EVENT_STREAM_CONTENT_TYPE = 'text/event-stream';
+const TERMINAL_STREAM_EVENTS = new Set(['message_stop', 'response.completed', 'response.incomplete', 'response.failed', 'error', '[DONE]']);
+
+export const parseEventStream = (text) => {
+  const events = [];
+  for (const block of String(text || '').split(/\r?\n\r?\n/)) {
+    let event = null;
+    const data = [];
+    for (const line of block.split(/\r?\n/)) {
+      if (!line || line.startsWith(':')) continue;
+      const colon = line.indexOf(':');
+      const field = colon < 0 ? line : line.slice(0, colon);
+      const value = colon < 0 ? '' : line.slice(colon + 1).replace(/^ /, '');
+      if (field === 'event') event = value;
+      else if (field === 'data') data.push(value);
+    }
+    if (!event && !data.length) continue;
+    const raw = data.join('\n');
+    let parsed = raw;
+    try { parsed = JSON.parse(raw); } catch { parsed = raw; }
+    events.push({ event, data: parsed });
+  }
+  return events;
+};
+
+export const serializeEventStream = (events) => events
+  .map(({ event, data }) => `${event ? `event: ${event}\n` : ''}data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`)
+  .join('');
+
+const streamEventType = (entry) => (entry?.data && typeof entry.data === 'object' && typeof entry.data.type === 'string'
+  ? entry.data.type
+  : entry?.event || (entry?.data === '[DONE]' ? '[DONE]' : null));
+
+export const eventStreamIsComplete = (events) =>
+  Array.isArray(events) && events.length > 0 && TERMINAL_STREAM_EVENTS.has(streamEventType(events[events.length - 1]));
+
+// Consecutive deltas of the same content block → one delta.
+const DELTA_FIELDS = Object.freeze({ text_delta: 'text', input_json_delta: 'partial_json', thinking_delta: 'thinking' });
+export const coalesceStreamDeltas = (events) => {
+  const out = [];
+  for (const entry of events) {
+    const prev = out[out.length - 1];
+    const d = entry.data;
+    const p = prev?.data;
+    if (d && p && typeof d === 'object' && typeof p === 'object') {
+      if (d.type === 'content_block_delta' && p.type === 'content_block_delta' && d.index === p.index
+        && d.delta?.type === p.delta?.type && DELTA_FIELDS[d.delta?.type]) {
+        const field = DELTA_FIELDS[d.delta.type];
+        out[out.length - 1] = { ...prev, data: { ...p, delta: { ...p.delta, [field]: `${p.delta[field] ?? ''}${d.delta[field] ?? ''}` } } };
+        continue;
+      }
+      if (/^response\.(output_text|function_call_arguments|reasoning_summary_text)\.delta$/.test(d.type || '') && d.type === p.type
+        && d.item_id === p.item_id && (d.content_index ?? null) === (p.content_index ?? null)) {
+        out[out.length - 1] = { ...prev, data: { ...p, delta: `${p.delta ?? ''}${d.delta ?? ''}` } };
+        continue;
+      }
+    }
+    out.push(entry);
+  }
+  return out;
+};
+
+// The model the stream names and the usage it reports (both providers).
+export const eventStreamSummary = (events) => {
+  let model = null;
+  const usage = {};
+  for (const { data } of events || []) {
+    if (!data || typeof data !== 'object') continue;
+    model ||= (typeof data.message?.model === 'string' && data.message.model)
+      || (typeof data.response?.model === 'string' && data.response.model)
+      || (typeof data.model === 'string' && data.model) || null;
+    Object.assign(usage, data.message?.usage || {}, data.usage || {}, data.response?.usage || {});
+  }
+  return { model, usage: Object.keys(usage).length ? usage : null, complete: eventStreamIsComplete(events) };
+};
+
+const PROVIDER_ID_PATTERN = /^(msg|resp|req|rs|item|fc|chatcmpl|run)_[A-Za-z0-9]+$/;
+const ACCOUNT_FIELDS = Object.freeze(['user', 'safety_identifier', 'prompt_cache_key', 'organization', 'metadata']);
+// Provider-side ids inside any event → a stable id derived from the request
+// key; account fields dropped. Nothing else is touched.
+const scrubStreamEvents = (events, key) => {
+  // The same provider id must map to the same recorded id everywhere in the
+  // stream (an output item id is named by every delta of that item).
+  const seen = new Map();
+  const stable = (value) => {
+    if (Array.isArray(value)) return value.map(stable);
+    if (!value || typeof value !== 'object') return value;
+    const out = {};
+    for (const [field, inner] of Object.entries(value)) {
+      if (ACCOUNT_FIELDS.includes(field) && (field !== 'metadata' || typeof inner === 'object')) continue;
+      if ((field === 'id' || field === 'item_id' || field === 'request_id') && typeof inner === 'string' && PROVIDER_ID_PATTERN.test(inner)) {
+        if (!seen.has(inner)) seen.set(inner, `recorded_${key.slice(0, 16)}_${seen.size + 1}`);
+        out[field] = seen.get(inner);
+      } else out[field] = stable(inner);
+    }
+    return out;
+  };
+  return events.map((entry) => ({ ...entry, data: stable(entry.data) }));
+};
+
+// The replay marker on every model id a stream names, and replay ids for the
+// recorded ones.
+const markStreamEvents = (events, key) => {
+  const walk = (value) => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (!value || typeof value !== 'object') return value;
+    const out = {};
+    for (const [field, inner] of Object.entries(value)) {
+      if (field === 'model' && typeof inner === 'string' && inner) out[field] = `${inner}${REPLAYED_MODEL_SUFFIX}`;
+      else if ((field === 'id' || field === 'item_id' || field === 'request_id') && typeof inner === 'string' && inner.startsWith('recorded_')) {
+        out[field] = `replay_${key.slice(0, 16)}${inner.slice(`recorded_${key.slice(0, 16)}`.length)}`;
+      } else out[field] = walk(inner);
+    }
+    return out;
+  };
+  return events.map((entry) => ({ ...entry, data: walk(entry.data) }));
+};
+
+// The model id a kept response names, whichever shape it has.
+export const recordedResponseModel = (response) => (Array.isArray(response?.events)
+  ? eventStreamSummary(response.events).model
+  : (typeof response?.body?.model === 'string' ? response.body.model : null));
+
+// A provider answer as text → { model, usage } (the demo's spend meter).
+export const summarizeProviderResponse = ({ contentType = '', text = '' } = {}) => {
+  if (String(contentType).includes(EVENT_STREAM_CONTENT_TYPE)) {
+    const { model, usage } = eventStreamSummary(parseEventStream(text));
+    return { model, usage };
+  }
+  try {
+    const body = JSON.parse(text);
+    return { model: typeof body?.model === 'string' ? body.model : null, usage: body?.usage || null };
+  } catch {
+    return { model: null, usage: null };
+  }
+};
+
+const responseFrom = (status, payload, contentType) => new Response(payload, { status, headers: { 'content-type': contentType } });
 
 // The models a recordings file answers with, per provider — what the boot
 // line, Host A, the health route and the screens name.
@@ -417,7 +576,7 @@ export const recordedModels = (recordings) => {
   const byProvider = {};
   for (const entry of recordings.entries || []) {
     for (const response of entry.responses || []) {
-      const model = typeof response?.body?.model === 'string' ? response.body.model : null;
+      const model = recordedResponseModel(response);
       if (!model) continue;
       const list = byProvider[entry.provider] ||= [];
       const label = entry.provenance === 'live' ? model : `${model} (${entry.provenance})`;
@@ -435,10 +594,10 @@ export const recordingsDigest = (file) => sha256(canonicalJson(file));
 // so the pass keeps it under this run's ids without calling the provider.
 export const recordedResponseFor = (entry, identity, served = 0) => {
   const recorded = entry.responses[Math.min(served, entry.responses.length - 1)];
-  return new Response(JSON.stringify(unbindResponse(recorded.body, identity)), {
-    status: recorded.status,
-    headers: { 'content-type': recorded.content_type || 'application/json' }
-  });
+  if (Array.isArray(recorded.events)) {
+    return responseFrom(recorded.status, serializeEventStream(unbindResponse(recorded.events, identity)), EVENT_STREAM_CONTENT_TYPE);
+  }
+  return responseFrom(recorded.status, JSON.stringify(unbindResponse(recorded.body, identity)), recorded.content_type || 'application/json');
 };
 
 // ── Secret hygiene ─────────────────────────────────────────────────────────
@@ -580,6 +739,11 @@ export const installProviderReplay = ({
     const index = Math.min(slot.served, slot.entry.responses.length - 1);
     slot.served += 1;
     const recorded = slot.entry.responses[index];
+    if (Array.isArray(recorded.events)) {
+      const events = markStreamEvents(unbindResponse(recorded.events, identity), identity.key);
+      served.push({ lane: classified.lane, provider: classified.endpoint_class, key: identity.key, status: recorded.status, model: eventStreamSummary(events).model, stream: true });
+      return responseFrom(recorded.status, serializeEventStream(events), EVENT_STREAM_CONTENT_TYPE);
+    }
     let body = unbindResponse(recorded.body, identity);
     if (body && typeof body === 'object' && !Array.isArray(body)) {
       body = {
@@ -643,11 +807,20 @@ export const installProviderRecorder = ({
     const { response, provenance } = await forward(input, init, classified, identity);
     const contentType = response.headers.get('content-type') || 'application/json';
     const text = await response.clone().text();
-    let body;
-    try { body = JSON.parse(text); } catch { body = text; }
-    ledger.push({ lane: classified.lane, provider: classified.endpoint_class, status: response.status, model: body?.model || null, usage: body?.usage || null, provenance, ms: Date.now() - started });
-    if (identity && response.status === 200) {
-      const kept = { status: response.status, content_type: contentType.split(';')[0], body: bindResponse(scrubResponseBody(body, identity.key), identity) };
+    const streamed = contentType.includes(EVENT_STREAM_CONTENT_TYPE);
+    let body = null;
+    let events = null;
+    if (streamed) events = coalesceStreamDeltas(parseEventStream(text));
+    else { try { body = JSON.parse(text); } catch { body = text; } }
+    const summary = streamed ? eventStreamSummary(events) : { model: body?.model || null, usage: body?.usage || null, complete: true };
+    ledger.push({ lane: classified.lane, provider: classified.endpoint_class, status: response.status, model: summary.model, usage: summary.usage, provenance, ms: Date.now() - started, ...(streamed ? { stream: true, complete: summary.complete } : {}) });
+    if (streamed && !summary.complete) {
+      logger?.error?.(`[provider-recorder] did not keep a ${classified.lane} stream that ended before its terminal event`);
+    }
+    if (identity && response.status === 200 && summary.complete) {
+      const kept = streamed
+        ? { status: response.status, content_type: EVENT_STREAM_CONTENT_TYPE, events: bindResponse(scrubStreamEvents(events, identity.key), identity) }
+        : { status: response.status, content_type: contentType.split(';')[0], body: bindResponse(scrubResponseBody(body, identity.key), identity) };
       const scan = findSecretShapes(JSON.stringify({ request: identity.request, response: kept }), { extraValues: secretValues });
       if (scan.length) {
         logger?.error?.(`[provider-recorder] refused to keep a ${classified.lane} answer: secret-shaped ${scan.map((s) => s.name).join(', ')}`);

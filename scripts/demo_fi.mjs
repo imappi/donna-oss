@@ -91,6 +91,7 @@ import {
   recordedModels,
   recordedResponseFor,
   recordingsDigest,
+  summarizeProviderResponse,
   unpackRecordings
 } from '../server/donna/providerReplay.js';
 
@@ -302,9 +303,9 @@ export const runDemo = async (options) => {
           throw new TypeError(`demo record: lane ${classified.lane} must be recorded live and needs a ${classified.endpoint_class} key in .env`);
         }
         const response = await realFetch(input, init);
-        let body = null;
-        try { body = await response.clone().json(); } catch { body = null; }
-        const usd = priceUsage({ prices: facts.prices, model: body?.model || classified.model_requested, usage: body?.usage, provider: classified.endpoint_class });
+        // JSON or an event stream: the model and usage the answer reports.
+        const answered = summarizeProviderResponse({ contentType: response.headers.get('content-type') || '', text: await response.clone().text() });
+        const usd = priceUsage({ prices: facts.prices, model: answered.model || classified.model_requested, usage: answered.usage, provider: classified.endpoint_class });
         spend.live_calls += 1;
         if (usd == null) spend.unpriced += 1; else spend.usd += usd;
         if (spend.live_calls % 10 === 0) log(`record: ${spend.live_calls} live calls, ${spend.usd.toFixed(3)} USD`);

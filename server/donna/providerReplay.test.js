@@ -14,6 +14,9 @@ import {
   installProviderRecorder,
   installProviderReplay,
   packRecordings,
+  parseEventStream,
+  recordedModels,
+  recordedResponseModel,
   providerRequestIdentity,
   unbindResponse,
   unpackRecordings
@@ -215,4 +218,165 @@ test('under replay the boot line says REPLAY with the recorded models, and the p
   } finally {
     replay.restore();
   }
+});
+
+// ── Streamed answers (text/event-stream) ────────────────────────────────────
+// A consumer written here, independent of the module's parser: what a lane
+// reading the stream would do — read the body as it arrives, split events,
+// accumulate text deltas, take the model from message_start.
+const consumeAnthropicStream = async (response) => {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let raw = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    raw += decoder.decode(value, { stream: true });
+  }
+  const events = raw.split('\n\n').filter(Boolean).map((block) => {
+    const event = /^event: (.*)$/m.exec(block)?.[1] || null;
+    const data = JSON.parse(/^data: (.*)$/m.exec(block)[1]);
+    return { event, data };
+  });
+  return {
+    events,
+    model: events.find((e) => e.data.type === 'message_start')?.data.message.model,
+    id: events.find((e) => e.data.type === 'message_start')?.data.message.id,
+    text: events.filter((e) => e.data.type === 'content_block_delta').map((e) => e.data.delta.text).join(''),
+    stopped: events.at(-1)?.data.type === 'message_stop'
+  };
+};
+
+const sse = (events) => events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('');
+const anthropicStream = ({ txId, today, cut = false }) => {
+  const id = 'msg_01QzX9k2LmNoPqRsTuVwXyZa';
+  const text = JSON.stringify({ match: txId, decided_on: today });
+  const half = Math.floor(txId.length / 2) + text.indexOf(txId);
+  const events = [
+    { event: 'message_start', data: { type: 'message_start', message: { id, type: 'message', role: 'assistant', model: 'claude-opus-4-8', content: [], usage: { input_tokens: 900, output_tokens: 1 } } } },
+    { event: 'content_block_start', data: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } },
+    // The transaction id is cut across two deltas, as a model may write it.
+    { event: 'content_block_delta', data: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: text.slice(0, half) } } },
+    { event: 'content_block_delta', data: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: text.slice(half) } } },
+    { event: 'content_block_stop', data: { type: 'content_block_stop', index: 0 } },
+    { event: 'message_delta', data: { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 80 } } },
+    { event: 'message_stop', data: { type: 'message_stop' } }
+  ];
+  return sse(cut ? events.slice(0, 4) : events);
+};
+const streamedBody = (body) => ({ ...body, stream: true });
+
+const recordStream = async ({ stream, body, now = () => T0 }) => {
+  const target = withTarget(async () => { throw new Error('unused'); });
+  const recorder = installProviderRecorder({
+    target,
+    now,
+    answer: async () => ({ response: new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream; charset=utf-8', 'request-id': 'req_0123456789abcdefghij' } }), provenance: 'live' })
+  });
+  try {
+    const response = await target.fetch(ANTHROPIC, init(body));
+    await response.text();
+  } finally {
+    recorder.restore();
+  }
+  return recorder;
+};
+
+test('a streamed answer is recorded as events: ids scrubbed, deltas coalesced, the run\'s ids bound, usage kept', async () => {
+  const body = streamedBody(triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' }));
+  const recorder = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10' }), body });
+  const [entry] = recorder.entries();
+  const [kept] = entry.responses;
+  assert.equal(kept.content_type, 'text/event-stream');
+  assert.equal(kept.body, undefined);
+  const text = JSON.stringify(kept);
+  assert.deepEqual(findSecretShapes(text), [], 'no provider id survives inside the events');
+  assert.doesNotMatch(text, /msg_01QzX9k2/);
+  assert.match(kept.events[0].data.message.id, /^recorded_[0-9a-f]{16}_1$/);
+  const deltas = kept.events.filter((e) => e.data.type === 'content_block_delta');
+  assert.equal(deltas.length, 1, 'the two deltas of one block are one');
+  assert.match(deltas[0].data.delta.text, /<id:1>/, 'the id written across two deltas is bound whole');
+  assert.match(deltas[0].data.delta.text, /<run-date\+0>/);
+  assert.equal(recorder.ledger[0].model, 'claude-opus-4-8');
+  assert.deepEqual(recorder.ledger[0].usage, { input_tokens: 900, output_tokens: 80 });
+  assert.equal(recordedResponseModel(kept), 'claude-opus-4-8');
+  assert.equal(recordedModels({ entries: recorder.entries() }).anthropic[0], 'claude-opus-4-8');
+});
+
+test('a streamed answer is replayed as a stream the lane reads, with the marker on its model and this run\'s ids', async () => {
+  const body = streamedBody(triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' }));
+  const recorder = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10' }), body });
+  const file = packRecordings({ format: 'donna.provider-replay.v1', identity: 'donna.provider-request-identity.v1', pack: 'unit', entries: recorder.entries() });
+  const real = refusingRealFetch();
+  const target = withTarget(real.fn);
+  const replay = installProviderReplay({ recordings: unpackRecordings(file), target, now: () => T0 + 5 * DAY });
+  try {
+    const later = streamedBody(triageBody({ txId: '0f8fad5b-d9cb-469f-a165-70867728950e', docId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', today: '2026-11-15', stamp: '2026-11-15T10:00:00Z' }));
+    const response = await target.fetch(ANTHROPIC, init(later));
+    assert.equal(response.headers.get('content-type'), 'text/event-stream');
+    const read = await consumeAnthropicStream(response);
+    assert.equal(read.model, `claude-opus-4-8${REPLAYED_MODEL_SUFFIX}`, 'the receipt model names the recorded model and the replay');
+    assert.match(read.id, /^replay_[0-9a-f]{16}_1$/);
+    assert.deepEqual(JSON.parse(read.text), { match: '0f8fad5b-d9cb-469f-a165-70867728950e', decided_on: '2026-11-15' });
+    assert.equal(read.stopped, true);
+    assert.equal(replay.served[0].stream, true);
+    assert.deepEqual(real.calls, []);
+  } finally {
+    replay.restore();
+  }
+});
+
+test('an OpenAI Responses stream is marked wherever it names the model', async () => {
+  const events = [
+    { event: 'response.created', data: { type: 'response.created', response: { id: 'resp_abc123', model: 'gpt-5.4', status: 'in_progress' } } },
+    { event: 'response.output_text.delta', data: { type: 'response.output_text.delta', item_id: 'msg_xyz789', content_index: 0, delta: '{"ok":' } },
+    { event: 'response.output_text.delta', data: { type: 'response.output_text.delta', item_id: 'msg_xyz789', content_index: 0, delta: 'true}' } },
+    { event: 'response.completed', data: { type: 'response.completed', response: { id: 'resp_abc123', model: 'gpt-5.4', status: 'completed', usage: { input_tokens: 10, output_tokens: 3 } } } }
+  ];
+  const url = 'https://api.openai.com/v1/responses';
+  const body = { model: 'gpt-5.4', stream: true, input: 'x', text: { format: { type: 'json_schema', name: 'document_routing', schema: {} } } };
+  const target = withTarget(async () => { throw new Error('unused'); });
+  const recorder = installProviderRecorder({ target, now: () => T0, answer: async () => ({ response: new Response(sse(events), { status: 200, headers: { 'content-type': 'text/event-stream' } }), provenance: 'live' }) });
+  try { await (await target.fetch(url, init(body))).text(); } finally { recorder.restore(); }
+  const kept = recorder.entries()[0].responses[0];
+  assert.equal(kept.events.filter((e) => e.data.type === 'response.output_text.delta').length, 1);
+  assert.equal(kept.events[0].data.response.id, kept.events.at(-1).data.response.id, 'one provider id → one recorded id');
+  const replay = installProviderReplay({ recordings: unpackRecordings(packRecordings({ format: 'donna.provider-replay.v1', identity: 'donna.provider-request-identity.v1', entries: recorder.entries() })), target, now: () => T0 });
+  try {
+    const served = parseEventStream(await (await target.fetch(url, init(body))).text());
+    assert.equal(served[0].data.response.model, 'gpt-5.4+replayed');
+    assert.equal(served.at(-1).data.response.model, 'gpt-5.4+replayed');
+    assert.equal(served[1].data.delta, '{"ok":true}');
+  } finally {
+    replay.restore();
+  }
+});
+
+test('a cut-off stream is never a silent success: not kept when recorded, refused when found in a file, a miss on replay', async () => {
+  const body = streamedBody(triageBody({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', docId: '8c9f2a10-0000-4000-8000-00000000aaaa', today: '2026-11-10', stamp: '2026-11-10T09:00:03Z' }));
+  const recorder = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10', cut: true }), body });
+  assert.equal(recorder.entries().length, 0, 'a stream that ended before message_stop is not an answer');
+  assert.equal(recorder.ledger[0].complete, false);
+  // A file someone edited to hold a cut-off stream is refused at load.
+  const whole = await recordStream({ stream: anthropicStream({ txId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', today: '2026-11-10' }), body });
+  const entries = whole.entries().map((entry) => ({ ...entry, responses: entry.responses.map((r) => ({ ...r, events: r.events.slice(0, -2) })) }));
+  assert.throws(() => unpackRecordings(packRecordings({ format: 'donna.provider-replay.v1', identity: 'donna.provider-request-identity.v1', entries })),
+    (error) => error.code === PROVIDER_REPLAY_CODES.BAD_RECORDINGS && /terminal event/.test(error.message));
+  // And with nothing kept, the replay of that request is a named miss.
+  const target = withTarget(async () => { throw new Error('network refused in this test'); });
+  const replay = installProviderReplay({ recordings: { entries: [] }, target, now: () => T0 });
+  try {
+    await assert.rejects(target.fetch(ANTHROPIC, init(body)), (error) => error.code === PROVIDER_REPLAY_CODES.UNRECORDED);
+  } finally {
+    replay.restore();
+  }
+});
+
+test('the health route\'s replay read never hangs: a blocked query gives null within its bound, a down database null', async () => {
+  const { readLatestProviderReplaySession } = await import('./providerReplaySession.js');
+  const started = Date.now();
+  assert.equal(await readLatestProviderReplaySession({ queryFn: () => new Promise(() => {}), timeoutMs: 200 }), null);
+  assert.ok(Date.now() - started < 1500, 'answered within the bound, not the pool\'s 30 s');
+  assert.equal(await readLatestProviderReplaySession({ queryFn: async () => { throw Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }); } }), null);
+  assert.equal(await readLatestProviderReplaySession({ queryFn: async () => ({ rows: [] }) }), null);
 });
