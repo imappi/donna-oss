@@ -37,7 +37,9 @@ export const STAND_IN_MODEL_PREFIX = 'scripted-stand-in-for-';
 const responsesBody = (model, value) => ({
   id: 'resp_stand_in',
   object: 'response',
-  created_at: Math.floor(Date.now() / 1000),
+  // A fixed time (the end of the pack's month), so a refill does not
+  // rewrite every stand-in answer.
+  created_at: 1740787200,
   status: 'completed',
   model: `${STAND_IN_MODEL_PREFIX}${model || 'unnamed-model'}`,
   output: [{ id: 'msg_stand_in', type: 'message', status: 'completed', role: 'assistant', content: [{ type: 'output_text', annotations: [], text: typeof value === 'string' ? value : JSON.stringify(value) }] }],
