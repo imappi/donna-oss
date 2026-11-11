@@ -52,6 +52,33 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  for(const flagKey of flags)await withClient(client=>setClientFlagStage(client,{...scope,flagKey,stage:'canary',actorId:'member',actorType:'firm_member',reason:'Synthetic regression'}));
  const policy=codingPolicyReceipt(resolveCodingPolicy({jurisdiction:'fi',businessDate:'2025-02-24',accountingSystem:'none'}));
  const tx=async id=>(await pool.query('select * from transactions where id=$1',[id])).rows[0];
+ // A step that asserts a definite outcome drives the clocks as the scheduler
+ // does: a `contended` result (a NOWAIT fence lost to another holder, often
+ // autovacuum's SHARE UPDATE EXCLUSIVE under parallel shards) means nothing
+ // was recorded, so it is taken again, bounded, for those cases only. Steps
+ // that provoke contention on purpose call the clock directly.
+ const pause=()=>new Promise(r=>setTimeout(r,250));
+ const recoverPosted=async(args={})=>{
+  const admit=args.runWorkerAdmissionFn||(async({work})=>work());
+  let res=await recoverPostedCodingCorrectionsInDb(args);
+  for(let i=0;i<10;i++){
+   const ids=new Set(res.filter(r=>r.state==='contended').map(r=>r.transactionId));
+   if(!ids.size)return res;
+   await pause();
+   const again=await recoverPostedCodingCorrectionsInDb({...args,limit:100,
+    runWorkerAdmissionFn:a=>ids.has(a.transactionId)?admit(a):{state:'busy'}});
+   res=res.map(r=>ids.has(r.transactionId)?(again.find(x=>x.transactionId===r.transactionId)||r):r);
+  }
+  assert.fail(`correction still contended after 10 re-drives: ${JSON.stringify(res)}`);
+ };
+ const recoverEvidence=async(args)=>{
+  for(let i=0;i<10;i++){
+   const res=await recoverChangedCodingEvidenceInDb(args);
+   if(!res.some(r=>r.state==='contended'))return res;
+   await pause();
+  }
+  assert.fail('evidence recovery still contended after 10 re-drives');
+ };
  const seed=async(id,{amount=923.6,incoming=true,document=true,privateUse=false}={})=>{
   if(document){
    await pool.query(`insert into documents(id,firm_id,client_id,filename,document_type,parse_status,document_date,currency,total_amount,tax_amount,parse_summary)
@@ -80,7 +107,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  await pool.query("insert into ledger_accounts(id,firm_id,client_id,name,account_type,normal_balance,status) values('interest-income','f','c','Interest income','revenue','credit','active')");
  const originalId=await seed('reminder');
  const original=await pool.query('select * from ledger_lines where journal_id=$1 order by line_no',[originalId]);
- await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await recoverEvidence({firmId:'f'});
  assert.equal((await tx('reminder')).payload.coding_correction_required.status,'pending');
  let calls=0,phase='allocation',race=null,lastRequest=null;
  globalThis.fetch=async(endpoint,init)=>{
@@ -96,7 +123,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
    return[key,{type:'choice',choice,confidence:.9,probabilities:Object.fromEntries(entries.map(([k])=>[k,k===choice?.9:.1/(entries.length-1)]))}];
   }));return new Response(JSON.stringify({model:'fixture-provider',answers,usage:{input_tokens:1,output_tokens:1}}),{status:200,headers:{'content-type':'application/json'}});
  };
- let result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ let result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].code,'CODING_CORRECTION_AUTHORITY_REQUIRED');assert.equal(calls,0);
  const blocked=(await tx('reminder')).payload.coding_correction_required;
  assert.equal(blocked.recovery.state,'blocked');
@@ -104,17 +131,17 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(convergenceForTransaction(await tx('reminder')).reason,'posted_evidence_correction_blocked:CODING_CORRECTION_AUTHORITY_REQUIRED');
  const failureCount=async id=>(await pool.query("select count(*)::int n from audit_events where resource_id=$1 and action='coding.correction_failed'",[id])).rows[0].n;
  assert.equal(await failureCount('reminder'),1);
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].code,'CODING_CORRECTION_AUTHORITY_REQUIRED');
  assert.equal(await failureCount('reminder'),1,'the unchanged blocked dependency is probed without another failure event');
  await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'canary',actorId:'member',actorType:'firm_member',reason:'Correct source-proven autonomous journals in this synthetic book'}));
  phase='bad_tax';
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].code,'TRANSACTION_ALV_CODING_SOURCE_CONFLICT',JSON.stringify(result));
  const rejectedCalls=calls;
  assert.deepEqual((await pool.query('select * from ledger_lines where journal_id=$1 order by line_no',[originalId])).rows,original.rows);
  phase='allocation';
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].state,'completed',JSON.stringify(result));
  assert.ok(calls>rejectedCalls,'a rejected treatment is reconsidered, not endlessly replayed');
  assert.equal(lastRequest.state.transaction.correction_context.previous_refusal.code,'TRANSACTION_ALV_CODING_SOURCE_CONFLICT');
@@ -125,27 +152,27 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  const delta=(await pool.query('select account_code,account_name,debit,credit,tax_type,payload from ledger_lines where journal_id=$1 order by line_no',[requirement.correction_journal_ids[0]])).rows;
  assert.deepEqual(delta.map(l=>[l.account_name,Number(l.debit),Number(l.credit)]),[['Interest expense',20,0],['Interest income',0,20]],JSON.stringify(delta));
  const spent=calls;
- assert.deepEqual(await recoverPostedCodingCorrectionsInDb({firmId:'f'}),[]);assert.equal(calls,spent);
+ assert.deepEqual(await recoverPosted({firmId:'f'}),[]);assert.equal(calls,spent);
  const retry=await postLedgerAdjustmentInDb({...scope,transactionId:'reminder',reason:'Retry same receipt',codingCorrection:{decision_digest:requirement.recovery.decision_digest}});
  assert.equal(retry.coding_correction.status,'corrected');
  assert.equal((await pool.query('select count(*)::int n from ledger_journals where correction_of_journal_id=$1',[originalId])).rows[0].n,1);
- await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await recoverEvidence({firmId:'f'});
  assert.equal((await tx('reminder')).payload.coding_correction_required.status,'corrected');
  // A genuine missing filing produces one persisted unsent question, never a
  // tax-account choice for the owner. Reply is saved through the real writer.
  await seed('statutory',{amount:1245,incoming:false,document:false});phase='ask';
- await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await recoverEvidence({firmId:'f'});
  phase='statutory';
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].code,'CODING_CORRECTION_EXECUTION_REFUSED');
  assert.equal((await tx('statutory')).payload.coding_correction_required.recovery.details.reason,'statutory_evidence_required');
  phase='ask';
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].state,'owner_question',JSON.stringify(result));
  assert.equal(lastRequest.state.transaction.correction_context.previous_refusal.details.reason,'statutory_evidence_required');
  const ask=(await pool.query("select * from client_evidence_requests where transaction_id='statutory'")).rows[0];
  assert.equal(ask.status,'draft');assert.match(ask.question,/liability and period/);assert.equal(ask.send_count,0);
- const beforeWait=calls;await recoverPostedCodingCorrectionsInDb({firmId:'f'});assert.equal(calls,beforeWait);
+ const beforeWait=calls;await recoverPosted({firmId:'f'});assert.equal(calls,beforeWait);
  await resolveClientEvidenceRequestInDb({firmId:'f',evidenceRequestId:ask.id,reply:'The filed return covers Q4. The notice is attached.',actorId:'member',actorType:'firm_member',answerSource:'in_person'});
  assert.equal((await pool.query('select status from client_evidence_requests where id=$1',[ask.id])).rows[0].status,'replied');
  assert.equal(convergenceForTransaction(await tx('statutory'),{hasAnsweredOwnerAsk:true}).state,'hanging');
@@ -153,17 +180,17 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  values('notice','f','c','notice.pdf','payment_confirmation','completed','2025-02-24','EUR',1245,0,'{"period":"Q4"}');
  insert into reconciliation_matches(id,firm_id,client_id,bank_transaction_id,matched_object_type,matched_object_id,match_amount,match_confidence,status)
  values('notice-match','f','c','statutory','payment_confirmation','notice',1245,1,'auto_matched');`);
- phase='statutory';result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ phase='statutory';result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].state,'completed',JSON.stringify(result));
  assert.equal((await pool.query('select status from client_evidence_requests where id=$1',[ask.id])).rows[0].status,'resolved');
  assert.equal((await tx('statutory')).coding_state,'posted');
  // A source change during generation cannot reach the adjustment writer.
- await seed('race');await recoverChangedCodingEvidenceInDb({firmId:'f'});phase='allocation';
+ await seed('race');await recoverEvidence({firmId:'f'});phase='allocation';
  race=()=>pool.query("update document_lines set description='Changed source component' where id='race-line-2'");
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].code,'CODING_CORRECTION_STALE',JSON.stringify(result));
  assert.equal((await tx('race')).payload.coding_correction_required.status,'pending');
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].state,'completed',JSON.stringify(result));
  assert.equal((await pool.query("select count(*)::int n from client_evidence_requests where transaction_id='race'")).rows[0].n,0);
  const tick=()=>runCodingConvergenceInDb({firmId:'f',
@@ -207,12 +234,12 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal((await pool.query("select count(*)::int n from client_evidence_requests where transaction_id='personal'")).rows[0].n,0,'a known personal-use source conflict must not manufacture a redundant question');
  assert.equal((await tx('personal')).payload.coding_correction_required.recovery.details.constraint,'personal_source_cannot_claim_input_tax');
  const refusedSource=(await tx('personal')).payload.coding_correction_required.recovery;
- const transportFailure=await recoverPostedCodingCorrectionsInDb({firmId:'f',suggestFn:async()=>({provider_failure:{code:'PROVIDER_REJECTED_REQUEST',reason:'synthetic_request_failure'}})});
+ const transportFailure=await recoverPosted({firmId:'f',suggestFn:async()=>({provider_failure:{code:'PROVIDER_REJECTED_REQUEST',reason:'synthetic_request_failure'}})});
  assert.equal(transportFailure[0].code,'PROVIDER_REJECTED_REQUEST');
  assert.deepEqual((await tx('personal')).payload.coding_correction_required.recovery.previous_refusal,{code:refusedSource.code,details:refusedSource.details});
  assert.equal((await tx('personal')).payload.coding_correction_required.recovery.attempts,refusedSource.attempts,'a provider failure does not consume an accounting reconsideration');
  const providerFailures=await failureCount('personal');
- const repeatedTransport=await recoverPostedCodingCorrectionsInDb({firmId:'f',suggestFn:async()=>({provider_failure:{code:'PROVIDER_REJECTED_REQUEST',reason:'synthetic_request_failure'}})});
+ const repeatedTransport=await recoverPosted({firmId:'f',suggestFn:async()=>({provider_failure:{code:'PROVIDER_REJECTED_REQUEST',reason:'synthetic_request_failure'}})});
  assert.equal(repeatedTransport[0].state,'blocked');
  assert.equal(await failureCount('personal'),providerFailures,'an unchanged transport blocker has one failure receipt');
  assert.equal((await tx('personal')).payload.coding_correction_required.recovery.attempts,refusedSource.attempts);
@@ -265,7 +292,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
   coding_correction_required:{status:'corrected',original_journal_id:residualJournal,current_evidence_digest:residualDigest,source_business_use_digest:hash([]),correction_journal_ids:[]}
  }]);
  const residualOriginal=(await pool.query('select * from ledger_lines where journal_id=$1 order by line_no',[residualJournal])).rows;
- await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await recoverEvidence({firmId:'f'});
  assert.equal((await tx('residual-tax')).payload.coding_correction_required.status,'pending');
  assert.equal((await tx('residual-tax')).payload.coding_correction_required.reason,'posted_source_business_use_conflict');
  phase='personal';clockResult=await tick();
@@ -280,15 +307,15 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
 
 
  // Two deliveries share the durable claim. Only one reasons and writes.
- await seed('concurrent');await recoverChangedCodingEvidenceInDb({firmId:'f'});phase='allocation';
+ await seed('concurrent');await recoverEvidence({firmId:'f'});phase='allocation';
  let nested;
  race=async()=>{nested=await recoverPostedCodingCorrectionsInDb({firmId:'f'});};
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});
+ result=await recoverPosted({firmId:'f'});
  assert.equal(result[0].state,'completed',JSON.stringify(result));assert.equal(nested[0].state,'busy');
  // Revoke after the saved decision commits but before the adjustment obtains
  // its checkout. The actual adjustment writer must refuse; no owner ask.
- await seed('revoked');await recoverChangedCodingEvidenceInDb({firmId:'f'});
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f',runWorkerAdmissionFn:async({work})=>{
+ await seed('revoked');await recoverEvidence({firmId:'f'});
+ result=await recoverPosted({firmId:'f',runWorkerAdmissionFn:async({work})=>{
   const staged=await work();
   await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'off',actorId:'member',actorType:'firm_member',reason:'Synthetic revocation race'}));
   return staged;
@@ -299,7 +326,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal((await pool.query('select count(*)::int n from ledger_journals where correction_of_journal_id=$1',[revoked.original_journal_id])).rows[0].n,0);
  assert.equal((await pool.query("select count(*)::int n from client_evidence_requests where transaction_id='revoked'")).rows[0].n,0);
  await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'canary',actorId:'member',actorType:'firm_member',reason:'Fresh synthetic correction authority'}));
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f'});assert.equal(result[0].state,'completed',JSON.stringify(result));
+ result=await recoverPosted({firmId:'f'});assert.equal(result[0].state,'completed',JSON.stringify(result));
 
  // Lock contention is not an outcome. A second connection holds ledger_lines
  // in SHARE UPDATE EXCLUSIVE, the mode autovacuum/ANALYZE takes, so the
@@ -333,7 +360,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
   return res;};
  phase='allocation';
  // 1. Held before the tick: the scan fence refuses before any claim or model call.
- await seed('contended-scan');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('contended-scan');await recoverEvidence({firmId:'f'});
  let release=await holdFence(),contendedCalls=calls,beforeCase=await caseOf('contended-scan');
  try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-scan'));}finally{await release();}
  assert.deepEqual(await assertContended('contended-scan',result,0),beforeCase,'the case is left exactly as it was');
@@ -342,7 +369,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(result.find(r=>r.transactionId==='contended-scan').state,'completed',JSON.stringify(result));
  // 2. Taken while the coder reasons: the decision fence refuses; the claim is
  // returned, so the reconsideration budget is not spent on contention.
- await seed('contended-decision');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('contended-decision');await recoverEvidence({firmId:'f'});
  release=null;race=async()=>{release=await holdFence();};
  try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-decision'));}finally{race=null;if(release)await release();}
  let stored=await assertContended('contended-decision',result,0);
@@ -351,7 +378,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(result.find(r=>r.transactionId==='contended-decision').state,'completed',JSON.stringify(result));
  // 3. Taken after the decision commits: the adjustment writer refuses; the
  // saved decision stays ready and is replayed without another model call.
- await seed('contended-write');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('contended-write');await recoverEvidence({firmId:'f'});
  release=null;
  try{result=await recoverPostedCodingCorrectionsInDb({...onlyCase('contended-write'),runWorkerAdmissionFn:async({transactionId,work})=>{
   if(transactionId!=='contended-write')return {state:'busy'};const staged=await work();release=await holdFence();return staged;}});}
@@ -366,7 +393,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  // 4. A case stored before this rule with the raw code as its blocker is
  // pending again: the next contended tick clears it without a receipt, and
  // the next free tick produces the real outcome.
- await seed('contended-legacy');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('contended-legacy');await recoverEvidence({firmId:'f'});
  await pool.query(`update transactions set payload=jsonb_set(payload,'{coding_correction_required,recovery}',
   '{"state":"blocked","code":"55P03","details":null,"attempted_at":"2026-01-01T00:00:00.000Z"}'::jsonb) where id='contended-legacy'`);
  assert.equal(convergenceForTransaction(await tx('contended-legacy')).reason,'posted_evidence_correction_blocked:55P03');
@@ -376,7 +403,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  result=await freeTick('contended-legacy');
  assert.equal(result.find(r=>r.transactionId==='contended-legacy').state,'completed',JSON.stringify(result));
  // 5. A real refusal under the same held fence is still recorded as itself.
- await seed('contended-refusal');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('contended-refusal');await recoverEvidence({firmId:'f'});
  await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'off',actorId:'member',actorType:'firm_member',reason:'Synthetic refusal under contention'}));
  contendedCalls=calls;release=await holdFence();
  try{result=await recoverPostedCodingCorrectionsInDb(onlyCase('contended-refusal'));}finally{await release();}
@@ -398,7 +425,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
   const pid=(await holder.query('select pg_backend_pid() as pid')).rows[0].pid;
   await holder.query('update transactions set updated_at=updated_at where id=$1',[id]);return {holder,pid};};
  //   6. The holder commits while the scan waits: 40001, could not serialize.
- await seed('serialization-scan');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('serialization-scan');await recoverEvidence({firmId:'f'});
  beforeCase=await caseOf('serialization-scan');contendedCalls=calls;
  {const {holder,pid}=await holdRow('serialization-scan');
   try{const tick=recoverPostedCodingCorrectionsInDb(onlyCase('serialization-scan'));tick.catch(()=>{});
@@ -410,7 +437,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(result.find(r=>r.transactionId==='serialization-scan').state,'completed',JSON.stringify(result));
  //   7. The holder then asks for the scan's own lease: 40P01, deadlock detected.
  // The holder's deadlock_timeout is longer, so the scan is the one aborted.
- await seed('deadlock-scan');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('deadlock-scan');await recoverEvidence({firmId:'f'});
  beforeCase=await caseOf('deadlock-scan');contendedCalls=calls;
  {const {holder,pid}=await holdRow('deadlock-scan');
   try{await holder.query("set deadlock_timeout='30s'");
@@ -425,7 +452,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(result.find(r=>r.transactionId==='deadlock-scan').state,'completed',JSON.stringify(result));
  //   A case stored before this rule as blocked:40001 is pending again on the
  //   next contended tick, with no receipt, like a stored 55P03 (section 4).
- await seed('serialization-legacy');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('serialization-legacy');await recoverEvidence({firmId:'f'});
  await pool.query(`update transactions set payload=jsonb_set(payload,'{coding_correction_required,recovery}',
   '{"state":"blocked","code":"40001","details":null,"attempted_at":"2026-01-01T00:00:00.000Z"}'::jsonb) where id='serialization-legacy'`);
  assert.equal(convergenceForTransaction(await tx('serialization-legacy')).reason,'posted_evidence_correction_blocked:40001');
@@ -436,8 +463,8 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal(result.find(r=>r.transactionId==='serialization-legacy').state,'completed',JSON.stringify(result));
  // 8. A programming error is neither transient nor a refusal: it is stored as
  // an unexpected failure with its message, and the case is taken again.
- await seed('unexpected-error');await recoverChangedCodingEvidenceInDb({firmId:'f'});
- result=await recoverPostedCodingCorrectionsInDb({...onlyCase('unexpected-error'),suggestFn:async()=>{throw new TypeError('synthetic programming error');}});
+ await seed('unexpected-error');await recoverEvidence({firmId:'f'});
+ result=await recoverPosted({...onlyCase('unexpected-error'),suggestFn:async()=>{throw new TypeError('synthetic programming error');}});
  assert.equal(result.find(r=>r.transactionId==='unexpected-error').code,'CODING_CORRECTION_FAILED',JSON.stringify(result));
  stored=await caseOf('unexpected-error');
  assert.equal(stored.recovery.state,'blocked');assert.equal(stored.recovery.details.message,'synthetic programming error');
@@ -448,29 +475,29 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
 
  // A waiting owner case cannot consume the bounded clock's only slot forever.
  await seed('a-waiting',{amount:1245,incoming:false,document:false});
- await recoverChangedCodingEvidenceInDb({firmId:'f'});phase='ask';
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});assert.equal(result[0].state,'owner_question');
- await seed('z-later');await recoverChangedCodingEvidenceInDb({firmId:'f'});phase='allocation';
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+ await recoverEvidence({firmId:'f'});phase='ask';
+ result=await recoverPosted({firmId:'f',limit:1});assert.equal(result[0].state,'owner_question');
+ await seed('z-later');await recoverEvidence({firmId:'f'});phase='allocation';
+ result=await recoverPosted({firmId:'f',limit:1});
  assert.equal(result[0].transactionId,'z-later');assert.equal(result[0].state,'completed',JSON.stringify(result));
 
  // Bank roster context is loaded from statement payload, outside the display
  // packet. Bind it too, so an unchanged parse summary cannot hide a new input.
- await seed('roster');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('roster');await recoverEvidence({firmId:'f'});
  await pool.query(`insert into documents(id,firm_id,client_id,filename,document_type,parse_status,document_date,currency,payload)
   values('roster-statement','f','c','statement.pdf','bank_statement','completed','2025-02-24','EUR',
   '{"statement_summary":{"bank_name":"Fixture bank","account_number":"1111"}}')`);
  phase='allocation';race=()=>pool.query(`update documents set payload=jsonb_set(payload,
   '{statement_summary,account_number}','"2222"'::jsonb) where id='roster-statement'`);
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+ result=await recoverPosted({firmId:'f',limit:1});
  assert.equal(result[0].transactionId,'roster');assert.equal(result[0].code,'CODING_CORRECTION_STALE',JSON.stringify(result));
 
  // Other coder-only source fields (not in the display projection) receive
  // the same protection. Preserve the actual error and do not mint a question.
- await seed('parser-context');await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await seed('parser-context');await recoverEvidence({firmId:'f'});
  race=()=>pool.query(`update transactions set payload=payload ||
   '{"parser_flags":["source_direction_requires_review"]}'::jsonb where id='parser-context'`);
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+ result=await recoverPosted({firmId:'f',limit:1});
  assert.equal(result[0].transactionId,'parser-context');assert.equal(result[0].code,'CODING_CORRECTION_STALE',JSON.stringify(result));
  assert.equal((await pool.query("select count(*)::int n from client_evidence_requests where transaction_id='parser-context'")).rows[0].n,0);
 
@@ -487,8 +514,8 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  await resolveClientEvidenceRequestInDb({firmId:'f',evidenceRequestId:legacyAsk.id,
   reply:'This cash was already recorded in the cashbook and is being moved to the bank.',
   actorId:'member',actorType:'firm_member',answerSource:'in_person'});
- await recoverChangedCodingEvidenceInDb({firmId:'f'});phase='cash';
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+ await recoverEvidence({firmId:'f'});phase='cash';
+ result=await recoverPosted({firmId:'f',limit:1});
  assert.equal(result[0].transactionId,'legacy-reply');assert.equal(result[0].state,'completed',JSON.stringify(result));
  assert.equal((await pool.query('select status from client_evidence_requests where id=$1',[legacyAsk.id])).rows[0].status,'resolved');
 
@@ -502,13 +529,13 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  ]) {
   const denied=`a-${label}-refused`,later=`z-${label}-later`;
   await seed(denied);await seed(later);
-  await recoverChangedCodingEvidenceInDb({firmId:'f'});phase='allocation';
+  await recoverEvidence({firmId:'f'});phase='allocation';
   await withClient(client=>setClientFlagStage(client,{...scope,flagKey,stage:blockedStage,
    actorId:'member',actorType:'firm_member',reason:'Synthetic early-refusal rotation proof'}));
   const callsBefore=calls;
   const journalsBefore=(await pool.query('select * from ledger_journals order by id')).rows;
   const linesBefore=(await pool.query('select * from ledger_lines order by id')).rows;
-  result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+  result=await recoverPosted({firmId:'f',limit:1});
   assert.equal(result[0].transactionId,denied);assert.equal(result[0].code,code);
   assert.equal(calls,callsBefore);
   const refusal=(await tx(denied)).payload.coding_correction_required;
@@ -526,7 +553,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
    await pool.query(`update transactions set payload=jsonb_set(payload,
      '{coding_correction_required,last_checked_at}','"2100-01-01T00:00:00Z"'::jsonb)
      where id=$1`,[later]);
-   result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+   result=await recoverPosted({firmId:'f',limit:1});
    assert.equal(result[0].transactionId,denied);
    assert.equal(result[0].state,'blocked');
    assert.equal(await failureCount(denied),countBefore,'a newer host receipt with the same cause is one blocker, not another failure');
@@ -537,7 +564,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
   assert.equal((await pool.query('select count(*)::int n from client_evidence_requests where transaction_id=$1',[denied])).rows[0].n,0);
   await withClient(client=>setClientFlagStage(client,{...scope,flagKey,stage:allowedStage,
    actorId:'member',actorType:'firm_member',reason:'Restore synthetic fixture after refusal proof'}));
-  result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+  result=await recoverPosted({firmId:'f',limit:1});
   assert.equal(result[0].transactionId,later);assert.equal(result[0].state,'completed',JSON.stringify(result));
   assert.equal((await tx(later)).payload.coding_correction_required.status,'corrected');
  }
@@ -549,8 +576,8 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  values('identity-doc','f','c','identity.pdf','receipt','completed','2025-02-24','EUR',52.1,0,'{}');
  insert into reconciliation_matches(id,firm_id,client_id,bank_transaction_id,matched_object_type,matched_object_id,match_amount,match_confidence,status,payload)
  values('identity-match','f','c','identity-refusal','receipt','identity-doc',52.1,1,'suggested','{"cross_entity":{"detected":true,"own_side":"Another synthetic company"}}')`);
- await recoverChangedCodingEvidenceInDb({firmId:'f'});phase='identity_initial';
- const identityPass=()=>recoverPostedCodingCorrectionsInDb({firmId:'f',limit:100,
+ await recoverEvidence({firmId:'f'});phase='identity_initial';
+ const identityPass=()=>recoverPosted({firmId:'f',limit:100,
   runWorkerAdmissionFn:({transactionId,work})=>transactionId==='identity-refusal'?work():{state:'busy'}});
  result=await identityPass();
  assert.equal(result.find(r=>r.transactionId==='identity-refusal').code,'CODING_CORRECTION_EXECUTION_REFUSED');
@@ -574,11 +601,11 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal((await tx('identity-refusal')).payload.ai_suggestion.source_identity_reply.actor_id,'member');
  assert.deepEqual((await pool.query("select * from reconciliation_matches where bank_transaction_id='identity-refusal'")).rows,identitySource);
  assert.deepEqual((await pool.query("select profile from clients where id='c'")).rows,identityProfile,'a scoped answer cannot teach a client alias');
- await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await recoverEvidence({firmId:'f'});
  assert.equal((await tx('identity-refusal')).payload.coding_correction_required.status,'corrected');
  // The same receipt cannot authorize a different source or a replaced answer.
  await pool.query("update client_evidence_requests set response_payload=jsonb_set(response_payload,'{reply}','\"The earlier explanation was wrong.\"') where id=$1",[identityAsk.id]);
- await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await recoverEvidence({firmId:'f'});
  assert.equal((await tx('identity-refusal')).payload.coding_correction_required.status,'pending');
  phase='identity_ask';await identityPass();
 
@@ -586,15 +613,15 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  // PostgreSQL's offset timestamp and the JS failure receipt's UTC timestamp
  // must sort by instant. Lexical order starved earlier successful scans.
  await seed('offset-earlier');await seed('utc-later');
- await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await recoverEvidence({firmId:'f'});
  for(const [id,at] of [['offset-earlier','2000-01-01T12:00:00+02:00'],['utc-later','2000-01-01T10:01:00Z']])
   await pool.query("update transactions set payload=jsonb_set(payload,'{coding_correction_required,last_checked_at}',to_jsonb($2::text)) where id=$1",[id,at]);
  await withClient(client=>setClientFlagStage(client,{...scope,flagKey:CODING_CORRECTION_FLAG,stage:'off',
   actorId:'member',actorType:'firm_member',reason:'Synthetic timestamp-order refusal proof'}));
  const beforeOffset=calls;
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+ result=await recoverPosted({firmId:'f',limit:1});
  assert.equal(result[0].transactionId,'offset-earlier');assert.equal(result[0].code,'CODING_CORRECTION_AUTHORITY_REQUIRED');
- result=await recoverPostedCodingCorrectionsInDb({firmId:'f',limit:1});
+ result=await recoverPosted({firmId:'f',limit:1});
  assert.equal(result[0].transactionId,'utc-later');assert.equal(calls,beforeOffset);
 
  // A generated output-VAT leg on a misclassified purchase is not a tax filing payment.
@@ -613,7 +640,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
    await client.query('commit');
   } catch(error) {await client.query('rollback');throw error;}
  });
- await recoverChangedCodingEvidenceInDb({firmId:'f'});
+ await recoverEvidence({firmId:'f'});
  assert.equal((await tx('receipt-sales')).payload.coding_correction_required.reason,'posted_allocation_account_conflict');
  assert.equal((await tx('receipt-sales')).payload.coding_correction_required.statutory_source_required,false);
 
