@@ -5,9 +5,6 @@ statements, codes each line in the local VAT rules, reconciles bank lines
 against documents, and asks the business owner only the questions only they
 can answer.
 
-This is a source release of a working codebase, not a supported product.
-There is no hosted service, no support and no warranty.
-
 ## Status
 
 - **Finland** is the most complete market: ALV coding, the Finnish chart of
@@ -44,15 +41,18 @@ calls go to OpenAI, Anthropic and Typesafe.
 ## Run Donna locally
 
 This runs Donna on one machine with no outside services: its own
-PostgreSQL in a folder under your home directory, documents stored on
-disk, background jobs in the same process, and a sign-in key you choose.
-It is the headless form of the desktop appliance (`scripts/desktop-boot.mjs`).
-The demo company is synthetic: Kampaamo Kultalanka Oy, a Finnish
-hairdresser, from the test pack in `data/evals/fixtures/fi-kultalanka-2025-02`.
+PostgreSQL, documents stored on disk, background jobs in the same process,
+and a sign-in key you choose. It is the headless form of the desktop
+appliance (`scripts/desktop-boot.mjs`). The demo company is synthetic:
+Kampaamo Kultalanka Oy, a Finnish hairdresser, from the test pack in
+`data/evals/fixtures/fi-kultalanka-2025-02`. There are two ways to start
+it: with Docker (one command), or on the host. To see it work first, with
+no provider key, start with the zero-key demo.
 
 ### The zero-key demo
 
-One command, no provider key, no network call:
+One command, no provider key, no network call. On the host (what you need
+is listed under "What you need on the host"):
 
 ```bash
 git clone https://github.com/imappi/donna-oss.git
@@ -62,13 +62,20 @@ npm run build
 npm run demo:fi
 ```
 
-It starts its own PostgreSQL in `~/.donna-demo` (never the book of
-`npm run local:runtime`), the runtime and the web app, creates the demo
-firm and company with its ALV registration, uploads the month's 26
-documents, runs the scheduler's work to rest, gives the owner's answers
+Or with Docker, from the same checkout:
+
+```bash
+docker compose run --rm --service-ports demo
+```
+
+It starts the runtime and the web app on a book of its own (on the host
+`~/.donna-demo`; with Docker the database `donna_demo` and the volume
+`donna_donna-demo-data`), never the book of the starts below. It creates
+the demo firm and company with its ALV registration, uploads the month's
+26 documents, runs the scheduler's work to rest, gives the owner's answers
 (`scripts/fixtures/fi_kultalanka_month_facts.json`) and runs to rest
-again. On a laptop that takes under a minute. It ends with a summary read
-from the stored rows, then keeps the book up:
+again, in under a minute. It ends with a summary read from the stored rows
+and keeps the book up:
 
 ```text
 [demo] replay at rest in 36 s
@@ -78,9 +85,12 @@ from the stored rows, then keeps the book up:
 [demo] sign in at http://127.0.0.1:5173/firms with the access key …
 ```
 
-Open the address, paste the printed access key, and choose Kampaamo
-Kultalanka Oy. Every screen says **Demo: recorded model outputs**.
-Ctrl-C stops it; `rm -rf ~/.donna-demo` starts it again from nothing.
+Open the address it prints (with Docker, <http://127.0.0.1:5174/firms>),
+paste the printed access key, and choose Kampaamo Kultalanka Oy. Every
+screen says **Demo: recorded model outputs**. Ctrl-C stops it. To start
+again from nothing: `rm -rf ~/.donna-demo` on the host; with Docker,
+`docker compose down` then `docker volume rm donna_donna-demo-data` and
+drop the `donna_demo` database.
 
 **The model answers are recorded, not live.** They were made once from a
 real run of this month and are committed in
@@ -100,15 +110,80 @@ runtime's `model lanes:` line says `REPLAY`.
 
 The demo serves only its own company: it refuses to start on a book that
 holds any other firm or company, and stops answering if one appears.
-To re-record (needs `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in `.env`,
-an empty book, and about 15 USD of model calls): `npm run demo:fi:record`.
+To re-record (on the host, with `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`
+in `.env`, and about 15 USD of model calls): `npm run demo:fi:record`.
 
-### Run it with your own keys
+The starts below run the same book on live providers, with your own keys
+and your own data.
 
-The rest of this section runs the same book on live providers, with your
-own keys and your own data.
+### Start with Docker
 
-### What you need
+You need git and Docker with Compose 2.24 or later: Docker Desktop on
+macOS or Windows, Docker Engine on Linux. Node.js and PostgreSQL are not
+installed on your machine; PostgreSQL 16 runs in a container of its own.
+This start has been run on Linux (x86_64) with Docker Engine. Docker
+Desktop on macOS and Windows, and arm64 machines such as Apple-silicon
+Macs, have not been run yet; the images it uses are published for both
+amd64 and arm64.
+
+```bash
+git clone https://github.com/imappi/donna-oss.git
+cd donna-oss
+cp .env.example .env    # Windows: copy .env.example .env
+docker compose up
+```
+
+Before `docker compose up`, put a long random string after
+`DONNA_ACCESS_TOKEN=` in `.env`: it is your sign-in key (on Linux and
+macOS, the `sed` line in step 2 below writes one). Provider keys go in
+the same file (see "What needs a model provider key"); the image never
+contains a key or a `.env`. Without a `.env`, Donna still starts and
+prints a sign-in key in its log (`access token: …`) that changes on every
+start.
+
+The first start builds the image and applies every migration, in a few
+minutes. It is ready when it prints:
+
+```text
+web-1  | [local-web] Donna web app on http://127.0.0.1:5173/firms (API forwarded to 127.0.0.1:8787; listening on 0.0.0.0:5173)
+```
+
+Open <http://127.0.0.1:5173/firms> and sign in with the key. The web app
+is published on this machine's loopback only; set `DONNA_LOCAL_WEB_PORT`
+in `.env` for another port. To load the demo company (step 5 below), in a
+second terminal:
+
+```bash
+docker compose exec runtime node scripts/load_finnish_demo.mjs
+```
+
+It prints the same `[demo]` lines as step 5; add `--all-documents` for the
+whole month. Without a `.env`, pass the printed key:
+`docker compose exec -e DONNA_ACCESS_TOKEN=<key> runtime node scripts/load_finnish_demo.mjs`.
+Steps 6 to 8 then apply as written.
+
+Where the books live, and what keeps them:
+
+- The database is in the Docker volume `donna_donna-db`; uploaded
+  documents and backup packages are in `donna_donna-data`.
+- Ctrl-C, `docker compose stop` and `docker compose down` stop Donna and
+  keep both volumes. `docker compose down --volumes` deletes them, and
+  with them the books; nothing else does.
+- After `git pull`, `docker compose up` rebuilds the image. If the new
+  version brings migrations, the runtime first writes a verified backup
+  package into `donna_donna-data`, then applies them, as on the host;
+  nothing is deleted.
+- After changing `.env`, run `docker compose up` again; it restarts the
+  runtime with the new values.
+- Logs: `docker compose logs runtime` (and `db`, `web`).
+
+The containers run as an unprivileged user, so the root-user error below
+cannot occur. The image is built from your checkout: uncommitted changes
+to the runtime's code (for example under `server/` or `db/migrations/`)
+are reported by the readiness check as a changed build and pause the
+background jobs, as they do on the host.
+
+### What you need on the host
 
 - Linux or macOS. The local database listens on a Unix socket only.
 - A normal user account. PostgreSQL refuses to initialise as root.
@@ -134,27 +209,23 @@ Reading and booking need keys, set in `.env`:
 |---|---|---|
 | OpenAI | `OPENAI_API_KEY` | Routes and reads documents, including the bank statement; coding; drafts asks |
 | Anthropic | `ANTHROPIC_API_KEY` | Reads receipts and invoices (preferred over OpenAI when both are set); reconciliation triage; bank-line disposition; chat |
-| Typesafe | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | First-line decisions on matching, disposition and coding. Without it, bank lines stay "Stalled" |
+| Typesafe (optional) | `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | With both set, makes the first-line decisions on matching, disposition and coding, and the lanes above take over only when it hands a case on. Without them, the lanes above make those decisions |
 
-A local book creates every company with the Typesafe lane switched on
-(`JEV_RECONCILIATION`). If you have OpenAI and Anthropic keys but no
-Typesafe key, add this line to `.env`:
-
-```bash
-CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION
-```
-
-It is the existing kill switch (`forceDisabled` in
-`server/donna/clientConfig.js`). It can only switch a capability off. With
-it, the bank lines are coded by the OpenAI coder and the Anthropic
-disposition step instead of staying "Stalled".
+Typesafe is optional. A company created on a local book has the first-line
+lane switched on (`JEV_RECONCILIATION`), but the lane decides only on a host
+where both Typesafe values are set; anywhere else it is dark, and the bank
+lines are coded by the OpenAI coder and the Anthropic disposition step. The
+first time a company's lines are decided without it, the audit trail records
+one `model_lane.first_line_dark` row for that company naming the missing
+values.
 
 When a key is set, the contents of the documents you upload and of the
 books are sent to that provider. At start the runtime prints a
-`model lanes:` line marking OpenAI and Anthropic `LIT` or `DARK`; the
-Typesafe lane is not on it.
+`model lanes:` line marking OpenAI and Anthropic `LIT` or `DARK`; it ends
+with `typesafe LIT` or `typesafe DARK — no TYPESAFE_API_KEY, no
+TYPESAFE_MODEL`, naming each value that is missing.
 
-### Steps
+### Steps on the host
 
 **1. Get the code and build the web app.**
 
@@ -276,7 +347,10 @@ rm -rf ~/.donna-desktop
 
 ### Troubleshooting
 
-- **`initdb: cannot be run as root`**: run as a normal user.
+- **`initdb: cannot be run as root`**: run as a normal user, or use the
+  Docker start.
+- **`port is already allocated` from `docker compose up`**: another program
+  has port 5173. Set `DONNA_LOCAL_WEB_PORT` in `.env`.
 - **`Postgres 16 binaries not found`**: install them (above), or set
   `PG_BIN` in `.env`. A `PG_BIN` that points at another major version is
   refused.
@@ -314,11 +388,12 @@ rm -rf ~/.donna-desktop
   a book an earlier release stopped over such a document (new uploads
   refused, "The work queue needs recovery") accepts work again on the
   first start of this release.
-- **Every bank line is "Stalled" although OpenAI and Anthropic are lit**:
-  the runtime log shows `Configure the first-line provider model for this
-  host`. Set `TYPESAFE_API_KEY` and `TYPESAFE_MODEL`, or switch that lane
-  off with `CLIENT_CONFIG_FORCE_DISABLE=JEV_RECONCILIATION` in `.env`
-  (see "What needs a model provider key"), then restart the runtime.
+- **Bank lines stay uncoded with Typesafe set**: a Typesafe key and model
+  are set, so the first-line lane decides, and its calls fail. Each line
+  names the failure (`coding_provider_failure`, provider `typesafe`) and is
+  tried again on the coding clock; no other model decides in its place. Fix
+  the key or model, or remove both values to leave the lane dark, then
+  restart the runtime.
 - **Provider calls fail with 401 behind an HTTPS proxy**: Node's `fetch`
   ignores `HTTPS_PROXY` unless `NODE_USE_ENV_PROXY=1` is set (Node 22.21
   or later).
@@ -395,6 +470,9 @@ Without `DONNA_PG_TEST_URL` the database suites are skipped.
 
 Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). The licence
 does not grant rights to the name Donna.
+
+This is a source release of a working codebase, not a supported product.
+There is no hosted service, no support and no warranty.
 
 ## Contributing
 

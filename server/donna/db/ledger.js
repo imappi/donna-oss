@@ -14,6 +14,7 @@ import { hash } from '../jevEvidenceContract.js';
 import { loadTaxPostingContext, readTaxPostingEvidence, taxFactsDigest } from './taxPostingFacts.js';
 import { readPostingAdmissionWithClient, requirePostingAdmission } from '../postingAdmissionRegistry.js';
 import { resolveMarketPostingAccounts } from '../provisioningPolicyRegistry.js';
+import { DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT, resolveDocumentSettlementFunding, settlementFundingAccountLabel } from '../documentSettlementFunding.js';
 
 import { aeOpeningDigest } from '../ae/openingBalances.js';
 import { prepareAeOpeningPostWithClient, finishAeOpeningPostWithClient } from '../ae/openingBalanceDb.js';
@@ -82,15 +83,19 @@ export const receiptPostingFailure = async ({ client, firmId, clientId, transact
   // The coding-evidence gate's refusals (assertCurrentCodingEvidence) are
   // row receipts like the component ones; they are not policy incidents.
   const evidenceFailure = CODING_EVIDENCE_REFUSAL_CODES.includes(error?.code);
-  if (!policyFailure && !aeVatFailure && !componentFailure && !processingScopeFailure && !evidenceFailure) return;
+  // A journal dated inside a filed VAT return (assertJournalDateOutsideFiledReturn):
+  // a row receipt like the component ones, which only a person resolves.
+  const filedReturnFailure = error?.code === LEDGER_JOURNAL_DATE_IN_FILED_RETURN;
+  if (!policyFailure && !aeVatFailure && !componentFailure && !processingScopeFailure && !evidenceFailure && !filedReturnFailure) return;
   if (policyFailure || aeVatFailure || processingScopeFailure) await recordCodingPolicyFailure({ client, firmId, clientId, transactionIds, error, operation: 'posting' });
-  if (aeVatFailure || componentFailure || processingScopeFailure || evidenceFailure) {
+  if (aeVatFailure || componentFailure || processingScopeFailure || evidenceFailure || filedReturnFailure) {
     // The existing RT-23 projection must see refusal from direct/manual and
     // preview entrypoints too, not only after the auto-post sweep visits it.
     await client.query(`update transactions set payload = payload || jsonb_build_object('ledger_post_refusal', $4::jsonb)
       where firm_id = $1 and client_id = $2 and id = any($3::text[])
         and coalesce(coding_state, '') not in ('posted', 'synced', 'closed')`,
-    [firmId, clientId, transactionIds, JSON.stringify({ code: error.code, error: error.message, details: error.details || null, source: evidenceFailure ? 'coding_evidence' : 'posting_policy' })]);
+    [firmId, clientId, transactionIds, JSON.stringify({ code: error.code, error: error.message, details: error.details || null,
+      source: evidenceFailure ? 'coding_evidence' : filedReturnFailure ? 'filed_vat_return' : 'posting_policy' })]);
   }
 };
 
@@ -2347,6 +2352,122 @@ const allocateTositeNumberTx = async ({ client, firmId, clientId, journalId, jou
   return { tosite_number: tositeNumber, fiscal_year_id: fyRow.id };
 };
 
+// A filed VAT return protects the figures it read. Filing does not lock the
+// close period, so the period lock does not cover it: a bank line, a bill or
+// an invoice that arrives late for a filed month would otherwise post into
+// that month and change the filed return's basis with nobody having decided
+// it. Every journal passes one of the two row writers below
+// (__writeLedgerJournalRows, insertLedgerCorrectionJournal), and each asks
+// this one rule before it writes anything of the journal: a journal whose
+// lines change what a filed return reads is not written with a date inside
+// that return. The reader and the predicate are #81's, shared with the
+// adjustment writer (postLedgerAdjustmentInDb), which asks them first under
+// its own code:
+// - whether a date is in a filed return: taxRegistrationPeriodState, the
+//   country's declared filedReturnOn (the UK, Singapore and the UAE declare
+//   none: nothing is read and nothing changes there);
+// - what lines move in what a return reads: correctionReturnMovement, netted
+//   by the country's own read of a line (taxRegistration.returnLineKey, else
+//   the tax code).
+// A journal the return does not read (no VAT code, no control leg) is written
+// as before. Whether a late item belongs in a corrected return for the filed
+// period or in a later return is a person's decision: nothing here re-dates.
+export const LEDGER_JOURNAL_DATE_IN_FILED_RETURN = 'LEDGER_JOURNAL_DATE_IN_FILED_RETURN';
+
+const filedReturnRuleWithClient = async ({ client, firmId, clientId }) => {
+  const company = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
+  return taxRegistrationRuleFor(company?.jurisdiction || company?.profile?.jurisdiction);
+};
+
+// What `lines` dated `journalDate` move in the VAT return the country
+// records as filed over that date. refused: the date is in a filed return and
+// the lines change what it reads.
+const filedReturnMovementOn = async ({ client, firmId, clientId, rule, journalDate, lines }) => {
+  const period = await taxRegistrationPeriodState({ client, firmId, clientId, rule, onDate: journalDate });
+  const taxMoved = correctionReturnMovement(lines, rule?.returnLineKey || undefined);
+  return { period, taxMoved, refused: Boolean(period.return_filed && taxMoved.length) };
+};
+
+const taxMovedText = (taxMoved) => taxMoved.map((row) => `${row.key} ${row.amount.toFixed(2)} ${row.currency}`.trim()).join(', ');
+
+const filedReturnDateRefusal = ({ code, message, journalDate, period, taxMoved, details = {} }) => {
+  const error = new Error(message);
+  error.statusCode = 409;
+  error.code = code;
+  error.details = { journal_date: journalDate, filed_return_id: period.filed_return_id,
+    filed_return_period: period.filed_return_period, tax_moved: taxMoved, ...details };
+  return error;
+};
+
+const reverseReturnLine = (line) => ({ ...line, debit: line.credit, credit: line.debit });
+
+// The guard both row writers call. lines: what this write puts on the date
+// (an adjustment's reversal and replacement together, as #81 nets them).
+// prior: a re-post's journal as the return reads it today ({ journal_date,
+// lines }), whose lines the write replaces.
+const assertJournalDateOutsideFiledReturn = async ({ client, firmId, clientId, rule: knownRule = undefined, journalDate, lines, prior = null, source = {} }) => {
+  const rule = knownRule === undefined ? await filedReturnRuleWithClient({ client, firmId, clientId }) : knownRule;
+  if (typeof rule?.filedReturnOn !== 'function') return;
+  const onDate = ledgerDateOnly(journalDate);
+  const priorDate = prior ? ledgerDateOnly(prior.journal_date) : null;
+  const replaced = prior ? prior.lines.map(reverseReturnLine) : [];
+  const dated = await filedReturnMovementOn({ client, firmId, clientId, rule, journalDate: onDate, lines });
+  const left = !prior ? null : priorDate === onDate ? dated
+    : await filedReturnMovementOn({ client, firmId, clientId, rule, journalDate: priorDate, lines: replaced });
+  const refuse = ({ on, period, taxMoved }) => filedReturnDateRefusal({
+    code: LEDGER_JOURNAL_DATE_IN_FILED_RETURN,
+    message: `Journal date ${on} falls inside the filed VAT return ${period.filed_return_period || period.filed_return_id}, and this journal changes what that return reads: `
+      + `${taxMovedText(taxMoved)}. Nothing was posted. Whether it belongs in a corrected return for that period or in a later return is a person's decision.`,
+    journalDate: on, period, taxMoved,
+    details: { source_type: source.source_type || null, source_id: source.source_id || null,
+      ...(prior ? { prior_journal_date: priorDate } : {}) }
+  });
+  // A re-post replaces its journal's lines: within one filed return the
+  // write nets against what it replaces; across two, each return is asked
+  // what it gains or loses.
+  const sameReturn = Boolean(left && dated.period.return_filed && left.period.filed_return_id === dated.period.filed_return_id);
+  if (dated.period.return_filed) {
+    const taxMoved = sameReturn ? correctionReturnMovement([...lines, ...replaced], rule.returnLineKey || undefined) : dated.taxMoved;
+    if (taxMoved.length) throw refuse({ on: onDate, period: dated.period, taxMoved });
+  }
+  if (left && !sameReturn && left.refused) throw refuse({ on: priorDate, period: left.period, taxMoved: left.taxMoved });
+};
+
+// The journal as the return reads it, from a row writer's builder shape: the
+// tax code and role the writer stores on the line, and the account type the
+// stored chart already gives the code (else the builder's), as the return
+// builder joins it. Read-only: nothing of the journal is written yet.
+const builderLinesAsRead = async ({ client, firmId, clientId, lines = [] }) => {
+  const codes = [...new Set(lines.map((line) => line.account?.code).filter(Boolean).map(String))];
+  const stored = codes.length
+    ? new Map((await client.query('select code, account_type from ledger_accounts where firm_id = $1 and client_id = $2 and code = any($3::text[])',
+      [firmId, clientId, codes])).rows.map((row) => [String(row.code), row.account_type]))
+    : new Map();
+  return lines.map((line) => {
+    const account = line.account || {};
+    return { account_code: account.code || null, tax_type: account.tax_type || null, role: account.role || null,
+      account_type: stored.get(String(account.code || '')) || (account.type && account.type !== 'unknown' ? account.type : null),
+      currency: line.currency, debit: line.debit, credit: line.credit };
+  });
+};
+
+// A re-post's journal (the upsert's natural key) as the return reads it
+// today: only a posted or closed journal is read.
+const priorJournalAsRead = async ({ client, firmId, clientId, sourceType, sourceId }) => {
+  const rows = (await client.query(
+    `select lj.journal_date::text as journal_date, ll.id as line_id, ll.account_code, ll.tax_type, ll.payload->>'role' as role,
+            la.account_type, ll.currency, ll.debit, ll.credit
+       from ledger_journals lj
+       left join ledger_lines ll on ll.journal_id = lj.id
+       left join ledger_accounts la on la.id = ll.account_id
+      where lj.firm_id = $1 and lj.client_id = $2 and lj.source_type = $3 and lj.source_id = $4
+        and lj.status in ('posted', 'closed')
+      order by ll.line_no`,
+    [firmId, clientId, sourceType, sourceId])).rows;
+  if (!rows.length) return null;
+  return { journal_date: rows[0].journal_date, lines: rows.filter((row) => row.line_id) };
+};
+
 // The shared row-writing tail of a ledger post: resolve the deterministic
 // journal id, upsert the accounts, upsert the journal, replace its lines.
 // Extracted verbatim from postLedgerJournalForTransaction (Slice 4b) so the
@@ -2386,6 +2507,19 @@ export const __writeLedgerJournalRows = async ({
 
   // Country-owned receipt and owner-recovery effects share this admitted transaction.
   const { row: admissionRow, policy: countryAdmission } = await readPostingAdmissionWithClient({ client, firmId, clientId });
+  // Before anything of the journal (its accounts, its row, its lines, the
+  // country's receipt) is written: a journal dated inside a filed VAT return
+  // that changes what the return reads is refused
+  // (assertJournalDateOutsideFiledReturn). Every caller has asked the period
+  // lock first, so a locked period still refuses under its own code. A
+  // country that keeps no filed-return record reads nothing more here.
+  const filedReturnRule = taxRegistrationRuleFor(admissionRow?.jurisdiction || admissionRow?.profile?.jurisdiction);
+  if (typeof filedReturnRule?.filedReturnOn === 'function') {
+    await assertJournalDateOutsideFiledReturn({ client, firmId, clientId, rule: filedReturnRule, journalDate: journal.journal_date,
+      lines: await builderLinesAsRead({ client, firmId, clientId, lines: journal.lines }),
+      prior: await priorJournalAsRead({ client, firmId, clientId, sourceType: journal.source_type, sourceId: journal.source_id }),
+      source: { source_type: journal.source_type, source_id: journal.source_id } });
+  }
   const effectivePayload = countryAdmission?.beforeJournalWrite
     ? await countryAdmission.beforeJournalWrite({ client, firmId, clientId, journalId, journal, payload, actorId, clientRow: admissionRow, evaluatedAt: new Date().toISOString() })
     : payload;
@@ -2498,18 +2632,11 @@ export const __writeLedgerJournalRows = async ({
   };
 };
 
-// Slice 4b (docs/donna-settlement-answer-and-ledger-entry-plan.md §3) — the
-// owner's-funds credit account for a cash/personal-card settlement entry: the
-// DONNA_COA 901 seed (xeroCoaProvisioning.js), jurisdiction-safe in all four
-// markets (plan decision #2, ratified by the silent #792 merge).
-// upsertLedgerAccountForJournal mints it on demand — no provisioning step.
-export const DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT = Object.freeze({
-  code: '901',
-  name: 'Director loan',
-  type: 'liability',
-  canonical_role: 'liability.director_loan',
-  tax_type: 'NONE'
-});
+// Slice 4b — the owner's-funds credit account (DONNA_COA 901) and the rule
+// that picks the credit account by whose money paid (owner's funds or the
+// company's cash box): documentSettlementFunding.js, shared with the entry
+// producer.
+export { DOCUMENT_SETTLEMENT_OWNER_FUNDS_ACCOUNT };
 
 // Slice 4b — the NAMED WRITER for a document-settlement journal (plan §3;
 // INV-1: proposals route here, the card only observes). For a money-out doc
@@ -2563,12 +2690,13 @@ export const postDocumentSettlementJournalWithClient = async ({
   // Posting consumes the locked source, not a stale proposal's amount or tax.
   const currentDocument = {...document,...source,currency};
   const disposition = source.payload?.no_line_disposition || {};
-  if (disposition.settlement_channel === 'cash' && disposition.funding_source !== 'owner') {
-    throw Object.assign(new Error('Cash settlement needs evidence of whose funds paid the document.'), {
-      code:'DOCUMENT_SETTLEMENT_FUNDING_REQUIRED',statusCode:409});
-  }
   const context = await resolvePostingContextWithClient({client,firmId,clientId,
     businessDate:toIsoDay(currentDocument.document_date),lockContext:true});
+  // Whose money paid decides the credit leg (documentSettlementFunding.js):
+  // the owner's funds, or the market's declared cash account for the
+  // company's cash box. Cash with no funding fact, or company cash in a
+  // market that declares no cash account, refuses before any write.
+  const funding = resolveDocumentSettlementFunding({ disposition, jurisdiction: context.policy.jurisdiction, ownerFundsAccount });
   const ledgerAccounts = context.policy.supplierBillNeedsChart
     ? await getDonnaLedgerAccountsForClient({client,firmId,clientId}) : [];
   const {alvSplit,expenseTaxType} = context.policy.capabilities.supplierBillTaxPosting
@@ -2576,7 +2704,7 @@ export const postDocumentSettlementJournalWithClient = async ({
       verdict:expenseAccount,document:currentDocument,ledgerAccounts,taxCodingEnabled:context.taxCodingEnabled,profile:context.profile})
     : {alvSplit:null,expenseTaxType:expenseAccount.tax_type || expenseAccount.xero_tax_type};
   const journal = buildLedgerJournalForDocumentSettlement({ document:currentDocument,
-    expenseAccount:{...expenseAccount,tax_type:expenseTaxType,xero_tax_type:expenseTaxType},ownerFundsAccount,alvSplit });
+    expenseAccount:{...expenseAccount,tax_type:expenseTaxType,xero_tax_type:expenseTaxType},ownerFundsAccount:funding.account,alvSplit });
   assertCorrectionLinesBalance(journal.lines);
 
   const existingJournal = await client.query(
@@ -2621,6 +2749,7 @@ export const postDocumentSettlementJournalWithClient = async ({
 
   const settlementReceipt = {
     document_id: document.id,
+    funding_source: funding.funding_source,
     settlement_channel: settlement.settlement_channel || null,
     verdict_source: settlement.verdict_source || null,
     evidence_request_id: settlement.evidence_request_id || null
@@ -2660,6 +2789,28 @@ export const postDocumentSettlementJournalWithClient = async ({
     settlement_entry: prior.rows[0].settlement_entry ?? null,
     no_line_disposition_owner_notified: prior.rows[0].no_line_owner_notified ?? null
   };
+  // The company's cash box cannot be credited below zero unnoticed: the
+  // entry's receipt states the cash account's balance at the entry's date
+  // after this credit, and names a negative balance (cash_account_negative).
+  // The entry still posts — the receipt says what it is; a negative till
+  // is a fact for a person to read (an unrecorded cash sale, a missing
+  // opening balance), not a reason to leave the paid receipt unbooked.
+  let cashBalance = null;
+  if (funding.funding_source === 'company_cash') {
+    cashBalance = Number((await client.query(
+      `select coalesce(sum(l.debit - l.credit), 0) as balance
+         from ledger_lines l
+         join ledger_journals j on j.id = l.journal_id and j.firm_id = l.firm_id and j.client_id = l.client_id
+        where l.firm_id = $1 and l.client_id = $2
+          and l.account_id = (select account_id from ledger_lines where journal_id = $3 and direction = 'credit' order by line_no desc limit 1)
+          and j.status in ('posted', 'closed') and j.journal_date <= $4::date`,
+      [firmId, clientId, post.ledger_journal_id, journal.journal_date]
+    )).rows[0]?.balance);
+  }
+  const cashReceipt = cashBalance === null ? {} : {
+    cash_balance_after: cashBalance,
+    ...(cashBalance < 0 ? { cash_account_negative: true } : {})
+  };
   const expenseLine = journal.lines[0]?.account || {};
   const settlementEntry = {
     journal_id: post.ledger_journal_id,
@@ -2667,7 +2818,13 @@ export const postDocumentSettlementJournalWithClient = async ({
     amount: journal.amount,
     currency: journal.currency,
     expense_account: expenseLine.label || expenseLine.name || '',
-    owner_funds_account: `${ownerFundsAccount.code || ''} · ${ownerFundsAccount.name || ''}`.replace(/^ · /, ''),
+    // The credited account: the owner's funds, or the company's cash box.
+    // owner_funds_account stays the owner-funded entry's field, byte for byte.
+    ...(funding.funding_source === 'owner'
+      ? { owner_funds_account: `${funding.account.code || ''} · ${funding.account.name || ''}`.replace(/^ · /, '') }
+      : { settlement_account: settlementFundingAccountLabel(funding.account) }),
+    funding_source: funding.funding_source,
+    ...cashReceipt,
     settlement_channel: settlementReceipt.settlement_channel,
     verdict_source: settlementReceipt.verdict_source,
     evidence_request_id: settlementReceipt.evidence_request_id,
@@ -2703,7 +2860,9 @@ export const postDocumentSettlementJournalWithClient = async ({
       amount: journal.amount,
       currency: journal.currency,
       expense_account: settlementEntry.expense_account,
-      owner_funds_account: settlementEntry.owner_funds_account,
+      ...(settlementEntry.owner_funds_account ? { owner_funds_account: settlementEntry.owner_funds_account } : { settlement_account: settlementEntry.settlement_account }),
+      funding_source: funding.funding_source,
+      ...cashReceipt,
       settlement_channel: settlementReceipt.settlement_channel,
       verdict_source: settlementReceipt.verdict_source,
       evidence_request_id: settlementReceipt.evidence_request_id,
@@ -4180,10 +4339,23 @@ const insertLedgerCorrectionJournal = async ({
   correctionOfJournalId = null,
   reversalOfJournalId = null,
   correctionReason = null,
-  actorId = 'system'
+  actorId = 'system',
+  // The lines of every journal this correction writes on journalDate in the
+  // caller's transaction (an adjustment's reversal and replacement), which a
+  // return reads together; this journal's own lines when omitted.
+  returnMovementLines = null
 } = {}) => {
   await assertRetainedLedgerScope({ client, firmId, clientId, actorId, resourceId: `adjustment:${sourceId}` });
   const { totalDebit } = assertCorrectionLinesBalance(lines);
+  if (returnMovementLines && !lines.every((line) => returnMovementLines.includes(line))) {
+    throw new Error('insertLedgerCorrectionJournal: returnMovementLines must include the journal\'s own lines.');
+  }
+  // Before anything of the journal is written, the rule every journal writer
+  // asks (assertJournalDateOutsideFiledReturn). Its callers ask the period
+  // lock first; the adjustment writer asks this same rule first under its own
+  // code, so for an adjustment this never refuses.
+  await assertJournalDateOutsideFiledReturn({ client, firmId, clientId, journalDate, lines: returnMovementLines || lines,
+    source: { source_type: 'adjustment', source_id: sourceId } });
   const journalId = ledgerRecordId('journal', firmId, clientId, 'adjustment', sourceId);
   {
     const named = lines.map((line) => line.account || {});
@@ -4407,22 +4579,23 @@ export const postLedgerAdjustmentInDb = async ({
       // own read of a line (taxRegistration.returnLineKey, the return
       // builder's; else the tax code). Both rules below use that one
       // movement.
-      const periodCompany = (await client.query('select jurisdiction, profile from clients where firm_id = $1 and id = $2', [firmId, clientId])).rows[0];
-      const periodRule = taxRegistrationRuleFor(periodCompany?.jurisdiction || periodCompany?.profile?.jurisdiction);
-      const taxMoved = correctionReturnMovement([...reversalLines, ...normalizedLines], periodRule?.returnLineKey || undefined);
-      const datePeriod = await taxRegistrationPeriodState({ client, firmId, clientId, rule: periodRule, onDate: resolvedDate });
+      // The reader and the predicate are the ones every journal writer asks
+      // (filedReturnMovementOn); this writer asks them first, under its own
+      // code, over the reversal and replacement together, and hands the same
+      // lines to each journal it writes, so the shared guard there agrees.
+      const periodRule = await filedReturnRuleWithClient({ client, firmId, clientId });
+      const returnMovementLines = [...reversalLines, ...normalizedLines];
+      const { period: datePeriod, taxMoved, refused: dateRefused } = await filedReturnMovementOn({ client, firmId, clientId,
+        rule: periodRule, journalDate: resolvedDate, lines: returnMovementLines });
       // Dated inside a filed return and changing what it reads: refused, with
       // no acknowledgement path. The correction is dated in an open period
       // (and, for a journal in the filed return, acknowledged below).
-      if (datePeriod.return_filed && taxMoved.length) {
-        const error = new Error(`Adjustment journal date ${resolvedDate} falls inside the filed VAT return ${datePeriod.filed_return_period || datePeriod.filed_return_id}, and this adjustment changes what that return reads: `
-          + `${taxMoved.map((row) => `${row.key} ${row.amount.toFixed(2)} ${row.currency}`.trim()).join(', ')}. `
-          + 'Date it in an open period instead; a correction of a journal in the filed return is then posted with a person\'s acknowledgement.');
-        error.statusCode = 409;
-        error.code = 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN';
-        error.details = { journal_date: resolvedDate, filed_return_id: datePeriod.filed_return_id,
-          filed_return_period: datePeriod.filed_return_period, tax_moved: taxMoved };
-        throw error;
+      if (dateRefused) {
+        throw filedReturnDateRefusal({ code: 'LEDGER_ADJUSTMENT_DATE_IN_FILED_RETURN',
+          message: `Adjustment journal date ${resolvedDate} falls inside the filed VAT return ${datePeriod.filed_return_period || datePeriod.filed_return_id}, and this adjustment changes what that return reads: `
+            + `${taxMovedText(taxMoved)}. `
+            + 'Date it in an open period instead; a correction of a journal in the filed return is then posted with a person\'s acknowledgement.',
+          journalDate: resolvedDate, period: datePeriod, taxMoved });
       }
       const datedInFiledReturn = datePeriod.return_filed
         ? { filed_return_id: datePeriod.filed_return_id, filed_return_period: datePeriod.filed_return_period } : null;
@@ -4481,7 +4654,8 @@ export const postLedgerAdjustmentInDb = async ({
           correctionOfJournalId: originalJournal.id,
           reversalOfJournalId: originalJournal.id,
           correctionReason: cleanReason,
-          actorId
+          actorId,
+          returnMovementLines
         }));
       }
       if (lines.length) {
@@ -4498,7 +4672,8 @@ export const postLedgerAdjustmentInDb = async ({
           correctionOfJournalId: originalJournal?.id || null,
           reversalOfJournalId: null,
           correctionReason: cleanReason,
-          actorId
+          actorId,
+          returnMovementLines
         }));
       }
       if (!journals.length && !recovery) {

@@ -229,6 +229,7 @@ import {
 } from './statutoryRegistry.js';
 import { buildModelLaneReceipt } from './desktop/capabilityReceipt.js';
 import { readLatestProviderReplaySession } from './providerReplaySession.js';
+import { firstLineLaneDecides, firstLineProviderConfigured } from './firstLineLane.js';
 import { isDesktopHostEnv, seedDesktopFirmMetadataWithClient } from './desktop/hostPlaneSeed.js';
 import { mintFirstRunFirm, normalizeFirstRunInput } from './desktop/firstRunFirmMint.js';
 import { runtimeLivenessProbe } from './desktop/runtimeLiveness.js';
@@ -2142,6 +2143,7 @@ const donnaFirmsApiHandler = async (req, res) => {
           openai: laneReceipt.openai,
           anthropic: laneReceipt.anthropic,
           openai_compatible: laneReceipt.openai_compatible,
+          typesafe: laneReceipt.typesafe,
           replay: Boolean(laneReceipt.replay)
         },
         provider_replay: replaySession
@@ -2481,7 +2483,7 @@ const donnaFirmsApiHandler = async (req, res) => {
           where firm_id=$1 and client_id=$2 and target_id=$3 and target_type='document'
           and payload->>'decision_engine'='jev' order by evaluated_at desc limit 1`, [firmId, clientId, documentId]);
         const last = rows[0];
-        return { enabled: clientFlagActs({ flagKey: 'JEV_RECONCILIATION', snapshot, envFallback: () => false }),
+        return { enabled: firstLineLaneDecides({ snapshot }),
           last_run: last ? { outcome: last.payload.selected_terminal, execution: last.payload.execution === 'existing_reconciliation_writer' ? 'applied'
             : last.payload.execution === 'held_for_authority' ? 'held' : 'not_applied',
             reason: last.payload.execution_reason, model: last.model, probability: last.payload.probability, evaluated_at: last.evaluated_at } : null };
@@ -2506,7 +2508,7 @@ const donnaFirmsApiHandler = async (req, res) => {
       await assertFirmAccess({ firmId, auth: req.donnaAuth, clientIds: collectClientIds(clientId), requireMember: true });
       try {
         if (!isFirmDatabaseConfigured()) throw Object.assign(new Error('Firm database is not configured.'), { statusCode: 503 });
-        if (!process.env.TYPESAFE_API_KEY || !process.env.TYPESAFE_MODEL) throw Object.assign(new Error('Jev is not configured in this Donna runtime.'), { statusCode: 503, code: 'jev_not_configured' });
+        if (!firstLineProviderConfigured()) throw Object.assign(new Error('Jev is not configured in this Donna runtime.'), { statusCode: 503, code: 'jev_not_configured' });
         const result = jevDecisionPreview(await withFirmDbClient(client => decideJevReconciliation({ client, firmId, clientId, documentId })));
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');

@@ -58,7 +58,9 @@ const env = {
   DONNA_BUILD_DIRTY: 'false',
   OPENAI_API_KEY: 'present-not-a-secret-in-this-test',
   ANTHROPIC_API_KEY: 'present-not-a-secret-in-this-test',
-  TYPESAFE_API_KEY: 'present-not-a-secret-in-this-test'
+  TYPESAFE_API_KEY: 'present-not-a-secret-in-this-test',
+  // v9: the first-line provider needs its model as well as its key.
+  TYPESAFE_MODEL: 'fixture-first-line'
 };
 const manifest = [{
   functionId: 'worker-a', kind: 'inngest-cron', cron: '* * * * *', maxAttempts: 1,
@@ -102,7 +104,7 @@ test('Host Certificate A is deterministic, zero-model, observe-only, and proves 
 });
 
 test('v5: an OpenAI-only host is PASS — dark lanes are receipts, and key presence never rewrites the compatibility digest', async () => {
-  assert.equal(HOST_CERTIFICATE_A_VERSION, 'donna.host-certificate-a.v9');
+  assert.equal(HOST_CERTIFICATE_A_VERSION, 'donna.host-certificate-a.v10');
   const observe = (overrides) => observeHostCertificateA({
     env: { ...env, ...overrides }, rootDir: ROOT, observedAt: OBSERVED_AT, manifest, schedulerEnabled: true,
     query: makeQuery(), storageOps: makeStorage().ops
@@ -136,6 +138,26 @@ test('v5: an OpenAI-only host is PASS — dark lanes are receipts, and key prese
   assert.equal(noKeys.compatibility_digest, bothKeys.compatibility_digest);
   assert.notEqual(openaiOnly.receipt_digest, bothKeys.receipt_digest, 'the receipt itself still records which lanes were dark');
   assert.ok(!JSON.stringify(bothKeys).includes(env.OPENAI_API_KEY), 'no key value reaches the certificate');
+});
+
+test('v9: the first-line lane needs TYPESAFE_API_KEY and TYPESAFE_MODEL — a missing row is a dark lane naming it, never a failure, and never moves the compatibility digest', async () => {
+  const observe = (overrides) => observeHostCertificateA({
+    env: { ...env, ...overrides }, rootDir: ROOT, observedAt: OBSERVED_AT, manifest, schedulerEnabled: true,
+    query: makeQuery(), storageOps: makeStorage().ops
+  });
+  const lit = await observe({});
+  const keyOnly = await observe({ TYPESAFE_MODEL: '' });
+  const none = await observe({ TYPESAFE_API_KEY: '', TYPESAFE_MODEL: '' });
+  const firstLine = (receipt) => receipt.checks.find(({ id }) => id === 'model_routes').detail.lanes.find(({ lane_id }) => lane_id === 'jev_reconciliation');
+  assert.deepEqual([firstLine(lit).credential_present, firstLine(lit).missing_env], [true, []]);
+  for (const [receipt, missing] of [[keyOnly, ['TYPESAFE_MODEL']], [none, ['TYPESAFE_API_KEY', 'TYPESAFE_MODEL']]]) {
+    assert.equal(receipt.status, 'PASS', 'a dark first-line lane is a receipt');
+    const routes = receipt.checks.find(({ id }) => id === 'model_routes');
+    assert.deepEqual(routes.detail.dark_providers, ['typesafe']);
+    assert.deepEqual(routes.detail.dark_lanes, ['jev_reconciliation']);
+    assert.deepEqual([firstLine(receipt).credential_present, firstLine(receipt).missing_env], [false, missing]);
+    assert.equal(receipt.compatibility_digest, lit.compatibility_digest, 'the compatibility digest does not move');
+  }
 });
 
 test('v5: model_routes is an inventory check — a malformed lane registry FAILs the host, a missing credential never does', async () => {

@@ -24,6 +24,7 @@ import {
   storeLocalEvidenceBytes
 } from './evidenceStorage.js';
 import { queryFirmDb } from './firmDb.js';
+import { FIRST_LINE_PROVIDER_ENV } from './firstLineLane.js';
 import { LANE_KINDS, MODEL_LANES } from './modelLanes.js';
 import { ENDPOINT_CLASSES, OPENAI_COMPATIBLE_ENV_KEYS } from './providerEndpoints.js';
 import { REPLAY_PLACEHOLDER_KEY, currentProviderReplay } from './providerReplay.js';
@@ -68,7 +69,18 @@ import { REPLAY_PLACEHOLDER_KEY, currentProviderReplay } from './providerReplay.
 // the host digest entity generations were certified against does not move.
 // Persisted v7 receipts keep naming the shape that scored them; the next
 // boot or renewal mints v8.
-// v9 (2026-11-10, the zero-key demo): the predicate is unchanged; the
+// v9 (2026-11-10, "the first-line lane is dark without its key"): the
+// `model_routes` predicate is unchanged (a dark lane is still a receipt,
+// never a failure) but its detail changes shape twice. The first-line
+// provider (typesafe) needs TYPESAFE_API_KEY AND TYPESAFE_MODEL to send a
+// request (firstLineLane.FIRST_LINE_PROVIDER_ENV), so a key without a model
+// now reads dark, as the runtime treats it; and every lane carries
+// `missing_env`, the names of the rows its dark providers lack, so the
+// inventory says which variable lights it. Both stay outside the
+// compatibility projection (lane_id, provider, kind): the host digest entity
+// generations were certified against does not move. Persisted v8 receipts
+// keep naming the shape that scored them; the next boot or renewal mints v9.
+// v10 (2026-11-11, the zero-key demo): the predicate is unchanged; the
 // `model_routes` detail says when the lanes are served from RECORDINGS
 // (`npm run demo:fi`, server/donna/providerReplay.js): `detail.provider_replay`
 // names the pack, the recording date and the recorded models per provider,
@@ -76,9 +88,9 @@ import { REPLAY_PLACEHOLDER_KEY, currentProviderReplay } from './providerReplay.
 // placeholder in a key variable is not a credential, so a replayed lane reads
 // `credential_present: false` and is listed dark — dark of keys, served by
 // recordings. The detail is a receipt, outside the compatibility projection:
-// the host digest does not move. Persisted v8 receipts keep naming the shape
-// that scored them; the next boot or renewal mints v9.
-export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v9';
+// the host digest does not move. Persisted v9 receipts keep naming the shape
+// that scored them; the next boot or renewal mints v10.
+export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v10';
 export const HOST_COMPATIBILITY_CONTRACT_VERSION = 'donna.host-compatibility.v1';
 export const HOST_CERTIFICATE_FRESHNESS_CONTRACT_VERSION = 'donna.host-certificate-freshness.v1';
 export const HOST_CERTIFICATE_RENEWAL_INTERVAL_MS = 5 * 60 * 1000;
@@ -101,7 +113,7 @@ export const HOST_CERTIFICATE_REQUIRED_TABLES = Object.freeze([
 const LANE_CREDENTIAL_ENV = Object.freeze({
   openai: Object.freeze(['OPENAI_API_KEY']),
   anthropic: Object.freeze(['ANTHROPIC_API_KEY']),
-  typesafe: Object.freeze(['TYPESAFE_API_KEY']),
+  typesafe: FIRST_LINE_PROVIDER_ENV,
   openai_compatible: Object.freeze([OPENAI_COMPATIBLE_ENV_KEYS.apiKey, OPENAI_COMPATIBLE_ENV_KEYS.baseUrl]),
   local: Object.freeze([])
 });
@@ -748,6 +760,10 @@ const modelRouteCheck = (env, modelLanes = MODEL_LANES, replay = currentProvider
       ...lane,
       credential_present: credentialPresent,
       lit_providers: lane.providers.filter((_, index) => perProvider[index] === true),
+      // v9: the rows a dark lane lacks, by name (never a value). Empty when lit.
+      missing_env: credentialPresent === false
+        ? [...new Set(lane.providers.flatMap((provider) => (LANE_CREDENTIAL_ENV[provider] || []).filter((name) => !clean(env[name]) || clean(env[name]) === REPLAY_PLACEHOLDER_KEY)))]
+        : [],
       served_by: replay ? 'replay' : 'provider'
     };
   });

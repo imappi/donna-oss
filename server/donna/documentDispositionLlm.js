@@ -722,6 +722,7 @@ Output a single JSON object with this exact shape, nothing else:
 
 Rules:
 - A cash answer must also identify whose funds paid it; if unknown ask that precise missing fact. A clear personally funded cash / personal-card answer ⇒ "auto_explain" with the matching settlement_channel, even if "materiality" is "material".
+- A clear answer that the company's own cash paid it (its cash box or till) ⇒ "auto_explain" with "settlement_channel": "cash" and "funding_source": "company_cash", even if "materiality" is "material".
 - "materiality" still reports your honest read of the amount — do not shade it to fit the disposition.
 - confidence is 0..1: how clearly the owner's answer resolves the question.
 - Return ONLY valid JSON. No markdown, no commentary.`;
@@ -1245,7 +1246,7 @@ export const runDocumentDispositionForClient = async ({
     ? documentIds.map((id) => String(id)).filter(Boolean)
     : null;
   if (scoped && !scoped.length) return stats;
-  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride);
+  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride, { decidedBy: 'document_disposition' });
   const policyModel = !jevEnabled && typeof decidingPolicy?.deciding_model === 'string' && decidingPolicy.deciding_model.trim()
     ? decidingPolicy.deciding_model.trim()
     : null;
@@ -1354,9 +1355,15 @@ export const runDocumentDispositionForClient = async ({
         and target_type = $3 and matcher_family = $4
         and payload->>'policy_version' = $5
         and ($6::text is distinct from 'act' or payload->>'matcher_mode' = 'act')
-        and not (
+        -- Only a DUE machine re-run is evaluated again. coalesce: a verdict
+        -- with no lane (an owner-confirmed settle, an unprompted
+        -- auto_explain) is NULL here, and NOT NULL would drop it from this
+        -- set; the next sweep then re-asked the model without the owner's
+        -- answer and minted the answered question again.
+        and not coalesce(
           payload->'lane'->>'kind' = 'machine_rerun'
-          and coalesce((payload->'lane'->>'due_at')::timestamptz, now()) <= now()
+          and coalesce((payload->'lane'->>'due_at')::timestamptz, now()) <= now(),
+          false
         )
         and target_id = any($7::text[])`,
     [
@@ -1603,7 +1610,7 @@ export const runOwnerReplyRedisposition = async ({
     result.skipped = 'missing_ids';
     return result;
   }
-  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride);
+  const jevEnabled = await jevDispositionEnabled(client, firmId, clientId, jevEnabledOverride, { decidedBy: 'document_disposition' });
   const policyModel = !jevEnabled && typeof decidingPolicy?.deciding_model === 'string' && decidingPolicy.deciding_model.trim()
     ? decidingPolicy.deciding_model.trim()
     : null;

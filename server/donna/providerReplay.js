@@ -143,6 +143,8 @@ export const ANTHROPIC_SYSTEM_LANES = Object.freeze([
   Object.freeze({ lane: 'reconciliation_reasoning', prefix: 'You match a parsed ' }),
   Object.freeze({ lane: 'bank_line_disposition', prefix: 'You triage a single unmatched bank ' }),
   Object.freeze({ lane: 'document_disposition', prefix: 'You triage a single parsed evidence DOCUMENT' }),
+  // documentSettlementEntry.js — the expense account of a document settled outside the bank feed.
+  Object.freeze({ lane: 'settlement_account', prefix: 'You code ONE expense document' }),
   Object.freeze({ lane: 'reconciliation_triage', prefix: 'You evaluate low-confidence ' }),
   Object.freeze({ lane: 'unified_extraction', prefix: 'You are extracting fields from one financial document' })
 ]);

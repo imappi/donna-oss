@@ -645,6 +645,12 @@ const KEY_OVERRIDES = Object.freeze({
   'mounted.financial.waitingProviderKey': 'لا يوجد {code} في هذا التثبيت: لم يُقرأ بعد. ستتم قراءته بمجرد إضافة المفتاح.',
   'mounted.financial.waitingProviderKeyRefused': 'رفض {provider} المفتاح {code}: لم يُقرأ بعد. ستتم قراءته بمجرد تصحيح المفتاح.',
   'mounted.financial.waitingProviderCredit': 'لا يوجد رصيد متبقٍ في حساب {provider}: لم يُقرأ بعد. ستتم قراءته بمجرد إضافة الرصيد.',
+  // Machine-written, unreviewed: a firm member's ledger adjustment question.
+  'mounted.financial.ledgerAdjustmentAsk.settlementReversal': 'اعكس قيد الدفع من الأموال الخاصة {journal} الخاص بـ {document} ({amount} {currency}): سطر البنك {date} {transaction} دفعه أيضًا.',
+  'mounted.financial.ledgerAdjustmentAsk.settlementReversalCompanyCash': 'اعكس قيد الدفع من نقدية الشركة {journal} الخاص بـ {document} ({amount} {currency}): سطر البنك {date} {transaction} دفعه أيضًا.',
+  'mounted.financial.ledgerAdjustmentAsk.restatesFiledReturn': 'لم تُرحّل دونا العكس: القيد ضمن إقرار ضريبة القيمة المضافة المقدَّم {period}، وعكسه يغيّر ما يقرؤه الإقرار ({detail}).',
+  'mounted.financial.ledgerAdjustmentAsk.dateInFiledReturn': 'لم تُرحّل دونا العكس: سيكون تاريخه داخل إقرار ضريبة القيمة المضافة المقدَّم {period} ويغيّر ما يقرؤه ({detail}).',
+  'mounted.financial.ledgerAdjustmentAsk.todo': 'رحّل عكس {journal} كتسوية في دفتر الأستاذ وأقرّ بالتغيير على الإقرار المقدَّم. يُغلق هذا السؤال عند ترحيل العكس.',
   'mounted.financial.waitingProvider': 'تعذّر الوصول إلى {provider}: لم يُقرأ بعد. ستتم قراءته بمجرد أن يستجيب.'
 });
 

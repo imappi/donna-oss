@@ -117,6 +117,9 @@ const OWNER_CONFIRMED_DOC_ROW = {
     materiality: 'material',
     expense_kind: 'rent',
     settlement_channel: 'cash',
+    // The gather takes cash only with its funding fact; the producer's card
+    // refuses cash without one (settlement_funding_account), as the writer does.
+    funding_source: 'owner',
     confidence: 0.95,
     verdict_source: 'owner_reply',
     evidence_request_id: 'evr-son-1',

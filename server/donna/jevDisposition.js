@@ -1,7 +1,8 @@
 // Jev chooses an existing terminal disposition or explicitly requests reasoning.
 // Provider failures never turn into an owner question or a reasoning handoff.
 import { callJevTyped } from './jevProvider.js';
-import { readClientConfigSnapshot, clientFlagActs } from './clientConfig.js';
+import { readClientConfigSnapshot } from './clientConfig.js';
+import { firstLineLaneDecidesWithClient } from './firstLineLane.js';
 import { exceedsMaterialityCeiling } from './dispositionMateriality.js';
 import { readJevCase, jevCasePrompt } from './jevPreview.js';
 
@@ -11,10 +12,12 @@ import { readJevCase, jevCasePrompt } from './jevPreview.js';
 // where the ask is built (documentDispositionLlm.buildNeedsHumanOwnerQuestion).
 export const CASH_FUNDING_OWNER_QUESTION = 'The receipt shows a cash payment. Was it paid from company cash or from your personal funds?';
 
-export async function jevDispositionEnabled(client, firmId, clientId, override) {
+// The one rule (firstLineLane.js): the flag acts AND the host has the lane's
+// provider. `decidedBy` names the lane that decides when it is dark.
+export async function jevDispositionEnabled(client, firmId, clientId, override, { decidedBy = null } = {}) {
   if (typeof override === 'boolean') return override;
   const snapshot = await readClientConfigSnapshot(client, { firmId, clientId, strict: true });
-  return clientFlagActs({ flagKey: 'JEV_RECONCILIATION', snapshot, envFallback: () => false });
+  return firstLineLaneDecidesWithClient(client, { firmId, clientId, snapshot, decidedBy });
 }
 
 export async function loadJevDispositionEvidence(client, firmId, clientId, focal = {}) {
@@ -48,6 +51,12 @@ export function jevDispositionPlans({ kind, direction = 'money_out', amount, mat
         `The supplied evidence${ownerReply ? ', including the owner answer,' : ''} establishes that this document was settled using ${channel === 'cash' ? 'cash explicitly supplied by the owner personally (a CASH payment label alone does not establish whose funds)' : 'the owner’s personal card'}. Resolve using that existing settlement channel.`,
         { disposition: 'auto_explain', settlement_channel: channel, funding_source:'owner', materiality: ownerReply ? 'material' : 'immaterial', expense_kind: 'settled_business_document', line_identified: true });
     }
+    // The other funding of a cash payment: the company's own cash box. The
+    // settlement entry credits the market's declared cash account for it
+    // (documentSettlementFunding.js), or refuses where none is declared.
+    if (direction !== 'money_in' && (ownerReply || !exceedsMaterialityCeiling(amount, materialityCeiling))) add('resolve_company_cash',
+      `The supplied evidence${ownerReply ? ', including the owner answer,' : ''} establishes that this document was paid in cash from the company’s own cash (its cash box or till), not by the owner personally (a CASH payment label alone does not establish whose funds). Resolve as company cash.`,
+      { disposition: 'auto_explain', settlement_channel: 'cash', funding_source: 'company_cash', materiality: ownerReply ? 'material' : 'immaterial', expense_kind: 'settled_business_document', line_identified: true });
     if (direction !== 'money_in') add('ask_cash_funding', 'The document establishes cash payment, but does not establish whether company cash or the owner personally funded it. Ask only whose cash paid it; acknowledge the held receipt and known payment method.',
       {disposition:'needs_human',settlement_channel:'cash',funding_source:'unknown',
         owner_question:CASH_FUNDING_OWNER_QUESTION,
@@ -97,6 +106,7 @@ const dispositionExplanation = selected => ({
   resolve_statutory: 'Identified as a statutory payment. Posting still requires the matched notice or identified obligation.',
   resolve_immaterial: 'The supplied evidence explains this ordinary business item.',
   resolve_cash: 'The supplied evidence establishes cash settlement.',
+  resolve_company_cash: 'The supplied evidence establishes payment from the company’s own cash.',
   acknowledge_still_open: 'The owner says this document is still unpaid; it stays open with them.',
   resolve_personal_card: 'The supplied evidence establishes settlement using the owner’s personal card.'
 }[selected] || 'Further accounting work is required.');

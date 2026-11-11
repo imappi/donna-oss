@@ -456,7 +456,7 @@ const proveDeploymentReadinessV7 = async ({pool,scope,clientId,files,attested,pa
     sendWorkerEvent:async event=>{events.push(event);return {status:'requested',event_ids:['p1-fixture-event']};}});
   assert.equal(renewal.status,'PASS',JSON.stringify(renewal));
   const freshHost=await readCurrentHostCertificateWithClient(pool);
-  assert.equal(freshHost.version,'donna.host-certificate-a.v9');
+  assert.equal(freshHost.version,'donna.host-certificate-a.v10');
   assert.deepEqual(receipts(freshHost),[
     [['convergence-metrics-daily','unverified','execution_evidence_from_previous_deployment'],['document-terminal-drain','unverified','execution_evidence_from_previous_deployment']],
     [['openai','unverified','evidence_from_previous_deployment'],['anthropic','unverified','evidence_from_previous_deployment']]]);

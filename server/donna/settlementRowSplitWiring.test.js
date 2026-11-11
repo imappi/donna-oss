@@ -64,6 +64,10 @@ const fakeClient = ({
     queries,
     async query(sql, params = []) {
       queries.push({ sql, params });
+      // The filed-VAT-return guard's reads (db/ledger.js assertJournalDateOutsideFiledReturn,
+      // 2026-11-10): no stored chart for the journal's codes and no filed return in this fixture.
+      if (sql.includes('select code, account_type from ledger_accounts')) return { rows: [] };
+      if (sql.includes('from alv_returns')) return { rows: [] };
       if (sql.includes('as birth_created_at')) return { rows: [{ id: 'c', jurisdiction: 'fi', profile: {} }] };
       if (sql.includes('select id,code,name,account_type')) return { rows: chart };
       if (['savepoint runtime_policy_incident', 'release savepoint runtime_policy_incident',

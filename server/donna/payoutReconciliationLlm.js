@@ -82,7 +82,8 @@ import {
   documentHasSettlementRows,
   DEFAULT_MODEL
 } from './reconciliationLlmCore.js';
-import { readClientConfigSnapshot, persistConfigSnapshot, clientFlagActs } from './clientConfig.js';
+import { readClientConfigSnapshot, persistConfigSnapshot } from './clientConfig.js';
+import { firstLineLaneDecidesWithClient } from './firstLineLane.js';
 import { runJevReconciliationForDocument } from './jevReconciliation.js';
 // Q8 (the model lab): the compatible endpoint for an experiment-seated
 // deciding rung. Fail-loud — an active policy with no endpoint refuses the
@@ -373,7 +374,7 @@ export const runPayoutReconciliationLlmForDocument = async ({
 } = {}) => {
   if (!client || !firmId || !clientId || !documentId) return ZERO_STATS();
   const jevConfig = await readClientConfigSnapshot(client, { firmId, clientId, strict: true });
-  if (clientFlagActs({ flagKey: 'JEV_RECONCILIATION', snapshot: jevConfig, envFallback: () => false })) {
+  if (await firstLineLaneDecidesWithClient(client, { firmId, clientId, snapshot: jevConfig, decidedBy: 'reconciliation_reasoning' })) {
     const first = await runJevReconciliationForDocument({ client, firmId, clientId, documentId, configSnapshot: jevConfig, fetchImpl, family: 'payout_statement' });
     if (!first.jev_handoff) return first;
   }

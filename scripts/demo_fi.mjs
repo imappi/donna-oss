@@ -42,7 +42,9 @@
 //   --database-url=URL    use an existing, empty PostgreSQL database instead
 //                         (tests and recording; the same guards apply)
 //   --port=N --web-port=N runtime and web ports (default 8787 / 5173, or
-//                         DONNA_DESKTOP_PORT / DONNA_LOCAL_WEB_PORT)
+//                         DONNA_DESKTOP_PORT / DONNA_LOCAL_WEB_PORT); the web
+//                         app listens on DONNA_LOCAL_WEB_HOST (default
+//                         127.0.0.1), as scripts/local_web.mjs does
 //   --hold=FILE           leave one document out, to upload it by hand
 //   --exit-at-rest        stop once the book is at rest (tests, recording)
 //   --no-web              do not serve the web app
@@ -361,7 +363,7 @@ export const runDemo = async (options) => {
       if (existsSync(path.join(distDir, 'index.html'))) {
         const { createLocalWebServer } = await import('./local_web.mjs');
         webServer = createLocalWebServer({ distDir, runtimePort: port });
-        await new Promise((resolve, reject) => { webServer.once('error', reject); webServer.listen(webPort, '127.0.0.1', resolve); });
+        await new Promise((resolve, reject) => { webServer.once('error', reject); webServer.listen(webPort, process.env.DONNA_LOCAL_WEB_HOST || '127.0.0.1', resolve); });
         log(`web app on http://127.0.0.1:${webPort}/firms`);
       } else {
         log('no built web app (dist/); run `npm run build` to look at the book in a browser');

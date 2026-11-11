@@ -18,6 +18,13 @@
 // - Donna's own late-bank-line reversal gets the refusal, records it once on
 //   the document, the card target and an audit row, and does not post again;
 //   a person's reversal through the route then self-heals the marker.
+// - That refusal is a question to a named firm member (a seat ask on the bank
+//   line, listed in their Mentions lane): the bank line's stored convergence
+//   reads on_owner / open_seat_ask, later sweeps add nothing, posting the bank
+//   line does not close it, and the person's acknowledged reversal does, in the
+//   self-heal's transaction. A refusal recorded before the ask existed is asked
+//   on the next sweep. Neighbours: a reversal that posts asks nobody; a
+//   document with no settlement entry is not gathered.
 //   DONNA_PG_TEST_URL=... node --test server/donna/ledgerAdjustmentClosedPeriodPgLifecycle.test.js
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -37,6 +44,10 @@ import { getFinlandAlvReturnFromDb } from './finland/statutoryDb.js';
 import { DOCUMENT_SETTLEMENT_LEDGER_ENTRY_FLAG_KEY } from './documentDispositionShape.js';
 import { TAX_REGISTRATION_RECHECK_FLAG } from './db/taxRegistrationChange.js';
 import { correctionReturnMovement, taxCodeReturnKey } from './ledgerCorrectionLines.js';
+import { resolveOpenEvidenceRequestsForTransaction } from './db/asks.js';
+import { ledgerAdjustmentAskMessages } from '../../src/lib/ledgerAdjustmentAskView.js';
+import en from '../../src/i18n/catalogs/en.js';
+import fi from '../../src/i18n/catalogs/fi.js';
 import { alvReturnLineKey, buildAlvReturnFromLedgerLines } from './finland/alvReturn.js';
 
 const pgUrl = process.env.DONNA_PG_TEST_URL;
@@ -101,6 +112,15 @@ async function harness(t) {
     req.setTimeout(30000, () => req.destroy(new Error('HTTP fixture timed out')));
     req.on('error', reject); req.end(JSON.stringify({ firm_id: firmId, ...body }));
   });
+  const get = (path, token = MEMBER_ID) => new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port: server.address().port, path, method: 'GET',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } }, res => {
+      let text = ''; res.on('data', chunk => { text += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(text) }));
+    });
+    req.setTimeout(30000, () => req.destroy(new Error('HTTP fixture timed out')));
+    req.on('error', reject); req.end();
+  });
   t.after(async () => {
     server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
     globalThis.fetch = realFetch;
@@ -117,7 +137,7 @@ async function harness(t) {
   await pool.query("insert into firms(id,name,slug) values($1,'Synthetic adjustment firm',$1)", [firmId]);
   await pool.query(`insert into firm_members(id,firm_id,user_id,email,name,role,status,access_level)
     values($1,$2,'user-member','member@auth.invalid','Synthetic Member','admin','active','owner')`, [MEMBER_ID, firmId]);
-  return { pool, adjust };
+  return { pool, adjust, get };
 }
 
 const flag = (pool, clientId, key, stage = 'auto') => pool.query("insert into client_capability_config(id,firm_id,client_id,flag_key,stage,source,set_by_actor_type,set_by_actor_id,reason) values($1,$2,$3,$4,$5,'manual','firm_member',$6,'Synthetic proof') on conflict do nothing",
@@ -425,4 +445,151 @@ test('real PG (FI): Donna\'s late-bank-line reversal of an entry in a filed retu
   assert.equal(healed.self_healed, 1, JSON.stringify(healed));
   const after = (await pool.query("select payload->'settlement_entry' as entry from documents where id='doc-cash'")).rows[0].entry;
   assert.equal(after.reversal.journal_id, posted.body.ledger_adjustment.journals[0].ledger_journal_id);
+});
+
+// The owner-funded settlement entry in Q2, its document, the late bank line
+// coded and confirmed against it, as the confirm cascade leaves it.
+const seedLateBankLine = async (pool, clientId, { documentId = 'doc-cash', journal = 'lj-settlement-entry', bankId = 'bank-late' } = {}) => {
+  await pool.query("insert into ledger_journals(id,firm_id,client_id,source_type,source_id,journal_date,currency,status,posted_at) values($1,$2,$3,'document_settlement',$4,'2026-05-14','EUR','posted',now())", [journal, firmId, clientId, documentId]);
+  const account = async (name) => (await pool.query('select id,code,name from ledger_accounts where client_id=$1 and name=$2', [clientId, name])).rows[0];
+  const expense = await account('Travel'), funds = await account('Director loan');
+  for (const [n, acct, debit, credit, tax] of [[1, expense, GROSS, 0, 'ALV_25_5_INPUT'], [2, funds, 0, GROSS, null]]) {
+    await pool.query(`insert into ledger_lines(id,journal_id,firm_id,client_id,account_id,account_code,account_name,line_no,direction,debit,credit,amount,currency,tax_type)
+      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'EUR',$13)`, [`${journal}-${n}`, journal, firmId, clientId, acct.id, acct.code, acct.name, n, debit ? 'debit' : 'credit', debit, credit, GROSS, tax]);
+  }
+  await pool.query(`insert into documents(id,firm_id,client_id,filename,document_type,parse_status,total_amount,currency,document_date,vendor_name,payload)
+    values($1,$2,$3,'Synthetic fuel receipt.pdf','receipt','completed',$4,'EUR','2026-05-14','Synthetic Fuel',$5)`,
+  [documentId, firmId, clientId, GROSS, { settlement_entry: { journal_id: journal, amount: GROSS, currency: 'EUR', expense_account: expense.name, owner_funds_account: funds.name } }]);
+  await pool.query(`insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,reconciliation_status,account_code,payload)
+    values($1,$2,$3,'2026-05-15','Synthetic card payment',0,$4,'EUR','reconciled','reconciled',$5,$6)`, [bankId, firmId, clientId, GROSS, expense.code, { account_name: expense.name }]);
+  await pool.query("insert into reconciliation_matches(id,firm_id,client_id,bank_transaction_id,matched_object_type,matched_object_id,match_amount,match_confidence,status,created_by,payload) values($1,$2,$3,$4,'receipt',$5,$6,.99,'confirmed','fixture','{}')", [`match-${bankId}`, firmId, clientId, bankId, documentId, GROSS]);
+  return journal;
+};
+const sweepOf = (pool, clientId) => async () => { const client = await pool.connect(); try { return await runDocumentSettlementReversalsForClient({ client, firmId, clientId }); } finally { client.release(); } };
+const asksOf = async (pool, clientId) => (await pool.query(`select id,audience,status,evidence_type,transaction_id,addressee_principal_type,addressee_principal_id,
+  request_payload,response_payload,resolved_by from client_evidence_requests where client_id=$1 order by created_at,id`, [clientId])).rows;
+const convergenceOf = async (pool, id) => (await pool.query('select convergence_state,convergence_reason from transactions where id=$1', [id])).rows[0];
+
+test('real PG (FI): the refused reversal is a question to a named firm member until the person\'s acknowledged reversal answers it', { skip }, async t => {
+  const { pool, adjust, get } = await harness(t);
+  const clientId = 'fi-settlement-ask';
+  await seedFi(pool, clientId, REGISTERED_2026);
+  await flag(pool, clientId, DOCUMENT_SETTLEMENT_LEDGER_ENTRY_FLAG_KEY);
+  // A second member sorts first by name; the member assigned to the client is asked.
+  await pool.query(`insert into firm_members(id,firm_id,user_id,email,name,role,status,access_level)
+    values('member-aaron',$1,'user-member-aaron','member-aaron@auth.invalid','Aaron Synthetic','member','active','staff')`, [firmId]);
+  await pool.query("insert into client_assignments(id,firm_id,client_id,principal_type,principal_id,role) values('assign-member',$1,$2,'firm_member',$3,'admin')", [firmId, clientId, MEMBER_ID]);
+  const journal = await seedLateBankLine(pool, clientId);
+  await fileReturn(pool, clientId, 'alv-ask-q2', '2026-Q2', '2026-04-01', '2026-06-30');
+  const sweep = sweepOf(pool, clientId);
+
+  const first = await sweep();
+  assert.equal(first.needs_person, 1, JSON.stringify(first));
+  assert.equal(first.person_asks_minted, 1, JSON.stringify(first));
+  const [ask, ...others] = await asksOf(pool, clientId);
+  assert.deepEqual(others, []);
+  assert.deepEqual([ask.audience, ask.status, ask.evidence_type, ask.transaction_id, ask.addressee_principal_type, ask.addressee_principal_id],
+    ['seat', 'draft', 'ledger_adjustment', 'bank-late', 'firm_member', MEMBER_ID]);
+  const subject = ask.request_payload.ledger_adjustment;
+  assert.deepEqual({ ...subject, refused_at: undefined, acknowledgement_digest: undefined }, {
+    kind: 'settlement_reversal', refusal_code: 'LEDGER_ADJUSTMENT_RESTATES_FILED_RETURN',
+    document_id: 'doc-cash', document_label: 'Synthetic Fuel', document_date: '2026-05-14', amount: GROSS, currency: 'EUR',
+    bank_transaction_id: 'bank-late', bank_line_date: '2026-05-15', bank_line_description: 'Synthetic card payment',
+    // An entry with no funding_source predates company-cash entries: the owner's funds.
+    settlement_journal_id: journal, funding_source: 'owner', original_journal_date: '2026-05-14', filed_return_id: 'alv-ask-q2', filed_return_period: '2026-Q2',
+    tax_moved: [{ key: 'tax_code:ALV_25_5_INPUT', currency: 'EUR', amount: -GROSS }], refused_at: undefined, acknowledgement_digest: undefined });
+  assert.match(subject.acknowledgement_digest, /^[0-9a-f]{64}$/);
+  const doc = (await pool.query("select payload->'settlement_entry' as entry from documents where id='doc-cash'")).rows[0].entry;
+  assert.equal(doc.reversal_refusal.person_ask_id, ask.id);
+  // The bank line carries the matched pair's verdict: on the named person.
+  assert.deepEqual(await convergenceOf(pool, 'bank-late'), { convergence_state: 'on_owner', convergence_reason: 'open_seat_ask' });
+
+  // The mounted read: the assigned member's Mentions lane lists it; the other member's does not.
+  const lane = await get(`/api/donna/firms/mentions/notifications?firm_id=${firmId}`);
+  assert.equal(lane.status, 200, JSON.stringify(lane.body));
+  const listed = lane.body.open_asks.filter(row => row.client_id === clientId);
+  assert.deepEqual(listed.map(row => [row.id, row.evidence_type, row.artifact_type, row.artifact_id]), [[ask.id, 'ledger_adjustment', 'transaction', 'bank-late']]);
+  const messages = ledgerAdjustmentAskMessages(listed[0]);
+  assert.deepEqual(messages.map(m => m.id), ['mounted.financial.ledgerAdjustmentAsk.settlementReversal',
+    'mounted.financial.ledgerAdjustmentAsk.restatesFiledReturn', 'mounted.financial.ledgerAdjustmentAsk.todo']);
+  assert.deepEqual(messages[1].values, { period: '2026-Q2', detail: 'ALV_25_5_INPUT -125.50 EUR' });
+  for (const m of messages) { assert.ok(en[m.id], m.id); assert.ok(fi[m.id], m.id); }
+  const other = await get(`/api/donna/firms/mentions/notifications?firm_id=${firmId}`, 'member-aaron');
+  assert.equal(other.status, 200, JSON.stringify(other.body));
+  assert.deepEqual(other.body.open_asks.filter(row => row.client_id === clientId), []);
+
+  // Nothing is told twice; posting or coding the bank line does not answer it.
+  const second = await sweep();
+  assert.equal(second.gathered, 0, JSON.stringify(second));
+  assert.equal((await asksOf(pool, clientId)).length, 1);
+  assert.equal((await pool.query("select count(*)::int as n from audit_events where client_id=$1 and action='evidence_request.create'", [clientId])).rows[0].n, 1);
+  const client = await pool.connect();
+  try { assert.deepEqual(await resolveOpenEvidenceRequestsForTransaction({ client, firmId, clientId, transactionId: 'bank-late', note: 'Superseded by ledger post (fixture).' }), []); }
+  finally { client.release(); }
+  assert.equal((await asksOf(pool, clientId))[0].status, 'draft');
+
+  // The person reverses it with the acknowledgement; the next sweep answers the question in the marker's transaction.
+  const refused = await adjust({ client_id: clientId, original_journal_id: journal, reason: 'Late bank line: book the expense once, against the bank line' });
+  assert.equal(refused.body.details.acknowledgement_digest, subject.acknowledgement_digest);
+  const posted = await adjust({ client_id: clientId, original_journal_id: journal, reason: 'Late bank line: book the expense once, against the bank line',
+    acknowledge_filed_return_digest: refused.body.details.acknowledgement_digest });
+  assert.equal(posted.status, 200, JSON.stringify(posted.body));
+  const reversalId = posted.body.ledger_adjustment.journals[0].ledger_journal_id;
+  const healed = await sweep();
+  assert.equal(healed.self_healed, 1, JSON.stringify(healed));
+  const [answered] = await asksOf(pool, clientId);
+  assert.equal(answered.status, 'resolved');
+  assert.equal(answered.response_payload.ledger_adjustment_journal_id, reversalId);
+  const heal = (await pool.query("select metadata from audit_events where client_id=$1 and action='ledger.reverse_document_settlement'", [clientId])).rows;
+  assert.deepEqual(heal.map(r => [r.metadata.self_healed, r.metadata.resolved_person_ask_ids]), [[true, [ask.id]]]);
+  assert.equal((await pool.query("select count(*)::int as n from audit_events where client_id=$1 and action='evidence_request.answered_by_ledger_adjustment'", [clientId])).rows[0].n, 1);
+  assert.notEqual((await convergenceOf(pool, 'bank-late')).convergence_reason, 'open_seat_ask');
+  const laneAfter = await get(`/api/donna/firms/mentions/notifications?firm_id=${firmId}`);
+  assert.deepEqual(laneAfter.body.open_asks.filter(row => row.client_id === clientId), []);
+  const after = await sweep();
+  assert.equal(after.gathered, 0, JSON.stringify(after));
+  assert.equal((await asksOf(pool, clientId)).length, 1);
+});
+
+test('real PG (FI): a refusal recorded before its firm member was asked is asked once on the next sweep', { skip }, async t => {
+  const { pool } = await harness(t);
+  const clientId = 'fi-settlement-backfill';
+  await seedFi(pool, clientId, REGISTERED_2026);
+  await flag(pool, clientId, DOCUMENT_SETTLEMENT_LEDGER_ENTRY_FLAG_KEY);
+  await seedLateBankLine(pool, clientId);
+  await fileReturn(pool, clientId, 'alv-backfill-q2', '2026-Q2', '2026-04-01', '2026-06-30');
+  const sweep = sweepOf(pool, clientId);
+  assert.equal((await sweep()).needs_person, 1);
+  // The marker as #81 recorded it: no ask.
+  await pool.query("update client_evidence_requests set status='cancelled' where client_id=$1", [clientId]);
+  await pool.query("update documents set payload=payload #- '{settlement_entry,reversal_refusal,person_ask_id}' #- '{settlement_entry,reversal_refusal,person_ask_addressee}' where id='doc-cash'");
+  const again = await sweep();
+  assert.equal(again.person_asks_minted, 1, JSON.stringify(again));
+  const live = (await asksOf(pool, clientId)).filter(row => row.status === 'draft');
+  assert.equal(live.length, 1);
+  assert.equal((await pool.query("select payload->'settlement_entry'->'reversal_refusal'->>'person_ask_id' as id from documents where id='doc-cash'")).rows[0].id, live[0].id);
+  assert.equal((await sweep()).gathered, 0);
+  assert.equal((await asksOf(pool, clientId)).filter(row => row.status === 'draft').length, 1);
+});
+
+test('real PG (FI): neighbours: a reversal in an open period posts and asks nobody; a document with no settlement entry is not gathered', { skip }, async t => {
+  const { pool } = await harness(t);
+  const clientId = 'fi-settlement-open';
+  await seedFi(pool, clientId, REGISTERED_2026);
+  await flag(pool, clientId, DOCUMENT_SETTLEMENT_LEDGER_ENTRY_FLAG_KEY);
+  const journal = await seedLateBankLine(pool, clientId);
+  await pool.query(`insert into documents(id,firm_id,client_id,filename,document_type,parse_status,total_amount,currency,document_date,vendor_name,payload)
+    values('doc-plain',$1,$2,'Synthetic plain receipt.pdf','receipt','completed',$3,'EUR','2026-05-20','Synthetic Shop','{}')`, [firmId, clientId, GROSS]);
+  await pool.query(`insert into transactions(id,firm_id,client_id,transaction_date,description,money_in,money_out,currency,status,payload)
+    values('bank-plain',$1,$2,'2026-05-21','Synthetic shop payment',0,$3,'EUR','needs_review','{}')`, [firmId, clientId, GROSS]);
+  await pool.query("insert into reconciliation_matches(id,firm_id,client_id,bank_transaction_id,matched_object_type,matched_object_id,match_amount,match_confidence,status,created_by,payload) values('match-plain',$1,$2,'bank-plain','receipt','doc-plain',$3,.99,'confirmed','fixture','{}')", [firmId, clientId, GROSS]);
+  const sweep = sweepOf(pool, clientId);
+  const first = await sweep();
+  assert.deepEqual([first.gathered, first.reversed, first.needs_person], [1, 1, 0], JSON.stringify(first));
+  assert.deepEqual(await asksOf(pool, clientId), []);
+  assert.equal((await journalsCorrecting(pool, journal)).filter(j => j.correction_type === 'reversal').length, 1);
+  const docs = (await pool.query("select id, payload->'settlement_entry' as entry from documents where client_id=$1 order by id", [clientId])).rows;
+  assert.equal(docs.find(d => d.id === 'doc-cash').entry.reversal.journal_id != null, true);
+  assert.equal(docs.find(d => d.id === 'doc-plain').entry, null);
+  assert.equal((await sweep()).gathered, 0);
 });
