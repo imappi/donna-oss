@@ -98,12 +98,13 @@ const intentionalCanonicalValues = new Set([
 // SG native intake adds five explicit processing-scope fact labels (2,626 total).
 // The portal's answered-questions notice adds one heading (2,868 total).
 // A firm member's ledger adjustment question adds four Mentions-lane lines (2,876 total).
+// 2026-11-10: its reversal line names whose money paid; the company-cash line is a fifth (2,877 total).
 // Re-pin deliberately, in the same change as the keys.
 test('AR-3A plus AR-3B install one immutable 2,621-message Alpha catalog for AR-3C activation', () => {
   assert.equal(AR_AE_CATALOG_VERSION, '2026-09-28.sg-native-intake.1');
-  assert.equal(Object.keys(en).length, 2876);
-  assert.equal(Object.keys(arAE).length, 2876);
-  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2876);
+  assert.equal(Object.keys(en).length, 2877);
+  assert.equal(Object.keys(arAE).length, 2877);
+  assert.equal(AR_AE_CATALOG_METADATA.expectedMessageCount, 2877);
   assert.equal(AR_AE_CATALOG_METADATA.maturity, 'alpha');
   assert.equal(AR_AE_CATALOG_METADATA.displayLabel, 'العربية · إصدار تجريبي');
   assert.equal(AR_AE_CATALOG_METADATA.authorship, 'machine-authored');
@@ -209,6 +210,8 @@ test('the frozen glossary preserves official versus proposed terminology status'
 // `mounted.financial.waitingProvider`, and the refused-key and no-credit lines `mounted.financial.waitingProviderKeyRefused`, `mounted.financial.waitingProviderCredit`).
 // 2026-11-10: mounted source re-pinned for the four Mentions-lane lines of a
 // firm member's ledger adjustment question (`mounted.financial.ledgerAdjustmentAsk.*`).
+// 2026-11-10: mounted source re-pinned for the reversal line naming whose money
+// paid (`settlementReversal` own funds, `settlementReversalCompanyCash`).
 test('the pre-AR-3B English catalog semantics are pinned and the mounted source is pinned', () => {
   const remainingSource = readFileSync(new URL('./catalogs/remainingSurfaces.en.js', import.meta.url));
   const mountedSource = readFileSync(new URL('./catalogs/mountedSurfaces.en.js', import.meta.url));
@@ -216,7 +219,7 @@ test('the pre-AR-3B English catalog semantics are pinned and the mounted source 
     Object.entries(en).filter(([key]) => !key.startsWith('mounted.'))
   );
   assert.equal(hash(remainingSource), '327d38f3bac59683faa61e2fc4dc7d127339bf9f1b954f567f02116ef931b488');
-  assert.equal(hash(mountedSource), '04862a16906925b313f0c86d833c07dca174c5d92f92f7165963f89a3d019056');
+  assert.equal(hash(mountedSource), 'adf8a66c07a90f27e388cf39e972c6ef083fb5edae98a85593b76a5c4cb85ecc');
   assert.equal(hash(JSON.stringify(preAr3bEn)), '0262e7da2a8812f88961ab199f15555775c7b30b59d0115dfadf147b0baec4ef');
 });
 

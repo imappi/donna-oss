@@ -123,7 +123,8 @@ const ledgerAccountFromBank = (bankAccount = {}) => {
 // Slice 4b (docs/donna-settlement-answer-and-ledger-entry-plan.md §3) — the
 // settlement journal for a MONEY-OUT document that settled outside the visible
 // bank feed (cash / the owner's personal card): DR the expense account /
-// CR the owner's-funds account. Balanced by construction (one debit + one
+// CR the account whose money paid it (the owner's funds, or the company's
+// cash box on the market's declared cash account). Balanced by construction (one debit + one
 // credit of the same amount), same as the transaction builder above. Money-IN
 // documents (a sales invoice settled in cash) are a DIFFERENT journal shape
 // (owner drew the cash) and are deliberately NOT built here — the producer's
@@ -165,16 +166,21 @@ export const buildLedgerJournalForDocumentSettlement = ({
     error.code = 'LEDGER_MISSING_OWNER_FUNDS_ACCOUNT';
     throw error;
   }
+  // The credit leg is the account whose money paid: the owner's funds (901),
+  // or the market's declared cash account for the company's cash box, which
+  // carries its own type, balance side, line role and statutory group
+  // (documentSettlementFunding.js). An owner-funds account is shaped as before.
   const ownerFunds = {
-    role: 'owner_funds',
+    role: trim(ownerFundsAccount.line_role) || 'owner_funds',
     code: ownerCode,
     name: ownerName,
     type: trim(ownerFundsAccount.type) || 'liability',
-    normal_balance: 'credit',
+    normal_balance: trim(ownerFundsAccount.normal_balance) || 'credit',
     tax_type: trim(ownerFundsAccount.tax_type || 'NONE'),
     xero_account_id: trim(ownerFundsAccount.xero_account_id),
     canonical_role: ownerFundsAccount.canonical_role || null,
-    label: ownerFundsAccount.label || accountLabel({ code: ownerCode, name: ownerName })
+    label: ownerFundsAccount.label || accountLabel({ code: ownerCode, name: ownerName }),
+    ...(ownerFundsAccount.statutory_group ? { statutory_group: ownerFundsAccount.statutory_group } : {})
   };
 
   const currency = requireLedgerCurrency(document.currency, 'document');
