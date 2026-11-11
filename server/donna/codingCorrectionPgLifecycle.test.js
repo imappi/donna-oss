@@ -58,13 +58,17 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  // was recorded, so it is taken again, bounded, for those cases only. Steps
  // that provoke contention on purpose call the clock directly.
  const pause=()=>new Promise(r=>setTimeout(r,250));
- const recoverPosted=async(args={})=>{
+ // A step that arms a one-shot `race` passes `rearm`: a contended attempt
+ // may already have run it, so each retry arms a fresh change of its own.
+ const recoverPosted=async(args={},{rearm=null}={})=>{
   const admit=args.runWorkerAdmissionFn||(async({work})=>work());
+  if(rearm)race=rearm();
   let res=await recoverPostedCodingCorrectionsInDb(args);
   for(let i=0;i<10;i++){
    const ids=new Set(res.filter(r=>r.state==='contended').map(r=>r.transactionId));
    if(!ids.size)return res;
    await pause();
+   if(rearm)race=rearm();
    const again=await recoverPostedCodingCorrectionsInDb({...args,limit:100,
     runWorkerAdmissionFn:a=>ids.has(a.transactionId)?admit(a):{state:'busy'}});
    res=res.map(r=>ids.has(r.transactionId)?(again.find(x=>x.transactionId===r.transactionId)||r):r);
@@ -186,8 +190,9 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  assert.equal((await tx('statutory')).coding_state,'posted');
  // A source change during generation cannot reach the adjustment writer.
  await seed('race');await recoverEvidence({firmId:'f'});phase='allocation';
- race=()=>pool.query("update document_lines set description='Changed source component' where id='race-line-2'");
- result=await recoverPosted({firmId:'f'});
+ let raceN=0;
+ result=await recoverPosted({firmId:'f'},{rearm:()=>{const n=++raceN;
+  return ()=>pool.query("update document_lines set description=$1 where id='race-line-2'",[`Changed source component ${n}`]);}});
  assert.equal(result[0].code,'CODING_CORRECTION_STALE',JSON.stringify(result));
  assert.equal((await tx('race')).payload.coding_correction_required.status,'pending');
  result=await recoverPosted({firmId:'f'});
@@ -309,8 +314,7 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  // Two deliveries share the durable claim. Only one reasons and writes.
  await seed('concurrent');await recoverEvidence({firmId:'f'});phase='allocation';
  let nested;
- race=async()=>{nested=await recoverPostedCodingCorrectionsInDb({firmId:'f'});};
- result=await recoverPosted({firmId:'f'});
+ result=await recoverPosted({firmId:'f'},{rearm:()=>async()=>{nested=await recoverPostedCodingCorrectionsInDb({firmId:'f'});}});
  assert.equal(result[0].state,'completed',JSON.stringify(result));assert.equal(nested[0].state,'busy');
  // Revoke after the saved decision commits but before the adjustment obtains
  // its checkout. The actual adjustment writer must refuse; no owner ask.
@@ -487,17 +491,17 @@ test('real PG: current evidence -> Jev -> adjustment/ask -> reply -> verified te
  await pool.query(`insert into documents(id,firm_id,client_id,filename,document_type,parse_status,document_date,currency,payload)
   values('roster-statement','f','c','statement.pdf','bank_statement','completed','2025-02-24','EUR',
   '{"statement_summary":{"bank_name":"Fixture bank","account_number":"1111"}}')`);
- phase='allocation';race=()=>pool.query(`update documents set payload=jsonb_set(payload,
-  '{statement_summary,account_number}','"2222"'::jsonb) where id='roster-statement'`);
- result=await recoverPosted({firmId:'f',limit:1});
+ phase='allocation';
+ result=await recoverPosted({firmId:'f',limit:1},{rearm:()=>{const n=++raceN;
+  return ()=>pool.query(`update documents set payload=jsonb_set(payload,
+  '{statement_summary,account_number}',to_jsonb($1::text)) where id='roster-statement'`,[`2222-${n}`]);}});
  assert.equal(result[0].transactionId,'roster');assert.equal(result[0].code,'CODING_CORRECTION_STALE',JSON.stringify(result));
 
  // Other coder-only source fields (not in the display projection) receive
  // the same protection. Preserve the actual error and do not mint a question.
  await seed('parser-context');await recoverEvidence({firmId:'f'});
- race=()=>pool.query(`update transactions set payload=payload ||
-  '{"parser_flags":["source_direction_requires_review"]}'::jsonb where id='parser-context'`);
- result=await recoverPosted({firmId:'f',limit:1});
+ result=await recoverPosted({firmId:'f',limit:1},{rearm:()=>{const n=++raceN;
+  return ()=>pool.query(`update transactions set payload=payload || jsonb_build_object('parser_flags',jsonb_build_array('source_direction_requires_review',$1::text)) where id='parser-context'`,[`attempt-${n}`]);}});
  assert.equal(result[0].transactionId,'parser-context');assert.equal(result[0].code,'CODING_CORRECTION_STALE',JSON.stringify(result));
  assert.equal((await pool.query("select count(*)::int n from client_evidence_requests where transaction_id='parser-context'")).rows[0].n,0);
 
