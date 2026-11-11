@@ -68,7 +68,7 @@ import { ENDPOINT_CLASSES, OPENAI_COMPATIBLE_ENV_KEYS } from './providerEndpoint
 // the host digest entity generations were certified against does not move.
 // Persisted v7 receipts keep naming the shape that scored them; the next
 // boot or renewal mints v8.
-// v9 (2026-11-10, "run on a local model", modelLanes.js
+// v10 (2026-11-10, "run on a local model", modelLanes.js
 // SELF_HOSTED_DECISION): the predicate is unchanged — `model_routes` still
 // scores the lane inventory only — but its detail now NAMES every active
 // self-hosted, UNQUALIFIED seat on this host's database
@@ -76,9 +76,11 @@ import { ENDPOINT_CLASSES, OPENAI_COMPATIBLE_ENV_KEYS } from './providerEndpoint
 // null when the database was not read) and the lanes that can take one
 // (`detail.self_hostable_lanes`). A receipt, outside the compatibility
 // projection and the lane manifest digest: seating or clearing a local model
-// does not move the host digest. Persisted v8 receipts keep naming the shape
-// that scored them; the next boot or renewal mints v9.
-export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v9';
+// does not move the host digest. Persisted v8/v9 receipts keep naming the shape
+// that scored them; the next boot or renewal mints v10. (v9 is the
+// first-line lane's missing_env change, #87; this note follows it once both
+// are on one tree.)
+export const HOST_CERTIFICATE_A_VERSION = 'donna.host-certificate-a.v10';
 export const HOST_COMPATIBILITY_CONTRACT_VERSION = 'donna.host-compatibility.v1';
 export const HOST_CERTIFICATE_FRESHNESS_CONTRACT_VERSION = 'donna.host-certificate-freshness.v1';
 export const HOST_CERTIFICATE_RENEWAL_INTERVAL_MS = 5 * 60 * 1000;
