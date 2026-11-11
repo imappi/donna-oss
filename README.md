@@ -104,10 +104,13 @@ Anthropic `claude-opus-4-8`; document routing, statement reading, coding
 and ask drafting are, in this recording, scripted stand-ins written from
 the pack in the OpenAI response format, in place of `gpt-5.4`. A stand-in
 names itself: its answers are marked `scripted_stand_in` in the file and
-carry the model `scripted-stand-in-for-gpt-5.4`, which every receipt built
-from the answer shows, with one exception: the document-routing receipt
-(the router's confidence envelope) stores the configured model,
-`gpt-5.4`, not the one that answered. Every model call leaves the
+carry the model `scripted-stand-in-for-gpt-5.4`. A receipt that takes its
+model from the response reads `scripted-stand-in-for-gpt-5.4+replayed`.
+These receipts store the configured model instead, so they read `gpt-5.4`:
+the document-routing receipt (the router's confidence envelope,
+`documentRouter.js`), the bank statement's parse summary
+(`extraction_model`, from `bankStatementVision.js`), and the firm-fact
+distiller's result (`firmFacts.js`; it stores nothing in this month). Every model call leaves the
 process through one seam (`server/donna/providerReplay.js`); the demo
 answers it from the recordings, so every parser, schema check, VAT rule
 and posting check runs on the recorded answer as on a live one. A request
@@ -124,11 +127,16 @@ running. To re-record (on the host, with `ANTHROPIC_API_KEY` and
 calls): `npm run demo:fi:record`. It takes only those two names from
 `.env`, and needs no `.env` at all when no lane has to go live. Its spend
 is capped at 20 USD across all its passes (`-- --cap-usd=N` to change it):
-a call is made only if its estimate fits in what is left (Anthropic
-calls are counted exactly with the free token-count endpoint; other calls
-are bounded from their text and files, and from what the same lane's
-earlier calls used), and the actual spend each answer reports is added
-after it. The committed recordings are replaced only after a replay on a
+a call is made only if its estimate fits in what is left (an Anthropic
+call's input is counted exactly with the free token-count endpoint and its
+output is bounded by the request's own limit; other calls are estimated
+from what the same lane used before, in the pass or in the recordings,
+and bounded from their text and files), and the actual spend each answer
+reports is added after it. It prices calls from
+`scripts/fixtures/fi_kultalanka_month_facts.json` and lists those prices
+first; the `gpt-5.4` rate there is an assumption, not a published price,
+so the cap is approximate for that model. A price table that cannot price
+every model the month calls stops the command before any call. The committed recordings are replaced only after a replay on a
 fresh book has used every one of them, each exactly as often as recorded.
 
 The starts below run the same book on live providers, with your own keys

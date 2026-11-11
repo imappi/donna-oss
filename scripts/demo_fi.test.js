@@ -28,7 +28,8 @@ import http from 'node:http';
 import {
   DEFAULT_RECORDINGS, DEMO_ENV_NAMES, DEMO_FIXED_ENV, IMAGE_TOKENS, LEARNED_MARGIN, PDF_PAGE_TOKENS, RECORD_ENV_NAMES, RERECORD_COMMAND, SOCKET_PATH_MAX,
   WORST_CASE_OUTPUT_TOKENS, answerFor, answersFromStandIn, assertDemoBookOnly, assertSocketPathFits, estimateCallUsd, giveOwnerAnswer, laneOutputTokensOf,
-  loadRecordKeys, loadReplayRecordings, parseDemoArgs, priceFor, priceUsage, recordedOn, sealDemoEnvironment, socketPathFor, standInLanesOf
+  laneUsageOf, loadRecordKeys, loadReplayRecordings, meterRefuses, modelsOf, parseDemoArgs, priceFor, priceUsage, recordedOn, sealDemoEnvironment,
+  socketPathFor, standInLanesOf, validatePriceTable, FACTS_FILE
 } from './demo_fi.mjs';
 import { STAND_IN_MODEL_PREFIX, answerOpenAiStandIn } from './demo_fi_stand_ins.mjs';
 import {
@@ -252,6 +253,47 @@ test('spend: a call is estimated before it is made, from the best source it has,
   const longest = laneOutputTokensOf(loadReplayRecordings().entries);
   assert.ok(longest['anthropic:unified_extraction'] > 0);
   assert.equal(Object.keys(longest).some((id) => id.startsWith('openai:')), false, 'stand-in answers teach nothing');
+});
+
+test('the price table must price every model the month calls, or the record command does not start; a meter that cannot read refuses', () => {
+  const good = { 'claude-': { input_per_million: 5, output_per_million: 25 }, 'gpt-': { input_per_million: 2.5, output_per_million: 15, assumed: true } };
+  const lines = validatePriceTable({ prices: good, models: ['claude-opus-4-8', 'gpt-5.4'] });
+  assert.match(lines.find((l) => l.startsWith('gpt-')), /an assumed rate, not a published price: the cap is approximate for this model/);
+  assert.doesNotMatch(lines.find((l) => l.startsWith('claude-')), /assumed/);
+  const bad = [
+    [{ 'claude-': { input_per_million: 5 } }, /row "claude-": output_per_million is undefined/],
+    [{ 'claude-': { input_per_million: '5', output_per_million: 25 } }, /row "claude-": input_per_million is "5"/],
+    [{ 'claude-': { input_per_million: 5, output_per_million: 0 } }, /output_per_million is 0/],
+    [{ 'claude-': { input_per_million: 5, output_per_million: 25, cache_write_multiplier: -1 } }, /cache_write_multiplier is -1/],
+    [{ 'claude-': { input_per_million: 5, output_per_million: 25 } }, /model "gpt-5.4" has no row/],
+    [{}, /there is no price table/]
+  ];
+  for (const [prices, message] of bad) {
+    assert.throws(() => validatePriceTable({ prices, models: ['claude-opus-4-8', 'gpt-5.4'] }), (error) => error.code === 'DEMO_PRICE_TABLE' && message.test(error.message) && /Nothing was called/.test(error.message));
+  }
+  // The committed facts file prices every model the committed recordings ask for.
+  const facts = JSON.parse(readFileSync(FACTS_FILE, 'utf8'));
+  assert.ok(validatePriceTable({ prices: facts.prices, models: modelsOf(loadReplayRecordings().entries) }).some((l) => /gpt-5\.4 .*assumed rate/.test(l)));
+  // A row missing a field would have made the estimate NaN: refused, not zero.
+  const nan = estimateCallUsd({ price: { input_per_million: 5 }, init: { body: '{"max_tokens":10}' }, provider: 'anthropic' });
+  assert.equal(Number.isFinite(nan.usd), false);
+  assert.equal(meterRefuses({ estimateUsd: nan.usd, spentUsd: 0 }), true);
+  assert.equal(meterRefuses({ estimateUsd: 0.2, spentUsd: Number.NaN }), true);
+  assert.equal(meterRefuses({ estimateUsd: 0.2, spentUsd: 1 }), false);
+});
+
+test('a pass\'s first call of a lane is estimated from the usage the recordings hold for it, with the margin', () => {
+  const usage = laneUsageOf(loadReplayRecordings().entries);
+  assert.ok(usage['anthropic:unified_extraction'].input > 0 && usage['anthropic:unified_extraction'].output > 0);
+  const price = { input_per_million: 2.5, output_per_million: 15 };
+  const body = JSON.stringify({ model: 'gpt-5.4', input: 'x'.repeat(200_000) });
+  const bound = estimateCallUsd({ price, init: { body }, provider: 'openai' });
+  const seeded = estimateCallUsd({ price, init: { body }, provider: 'openai', laneInputTokens: 30_000 });
+  assert.equal(seeded.input_source, 'recorded');
+  assert.equal(seeded.input_tokens, 30_000 * LEARNED_MARGIN);
+  assert.ok(seeded.usd < bound.usd);
+  // Never above the bound.
+  assert.equal(estimateCallUsd({ price, init: { body: '{"input":"short"}' }, provider: 'openai', laneInputTokens: 30_000 }).input_source, 'bound');
 });
 
 test('the socket path is checked before PostgreSQL starts', () => {
@@ -626,7 +668,10 @@ test('an uncommitted runtime is refused up front with the remedy, before any dat
 
 // initdb refuses to run as root, so this one needs an ordinary user.
 const AS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
-test('--data-dir: a folder holding another firm\'s book is refused, its catalogue and rows unchanged, its running server left running', { skip: AS_ROOT ? 'initdb cannot run as root' : false, timeout: 600_000 }, async () => {
+const { findPgBin } = await import('../server/donna/desktop/pgSupervisor.js');
+const NO_PG_BINARIES = (() => { try { findPgBin(); return false; } catch { return true; } })();
+const OWN_PG_SKIP = AS_ROOT ? 'initdb cannot run as root' : NO_PG_BINARIES ? 'no PostgreSQL 16 binaries on this machine (PG_BIN)' : false;
+test('--data-dir: a folder holding another firm\'s book is refused, its catalogue and rows unchanged, its running server left running', { skip: OWN_PG_SKIP, timeout: 600_000 }, async () => {
   const { ensureLocalPostgres } = await import('../server/donna/desktop/pgSupervisor.js');
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'dfb-'));
   const pgPort = 15400 + (process.pid % 500);
@@ -658,4 +703,47 @@ test('--data-dir: a folder holding another firm\'s book is refused, its catalogu
   } finally {
     handle.stop();
   }
+});
+
+// The fixed-locale re-run: killed outright, the parent leaves nothing behind.
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now() < end) { if (await fn()) return true; await new Promise((r) => setTimeout(r, 200)); } return fn(); };
+const startReRun = (args, env = {}) => {
+  const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'demo_fi.mjs'), ...args], {
+    cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/_API_KEY$/.test(k))), TZ: 'Europe/Helsinki', LANG: 'fi_FI.UTF-8', LC_ALL: 'fi_FI.UTF-8',
+      DONNA_BUILD_COMMIT_SHA: 'demo-fi-test', DONNA_BUILD_DIRTY: 'false', DONNA_RUNTIME_BUILD_DIRTY: 'false', ...env }
+  });
+  let out = '';
+  child.stdout.on('data', (c) => { out += c; });
+  child.stderr.on('data', (c) => { out += c; });
+  return { child, out: () => out };
+};
+
+test('the fixed-locale re-run: a parent killed with SIGKILL leaves no demo process behind', { skip: PG ? false : 'DONNA_PG_TEST_URL not set', timeout: 300_000 }, async () => {
+  const name = `donna_demo_orphan_${process.pid}`;
+  const url = await scratchDatabase(name);
+  try {
+    const run = startReRun([`--database-url=${url}`, '--exit-at-rest', '--no-web', '--quiet', '--port=8796']);
+    assert.ok(await waitFor(() => /running as process \d+/.test(run.out()) && /applying migrations|replay: /.test(run.out()), 60_000), run.out().slice(-2000));
+    const childPid = Number(/running as process (\d+)/.exec(run.out())[1]);
+    assert.ok(alive(childPid));
+    run.child.kill('SIGKILL');
+    assert.ok(await waitFor(() => !alive(childPid), 15_000), `the re-run child ${childPid} is still running after its parent was killed`);
+  } finally {
+    await dropDatabase(name);
+  }
+});
+
+test('the fixed-locale re-run on its own data folder: a parent killed with SIGKILL leaves no PostgreSQL behind', { skip: OWN_PG_SKIP, timeout: 300_000 }, async () => {
+  const dataDir = mkdtempSync(path.join(os.tmpdir(), 'dok-'));
+  const pgPort = 15900 + (process.pid % 500);
+  const run = startReRun([`--data-dir=${dataDir}`, '--exit-at-rest', '--no-web', '--quiet', '--port=8795'], { DONNA_DESKTOP_PG_PORT: String(pgPort) });
+  const pgData = path.join(dataDir, 'database', 'pg');
+  assert.ok(await waitFor(() => /applying migrations/.test(run.out()), 120_000), run.out().slice(-2000));
+  const childPid = Number(/running as process (\d+)/.exec(run.out())[1]);
+  const pgPid = Number(readFileSync(path.join(pgData, 'postmaster.pid'), 'utf8').split('\n')[0]);
+  assert.ok(alive(pgPid));
+  run.child.kill('SIGKILL');
+  assert.ok(await waitFor(() => !alive(childPid) && !alive(pgPid), 30_000), `left running: ${[!alive(childPid) ? null : `demo ${childPid}`, !alive(pgPid) ? null : `postgres ${pgPid}`].filter(Boolean).join(', ')}`);
 });

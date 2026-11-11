@@ -87,7 +87,8 @@
 //                         the requests that pass made
 //   --cap-usd=N           with --record: the spend cap in USD for the whole
 //                         command, across every pass (default 20); a live call
-//                         is made only if its worst-case price still fits
+//                         is made only if its estimated price still fits
+//                         (estimateCallUsd), and its reported cost is added
 //   --stand-in=openai     with --record: answer the OpenAI lanes from the
 //                         scripted stand-in (scripts/demo_fi_stand_ins.mjs)
 //                         instead of the network
@@ -322,6 +323,40 @@ export const loadReplayRecordings = (file = DEFAULT_RECORDINGS) => {
 // scripts/fi_month_two_stage_run.js), by exact model id or id prefix.
 export const priceFor = (prices = {}, model) => prices[model] || Object.entries(prices).find(([prefix]) => model && model.startsWith(prefix))?.[1] || null;
 
+// The price table a record command spends by. Every row must carry finite,
+// positive input and output prices (and finite, non-negative multipliers
+// where it has them), and every model the month may call must resolve to a
+// row: otherwise the meter would read NaN and the cap would stop nothing. A
+// row marked `assumed` is not a published price: the cap is approximate for
+// that model, and the command says so.
+export const PRICE_FIELDS = Object.freeze(['input_per_million', 'output_per_million']);
+export const PRICE_MULTIPLIERS = Object.freeze(['cache_write_multiplier', 'cache_read_multiplier']);
+export const validatePriceTable = ({ prices, models = [] }) => {
+  const problems = [];
+  if (!prices || typeof prices !== 'object' || !Object.keys(prices).length) problems.push('there is no price table');
+  for (const [row, price] of Object.entries(prices || {})) {
+    for (const field of PRICE_FIELDS) {
+      const value = price?.[field];
+      if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) problems.push(`row "${row}": ${field} is ${JSON.stringify(value)}, not a positive number`);
+    }
+    for (const field of PRICE_MULTIPLIERS) {
+      if (field in (price || {}) && (typeof price[field] !== 'number' || !Number.isFinite(price[field]) || price[field] < 0)) problems.push(`row "${row}": ${field} is ${JSON.stringify(price[field])}, not a non-negative number`);
+    }
+  }
+  for (const model of models) if (model && !priceFor(prices, model)) problems.push(`model "${model}" has no row`);
+  if (problems.length) {
+    throw new DemoError({ code: 'DEMO_PRICE_TABLE', message: `demo record: the price table in ${path.relative(ROOT, FACTS_FILE)} cannot meter the spend: ${problems.join('; ')}. Nothing was called.` });
+  }
+  return Object.entries(prices).map(([row, price]) => `${row} ${price.input_per_million} in / ${price.output_per_million} out USD per million tokens${price.assumed ? ' (an assumed rate, not a published price: the cap is approximate for this model)' : ''}`);
+};
+// A meter that cannot read refuses the call: a NaN estimate or a NaN total
+// would otherwise compare false against the cap and stop nothing.
+export const meterRefuses = ({ estimateUsd, spentUsd }) => !Number.isFinite(estimateUsd) || !Number.isFinite(spentUsd) || estimateUsd < 0;
+
+// The models a record command may call: every model the reference
+// recordings asked for.
+export const modelsOf = (entries = []) => [...new Set((entries || []).map((entry) => entry.model_requested).filter(Boolean))].sort();
+
 // What one live answer cost, from its reported usage. Null when the model is
 // unpriced or the answer reports no usage.
 export const priceUsage = ({ prices = {}, model, usage, provider }) => {
@@ -340,7 +375,10 @@ export const priceUsage = ({ prices = {}, model, usage, provider }) => {
 //   1. Anthropic: the free count_tokens endpoint's exact count;
 //   2. the lane's own earlier live calls in this pass: the most input tokens
 //      per bound unit (below) any of them used, times LEARNED_MARGIN;
-//   3. the hard bound: every byte of the request's text as a token (a text
+//   3. the most input tokens the lane used in the reference recordings (their
+//      stored usage), times LEARNED_MARGIN, so a pass's first call of a lane
+//      is not priced at the bound;
+//   4. the hard bound: every byte of the request's text as a token (a text
 //      token is never shorter than a byte), and each attached file by what it
 //      can cost rather than by its size: a PDF page PDF_PAGE_TOKENS, an image
 //      IMAGE_TOKENS.
@@ -395,34 +433,41 @@ export const requestShape = (init) => {
     outputLimit: Number(body.max_tokens ?? body.max_output_tokens ?? body.max_completion_tokens) || null
   };
 };
-export const estimateCallUsd = ({ price, init, provider, countedInputTokens = null, laneOutputTokens = null, laneTokensPerUnit = null }) => {
+export const estimateCallUsd = ({ price, init, provider, countedInputTokens = null, laneOutputTokens = null, laneTokensPerUnit = null, laneInputTokens = null }) => {
   const shape = requestShape(init);
   const bound = shape.textTokensBound + shape.fileTokens;
   const inputTokens = countedInputTokens
-    ?? (laneTokensPerUnit ? Math.ceil(bound * Math.min(1, laneTokensPerUnit * LEARNED_MARGIN)) : bound);
+    ?? (laneTokensPerUnit ? Math.ceil(bound * Math.min(1, laneTokensPerUnit * LEARNED_MARGIN))
+      : laneInputTokens ? Math.min(bound, Math.ceil(laneInputTokens * LEARNED_MARGIN)) : bound);
   const outputTokens = shape.outputLimit ?? (laneOutputTokens ? Math.ceil(laneOutputTokens * LEARNED_MARGIN) : WORST_CASE_OUTPUT_TOKENS);
   const inputRate = price.input_per_million * (provider === 'anthropic' ? (price.cache_write_multiplier ?? 1.25) : 1);
   const outputUsd = outputTokens * price.output_per_million / 1e6;
   return {
     usd: inputTokens * inputRate / 1e6 + outputUsd, output_usd: outputUsd, input_tokens: inputTokens, output_tokens: outputTokens, bound_units: bound,
-    input_source: countedInputTokens != null ? 'counted' : laneTokensPerUnit ? 'learned' : 'bound'
+    input_source: countedInputTokens != null ? 'counted' : laneTokensPerUnit ? 'learned' : laneInputTokens && Math.ceil(laneInputTokens * LEARNED_MARGIN) < bound ? 'recorded' : 'bound'
   };
 };
 
-// The longest answer each lane gave, from live answers in a recordings file.
-export const laneOutputTokensOf = (entries = []) => {
-  const longest = {};
+// The most input and output tokens each lane used, from the live answers
+// in a recordings file (their stored usage).
+export const laneUsageOf = (entries = []) => {
+  const most = {};
   for (const entry of entries || []) {
     if (entry.provenance !== 'live') continue;
     for (const response of entry.responses || []) {
       const usage = response.events ? summarizeProviderResponse({ contentType: 'text/event-stream', text: serializeEventStream(response.events) }).usage : response.body?.usage;
-      const out = Number(usage?.output_tokens ?? usage?.completion_tokens) || 0;
+      const input = (Number(usage?.input_tokens ?? usage?.prompt_tokens) || 0)
+        + (Number(usage?.cache_creation_input_tokens) || 0) + (Number(usage?.cache_read_input_tokens) || 0);
+      const output = Number(usage?.output_tokens ?? usage?.completion_tokens) || 0;
       const id = `${entry.provider}:${entry.lane}`;
-      if (out > (longest[id] || 0)) longest[id] = out;
+      const lane = most[id] ||= { input: 0, output: 0 };
+      lane.input = Math.max(lane.input, input);
+      lane.output = Math.max(lane.output, output);
     }
   }
-  return longest;
+  return most;
 };
+export const laneOutputTokensOf = (entries = []) => Object.fromEntries(Object.entries(laneUsageOf(entries)).filter(([, u]) => u.output).map(([id, u]) => [id, u.output]));
 
 // Anthropic's count_tokens endpoint (free): the exact input size of a
 // Messages request. Null when it cannot be had.
@@ -616,6 +661,13 @@ export const runDemo = async (options) => {
   };
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
+  // Started by another demo process (the fixed-locale re-run, or a pass of
+  // the record loop): when that process is gone, even killed outright, stop.
+  const onParentGone = () => onSignal('parent process gone');
+  if (process.channel) {
+    process.on('disconnect', onParentGone);
+    process.channel.unref();
+  }
 
   try {
     const { DEMO_CLIENT_ID, createRuntimeClient, loadFinnishDemo } = await import('./load_finnish_demo.mjs');
@@ -675,8 +727,11 @@ export const runDemo = async (options) => {
       // sets no output limit: from the file a fill starts from, else from the
       // committed recordings.
       const reference = base || (existsSync(DEFAULT_RECORDINGS) ? (() => { try { return loadReplayRecordings(DEFAULT_RECORDINGS); } catch { return null; } })() : null);
+      const recordedUsage = laneUsageOf(reference?.entries);
       const laneOutput = laneOutputTokensOf(reference?.entries);
       const laneRatio = {};
+      // The meter: refuse to start on a table that cannot price the month.
+      for (const line of validatePriceTable({ prices: facts.prices, models: modelsOf(reference?.entries) })) log(`record: price ${line}`);
       const answerRequest = async (input, init, classified, identity) => {
         const held = identity ? baseByKey.get(identity.key) : null;
         if (!held) spend.new_requests += 1;
@@ -704,11 +759,18 @@ export const runDemo = async (options) => {
         const remaining = capUsd - spend.usd;
         const laneId = `${classified.endpoint_class}:${classified.lane}`;
         const laneOutputTokens = laneOutput[laneId] || null;
-        const first = estimateCallUsd({ price, init, provider: classified.endpoint_class, laneOutputTokens, laneTokensPerUnit: laneRatio[laneId] || null });
+        const laneInputTokens = recordedUsage[laneId]?.input || null;
+        const first = estimateCallUsd({ price, init, provider: classified.endpoint_class, laneOutputTokens, laneTokensPerUnit: laneRatio[laneId] || null, laneInputTokens });
         const counted = classified.endpoint_class === 'anthropic' && first.output_usd <= remaining
           ? await countAnthropicInputTokens({ fetchFn: realFetch, input, init })
           : null;
         const estimate = counted ? estimateCallUsd({ price, init, provider: classified.endpoint_class, laneOutputTokens, countedInputTokens: counted }) : first;
+        // A meter that cannot read is a refusal, never a zero.
+        if (meterRefuses({ estimateUsd: estimate.usd, spentUsd: spend.usd })) {
+          spend.stopped ||= { reason: 'meter_not_finite', lane: classified.lane, model: classified.model_requested };
+          throw new TypeError(`demo record: the cost of the next ${classified.lane} call cannot be estimated (${classified.model_requested}); not calling`);
+        }
+        if (spend.stopped?.reason === 'meter_not_finite') throw new TypeError(`demo record: the spend meter stopped reading; not calling ${classified.lane}`);
         if (estimate.usd > remaining) {
           spend.stopped ||= { reason: 'cap', lane: classified.lane, spent_usd: spend.usd, next_estimate_usd: estimate.usd };
           throw new TypeError(`demo record: spend cap ${capUsd.toFixed(2)} USD: ${spend.usd.toFixed(3)} spent, the next ${classified.lane} call is estimated at up to ${estimate.usd.toFixed(3)}; not calling`);
@@ -726,7 +788,12 @@ export const runDemo = async (options) => {
         if (usedIn && estimate.bound_units) laneRatio[laneId] = Math.max(laneRatio[laneId] || 0, usedIn / estimate.bound_units);
         if (usedOut > (laneOutput[laneId] || 0)) laneOutput[laneId] = usedOut;
         // An answer that reports no usage is counted at its estimate.
-        if (usd == null) { spend.unpriced += 1; spend.usd += estimate.usd; } else {
+        if (usd != null && !Number.isFinite(usd)) {
+          // The answer came, but what it cost cannot be read: count its
+          // estimate and make no further call this pass.
+          spend.usd += estimate.usd;
+          spend.stopped ||= { reason: 'meter_not_finite', lane: classified.lane, model: answered.model || classified.model_requested };
+        } else if (usd == null) { spend.unpriced += 1; spend.usd += estimate.usd; } else {
           spend.usd += usd;
           if (usd > estimate.usd) { spend.over_estimate += 1; log(`record: ${classified.lane} cost ${usd.toFixed(4)} USD, more than its estimate ${estimate.usd.toFixed(4)}`); }
         }
@@ -1009,6 +1076,7 @@ export const runDemo = async (options) => {
     await stop();
     process.off('SIGINT', onSignal);
     process.off('SIGTERM', onSignal);
+    process.off('disconnect', onParentGone);
   }
 };
 
@@ -1037,7 +1105,7 @@ export const printSummary = (summary) => {
 // a copy; the committed file is replaced only after the verify passes. One
 // spend cap covers every pass: each is given what is left of it.
 const runChild = (args, env = process.env) => new Promise((resolve) => {
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { stdio: 'inherit', env });
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'], env });
   child.on('exit', (code) => resolve(code));
 });
 const readJson = (file) => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; } };
@@ -1046,8 +1114,14 @@ const recordAll = async (options, argv) => {
   if (options.databaseUrl) {
     throw new DemoError({ code: 'DEMO_RECORD_FRESH_BOOKS', message: '`demo:fi:record` gives every pass a fresh book of its own and cannot with --database-url; run single passes yourself with --record --exit-at-rest [--fill] --database-url=… on new empty databases' });
   }
-  // Every pass would stop on an uncommitted runtime the same way: say it once.
+  // Every pass would stop on an uncommitted runtime, or on a price table that
+  // cannot meter the spend, the same way: say it once, before any pass.
   await assertDemoBuildRuns({ env: { ...process.env }, mode: 'record' });
+  {
+    const facts = JSON.parse(readFileSync(FACTS_FILE, 'utf8'));
+    const reference = existsSync(path.resolve(options.recordings || DEFAULT_RECORDINGS)) ? loadReplayRecordings(path.resolve(options.recordings || DEFAULT_RECORDINGS)) : null;
+    for (const line of validatePriceTable({ prices: facts.prices, models: modelsOf(reference?.entries) })) log(`record: price ${line}`);
+  }
   const committed = path.resolve(options.recordings || DEFAULT_RECORDINGS);
   const capUsd = options.capUsd ?? DEFAULT_CAP_USD;
   const temp = mkdtempSync(path.join(os.tmpdir(), 'donna-demo-passes-'));
@@ -1068,7 +1142,7 @@ const recordAll = async (options, argv) => {
     // What the pass spent, from its sidecar (written after every answer, so
     // it holds even when the pass failed); what it asked, from its report.
     const spend = readJson(report)?.provider?.spend || readJson(`${report}.spend.json`);
-    if (spend) spent += spend.usd;
+    if (spend) spent += Number.isFinite(spend.usd) ? spend.usd : Infinity;
     log(`${name}: exit ${code}; ${spent.toFixed(3)} of ${capUsd.toFixed(2)} USD spent so far`);
     return { code, report: readJson(report), spend };
   };
@@ -1115,7 +1189,10 @@ export const needsFixedLocaleRun = (env = process.env) => Object.entries(DEMO_FI
 const runWithFixedLocale = () => {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^LC_/.test(k)));
   Object.assign(env, DEMO_FIXED_ENV);
-  const child = spawn(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit', env });
+  // An IPC channel, so the child notices when this process is gone, even
+  // killed outright (SIGKILL): it then stops what it started and exits.
+  const child = spawn(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'], env });
+  log(`time zone and locale fixed (${Object.entries(DEMO_FIXED_ENV).map(([k, v]) => `${k}=${v}`).join(' ')}): running as process ${child.pid}`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
   child.on('exit', (code, signal) => process.exit(code ?? (signal === 'SIGINT' ? 130 : 143)));
 };
@@ -1131,6 +1208,8 @@ else if (isDirectRun) {
     if (loaded.length) log(`record: ${loaded.join(', ')} from .env`);
   }
   if (options.record && !options.exitAtRest) {
+    // The record loop's own parent gone: end, so its passes notice in turn.
+    if (process.channel) { process.on('disconnect', () => process.exit(1)); process.channel.unref(); }
     recordAll(options, argv).then(({ code, temp }) => {
       if (temp) log(`the passes' reports are in ${temp}`);
       process.exit(code);

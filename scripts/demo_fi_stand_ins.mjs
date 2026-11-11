@@ -8,12 +8,14 @@
 // schema checks and writers run on it as on a live answer. The recordings
 // mark every such answer `provenance: "scripted_stand_in"`, and the answer
 // names its own model, never the one asked for: `scripted-stand-in-for-
-// <requested model>`, so a receipt built from the answer reads
-// `scripted-stand-in-for-gpt-5.4+replayed`. One receipt does not: the
-// document router's confidence envelope stores the configured model
-// (documentRouter.js returns config.model), so routing receipts, and the
-// coder prompts that quote them, say `gpt-5.4`. A live re-record replaces
-// the stand-ins.
+// <requested model>`, so a receipt that takes its model from the response
+// reads `scripted-stand-in-for-gpt-5.4+replayed`. Receipts that store the
+// configured model instead read `gpt-5.4`: the document router's confidence
+// envelope (documentRouter.js; the coder prompts that quote it say so too),
+// the bank statement's parse summary (`extraction_model`, from
+// bankStatementVision.js), and the firm-fact distiller's result
+// (firmFacts.js; it stores nothing in this month). A live re-record
+// replaces the stand-ins.
 //
 // A lane with no stand-in answers 418 (refused, never retried), so the
 // recording run shows what is missing instead of inventing an answer.

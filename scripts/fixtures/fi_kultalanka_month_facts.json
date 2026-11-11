@@ -6,8 +6,8 @@
   "prices": {
     "claude-opus-4-8": { "input_per_million": 5, "output_per_million": 25 },
     "claude-": { "input_per_million": 5, "output_per_million": 25 },
-    "gpt-5.4": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1 },
-    "gpt-": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1 }
+    "gpt-5.4": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1, "assumed": true },
+    "gpt-": { "input_per_million": 2.5, "output_per_million": 15, "cache_read_multiplier": 0.1, "assumed": true }
   },
   "owner_answers": {
     "_note": "The owner's answers for the zero-key demo (scripts/demo_fi.mjs), one per bank line whose adjudicated terminal is an owner question (labels.json). Each is given through the reply route (POST /api/donna/firms/evidence/requests/:id/resolve) to the open ask on that statement line; an ask the file does not answer stays open. Synthetic, like the pack.",
