@@ -26,7 +26,7 @@ import pg from 'pg';
 import http from 'node:http';
 
 import {
-  DEFAULT_RECORDINGS, DEMO_ENV_NAMES, DEMO_FIXED_ENV, IMAGE_TOKENS, LEARNED_MARGIN, PDF_PAGE_TOKENS, RECORD_ENV_NAMES, RERECORD_COMMAND, SOCKET_PATH_MAX,
+  COUNTED_MARGIN, DEFAULT_RECORDINGS, DEMO_ENV_NAMES, DEMO_FIXED_ENV, IMAGE_TOKENS, LEARNED_MARGIN, PDF_PAGE_TOKENS, RECORD_ENV_NAMES, RERECORD_COMMAND, SOCKET_PATH_MAX,
   WORST_CASE_OUTPUT_TOKENS, answerFor, answersFromStandIn, assertDemoBookOnly, assertSocketPathFits, estimateCallUsd, giveOwnerAnswer, laneOutputTokensOf,
   laneUsageOf, loadRecordKeys, loadReplayRecordings, meterRefuses, modelsOf, parseDemoArgs, priceFor, priceUsage, recordedOn, sealDemoEnvironment,
   socketPathFor, standInLanesOf, validatePriceTable, FACTS_FILE
@@ -230,9 +230,10 @@ test('spend: a call is estimated before it is made, from the best source it has,
   const bound = estimateCallUsd({ price: prices['claude-'], init: { body: text }, provider: 'anthropic' });
   assert.equal(bound.input_source, 'bound');
   assert.ok(bound.usd >= priceUsage({ prices, model: 'claude-opus-4-8', provider: 'anthropic', usage: { input_tokens: Buffer.byteLength(text), output_tokens: 2048 } }));
-  // An exact count (Anthropic count_tokens) replaces the bound.
+  // A count (Anthropic count_tokens, documented as an estimate) replaces the
+  // bound, with its margin.
   const counted = estimateCallUsd({ price: prices['claude-'], init: { body: text }, provider: 'anthropic', countedInputTokens: 1200 });
-  assert.equal(counted.input_tokens, 1200);
+  assert.equal(counted.input_tokens, Math.ceil(1200 * COUNTED_MARGIN));
   assert.equal(counted.input_source, 'counted');
   // What the lane's earlier calls used, with the margin.
   const learned = estimateCallUsd({ price: prices['gpt-'], init: { body: text }, provider: 'openai', laneTokensPerUnit: 0.3 });
@@ -280,6 +281,27 @@ test('the price table must price every model the month calls, or the record comm
   assert.equal(meterRefuses({ estimateUsd: nan.usd, spentUsd: 0 }), true);
   assert.equal(meterRefuses({ estimateUsd: 0.2, spentUsd: Number.NaN }), true);
   assert.equal(meterRefuses({ estimateUsd: 0.2, spentUsd: 1 }), false);
+});
+
+test('prices: an exact row wins, else the longest matching prefix; Anthropic cache reads and writes are priced at their multiples', () => {
+  const facts = JSON.parse(readFileSync(FACTS_FILE, 'utf8'));
+  const p = facts.prices;
+  assert.equal(priceFor(p, 'claude-opus-5-5'), p['claude-opus-5-5']);
+  assert.equal(priceFor(p, 'claude-opus-5-5-20261101'), p['claude-opus-5-5'], 'a dated id takes its model row, not the bare claude- guess');
+  assert.equal(priceFor(p, 'claude-sonnet-9'), p['claude-']);
+  // Order does not matter.
+  assert.equal(priceFor({ 'claude-': { a: 1 }, 'claude-opus-5-5': { b: 2 } }, 'claude-opus-5-5-x').b, 2);
+  assert.deepEqual([p['claude-opus-5-5'].input_per_million, p['claude-opus-5-5'].output_per_million, p['claude-opus-5-5'].cache_read_multiplier, p['claude-opus-5-5'].cache_write_multiplier], [4, 20, 0.05, 1.25]);
+  assert.equal(p['claude-'].assumed, true);
+  assert.match(validatePriceTable({ prices: p }).find((l) => l.startsWith('claude- ')), /assumed rate/);
+  // 1M uncached input, 1M cache writes, 1M cache reads, 1M output on claude-opus-5-5:
+  // 4 + 4*1.25 + 4*0.05 + 20 = 29.2 USD.
+  const usd = priceUsage({ prices: p, model: 'claude-opus-5-5', provider: 'anthropic', usage: { input_tokens: 1e6, cache_creation_input_tokens: 1e6, cache_read_input_tokens: 1e6, output_tokens: 1e6 } });
+  assert.ok(Math.abs(usd - 29.2) < 1e-9, String(usd));
+  // claude-opus-4-8: 5 + 6.25 + 0.5 + 25.
+  assert.ok(Math.abs(priceUsage({ prices: p, model: 'claude-opus-4-8', provider: 'anthropic', usage: { input_tokens: 1e6, cache_creation_input_tokens: 1e6, cache_read_input_tokens: 1e6, output_tokens: 1e6 } }) - 36.75) < 1e-9);
+  // OpenAI reports cached tokens inside input_tokens: 2M input of which 1M cached = 2.5 + 0.25 + 15 output.
+  assert.ok(Math.abs(priceUsage({ prices: p, model: 'gpt-5.4', provider: 'openai', usage: { input_tokens: 2e6, input_tokens_details: { cached_tokens: 1e6 }, output_tokens: 1e6 } }) - 17.75) < 1e-9);
 });
 
 test('a pass\'s first call of a lane is estimated from the usage the recordings hold for it, with the margin', () => {

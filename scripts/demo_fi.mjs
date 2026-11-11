@@ -320,8 +320,15 @@ export const loadReplayRecordings = (file = DEFAULT_RECORDINGS) => {
 
 // ── Spend ──────────────────────────────────────────────────────────────────
 // List prices from the facts file (the spend meter of
-// scripts/fi_month_two_stage_run.js), by exact model id or id prefix.
-export const priceFor = (prices = {}, model) => prices[model] || Object.entries(prices).find(([prefix]) => model && model.startsWith(prefix))?.[1] || null;
+// scripts/fi_month_two_stage_run.js): the exact model id's row, else the
+// LONGEST row that is a prefix of it, so `claude-opus-5-5-<date>` takes the
+// claude-opus-5-5 row and never the bare `claude-` guess, whatever the order.
+export const priceFor = (prices = {}, model) => {
+  if (!model) return null;
+  if (prices[model]) return prices[model];
+  const rows = Object.entries(prices).filter(([prefix]) => model.startsWith(prefix)).sort(([a], [b]) => b.length - a.length);
+  return rows[0]?.[1] || null;
+};
 
 // The price table a record command spends by. Every row must carry finite,
 // positive input and output prices (and finite, non-negative multipliers
@@ -358,7 +365,12 @@ export const meterRefuses = ({ estimateUsd, spentUsd }) => !Number.isFinite(esti
 export const modelsOf = (entries = []) => [...new Set((entries || []).map((entry) => entry.model_requested).filter(Boolean))].sort();
 
 // What one live answer cost, from its reported usage. Null when the model is
-// unpriced or the answer reports no usage.
+// unpriced or the answer reports no usage. Anthropic reports input_tokens
+// WITHOUT the cached part, and cache writes and cache reads separately, each
+// priced at its multiple of the input price (writes 1.25x for five minutes;
+// reads 0.1x, 0.05x on claude-opus-5-5). OpenAI reports input_tokens WITH
+// the cached part (input_tokens_details.cached_tokens), so that part is taken
+// out of the full-price input and priced at the read multiple.
 export const priceUsage = ({ prices = {}, model, usage, provider }) => {
   const price = priceFor(prices, model);
   if (!price || !usage) return null;
@@ -372,7 +384,13 @@ export const priceUsage = ({ prices = {}, model, usage, provider }) => {
 
 // What one live call may cost, before it is made.
 // Input tokens, best source first:
-//   1. Anthropic: the free count_tokens endpoint's exact count;
+//   1. Anthropic: the count_tokens endpoint's count, times COUNTED_MARGIN.
+//      "Token counting is free to use but subject to requests per minute rate
+//      limits", separate from message creation's; "the token count is an
+//      estimate" that "might differ by a small amount"
+//      (platform.claude.com/docs/en/build-with-claude/token-counting, "Pricing
+//      and rate limits"). The command meters none of it and counts its calls
+//      (spend.count_tokens_calls); a failed count falls back to 2-4;
 //   2. the lane's own earlier live calls in this pass: the most input tokens
 //      per bound unit (below) any of them used, times LEARNED_MARGIN;
 //   3. the most input tokens the lane used in the reference recordings (their
@@ -392,6 +410,7 @@ export const priceUsage = ({ prices = {}, model, usage, provider }) => {
 export const PDF_PAGE_TOKENS = 3_000;
 export const IMAGE_TOKENS = 6_000;
 export const LEARNED_MARGIN = 1.5;
+export const COUNTED_MARGIN = 1.05;
 // A file is only what the request says is one: a base64 data URL (OpenAI
 // input_file / input_image), or an Anthropic source block of type base64.
 const fileOf = (value) => {
@@ -436,7 +455,7 @@ export const requestShape = (init) => {
 export const estimateCallUsd = ({ price, init, provider, countedInputTokens = null, laneOutputTokens = null, laneTokensPerUnit = null, laneInputTokens = null }) => {
   const shape = requestShape(init);
   const bound = shape.textTokensBound + shape.fileTokens;
-  const inputTokens = countedInputTokens
+  const inputTokens = (countedInputTokens != null ? Math.ceil(countedInputTokens * COUNTED_MARGIN) : null)
     ?? (laneTokensPerUnit ? Math.ceil(bound * Math.min(1, laneTokensPerUnit * LEARNED_MARGIN))
       : laneInputTokens ? Math.min(bound, Math.ceil(laneInputTokens * LEARNED_MARGIN)) : bound);
   const outputTokens = shape.outputLimit ?? (laneOutputTokens ? Math.ceil(laneOutputTokens * LEARNED_MARGIN) : WORST_CASE_OUTPUT_TOKENS);
@@ -469,8 +488,9 @@ export const laneUsageOf = (entries = []) => {
 };
 export const laneOutputTokensOf = (entries = []) => Object.fromEntries(Object.entries(laneUsageOf(entries)).filter(([, u]) => u.output).map(([id, u]) => [id, u.output]));
 
-// Anthropic's count_tokens endpoint (free): the exact input size of a
-// Messages request. Null when it cannot be had.
+// Anthropic's count_tokens endpoint: the input size of a Messages request, as
+// the documentation's estimate (see estimateCallUsd). Null when it cannot be
+// had.
 export const countAnthropicInputTokens = async ({ fetchFn, input, init }) => {
   try {
     const body = parseRequestBody(init);
@@ -720,7 +740,7 @@ export const runDemo = async (options) => {
       if (options.standIn) process.env.OPENAI_API_KEY = REPLAY_PLACEHOLDER_KEY;
       const keyFor = { openai: realKeys.OPENAI_API_KEY, anthropic: realKeys.ANTHROPIC_API_KEY };
       const capUsd = options.capUsd ?? DEFAULT_CAP_USD;
-      spend = { usd: 0, cap_usd: capUsd, live_calls: 0, stand_in: 0, unpriced: 0, reused: 0, new_requests: 0, estimated_usd: 0, over_estimate: 0, stopped: null };
+      spend = { usd: 0, cap_usd: capUsd, live_calls: 0, count_tokens_calls: 0, count_tokens_failed: 0, stand_in: 0, unpriced: 0, reused: 0, new_requests: 0, estimated_usd: 0, over_estimate: 0, stopped: null };
       const writeSpend = () => { if (options.report) writeFileSync(`${options.report}.spend.json`, `${JSON.stringify(spend)}\n`); };
       writeSpend();
       // The longest answer each lane gave, for the estimate of a call that
@@ -761,9 +781,12 @@ export const runDemo = async (options) => {
         const laneOutputTokens = laneOutput[laneId] || null;
         const laneInputTokens = recordedUsage[laneId]?.input || null;
         const first = estimateCallUsd({ price, init, provider: classified.endpoint_class, laneOutputTokens, laneTokensPerUnit: laneRatio[laneId] || null, laneInputTokens });
-        const counted = classified.endpoint_class === 'anthropic' && first.output_usd <= remaining
-          ? await countAnthropicInputTokens({ fetchFn: realFetch, input, init })
-          : null;
+        let counted = null;
+        if (classified.endpoint_class === 'anthropic' && first.output_usd <= remaining) {
+          spend.count_tokens_calls += 1;
+          counted = await countAnthropicInputTokens({ fetchFn: realFetch, input, init });
+          if (counted == null) spend.count_tokens_failed += 1;
+        }
         const estimate = counted ? estimateCallUsd({ price, init, provider: classified.endpoint_class, laneOutputTokens, countedInputTokens: counted }) : first;
         // A meter that cannot read is a refusal, never a zero.
         if (meterRefuses({ estimateUsd: estimate.usd, spentUsd: spend.usd })) {
@@ -1022,6 +1045,7 @@ export const runDemo = async (options) => {
         summary.recordings = { written: true, file: path.relative(ROOT, recordingsFile), entries: entries.length, bytes: Buffer.byteLength(text), models: recordedModels({ entries }) };
         log(`wrote ${entries.length} recordings (${Math.round(Buffer.byteLength(text) / 1024)} KB) to ${path.relative(ROOT, recordingsFile)}`);
       }
+      log(`token-count calls (not metered; their own rate limit): ${spend.count_tokens_calls}${spend.count_tokens_failed ? `, ${spend.count_tokens_failed} failed and fell back` : ''}`);
       log(`live spend ${spend.usd.toFixed(3)} USD over ${spend.live_calls} calls (${spend.unpriced} without usage, counted at their estimate); ${spend.stand_in} from the stand-in; ${spend.reused} from the existing recordings; ${spend.new_requests} not in them`);
     }
     if (options.report) writeFileSync(options.report, `${JSON.stringify(summary, null, 2)}\n`);

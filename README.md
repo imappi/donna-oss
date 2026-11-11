@@ -128,14 +128,17 @@ calls): `npm run demo:fi:record`. It takes only those two names from
 `.env`, and needs no `.env` at all when no lane has to go live. Its spend
 is capped at 20 USD across all its passes (`-- --cap-usd=N` to change it):
 a call is made only if its estimate fits in what is left (an Anthropic
-call's input is counted exactly with the free token-count endpoint and its
-output is bounded by the request's own limit; other calls are estimated
+call's input is counted with Anthropic's token-count endpoint, which the
+documentation describes as free with its own rate limit and as an estimate,
+so the count gets a 5% margin, and its output is bounded by the request's
+own limit; other calls are estimated
 from what the same lane used before, in the pass or in the recordings,
 and bounded from their text and files), and the actual spend each answer
 reports is added after it. It prices calls from
 `scripts/fixtures/fi_kultalanka_month_facts.json` and lists those prices
 first; the `gpt-5.4` rate there is an assumption, not a published price,
-so the cap is approximate for that model. A price table that cannot price
+and so is the bare `claude-` row for any Claude model without a row of its
+own, so the cap is approximate for those models. A price table that cannot price
 every model the month calls stops the command before any call. The committed recordings are replaced only after a replay on a
 fresh book has used every one of them, each exactly as often as recorded.
 
