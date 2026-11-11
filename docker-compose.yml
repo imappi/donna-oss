@@ -108,8 +108,9 @@ services:
   # The zero-key demo (README.md, "The zero-key demo"), only on request:
   #   docker compose run --rm --service-ports demo
   # It replays recorded model outputs (scripts/demo_fi.mjs) into a database of
-  # its own, donna_demo, on the same PostgreSQL server — never donna_local, the
-  # book `docker compose up` serves — with its documents in donna-demo-data.
+  # its own, donna_demo (C collation, as the recordings were made), on the same
+  # PostgreSQL server — never donna_local, the book `docker compose up` serves —
+  # with its documents in donna-demo-data.
   # No .env and no key: it needs none and reads none. Its web app is on
   # http://127.0.0.1:5174/firms so it can run beside `docker compose up`.
   demo:
@@ -123,7 +124,7 @@ services:
       - >-
         /opt/pg16/bin/psql -h /run/donna-pg -U donna -d donna_local -Atqc
         "select 1 from pg_database where datname = 'donna_demo'" | grep -q 1
-        || /opt/pg16/bin/psql -h /run/donna-pg -U donna -d donna_local -qc 'create database donna_demo';
+        || /opt/pg16/bin/psql -h /run/donna-pg -U donna -d donna_local -qc "create database donna_demo template template0 locale 'C'";
         exec node scripts/demo_fi.mjs --data-dir=/data --web-port=5174
         '--database-url=postgresql://donna@localhost/donna_demo?host=/run/donna-pg&port=5432'
     environment:

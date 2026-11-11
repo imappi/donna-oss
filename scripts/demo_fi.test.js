@@ -88,6 +88,13 @@ test('owner answers are matched to their statement line by date, amount and dire
   assert.equal(answerFor({ ask: { id: 'a1' }, transaction: null, answers }), null);
 });
 
+test('the demo refuses a database that does not sort text in C order', async () => {
+  const { assertDemoCollation } = await import('./demo_fi.mjs');
+  await assertDemoCollation({ query: async () => ({ rows: [{ datcollate: 'C.UTF-8' }] }) });
+  await assert.rejects(assertDemoCollation({ query: async () => ({ rows: [{ datcollate: 'en_US.utf8' }] }) }),
+    (error) => error.code === 'PROVIDER_REPLAY_COLLATION' && /template template0 locale 'C'/.test(error.message));
+});
+
 test('replay is entered by the command only', () => {
   assert.equal(parseDemoArgs([]).record, false);
   assert.throws(() => parseDemoArgs(['--stand-in=openai']), /only for --record/);
@@ -114,7 +121,9 @@ const scratchDatabase = async (name) => {
   const admin = new pg.Client({ connectionString: PG });
   await admin.connect();
   await admin.query(`drop database if exists "${name}"`);
-  await admin.query(`create database "${name}"`);
+  // C collation, as the demo requires (demo_fi.mjs assertDemoCollation); CI's
+  // server defaults to en_US.utf8.
+  await admin.query(`create database "${name}" template template0 locale 'C'`);
   await admin.end();
   const url = new URL(PG);
   url.pathname = `/${name}`;

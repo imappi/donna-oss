@@ -145,6 +145,23 @@ export const assertDemoBookOnly = async ({ query, clientId, firmId = DEMO_FIRM_I
   }
 };
 
+// The recordings were made on a database with C (byte-order) collation. Some
+// queries that build a prompt sort text ids (`order by id`), and the order of
+// those ids — so the prompt, so the request — follows the database's
+// collation: on an en_US database the same book asks different questions. The
+// demo therefore runs only on a C-collated database and says so by name.
+export const DEMO_COLLATIONS = Object.freeze(['C', 'POSIX', 'C.UTF-8', 'C.utf8']);
+export const assertDemoCollation = async ({ query }) => {
+  const collation = (await query('select datcollate from pg_database where datname = current_database()')).rows[0]?.datcollate;
+  if (!DEMO_COLLATIONS.includes(collation)) {
+    throw new ProviderReplayError({
+      code: 'PROVIDER_REPLAY_COLLATION',
+      message: `provider replay: this database sorts text as ${collation}; the recordings were made on C collation and the prompts would differ. `
+        + "Use the demo's own data folder, or create the database with: create database <name> template template0 locale 'C'"
+    });
+  }
+};
+
 const STORAGE_STUB_SQL = `
   create schema if not exists storage;
   create table if not exists storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
@@ -293,7 +310,19 @@ export const runDemo = async (options) => {
       ? mkdtempSync(path.join(os.tmpdir(), 'donna-demo-record-'))
       : path.join(os.homedir(), '.donna-demo')));
     const { ensureLocalPostgres } = await import('../server/donna/desktop/pgSupervisor.js');
-    pgHandle = ensureLocalPostgres({ dataDir, logger: { log: (l) => console.log(l), error: (l) => console.error(l) } });
+    // The demo's own cluster is initialised with C collation (see
+    // assertDemoCollation); only initdb and its server see this, and only for
+    // the demo's own data folder.
+    const priorLocale = { LC_ALL: process.env.LC_ALL, LANG: process.env.LANG };
+    process.env.LC_ALL = 'C';
+    process.env.LANG = 'C';
+    try {
+      pgHandle = ensureLocalPostgres({ dataDir, logger: { log: (l) => console.log(l), error: (l) => console.error(l) } });
+    } finally {
+      for (const [key, value] of Object.entries(priorLocale)) {
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+      }
+    }
     process.env.DATABASE_URL = pgHandle.databaseUrl;
     process.env.DONNA_DESKTOP_BLOB_DIR = path.join(dataDir, 'documents');
     log(`data folder ${dataDir}`);
@@ -322,6 +351,7 @@ export const runDemo = async (options) => {
     if (options.databaseUrl) await queryFirmDb(STORAGE_STUB_SQL);
     log('applying migrations…');
     execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'migrate_firm_db.js')], { cwd: ROOT, stdio: 'ignore', env: process.env });
+    await assertDemoCollation({ query: queryFirmDb });
     // Refuse a book that holds anything but the demo, before the runtime starts.
     await assertDemoBookOnly({ query: queryFirmDb, clientId: DEMO_CLIENT_ID });
     if (mode === 'record' && (await queryFirmDb('select 1 from firms limit 1')).rows.length) {
